@@ -1,4 +1,7 @@
 use crate::config::Config;
+use crate::discovery;
+use crate::parser::{FILETAGS_RE, TITLE_RE};
+use crate::util;
 use anyhow::Result;
 use regex::Regex;
 use serde::Serialize;
@@ -29,12 +32,6 @@ static UUID_RE: LazyLock<Regex> =
             .unwrap()
     });
 
-static TITLE_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"(?im)^#\+title:\s*(.*)$").unwrap());
-
-static FILETAGS_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"(?im)^#\+filetags:\s*(.+)$").unwrap());
-
 static ALIASES_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r":ROAM_ALIASES:\s+(.*)").unwrap());
 
@@ -52,8 +49,7 @@ fn scan_files(root: &Path, ignore_patterns: &[String]) -> Vec<ResolvedNote> {
         .into_iter()
         .filter_entry(move |e| {
             if e.path() == root_clone { return true; }
-            let file_name = e.file_name().to_string_lossy();
-            !file_name.starts_with('.') && !compiled_patterns.iter().any(|p| p.matches(&file_name))
+            !discovery::is_ignored(e, &compiled_patterns)
         })
     {
         let Ok(entry) = entry else { continue };
@@ -172,12 +168,7 @@ pub fn run(
     results.truncate(limit);
 
     if count_only {
-        if json {
-            println!("{}", serde_json::json!({"count": results.len()}));
-        } else {
-            println!("{}", results.len());
-        }
-        return Ok(());
+        return util::print_count(results.len(), json);
     }
 
     let field_set: Option<HashSet<String>> = fields.map(|f| f.split(',').map(|s| s.trim().to_string()).collect());
@@ -188,6 +179,7 @@ pub fn run(
                 let v = filter_fields(&serde_json::to_value(note)?, &field_set);
                 println!("{}", serde_json::to_string(&v)?);
             }
+            return Ok(());
         } else {
             let output = ResolveOutput {
                 query: query.to_string(),
@@ -204,7 +196,7 @@ pub fn run(
             println!("Total: {}", results.len());
         }
         for note in &results {
-            let short = if note.uuid.len() > 8 { &note.uuid[..8] } else { &note.uuid };
+            let short = util::short_uuid(&note.uuid);
             if let Some(ref fs) = field_set {
                 if fs.contains("title") {
                     println!("  {} ({})", note.title, short);

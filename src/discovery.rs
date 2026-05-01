@@ -42,7 +42,7 @@ pub fn discover_files(root: &Path, ignore_patterns: &[String]) -> Result<Vec<Fil
     Ok(entries)
 }
 
-fn is_ignored(entry: &walkdir::DirEntry, ignore_patterns: &[glob::Pattern]) -> bool {
+pub(crate) fn is_ignored(entry: &walkdir::DirEntry, ignore_patterns: &[glob::Pattern]) -> bool {
     let file_name = entry.file_name().to_string_lossy();
     if file_name.starts_with('.') {
         return true;

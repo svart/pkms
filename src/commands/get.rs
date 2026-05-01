@@ -1,5 +1,6 @@
 use crate::config::Config;
 use crate::graph::{Graph, Node};
+use crate::util;
 use anyhow::Result;
 use serde::Serialize;
 use std::collections::HashMap;
@@ -21,7 +22,7 @@ impl NodeJson {
         NodeJson {
             uuid: node.uuid.clone(),
             title: node.title.clone(),
-            path: node.path.to_string_lossy().to_string(),
+            path: util::path_string(&node.path),
             filetags: node.filetags.clone(),
             content: content.map(|c| c.to_string()),
         }
@@ -184,12 +185,7 @@ pub fn run(
 }
 
 fn print_node_short(n: &crate::graph::Node, indent: &str) {
-    let short_uuid = if n.uuid.len() > 8 {
-        &n.uuid[..8]
-    } else {
-        &n.uuid
-    };
-    println!("{}{} ({})", indent, n.title, short_uuid);
+    println!("{}{} ({})", indent, n.title, util::short_uuid(&n.uuid));
 }
 
 fn print_graph(
@@ -198,8 +194,7 @@ fn print_graph(
     max_depth: u32,
 ) {
     let label = |n: &crate::graph::Node| {
-        let short = if n.uuid.len() > 8 { &n.uuid[..8] } else { &n.uuid };
-        format!("{} ({})", n.title, short)
+        format!("{} ({})", n.title, util::short_uuid(&n.uuid))
     };
 
     println!();

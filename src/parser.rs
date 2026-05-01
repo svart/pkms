@@ -47,17 +47,17 @@ const PROP_ID: &str = "ID";
 const PROP_ROAM_ALIASES: &str = "ROAM_ALIASES";
 const PROP_ROAM_REFS: &str = "ROAM_REFS";
 
-static LINK_RE: LazyLock<Regex> =
+pub(crate) static LINK_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"\[\[([^\]]+?)(?:\]\[([^\]]*))?\]\]").unwrap());
 
-static HEADING_RE: LazyLock<Regex> = LazyLock::new(|| {
+pub(crate) static HEADING_RE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"^(\*+)\s+(?:(\w+)\s+)?(.*?)(?:\s+:(\w+(?::\w+)*):)?\s*$").unwrap()
 });
 
-static TITLE_RE: LazyLock<Regex> =
+pub(crate) static TITLE_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"(?im)^#\+title:\s*(.*)$").unwrap());
 
-static FILETAGS_RE: LazyLock<Regex> =
+pub(crate) static FILETAGS_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"(?m)^#\+filetags:\s*(.+)$").unwrap());
 
 pub fn parse_note(content: &str) -> ParsedNote {

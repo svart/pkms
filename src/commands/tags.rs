@@ -1,5 +1,6 @@
 use crate::config::Config;
 use crate::graph::Graph;
+use crate::util;
 use anyhow::Result;
 use serde::Serialize;
 
@@ -37,12 +38,7 @@ pub fn run(
     if let Some(tag) = tag_filter {
         let notes = graph.notes_by_tag(tag);
         if count_only {
-            if json {
-                println!("{}", serde_json::json!({"count": notes.len()}));
-            } else {
-                println!("{}", notes.len());
-            }
-            return Ok(());
+            return util::print_count(notes.len(), json);
         }
         if json {
             let notes_json: Vec<TagNote> = notes
@@ -50,13 +46,11 @@ pub fn run(
                 .map(|n| TagNote {
                     uuid: n.uuid.clone(),
                     title: n.title.clone(),
-                    path: n.path.to_string_lossy().to_string(),
+                    path: util::path_string(&n.path),
                 })
                 .collect();
             if ndjson {
-                for n in &notes_json {
-                    println!("{}", serde_json::to_string(n)?);
-                }
+                return util::print_ndjson(&notes_json);
             } else {
                 let output = TagsOutput {
                     tags: vec![TagEntry {
@@ -79,12 +73,7 @@ pub fn run(
     } else {
         let tags = graph.all_tags();
         if count_only {
-            if json {
-                println!("{}", serde_json::json!({"count": tags.len()}));
-            } else {
-                println!("{}", tags.len());
-            }
-            return Ok(());
+            return util::print_count(tags.len(), json);
         }
         if json {
             let entries: Vec<TagEntry> = tags
@@ -96,9 +85,7 @@ pub fn run(
                 })
                 .collect();
             if ndjson {
-                for e in &entries {
-                    println!("{}", serde_json::to_string(e)?);
-                }
+                return util::print_ndjson(&entries);
             } else {
                 let output = TagsOutput { tags: entries };
                 println!("{}", serde_json::to_string_pretty(&output)?);

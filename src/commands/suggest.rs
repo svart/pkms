@@ -1,6 +1,7 @@
 use crate::config::Config;
 use crate::graph::Graph;
 use crate::parser::Link;
+use crate::util;
 use anyhow::Result;
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
@@ -32,16 +33,7 @@ pub fn run(
     input_json: Option<&std::path::PathBuf>,
     db_cli: Option<&std::path::Path>,
 ) -> Result<()> {
-    let target = match (target, input_json) {
-        (Some(t), _) => t.to_string(),
-        (None, Some(path)) => {
-            let content = std::fs::read_to_string(path)?;
-            let params: serde_json::Value = serde_json::from_str(&content)?;
-            params.get("target").and_then(|v| v.as_str().map(|s| s.to_string()))
-                .ok_or_else(|| anyhow::anyhow!("No target specified in JSON"))?
-        }
-        (None, None) => anyhow::bail!("No target specified. Provide a target or use --input-json"),
-    };
+    let target = util::load_input_target(input_json, target, "target", "No target specified. Provide a target or use --input-json")?;
 
     let graph = Graph::load(config, db_cli, false)?;
     let limit = limit.unwrap_or(10);

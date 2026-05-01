@@ -633,18 +633,7 @@ impl Graph {
             .filter(|l| matches!(l, Link::Url(_)))
             .count();
         let total_links = total_internal_links + total_file_links + total_url_links;
-        let orphan_notes = self
-            .nodes
-            .values()
-            .filter(|n| {
-                let has_outgoing = n.outgoing.iter().any(|l| matches!(l, Link::Internal(_)));
-                let has_incoming = self
-                    .backlinks
-                    .get(&n.uuid)
-                    .map_or(false, |b| !b.is_empty());
-                !has_outgoing && !has_incoming
-            })
-            .count();
+        let orphan_notes = self.orphan_nodes().len();
         let broken_link_count = self.broken_links.len();
         let skipped_count = self.skipped_files.len();
         let parse_error_count = self.parse_errors.len();

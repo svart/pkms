@@ -4,6 +4,7 @@ mod config;
 mod discovery;
 mod graph;
 mod parser;
+mod util;
 
 use anyhow::Result;
 use clap::Parser;

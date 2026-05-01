@@ -1,5 +1,6 @@
 use crate::config::Config;
 use crate::graph::Graph;
+use crate::util;
 use anyhow::Result;
 use serde::Serialize;
 
@@ -30,12 +31,7 @@ pub fn run(
 
     let count = orphans.len();
     if count_only {
-        if json {
-            println!("{}", serde_json::json!({"count": count}));
-        } else {
-            println!("{}", count);
-        }
-        return Ok(());
+        return util::print_count(count, json);
     }
 
     if json {
@@ -44,14 +40,12 @@ pub fn run(
             .map(|n| OrphanEntry {
                 uuid: n.uuid.clone(),
                 title: n.title.clone(),
-                path: n.path.to_string_lossy().to_string(),
+                path: util::path_string(&n.path),
                 filetags: n.filetags.clone(),
             })
             .collect();
         if ndjson {
-            for e in &entries {
-                println!("{}", serde_json::to_string(e)?);
-            }
+            return util::print_ndjson(&entries);
         } else {
             let output = OrphansOutput {
                 count: orphans.len(),
@@ -64,8 +58,7 @@ pub fn run(
             println!("Orphan notes ({}):", count);
         }
         for n in &orphans {
-            let short = if n.uuid.len() > 8 { &n.uuid[..8] } else { &n.uuid };
-            println!("  {} ({})", n.title, short);
+            println!("  {} ({})", n.title, util::short_uuid(&n.uuid));
         }
     }
 

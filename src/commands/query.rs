@@ -2,6 +2,7 @@ use crate::config::Config;
 use crate::discovery::discover_files;
 use crate::graph::{FileScanResult, Graph};
 use crate::parser::parse_note;
+use crate::util;
 use anyhow::Result;
 use rayon::prelude::*;
 use serde::Serialize;
@@ -43,16 +44,7 @@ pub fn run(
     input_json: Option<&std::path::PathBuf>,
     db_cli: Option<&std::path::Path>,
 ) -> Result<()> {
-    let terms = match (terms, input_json) {
-        (Some(t), _) => t.to_string(),
-        (None, Some(path)) => {
-            let content = std::fs::read_to_string(path)?;
-            let params: serde_json::Value = serde_json::from_str(&content)?;
-            params.get("terms").and_then(|v| v.as_str().map(|s| s.to_string()))
-                .ok_or_else(|| anyhow::anyhow!("No terms specified in JSON"))?
-        }
-        (None, None) => anyhow::bail!("No search terms specified. Provide terms or use --input-json"),
-    };
+    let terms = util::load_input_target(input_json, terms, "terms", "No search terms specified. Provide terms or use --input-json")?;
 
     let db_root = config.resolve_db_root(db_cli)?;
     let ignore = config.resolve_ignore_patterns();
@@ -172,19 +164,12 @@ pub fn run(
     }
 
     if count_only {
-        if json {
-            println!("{}", serde_json::json!({"count": combined.len()}));
-        } else {
-            println!("{}", combined.len());
-        }
-        return Ok(());
+        return util::print_count(combined.len(), json);
     }
 
     if json {
         if ndjson {
-            for r in &combined {
-                println!("{}", serde_json::to_string(r)?);
-            }
+            return util::print_ndjson(&combined);
         } else {
             let output = QueryOutput {
                 query: terms.to_string(),

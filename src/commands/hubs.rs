@@ -1,6 +1,7 @@
 use crate::config::Config;
 use crate::graph::Graph;
 use crate::parser::Link;
+use crate::util;
 use anyhow::Result;
 use serde::Serialize;
 
@@ -33,12 +34,7 @@ pub fn run(
     let hubs = graph.hubs(limit);
 
     if count_only {
-        if json {
-            println!("{}", serde_json::json!({"count": hubs.len()}));
-        } else {
-            println!("{}", hubs.len());
-        }
-        return Ok(());
+        return util::print_count(hubs.len(), json);
     }
 
     if json {
@@ -63,9 +59,7 @@ pub fn run(
             })
             .collect();
         if ndjson {
-            for e in &entries {
-                println!("{}", serde_json::to_string(e)?);
-            }
+            return util::print_ndjson(&entries);
         } else {
             let output = HubsOutput { limit, hubs: entries };
             println!("{}", serde_json::to_string_pretty(&output)?);
@@ -81,7 +75,6 @@ pub fn run(
                 .filter(|l| matches!(l, Link::Internal(_)))
                 .count();
             let incoming = graph.backlinks.get(&node.uuid).map_or(0, |v| v.len());
-            let short = if node.uuid.len() > 8 { &node.uuid[..8] } else { &node.uuid };
             println!(
                 "  {:3}. {:40} {} links ({} out / {} in)  {}",
                 i + 1,
@@ -89,7 +82,7 @@ pub fn run(
                 deg,
                 outgoing,
                 incoming,
-                short
+                util::short_uuid(&node.uuid)
             );
         }
     }

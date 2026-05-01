@@ -1,5 +1,6 @@
 use crate::config::Config;
 use crate::graph::Graph;
+use crate::util;
 use anyhow::Result;
 use serde::Serialize;
 
@@ -29,12 +30,7 @@ pub fn run(
 
     let count = links.len();
     if count_only {
-        if json {
-            println!("{}", serde_json::json!({"count": count}));
-        } else {
-            println!("{}", count);
-        }
-        return Ok(());
+        return util::print_count(count, json);
     }
 
     if json {
@@ -47,9 +43,7 @@ pub fn run(
             })
             .collect();
         if ndjson {
-            for e in &entries {
-                println!("{}", serde_json::to_string(e)?);
-            }
+            return util::print_ndjson(&entries);
         } else {
             let output = BrokenOutput {
                 count: entries.len(),
