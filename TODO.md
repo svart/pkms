@@ -23,10 +23,10 @@ These directly impact how effectively AI agents (and power users) can use pkms p
 
 ### Output / JSON reliability
 
-- [ ] **Guarantee pure JSON output with `--json`**: Audit every command to ensure `--json` produces **only** valid JSON on stdout, with no human-readable text mixed in. Currently `query` prints "Query: ..." and "Results: ..." to stdout in JSON mode. All informational text should go to stderr via `eprintln!`.
-- [ ] **Add `--quiet` / `-q` flag**: Suppresses all non-essential stderr output. AI agents parsing stdout don't want to see progress messages. Make `--json` imply `--quiet`.
-- [ ] **Structured error output in JSON mode**: When `--json` is active and a command fails, output `{"error": "message"}` to stdout (or stderr) instead of raw `anyhow` error text. Currently errors are just `bail!()` which produces non-JSON output even with `--json`.
-- [ ] **Exit code consistency**: Document and enforce a consistent exit code scheme. Currently only `check` uses non-zero exit codes (for unhealthy). Consider: 0 = success, 1 = business-logic failure (e.g., note not found, check unhealthy), 2 = parse/argument error.
+- [x] **Guarantee pure JSON output with `--json`**: Audit every command to ensure `--json` produces **only** valid JSON on stdout, with no human-readable text mixed in. Currently `query` prints "Query: ..." and "Results: ..." to stdout in JSON mode. All informational text should go to stderr via `eprintln!`.
+- [x] **Add `--quiet` / `-q` flag**: Suppresses all non-essential stderr output. AI agents parsing stdout don't want to see progress messages. Make `--json` imply `--quiet`.
+- [x] **Structured error output in JSON mode**: When `--json` is active and a command fails, output `{"error": "message"}` to stdout (or stderr) instead of raw `anyhow` error text. Currently errors are just `bail!()` which produces non-JSON output even with `--json`.
+- [x] **Exit code consistency**: Document and enforce a consistent exit code scheme. Currently only `check` uses non-zero exit codes (for unhealthy). Consider: 0 = success, 1 = business-logic failure (e.g., note not found, check unhealthy), 2 = parse/argument error.
 
 ### Machine-parseable output
 

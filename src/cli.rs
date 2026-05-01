@@ -13,6 +13,9 @@ pub struct Cli {
     #[arg(global = true, short, long, help = "Verbose output")]
     pub verbose: bool,
 
+    #[arg(global = true, short = 'q', long, help = "Suppress non-essential stderr output")]
+    pub quiet: bool,
+
     #[command(subcommand)]
     pub command: Command,
 }

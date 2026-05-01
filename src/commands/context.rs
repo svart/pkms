@@ -14,7 +14,7 @@ pub struct ContextOutput {
 pub fn run(
     config: &Config,
     json: bool,
-    _verbose: bool,
+    quiet: bool,
     target: &str,
     depth: u32,
     max_tokens: Option<usize>,
@@ -95,12 +95,14 @@ pub fn run(
         println!("{}", serde_json::to_string_pretty(&output)?);
     } else {
         println!("{}", ctx);
-        eprintln!(
-            "[context: ~{} tokens, depth: {}, max_tokens: {}]",
-            final_tokens,
-            depth,
-            max_tokens.map_or("unlimited".to_string(), |m| m.to_string())
-        );
+        if !quiet {
+            eprintln!(
+                "[context: ~{} tokens, depth: {}, max_tokens: {}]",
+                final_tokens,
+                depth,
+                max_tokens.map_or("unlimited".to_string(), |m| m.to_string())
+            );
+        }
     }
 
     Ok(())
