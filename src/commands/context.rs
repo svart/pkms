@@ -187,19 +187,48 @@ fn truncate_content(s: &str, max_chars: usize) -> String {
     truncated
 }
 
-/// Estimate tokens using character-based heuristic: tokens ≈ chars / 4.
-/// This is a rough estimate for English text at ~4 chars/token.
-/// For code or mixed content, actual token count may vary by model.
 fn estimate_tokens(text: &str) -> usize {
-    text.chars().count() / 4
+    let mut tokens = 0usize;
+    let mut in_word = false;
+    for c in text.chars() {
+        if c.is_whitespace() || c == '\n' {
+            in_word = false;
+        } else if c.is_ascii() {
+            if !in_word {
+                tokens += 1;
+                in_word = true;
+            }
+        } else {
+            tokens += 2;
+            in_word = false;
+        }
+    }
+    tokens
 }
 
 fn truncate_by_tokens(text: &str, max_tokens: usize) -> String {
-    let max_chars = max_tokens * 4;
-    if text.chars().count() <= max_chars {
-        return text.to_string();
+    let mut tokens = 0usize;
+    let mut in_word = false;
+    let pos = text.char_indices().position(|(_, c)| {
+        if c.is_whitespace() || c == '\n' {
+            in_word = false;
+            false
+        } else if c.is_ascii() {
+            if !in_word {
+                tokens += 1;
+                in_word = true;
+            }
+            tokens > max_tokens
+        } else {
+            tokens += 2;
+            in_word = false;
+            tokens > max_tokens
+        }
+    });
+    match pos {
+        Some(p) => text[..p].to_string(),
+        None => text.to_string(),
     }
-    text.chars().take(max_chars).collect()
 }
 
 #[cfg(test)]
@@ -213,14 +242,17 @@ mod tests {
 
     #[test]
     fn test_estimate_tokens_short() {
-        // "hello world" = 11 chars / 4 = 2
         assert_eq!(estimate_tokens("hello world"), 2);
     }
 
     #[test]
-    fn test_estimate_tokens_rounds_down() {
-        // "abc" = 3 chars / 4 = 0
-        assert_eq!(estimate_tokens("abc"), 0);
+    fn test_estimate_tokens_single_word() {
+        assert_eq!(estimate_tokens("hello"), 1);
+    }
+
+    #[test]
+    fn test_estimate_tokens_cjk() {
+        assert_eq!(estimate_tokens("你好世界"), 8);
     }
 
     #[test]
@@ -231,10 +263,10 @@ mod tests {
 
     #[test]
     fn test_truncate_by_tokens_long() {
-        let text = "a".repeat(100);
-        // 100 chars / 4 = 25 tokens, so 50 tokens = 200 chars
-        let truncated = truncate_by_tokens(&text, 10);
-        assert_eq!(truncated.len(), 40); // 10 tokens * 4 chars
+        let text = "aaaa bbbb cccc dddd";
+        // 4 words → 4 tokens, truncating at 2 tokens → first 2 start positions
+        let truncated = truncate_by_tokens(text, 2);
+        assert!(truncated.len() < text.len());
     }
 
     #[test]
