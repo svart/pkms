@@ -1,5 +1,16 @@
 # PKMS Code Quality & Architecture Improvement Plan
 
+## Progress
+
+| Phase | Status | Date |
+|-------|--------|------|
+| Phase 1: Reduce Code Duplication | ✅ Complete | 2026-05-02 |
+| Phase 2: Split Monolithic Modules | ✅ Complete | 2026-05-02 |
+| Phase 3: Fix Inconsistencies | ✅ Complete | 2026-05-02 |
+| Phase 4: Improve Data Model & Performance | ✅ Complete (4.3 only) | 2026-05-02 |
+| Phase 5: Improve Test Infrastructure | ✅ Complete (5.1 only) | 2026-05-02 |
+| Phase 6: Documentation & Tooling | ⬜ Pending | — |
+
 ## Summary
 
 The pkms project is a well-functioning CLI tool with 18 commands, ~4,400 lines of Rust,
