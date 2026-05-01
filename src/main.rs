@@ -106,6 +106,8 @@ fn main() -> ExitCode {
         Err(e) => {
             if machine {
                 println!("{}", serde_json::json!({"error": e.to_string()}));
+            } else {
+                eprintln!("Error: {}", e);
             }
             ExitCode::from(1)
         }

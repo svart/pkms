@@ -60,15 +60,15 @@ These directly impact how effectively AI agents (and power users) can use pkms p
 
 ## P1 — Testability
 
-- [ ] **Add integration tests for remaining commands**: `fix`, `suggest`, `resolve`, `subgraph`, `validate` (json), `tags --tag`, `stats --days`, `get --graph`, `get --out`, `context --max-tokens`.
-- [ ] **Add error-path integration tests**: Note not found, invalid UUID format, missing `--db` argument, empty database, malformed `.org` files.
-- [ ] **Add JSON schema validation in tests**: For `--json` output, parse with `serde_json` and verify struct fields are present and correctly typed, not just string-contains checks.
+- [x] **Add integration tests for remaining commands**: `fix`, `suggest`, `resolve`, `subgraph`, `validate` (json), `tags --tag`, `stats --days`, `get --graph`, `get --out`, `context --max-tokens`.
+- [x] **Add error-path integration tests**: Note not found, invalid UUID format, missing `--db` argument, empty database, malformed `.org` files.
+- [x] **Add JSON schema validation in tests**: For `--json` output, parse with `serde_json` and verify struct fields are present and correctly typed, not just string-contains checks.
 - [ ] **Add snapshot testing**: Use `insta` crate for golden-file testing of human-readable output. Protects against accidental format changes that AI agents might rely on.
 - [ ] **Add property-based tests for graph operations**: Fuzz `Graph::build()` with random `FileScanResult` vectors, ensure no panics. Similarly for `find_node()` with edge-case inputs.
-- [ ] **Test duplicate UUID detection**: Create a test DB with duplicate UUIDs and verify `check` reports them. Currently untested.
-- [ ] **Test duplicate title detection**: Same as above.
-- [ ] **Test the `--json` flag on ALL commands**: A single parameterized test that runs every command with `--json` and asserts the output is valid JSON. Use the mock DB.
-- [ ] **Extract shared test helpers**: Move `setup_db()` into a reusable test module. Add helper functions like `run_pkms(&["--json", "check"])` that return `(stdout, stderr, exit_code)`.
+- [x] **Test duplicate UUID detection**: Create a test DB with duplicate UUIDs and verify `check` reports them. Currently untested.
+- [x] **Test duplicate title detection**: Same as above.
+- [x] **Test the `--json` flag on ALL commands**: A single parameterized test that runs every command with `--json` and asserts the output is valid JSON. Use the mock DB.
+- [x] **Extract shared test helpers**: Move `setup_db()` into a reusable test module. Add helper functions like `run_pkms(&["--json", "check"])` that return `(stdout, stderr, exit_code)`.
 
 ---
 
