@@ -31,7 +31,7 @@ pub fn discover_files(root: &Path, ignore_patterns: &[String]) -> Result<Vec<Fil
         })
     {
         let entry = entry?;
-        if entry.file_type().is_file() && entry.path().extension().map_or(false, |e| e == "org") {
+        if entry.file_type().is_file() && entry.path().extension().is_some_and(|e| e == "org") {
             entries.push(FileEntry {
                 path: entry.path().to_path_buf(),
             });
@@ -70,7 +70,16 @@ mod tests {
         fs::write(hidden.join("secret.org"), "test").unwrap();
 
         let entries = discover_files(dir.path(), &["*.bak".to_string()]).unwrap();
-        assert_eq!(entries.len(), 1, "expected 1 org file, got {}: {:?}", entries.len(), entries.iter().map(|e| e.path.display().to_string()).collect::<Vec<_>>());
+        assert_eq!(
+            entries.len(),
+            1,
+            "expected 1 org file, got {}: {:?}",
+            entries.len(),
+            entries
+                .iter()
+                .map(|e| e.path.display().to_string())
+                .collect::<Vec<_>>()
+        );
         assert!(entries[0].path.ends_with("note.org"));
     }
 }

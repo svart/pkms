@@ -24,13 +24,19 @@ fn run_json(args: &[&str]) -> (serde_json::Value, ExitStatus) {
     if !trimmed.starts_with('{') && !trimmed.starts_with('[') {
         panic!("Not JSON for args {:?}\nstdout: {}", args, stdout);
     }
-    let v: serde_json::Value =
-        serde_json::from_str(trimmed).unwrap_or_else(|e| panic!("Invalid JSON for {:?}: {}\nError: {}", args, trimmed, e));
+    let v: serde_json::Value = serde_json::from_str(trimmed)
+        .unwrap_or_else(|e| panic!("Invalid JSON for {:?}: {}\nError: {}", args, trimmed, e));
     (v, status)
 }
 
 fn _assert_success(status: ExitStatus, args: &[&str], stdout: &str, stderr: &str) {
-    assert!(status.success(), "args: {:?}\nstdout: {}\nstderr: {}", args, stdout, stderr);
+    assert!(
+        status.success(),
+        "args: {:?}\nstdout: {}\nstderr: {}",
+        args,
+        stdout,
+        stderr
+    );
 }
 
 fn setup_db() -> (tempfile::TempDir, PathBuf) {
@@ -251,7 +257,13 @@ fn test_validate_human() {
 #[test]
 fn test_validate_json() {
     let (_dir, root) = setup_db();
-    let (v, status) = run_json(&["--db", root.to_str().unwrap(), "--json", "validate", "Note A"]);
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--json",
+        "validate",
+        "Note A",
+    ]);
     assert!(status.success());
     assert_eq!(v["title"], "Note A");
     assert_eq!(v["healthy"], true);
@@ -263,7 +275,13 @@ fn test_validate_json() {
 #[test]
 fn test_validate_broken_note() {
     let (_dir, root) = setup_db();
-    let (v, status) = run_json(&["--db", root.to_str().unwrap(), "--json", "validate", "Broken Note"]);
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--json",
+        "validate",
+        "Broken Note",
+    ]);
     assert!(status.success());
     assert_eq!(v["healthy"], false);
     assert!(v["broken_internal"].as_array().map_or(0, |a| a.len()) >= 1);
@@ -272,9 +290,19 @@ fn test_validate_broken_note() {
 #[test]
 fn test_validate_note_not_found() {
     let (_dir, root) = setup_db();
-    let (stdout, stderr, status) = run(&["--db", root.to_str().unwrap(), "validate", "NonexistentNote"]);
+    let (stdout, stderr, status) = run(&[
+        "--db",
+        root.to_str().unwrap(),
+        "validate",
+        "NonexistentNote",
+    ]);
     assert!(!status.success());
-    assert!(stderr.contains("not found") || stdout.contains("error"), "stderr: {}\nstdout: {}", stderr, stdout);
+    assert!(
+        stderr.contains("not found") || stdout.contains("error"),
+        "stderr: {}\nstdout: {}",
+        stderr,
+        stdout
+    );
 }
 
 // ----------------------------------------------------------------
@@ -315,17 +343,34 @@ fn test_orphans_json() {
     let (_dir, root) = setup_db();
     let (v, status) = run_json(&["--db", root.to_str().unwrap(), "--json", "orphans"]);
     assert!(status.success());
-    assert!(v["count"].as_u64().unwrap_or(0) >= 1, "expected at least one orphan, got {}", v["count"]);
-    let titles: Vec<&str> = v["orphans"].as_array().unwrap().iter()
-        .filter_map(|o| o["title"].as_str()).collect();
-    assert!(titles.contains(&"Orphan Note"), "expected 'Orphan Note' in orphans, got: {:?}", titles);
+    assert!(
+        v["count"].as_u64().unwrap_or(0) >= 1,
+        "expected at least one orphan, got {}",
+        v["count"]
+    );
+    let titles: Vec<&str> = v["orphans"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|o| o["title"].as_str())
+        .collect();
+    assert!(
+        titles.contains(&"Orphan Note"),
+        "expected 'Orphan Note' in orphans, got: {:?}",
+        titles
+    );
 }
 
 #[test]
 fn test_orphans_ndjson() {
     let (_dir, root) = setup_db();
-    let (stdout, _stderr, status) =
-        run(&["--db", root.to_str().unwrap(), "--output-format", "ndjson", "orphans"]);
+    let (stdout, _stderr, status) = run(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "ndjson",
+        "orphans",
+    ]);
     assert!(status.success());
     for line in stdout.lines() {
         let v: serde_json::Value = serde_json::from_str(line).unwrap();
@@ -356,8 +401,13 @@ fn test_broken_json() {
 #[test]
 fn test_broken_ndjson() {
     let (_dir, root) = setup_db();
-    let (stdout, _stderr, status) =
-        run(&["--db", root.to_str().unwrap(), "--output-format", "ndjson", "broken"]);
+    let (stdout, _stderr, status) = run(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "ndjson",
+        "broken",
+    ]);
     assert!(status.success());
     let lines: Vec<&str> = stdout.lines().collect();
     assert!(lines.len() >= 1);
@@ -389,8 +439,13 @@ fn test_hubs_json() {
 #[test]
 fn test_hubs_ndjson() {
     let (_dir, root) = setup_db();
-    let (stdout, _stderr, status) =
-        run(&["--db", root.to_str().unwrap(), "--output-format", "ndjson", "hubs"]);
+    let (stdout, _stderr, status) = run(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "ndjson",
+        "hubs",
+    ]);
     assert!(status.success());
     for line in stdout.lines() {
         let v: serde_json::Value = serde_json::from_str(line).unwrap();
@@ -404,8 +459,14 @@ fn test_hubs_ndjson() {
 #[test]
 fn test_context_human() {
     let (_dir, root) = setup_db();
-    let (stdout, _stderr, status) =
-        run(&["--db", root.to_str().unwrap(), "context", "Note A", "--depth", "1"]);
+    let (stdout, _stderr, status) = run(&[
+        "--db",
+        root.to_str().unwrap(),
+        "context",
+        "Note A",
+        "--depth",
+        "1",
+    ]);
     assert!(status.success(), "stdout: {}", stdout);
     assert!(stdout.contains("Note A"), "stdout: {}", stdout);
 }
@@ -413,8 +474,15 @@ fn test_context_human() {
 #[test]
 fn test_context_json() {
     let (_dir, root) = setup_db();
-    let (v, status) =
-        run_json(&["--db", root.to_str().unwrap(), "--json", "context", "Note A", "--depth", "1"]);
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--json",
+        "context",
+        "Note A",
+        "--depth",
+        "1",
+    ]);
     assert!(status.success());
     assert_eq!(v["target"], "Note A");
     assert!(v.get("context").is_some());
@@ -425,8 +493,15 @@ fn test_context_json() {
 #[test]
 fn test_context_depth_2() {
     let (_dir, root) = setup_db();
-    let (v, status) =
-        run_json(&["--db", root.to_str().unwrap(), "--json", "context", "Note A", "--depth", "2"]);
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--json",
+        "context",
+        "Note A",
+        "--depth",
+        "2",
+    ]);
     assert!(status.success());
     assert!(v["context"].as_str().unwrap_or("").contains("Note C"));
 }
@@ -457,9 +532,16 @@ fn test_context_include_outgoing_false() {
     let ctx = v["context"].as_str().unwrap_or("");
     // Should still have the note content but NOT forward links
     assert!(ctx.contains("Note A"), "should contain target title");
-    assert!(!ctx.contains("→"), "should not contain forward link arrows: {}", ctx);
+    assert!(
+        !ctx.contains("→"),
+        "should not contain forward link arrows: {}",
+        ctx
+    );
     // "Note B" appears in the raw file content as [[id:...][Note B]], so check for arrow prefix
-    assert!(!ctx.contains("\n  → Note B"), "should not contain neighbor as forward link");
+    assert!(
+        !ctx.contains("\n  → Note B"),
+        "should not contain neighbor as forward link"
+    );
 }
 
 #[test]
@@ -503,7 +585,10 @@ fn test_context_template_custom() {
     let ctx = v["context"].as_str().unwrap_or("");
     assert!(ctx.starts_with("Title: Note A"), "ctx: {}", ctx);
     assert!(ctx.contains("Content:"));
-    assert!(!ctx.contains("UUID:"), "should not contain UUID from default template");
+    assert!(
+        !ctx.contains("UUID:"),
+        "should not contain UUID from default template"
+    );
 }
 
 #[test]
@@ -523,7 +608,11 @@ fn test_context_template_conditional() {
     assert!(status.success());
     let ctx = v["context"].as_str().unwrap_or("");
     // Note A has no tags or aliases, so both conditionals should be empty
-    assert_eq!(ctx, "", "expected empty output for missing conditionals, got: {}", ctx);
+    assert_eq!(
+        ctx, "",
+        "expected empty output for missing conditionals, got: {}",
+        ctx
+    );
 }
 
 // ----------------------------------------------------------------
@@ -552,8 +641,13 @@ fn test_resolve_json() {
 #[test]
 fn test_resolve_ndjson() {
     let (_dir, root) = setup_db();
-    let (stdout, _stderr, status) =
-        run(&["--db", root.to_str().unwrap(), "--output-format", "ndjson", "resolve"]);
+    let (stdout, _stderr, status) = run(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "ndjson",
+        "resolve",
+    ]);
     assert!(status.success());
     for line in stdout.lines() {
         let v: serde_json::Value = serde_json::from_str(line).unwrap();
@@ -566,14 +660,23 @@ fn test_resolve_query() {
     let (_dir, root) = setup_db();
     let (v, status) = run_json(&["--db", root.to_str().unwrap(), "--json", "resolve", "Note"]);
     assert!(status.success());
-    assert!(v["total"].as_u64().unwrap_or(0) >= 1, "expected at least 1 result for 'Note', got {}", v["total"]);
+    assert!(
+        v["total"].as_u64().unwrap_or(0) >= 1,
+        "expected at least 1 result for 'Note', got {}",
+        v["total"]
+    );
 }
 
 #[test]
 fn test_resolve_fields_human() {
     let (_dir, root) = setup_db();
-    let (stdout, _stderr, status) =
-        run(&["--db", root.to_str().unwrap(), "resolve", "--fields", "uuid,title"]);
+    let (stdout, _stderr, status) = run(&[
+        "--db",
+        root.to_str().unwrap(),
+        "resolve",
+        "--fields",
+        "uuid,title",
+    ]);
     assert!(status.success());
     assert!(!stdout.contains("Tags:"));
 }
@@ -635,8 +738,13 @@ fn test_fix_json() {
 #[test]
 fn test_fix_broken_not_found() {
     let (_dir, root) = setup_db();
-    let (stdout, _stderr, status) =
-        run(&["--db", root.to_str().unwrap(), "fix", "00000000-0000-0000-0000-000000000000", "Note A"]);
+    let (stdout, _stderr, status) = run(&[
+        "--db",
+        root.to_str().unwrap(),
+        "fix",
+        "00000000-0000-0000-0000-000000000000",
+        "Note A",
+    ]);
     // fix succeeds (0 replacements found); check output mentions 0
     assert!(status.success());
     assert!(stdout.contains("0 broken link") || stdout.contains("Would fix"));
@@ -656,7 +764,13 @@ fn test_suggest_human() {
 #[test]
 fn test_suggest_json() {
     let (_dir, root) = setup_db();
-    let (v, status) = run_json(&["--db", root.to_str().unwrap(), "--json", "suggest", "Note A"]);
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--json",
+        "suggest",
+        "Note A",
+    ]);
     assert!(status.success());
     assert_eq!(v["target"], "Note A");
     assert!(v.get("suggestions").is_some());
@@ -664,7 +778,11 @@ fn test_suggest_json() {
     if let Some(suggestions) = v["suggestions"].as_array() {
         if !suggestions.is_empty() {
             let s = &suggestions[0];
-            assert!(s.get("scores").is_some(), "missing per-factor scores: {}", s);
+            assert!(
+                s.get("scores").is_some(),
+                "missing per-factor scores: {}",
+                s
+            );
             let scores = s["scores"].as_object().unwrap();
             // At least one scoring factor should be present
             assert!(!scores.is_empty(), "scores should not be empty: {}", s);
@@ -679,7 +797,8 @@ fn test_suggest_json() {
 #[test]
 fn test_suggest_note_not_found() {
     let (_dir, root) = setup_db();
-    let (_stdout, _stderr, status) = run(&["--db", root.to_str().unwrap(), "suggest", "Nonexistent"]);
+    let (_stdout, _stderr, status) =
+        run(&["--db", root.to_str().unwrap(), "suggest", "Nonexistent"]);
     assert!(!status.success());
 }
 
@@ -698,8 +817,13 @@ fn test_new_dry_run() {
 #[test]
 fn test_new_create() {
     let (_dir, root) = setup_db();
-    let (stdout, _stderr, status) =
-        run(&["--db", root.to_str().unwrap(), "new", "Fresh Note", "--create"]);
+    let (stdout, _stderr, status) = run(&[
+        "--db",
+        root.to_str().unwrap(),
+        "new",
+        "Fresh Note",
+        "--create",
+    ]);
     assert!(status.success());
     assert!(stdout.contains("created"));
 }
@@ -737,8 +861,14 @@ fn test_new_with_tags() {
 #[test]
 fn test_get_human() {
     let (_dir, root) = setup_db();
-    let (stdout, _stderr, status) =
-        run(&["--db", root.to_str().unwrap(), "get", "Note A", "--depth", "1"]);
+    let (stdout, _stderr, status) = run(&[
+        "--db",
+        root.to_str().unwrap(),
+        "get",
+        "Note A",
+        "--depth",
+        "1",
+    ]);
     assert!(status.success());
     assert!(stdout.contains("Note A"));
     assert!(stdout.contains("Note B"));
@@ -747,8 +877,15 @@ fn test_get_human() {
 #[test]
 fn test_get_json() {
     let (_dir, root) = setup_db();
-    let (v, status) =
-        run_json(&["--db", root.to_str().unwrap(), "--json", "get", "Note A", "--depth", "1"]);
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--json",
+        "get",
+        "Note A",
+        "--depth",
+        "1",
+    ]);
     assert!(status.success());
     assert_eq!(v["node"]["title"], "Note A");
     assert!(v.get("neighbors").is_some());
@@ -769,14 +906,15 @@ fn test_get_graph() {
     let (stdout, _stderr, status) =
         run(&["--db", root.to_str().unwrap(), "get", "Note A", "--graph"]);
     assert!(status.success());
-    assert!(stdout.contains("\u{2514}") || stdout.contains("\u{2502}") || stdout.contains("\u{25cf}"));
+    assert!(
+        stdout.contains("\u{2514}") || stdout.contains("\u{2502}") || stdout.contains("\u{25cf}")
+    );
 }
 
 #[test]
 fn test_get_note_not_found() {
     let (_dir, root) = setup_db();
-    let (_stdout, _stderr, status) =
-        run(&["--db", root.to_str().unwrap(), "get", "Nonexistent"]);
+    let (_stdout, _stderr, status) = run(&["--db", root.to_str().unwrap(), "get", "Nonexistent"]);
     assert!(!status.success());
 }
 
@@ -804,8 +942,14 @@ fn test_query_json() {
 #[test]
 fn test_query_ndjson() {
     let (_dir, root) = setup_db();
-    let (stdout, _stderr, status) =
-        run(&["--db", root.to_str().unwrap(), "--output-format", "ndjson", "query", "Note"]);
+    let (stdout, _stderr, status) = run(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "ndjson",
+        "query",
+        "Note",
+    ]);
     assert!(status.success());
     for line in stdout.lines() {
         let v: serde_json::Value = serde_json::from_str(line).unwrap();
@@ -816,16 +960,29 @@ fn test_query_ndjson() {
 #[test]
 fn test_query_tag_filter() {
     let (_dir, root) = setup_db();
-    let (_stdout, _stderr, status) =
-        run(&["--db", root.to_str().unwrap(), "query", "Note", "--tag", "learning"]);
+    let (_stdout, _stderr, status) = run(&[
+        "--db",
+        root.to_str().unwrap(),
+        "query",
+        "Note",
+        "--tag",
+        "learning",
+    ]);
     assert!(status.success());
 }
 
 #[test]
 fn test_query_limit() {
     let (_dir, root) = setup_db();
-    let (v, status) =
-        run_json(&["--db", root.to_str().unwrap(), "--json", "query", "Note", "--limit", "1"]);
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--json",
+        "query",
+        "Note",
+        "--limit",
+        "1",
+    ]);
     assert!(status.success());
     assert_eq!(v["total_results"], 1);
 }
@@ -865,8 +1022,14 @@ fn test_path_human() {
 #[test]
 fn test_path_json() {
     let (_dir, root) = setup_db();
-    let (v, status) =
-        run_json(&["--db", root.to_str().unwrap(), "--json", "path", "Note A", "Note C"]);
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--json",
+        "path",
+        "Note A",
+        "Note C",
+    ]);
     assert!(status.success());
     assert_eq!(v["from"], "Note A");
     assert_eq!(v["to"], "Note C");
@@ -877,8 +1040,13 @@ fn test_path_json() {
 #[test]
 fn test_path_not_found() {
     let (_dir, root) = setup_db();
-    let (_stdout, _stderr, status) =
-        run(&["--db", root.to_str().unwrap(), "path", "Nonexistent", "Note A"]);
+    let (_stdout, _stderr, status) = run(&[
+        "--db",
+        root.to_str().unwrap(),
+        "path",
+        "Nonexistent",
+        "Note A",
+    ]);
     assert!(!status.success());
 }
 
@@ -888,8 +1056,14 @@ fn test_path_not_found() {
 #[test]
 fn test_subgraph_human() {
     let (_dir, root) = setup_db();
-    let (stdout, _stderr, status) =
-        run(&["--db", root.to_str().unwrap(), "subgraph", "Note A", "--depth", "1"]);
+    let (stdout, _stderr, status) = run(&[
+        "--db",
+        root.to_str().unwrap(),
+        "subgraph",
+        "Note A",
+        "--depth",
+        "1",
+    ]);
     assert!(status.success());
     assert!(stdout.contains("Note A") || stdout.contains("Vertices:"));
 }
@@ -897,8 +1071,15 @@ fn test_subgraph_human() {
 #[test]
 fn test_subgraph_json() {
     let (_dir, root) = setup_db();
-    let (v, status) =
-        run_json(&["--db", root.to_str().unwrap(), "--json", "subgraph", "Note A", "--depth", "1"]);
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--json",
+        "subgraph",
+        "Note A",
+        "--depth",
+        "1",
+    ]);
     assert!(status.success());
     assert!(v.get("root_uuid").is_some());
     assert!(v.get("vertex_count").is_some());
@@ -936,8 +1117,13 @@ fn test_tags_json() {
 #[test]
 fn test_tags_ndjson() {
     let (_dir, root) = setup_db();
-    let (stdout, _stderr, status) =
-        run(&["--db", root.to_str().unwrap(), "--output-format", "ndjson", "tags"]);
+    let (stdout, _stderr, status) = run(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "ndjson",
+        "tags",
+    ]);
     assert!(status.success());
     for line in stdout.lines() {
         let v: serde_json::Value = serde_json::from_str(line).unwrap();
@@ -957,11 +1143,21 @@ fn test_tags_tag_filter() {
 #[test]
 fn test_tags_tag_filter_json() {
     let (_dir, root) = setup_db();
-    let (v, status) =
-        run_json(&["--db", root.to_str().unwrap(), "--json", "tags", "--tag", "learning"]);
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--json",
+        "tags",
+        "--tag",
+        "learning",
+    ]);
     assert!(status.success());
     assert_eq!(v["tags"][0]["tag"], "learning");
-    assert!(v["tags"][0]["notes"].as_array().map_or(false, |n| !n.is_empty()));
+    assert!(
+        v["tags"][0]["notes"]
+            .as_array()
+            .map_or(false, |n| !n.is_empty())
+    );
 }
 
 // ----------------------------------------------------------------
@@ -979,7 +1175,13 @@ fn test_check_file_links_human() {
 #[test]
 fn test_check_file_links_json() {
     let (_dir, root) = setup_db();
-    let (v, status) = run_json(&["--db", root.to_str().unwrap(), "--json", "check", "--file-links"]);
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--json",
+        "check",
+        "--file-links",
+    ]);
     assert!(!status.success());
     assert!(v.get("broken_file_links").is_some());
     let broken_files = v["broken_file_links"].as_array().unwrap();
@@ -994,8 +1196,12 @@ fn test_check_file_links_json() {
 #[test]
 fn test_check_attachment_links_human() {
     let (_dir, root) = setup_db();
-    let (stdout, _stderr, status) =
-        run(&["--db", root.to_str().unwrap(), "check", "--attachment-links"]);
+    let (stdout, _stderr, status) = run(&[
+        "--db",
+        root.to_str().unwrap(),
+        "check",
+        "--attachment-links",
+    ]);
     assert!(!status.success());
     assert!(stdout.contains("Broken attach:"));
     assert!(stdout.contains("Attachment Link Note"));
@@ -1004,7 +1210,13 @@ fn test_check_attachment_links_human() {
 #[test]
 fn test_check_attachment_links_json() {
     let (_dir, root) = setup_db();
-    let (v, status) = run_json(&["--db", root.to_str().unwrap(), "--json", "check", "--attachment-links"]);
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--json",
+        "check",
+        "--attachment-links",
+    ]);
     assert!(!status.success());
     assert!(v.get("broken_attachment_links").is_some());
     let broken_attach = v["broken_attachment_links"].as_array().unwrap();
@@ -1039,21 +1251,60 @@ fn test_error_note_not_found_json() {
     let (_dir, root) = setup_db();
     let db = root.to_str().unwrap().to_string();
     let cases: Vec<Vec<String>> = vec![
-        vec!["--db".into(), db.clone(), "--json".into(), "validate".into(), "Nonexistent".into()],
-        vec!["--db".into(), db.clone(), "--json".into(), "get".into(), "Nonexistent".into()],
-        vec!["--db".into(), db.clone(), "--json".into(), "suggest".into(), "Nonexistent".into()],
-        vec!["--db".into(), db.clone(), "--json".into(), "subgraph".into(), "Nonexistent".into()],
-        vec!["--db".into(), db.clone(), "--json".into(), "context".into(), "Nonexistent".into()],
+        vec![
+            "--db".into(),
+            db.clone(),
+            "--json".into(),
+            "validate".into(),
+            "Nonexistent".into(),
+        ],
+        vec![
+            "--db".into(),
+            db.clone(),
+            "--json".into(),
+            "get".into(),
+            "Nonexistent".into(),
+        ],
+        vec![
+            "--db".into(),
+            db.clone(),
+            "--json".into(),
+            "suggest".into(),
+            "Nonexistent".into(),
+        ],
+        vec![
+            "--db".into(),
+            db.clone(),
+            "--json".into(),
+            "subgraph".into(),
+            "Nonexistent".into(),
+        ],
+        vec![
+            "--db".into(),
+            db.clone(),
+            "--json".into(),
+            "context".into(),
+            "Nonexistent".into(),
+        ],
     ];
     for args in &cases {
         let args_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
         let (stdout, _stderr, status) = run(&args_refs);
         assert!(!status.success(), "Expected failure for {:?}", args_refs);
         let trimmed = stdout.trim();
-        assert!(trimmed.starts_with('{'), "Expected JSON error for {:?}, got: {}", args_refs, stdout);
+        assert!(
+            trimmed.starts_with('{'),
+            "Expected JSON error for {:?}, got: {}",
+            args_refs,
+            stdout
+        );
         let v: serde_json::Value = serde_json::from_str(trimmed)
             .unwrap_or_else(|_| panic!("Invalid JSON for {:?}: {}", args_refs, stdout));
-        assert!(v.get("error").is_some(), "Missing error key for {:?}", args_refs);
+        assert!(
+            v.get("error").is_some(),
+            "Missing error key for {:?}",
+            args_refs
+        );
     }
 }
 
@@ -1127,7 +1378,11 @@ fn test_ndjson_quiet() {
         "resolve",
     ]);
     assert!(status.success());
-    assert!(stderr.is_empty(), "Expected empty stderr with --quiet, got: {}", stderr);
+    assert!(
+        stderr.is_empty(),
+        "Expected empty stderr with --quiet, got: {}",
+        stderr
+    );
     for line in stdout.lines() {
         let v: serde_json::Value = serde_json::from_str(line).unwrap();
         assert!(v.get("uuid").is_some());
@@ -1142,31 +1397,153 @@ fn test_all_commands_json() {
     let (_dir, root) = setup_db();
     let db = root.to_str().unwrap().to_string();
     let cases: Vec<(Vec<String>, bool)> = vec![
-        (vec!["--db".into(), db.clone(), "--json".into(), "check".into()], false),
-        (vec!["--db".into(), db.clone(), "--json".into(), "stats".into()], true),
-        (vec!["--db".into(), db.clone(), "--json".into(), "orphans".into()], true),
-        (vec!["--db".into(), db.clone(), "--json".into(), "broken".into()], true),
-        (vec!["--db".into(), db.clone(), "--json".into(), "hubs".into()], true),
-        (vec!["--db".into(), db.clone(), "--json".into(), "tags".into()], true),
-        (vec!["--db".into(), db.clone(), "--json".into(), "info".into()], true),
-        (vec!["--db".into(), db.clone(), "--json".into(), "resolve".into()], true),
-        (vec!["--db".into(), db.clone(), "--json".into(), "query".into(), "Note".into()], true),
-        (vec!["--db".into(), db.clone(), "--json".into(), "path".into(), "Note A".into(), "Note C".into()], true),
-        (vec!["--db".into(), db.clone(), "--json".into(), "context".into(), "Note A".into(), "--depth".into(), "1".into()], true),
-        (vec!["--db".into(), db.clone(), "--json".into(), "validate".into(), "Note A".into()], true),
-        (vec!["--db".into(), db.clone(), "--json".into(), "get".into(), "Note A".into(), "--depth".into(), "1".into()], true),
-        (vec!["--db".into(), db.clone(), "--json".into(), "suggest".into(), "Note A".into()], true),
-        (vec!["--db".into(), db.clone(), "--json".into(), "new".into(), "Parametric Test".into()], true),
-        (vec!["--db".into(), db.clone(), "--json".into(), "subgraph".into(), "Note A".into(), "--depth".into(), "1".into()], true),
-        (vec!["--db".into(), db.clone(), "--json".into(), "fix".into(), "ffffffff-ffff-4fff-ffff-ffffffffffff".into(), "Note A".into()], true),
+        (
+            vec!["--db".into(), db.clone(), "--json".into(), "check".into()],
+            false,
+        ),
+        (
+            vec!["--db".into(), db.clone(), "--json".into(), "stats".into()],
+            true,
+        ),
+        (
+            vec!["--db".into(), db.clone(), "--json".into(), "orphans".into()],
+            true,
+        ),
+        (
+            vec!["--db".into(), db.clone(), "--json".into(), "broken".into()],
+            true,
+        ),
+        (
+            vec!["--db".into(), db.clone(), "--json".into(), "hubs".into()],
+            true,
+        ),
+        (
+            vec!["--db".into(), db.clone(), "--json".into(), "tags".into()],
+            true,
+        ),
+        (
+            vec!["--db".into(), db.clone(), "--json".into(), "info".into()],
+            true,
+        ),
+        (
+            vec!["--db".into(), db.clone(), "--json".into(), "resolve".into()],
+            true,
+        ),
+        (
+            vec![
+                "--db".into(),
+                db.clone(),
+                "--json".into(),
+                "query".into(),
+                "Note".into(),
+            ],
+            true,
+        ),
+        (
+            vec![
+                "--db".into(),
+                db.clone(),
+                "--json".into(),
+                "path".into(),
+                "Note A".into(),
+                "Note C".into(),
+            ],
+            true,
+        ),
+        (
+            vec![
+                "--db".into(),
+                db.clone(),
+                "--json".into(),
+                "context".into(),
+                "Note A".into(),
+                "--depth".into(),
+                "1".into(),
+            ],
+            true,
+        ),
+        (
+            vec![
+                "--db".into(),
+                db.clone(),
+                "--json".into(),
+                "validate".into(),
+                "Note A".into(),
+            ],
+            true,
+        ),
+        (
+            vec![
+                "--db".into(),
+                db.clone(),
+                "--json".into(),
+                "get".into(),
+                "Note A".into(),
+                "--depth".into(),
+                "1".into(),
+            ],
+            true,
+        ),
+        (
+            vec![
+                "--db".into(),
+                db.clone(),
+                "--json".into(),
+                "suggest".into(),
+                "Note A".into(),
+            ],
+            true,
+        ),
+        (
+            vec![
+                "--db".into(),
+                db.clone(),
+                "--json".into(),
+                "new".into(),
+                "Parametric Test".into(),
+            ],
+            true,
+        ),
+        (
+            vec![
+                "--db".into(),
+                db.clone(),
+                "--json".into(),
+                "subgraph".into(),
+                "Note A".into(),
+                "--depth".into(),
+                "1".into(),
+            ],
+            true,
+        ),
+        (
+            vec![
+                "--db".into(),
+                db.clone(),
+                "--json".into(),
+                "fix".into(),
+                "ffffffff-ffff-4fff-ffff-ffffffffffff".into(),
+                "Note A".into(),
+            ],
+            true,
+        ),
     ];
     for (args, expect_success) in &cases {
         let args_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
-        let output = Command::new(pkms_binary()).args(&args_refs).output().unwrap();
+        let output = Command::new(pkms_binary())
+            .args(&args_refs)
+            .output()
+            .unwrap();
         let stdout = String::from_utf8_lossy(&output.stdout);
         let stderr = String::from_utf8_lossy(&output.stderr);
         if *expect_success {
-            assert!(output.status.success(), "Expected success for {:?}\nstdout: {}\nstderr: {}", args_refs, stdout, stderr);
+            assert!(
+                output.status.success(),
+                "Expected success for {:?}\nstdout: {}\nstderr: {}",
+                args_refs,
+                stdout,
+                stderr
+            );
         }
         let trimmed = stdout.trim();
         assert!(
@@ -1188,11 +1565,20 @@ fn test_all_commands_json() {
 #[test]
 fn test_no_header_orphans() {
     let (_dir, root) = setup_db();
-    let (stdout, _stderr, status) = run(&["--db", root.to_str().unwrap(), "orphans", "--no-header"]);
+    let (stdout, _stderr, status) =
+        run(&["--db", root.to_str().unwrap(), "orphans", "--no-header"]);
     assert!(status.success());
     // Should NOT contain "Orphan notes (N):" header
-    assert!(!stdout.contains("Orphan notes"), "no-header should suppress header: {}", stdout);
-    assert!(stdout.contains("Orphan Note"), "should still show items: {}", stdout);
+    assert!(
+        !stdout.contains("Orphan notes"),
+        "no-header should suppress header: {}",
+        stdout
+    );
+    assert!(
+        stdout.contains("Orphan Note"),
+        "should still show items: {}",
+        stdout
+    );
 }
 
 #[test]
@@ -1200,17 +1586,34 @@ fn test_no_header_broken() {
     let (_dir, root) = setup_db();
     let (stdout, _stderr, status) = run(&["--db", root.to_str().unwrap(), "broken", "--no-header"]);
     assert!(status.success());
-    assert!(!stdout.contains("Broken links"), "no-header should suppress header: {}", stdout);
-    assert!(stdout.contains("Broken Note"), "should still show items: {}", stdout);
+    assert!(
+        !stdout.contains("Broken links"),
+        "no-header should suppress header: {}",
+        stdout
+    );
+    assert!(
+        stdout.contains("Broken Note"),
+        "should still show items: {}",
+        stdout
+    );
 }
 
 #[test]
 fn test_no_header_resolve() {
     let (_dir, root) = setup_db();
-    let (stdout, _stderr, status) = run(&["--db", root.to_str().unwrap(), "resolve", "--no-header"]);
+    let (stdout, _stderr, status) =
+        run(&["--db", root.to_str().unwrap(), "resolve", "--no-header"]);
     assert!(status.success());
-    assert!(!stdout.contains("Total:"), "no-header should suppress Total: {}", stdout);
-    assert!(stdout.contains("Note A"), "should still show items: {}", stdout);
+    assert!(
+        !stdout.contains("Total:"),
+        "no-header should suppress Total: {}",
+        stdout
+    );
+    assert!(
+        stdout.contains("Note A"),
+        "should still show items: {}",
+        stdout
+    );
 }
 
 #[test]
@@ -1218,14 +1621,23 @@ fn test_count_only_broken() {
     let (_dir, root) = setup_db();
     let (stdout, _stderr, status) = run(&["--db", root.to_str().unwrap(), "broken", "--count"]);
     assert!(status.success());
-    let count: usize = stdout.trim().parse().expect("--count should print just a number");
+    let count: usize = stdout
+        .trim()
+        .parse()
+        .expect("--count should print just a number");
     assert!(count >= 1, "expected at least 1 broken link");
 }
 
 #[test]
 fn test_count_only_orphans() {
     let (_dir, root) = setup_db();
-    let (v, status) = run_json(&["--db", root.to_str().unwrap(), "--json", "orphans", "--count"]);
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--json",
+        "orphans",
+        "--count",
+    ]);
     assert!(status.success());
     assert!(v.get("count").is_some());
     assert!(v["count"].as_u64().unwrap_or(0) >= 1);
@@ -1240,7 +1652,14 @@ fn test_count_only_orphans() {
 fn test_get_from_stdin() {
     let (_dir, root) = setup_db();
     let mut child = std::process::Command::new(pkms_binary())
-        .args(&["--db", root.to_str().unwrap(), "get", "--from-stdin", "--depth", "0"])
+        .args(&[
+            "--db",
+            root.to_str().unwrap(),
+            "get",
+            "--from-stdin",
+            "--depth",
+            "0",
+        ])
         .stdin(std::process::Stdio::piped())
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
@@ -1253,7 +1672,11 @@ fn test_get_from_stdin() {
         writeln!(stdin, "Note B").unwrap();
     }
     let output = child.wait_with_output().unwrap();
-    assert!(output.status.success(), "stderr: {}", String::from_utf8_lossy(&output.stderr));
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("Note A"), "stdout: {}", stdout);
     assert!(stdout.contains("Note B"), "stdout: {}", stdout);
@@ -1284,21 +1707,60 @@ fn test_json_error_exit_code() {
     let (_dir, root) = setup_db();
     let db = root.to_str().unwrap().to_string();
     let cases: Vec<Vec<String>> = vec![
-        vec!["--db".into(), db.clone(), "--json".into(), "validate".into(), "DoesNotExist".into()],
-        vec!["--db".into(), db.clone(), "--json".into(), "get".into(), "DoesNotExist".into()],
-        vec!["--db".into(), db.clone(), "--json".into(), "suggest".into(), "DoesNotExist".into()],
-        vec!["--db".into(), db.clone(), "--json".into(), "context".into(), "DoesNotExist".into()],
-        vec!["--db".into(), db.clone(), "--json".into(), "subgraph".into(), "DoesNotExist".into()],
+        vec![
+            "--db".into(),
+            db.clone(),
+            "--json".into(),
+            "validate".into(),
+            "DoesNotExist".into(),
+        ],
+        vec![
+            "--db".into(),
+            db.clone(),
+            "--json".into(),
+            "get".into(),
+            "DoesNotExist".into(),
+        ],
+        vec![
+            "--db".into(),
+            db.clone(),
+            "--json".into(),
+            "suggest".into(),
+            "DoesNotExist".into(),
+        ],
+        vec![
+            "--db".into(),
+            db.clone(),
+            "--json".into(),
+            "context".into(),
+            "DoesNotExist".into(),
+        ],
+        vec![
+            "--db".into(),
+            db.clone(),
+            "--json".into(),
+            "subgraph".into(),
+            "DoesNotExist".into(),
+        ],
     ];
     for args in &cases {
         let args_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
         let (stdout, _stderr, status) = run(&args_refs);
         assert!(!status.success(), "Expected failure for {:?}", args_refs);
         let trimmed = stdout.trim();
-        assert!(trimmed.starts_with('{'), "Expected JSON for {:?}", args_refs);
-        let v: serde_json::Value = serde_json::from_str(trimmed)
-            .unwrap_or_else(|_| panic!("Invalid JSON on error path for {:?}: {}", args_refs, stdout));
-        assert!(v.get("error").is_some(), "Expected error key for {:?}", args_refs);
+        assert!(
+            trimmed.starts_with('{'),
+            "Expected JSON for {:?}",
+            args_refs
+        );
+        let v: serde_json::Value = serde_json::from_str(trimmed).unwrap_or_else(|_| {
+            panic!("Invalid JSON on error path for {:?}: {}", args_refs, stdout)
+        });
+        assert!(
+            v.get("error").is_some(),
+            "Expected error key for {:?}",
+            args_refs
+        );
     }
 }
 
@@ -1326,7 +1788,8 @@ fn test_snapshot_tags() {
 #[test]
 fn test_snapshot_path() {
     let (_dir, root) = setup_db();
-    let (stdout, _stderr, _status) = run(&["--db", root.to_str().unwrap(), "path", "Note A", "Note C"]);
+    let (stdout, _stderr, _status) =
+        run(&["--db", root.to_str().unwrap(), "path", "Note A", "Note C"]);
     insta::assert_snapshot!("path_human", normalize_snapshot(&stdout, &root));
 }
 
