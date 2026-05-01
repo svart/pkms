@@ -3,6 +3,7 @@ use crate::discovery::discover_files;
 use crate::graph::{FileScanResult, Graph};
 use crate::parser::parse_note;
 use anyhow::Result;
+use rayon::prelude::*;
 use serde::Serialize;
 
 #[derive(Serialize)]
@@ -32,7 +33,7 @@ pub struct ContextLine {
 pub fn run(
     config: &Config,
     json: bool,
-    _verbose: bool,
+    verbose: bool,
     terms: &str,
     tag_filter: Option<&str>,
     limit: Option<usize>,
@@ -43,8 +44,12 @@ pub fn run(
 
     let files = discover_files(&db_root, &ignore)?;
 
+    if verbose {
+        eprintln!("Found {} .org files, parsing...", files.len());
+    }
+
     let results: Vec<FileScanResult> = files
-        .into_iter()
+        .into_par_iter()
         .map(|entry| {
             let path = entry.path.clone();
             match std::fs::read_to_string(&path) {

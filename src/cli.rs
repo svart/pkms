@@ -80,7 +80,7 @@ pub enum Command {
     New {
         #[arg(help = "Title of the new note")]
         title: String,
-        #[arg(long, help = "Actualy write the boilerplate file")]
+        #[arg(long, help = "Actually write the boilerplate file")]
         create: bool,
         #[arg(long, help = "Comma-separated list of filetags")]
         tags: Option<String>,
