@@ -27,7 +27,7 @@ pub struct Suggestion {
 pub fn run(
     config: &Config,
     json: bool,
-    _verbose: bool,
+    verbose: bool,
     target: Option<&str>,
     limit: Option<usize>,
     input_json: Option<&std::path::PathBuf>,
@@ -216,7 +216,7 @@ pub fn run(
     } else {
         println!("Suggestions for \"{}\":", node.title);
         println!();
-        for (i, (n, score, reasons, _fs)) in scored.iter().enumerate() {
+        for (i, (n, score, reasons, fs)) in scored.iter().enumerate() {
             println!(
                 "{:3}. {:45} score: {:5.0}",
                 i + 1,
@@ -225,6 +225,12 @@ pub fn run(
             );
             if !reasons.is_empty() {
                 println!("       {}", reasons.join(", "));
+            }
+            if verbose && !fs.is_empty() {
+                let mut factors: Vec<(&String, &f64)> = fs.iter().collect();
+                factors.sort_by(|a, b| b.1.partial_cmp(a.1).unwrap_or(std::cmp::Ordering::Equal));
+                let parts: Vec<String> = factors.iter().map(|(k, v)| format!("  {}: {:.0}", k, v)).collect();
+                println!("       Factors:{}", parts.join(""));
             }
         }
     }

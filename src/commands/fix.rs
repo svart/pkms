@@ -16,7 +16,7 @@ pub struct FixOutput {
 pub fn run(
     config: &Config,
     json: bool,
-    _verbose: bool,
+    verbose: bool,
     broken_uuid: &str,
     target: &str,
     apply: bool,
@@ -129,6 +129,9 @@ pub fn run(
         }
         for f in &files_affected {
             println!("  {}", f);
+        }
+        if verbose {
+            println!("  ({} replacement(s) total)", total_replacements);
         }
     }
 

@@ -4,6 +4,7 @@ use crate::parser::Link;
 use anyhow::Result;
 use serde::Serialize;
 use std::path::Path;
+use std::process::ExitCode;
 
 #[derive(Serialize)]
 pub struct CheckOutput {
@@ -60,7 +61,7 @@ pub fn run(
     db_cli: Option<&std::path::Path>,
     file_links: bool,
     attachment_links: bool,
-) -> Result<bool> {
+) -> Result<ExitCode> {
     let graph = Graph::load(config, db_cli, verbose)?;
     let stats = graph.stats();
     let db_root = config.resolve_db_root(db_cli)?;
@@ -248,5 +249,5 @@ pub fn run(
         }
     }
 
-    Ok(healthy)
+    if healthy { Ok(ExitCode::SUCCESS) } else { Ok(ExitCode::from(1)) }
 }

@@ -43,7 +43,7 @@ pub struct RecentNote {
 pub fn run(
     config: &Config,
     json: bool,
-    _verbose: bool,
+    verbose: bool,
     days: Option<u32>,
     db_cli: Option<&std::path::Path>,
 ) -> Result<()> {
@@ -116,11 +116,13 @@ pub fn run(
             let recent = graph.notes_since(d);
             println!("  Recent ({} days):   {}", d, recent.len());
         }
-        println!();
-        println!("Directories:");
-        for (dir, count) in &dirs {
-            let display = if dir.is_empty() { "(root)" } else { dir.as_str() };
-            println!("  {:40} {}", display, count);
+        if verbose {
+            println!();
+            println!("Directories:");
+            for (dir, count) in &dirs {
+                let display = if dir.is_empty() { "(root)" } else { dir.as_str() };
+                println!("  {:40} {}", display, count);
+            }
         }
         println!();
         println!("Top hubs:");
