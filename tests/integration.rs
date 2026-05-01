@@ -425,6 +425,93 @@ fn test_context_note_not_found() {
     assert!(!status.success());
 }
 
+#[test]
+fn test_context_include_outgoing_false() {
+    let (_dir, root) = setup_db();
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--json",
+        "context",
+        "Note A",
+        "--depth",
+        "1",
+        "--include-outgoing",
+        "false",
+    ]);
+    assert!(status.success());
+    let ctx = v["context"].as_str().unwrap_or("");
+    // Should still have the note content but NOT forward links
+    assert!(ctx.contains("Note A"), "should contain target title");
+    assert!(!ctx.contains("→"), "should not contain forward link arrows: {}", ctx);
+    // "Note B" appears in the raw file content as [[id:...][Note B]], so check for arrow prefix
+    assert!(!ctx.contains("\n  → Note B"), "should not contain neighbor as forward link");
+}
+
+#[test]
+fn test_context_include_incoming_false() {
+    // Note B has an incoming link from Note A; with --include-incoming=false
+    // the backlinks section should still appear since we use depth
+    let (_dir, root) = setup_db();
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--json",
+        "context",
+        "Note B",
+        "--depth",
+        "1",
+        "--include-incoming",
+        "false",
+    ]);
+    assert!(status.success());
+    let ctx = v["context"].as_str().unwrap_or("");
+    // Should still show forward links (Note C) but NOT backlinks (Note A)
+    assert!(ctx.contains("Note C"), "should contain forward linked note");
+    assert!(!ctx.contains("←"), "should not contain backlink arrows");
+}
+
+#[test]
+fn test_context_template_custom() {
+    let (_dir, root) = setup_db();
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--json",
+        "context",
+        "Note A",
+        "--depth",
+        "1",
+        "--template",
+        "Title: {{title}}\nContent:\n{{content}}",
+    ]);
+    assert!(status.success());
+    let ctx = v["context"].as_str().unwrap_or("");
+    assert!(ctx.starts_with("Title: Note A"), "ctx: {}", ctx);
+    assert!(ctx.contains("Content:"));
+    assert!(!ctx.contains("UUID:"), "should not contain UUID from default template");
+}
+
+#[test]
+fn test_context_template_conditional() {
+    let (_dir, root) = setup_db();
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--json",
+        "context",
+        "Note A",
+        "--depth",
+        "0",
+        "--template",
+        "{{#tags}}has tags{{/tags}}{{#aliases}}has aliases{{/aliases}}",
+    ]);
+    assert!(status.success());
+    let ctx = v["context"].as_str().unwrap_or("");
+    // Note A has no tags or aliases, so both conditionals should be empty
+    assert_eq!(ctx, "", "expected empty output for missing conditionals, got: {}", ctx);
+}
+
 // ----------------------------------------------------------------
 // RESOLVE
 // ----------------------------------------------------------------
@@ -559,6 +646,20 @@ fn test_suggest_json() {
     assert!(status.success());
     assert_eq!(v["target"], "Note A");
     assert!(v.get("suggestions").is_some());
+    // Verify per-factor scores exist
+    if let Some(suggestions) = v["suggestions"].as_array() {
+        if !suggestions.is_empty() {
+            let s = &suggestions[0];
+            assert!(s.get("scores").is_some(), "missing per-factor scores: {}", s);
+            let scores = s["scores"].as_object().unwrap();
+            // At least one scoring factor should be present
+            assert!(!scores.is_empty(), "scores should not be empty: {}", s);
+            // Each score should be a number
+            for (_k, v) in scores {
+                assert!(v.is_number(), "score value should be number: {}", v);
+            }
+        }
+    }
 }
 
 #[test]

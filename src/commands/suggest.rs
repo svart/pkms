@@ -3,7 +3,7 @@ use crate::graph::Graph;
 use crate::parser::Link;
 use anyhow::Result;
 use serde::Serialize;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 #[derive(Serialize)]
 pub struct SuggestOutput {
@@ -20,6 +20,7 @@ pub struct Suggestion {
     pub score: f64,
     pub reasons: Vec<String>,
     pub filetags: Vec<String>,
+    pub scores: HashMap<String, f64>,
 }
 
 pub fn run(
@@ -78,7 +79,7 @@ pub fn run(
         })
         .collect();
 
-    let mut scored: Vec<(&crate::graph::Node, f64, Vec<String>)> = Vec::new();
+    let mut scored: Vec<(&crate::graph::Node, f64, Vec<String>, HashMap<String, f64>)> = Vec::new();
 
     for other in graph.nodes.values() {
         if other.uuid == node.uuid {
@@ -87,6 +88,7 @@ pub fn run(
 
         let mut score = 0.0;
         let mut reasons = Vec::new();
+        let mut factor_scores: HashMap<String, f64> = HashMap::new();
 
         // 1. Title keyword match (strongest signal)
         let other_lower = other.title.to_lowercase();
@@ -96,7 +98,9 @@ pub fn run(
             .filter(|w| target_keywords.iter().any(|kw| kw.as_str() == **w))
             .count();
         if title_overlap > 0 {
-            score += title_overlap as f64 * 20.0;
+            let s = title_overlap as f64 * 20.0;
+            score += s;
+            factor_scores.insert("title".to_string(), s);
             reasons.push(format!("shared title: \"{}\"", other.title));
         }
 
@@ -108,7 +112,9 @@ pub fn run(
                     .filter(|kw| other_lc.contains(kw.as_str()))
                     .count();
                 if content_match_count > 0 {
-                    score += content_match_count as f64 * 5.0;
+                    let s = content_match_count as f64 * 5.0;
+                    score += s;
+                    *factor_scores.entry("content".to_string()).or_insert(0.0) += s;
                     if title_overlap == 0 {
                         reasons.push(format!("{} content keyword matches", content_match_count));
                     }
@@ -123,7 +129,9 @@ pub fn run(
             .filter(|t| target_tags.contains(t.as_str()))
             .count();
         if tag_overlap > 0 {
-            score += tag_overlap as f64 * 25.0;
+            let s = tag_overlap as f64 * 25.0;
+            score += s;
+            factor_scores.insert("tags".to_string(), s);
             reasons.push(format!("shared tags"));
         }
 
@@ -137,7 +145,9 @@ pub fn run(
             .intersection(&other_backlinks)
             .count();
         if shared_backlinks > 0 {
-            score += shared_backlinks as f64 * 15.0;
+            let s = shared_backlinks as f64 * 15.0;
+            score += s;
+            *factor_scores.entry("backlinks".to_string()).or_insert(0.0) += s;
             reasons.push(format!("{} shared backlinks", shared_backlinks));
         }
 
@@ -157,19 +167,23 @@ pub fn run(
             .intersection(&other_outgoing)
             .count();
         if shared_outgoing > 0 {
-            score += shared_outgoing as f64 * 12.0;
+            let s = shared_outgoing as f64 * 12.0;
+            score += s;
+            *factor_scores.entry("outgoing".to_string()).or_insert(0.0) += s;
             reasons.push(format!("{} shared outgoing", shared_outgoing));
         }
 
         // 6. Directory proximity (same parent dir)
         if let (Some(tp), Some(op)) = (node.path.parent(), other.path.parent()) {
             if tp == op && score > 0.0 {
-                score += 5.0;
+                let s = 5.0;
+                score += s;
+                *factor_scores.entry("directory".to_string()).or_insert(0.0) += s;
             }
         }
 
         if score > 0.0 {
-            scored.push((other, score, reasons));
+            scored.push((other, score, reasons, factor_scores));
         }
     }
 
@@ -179,13 +193,14 @@ pub fn run(
     if json {
         let suggestions: Vec<Suggestion> = scored
             .into_iter()
-            .map(|(n, s, r)| Suggestion {
+            .map(|(n, s, r, fs)| Suggestion {
                 uuid: n.uuid.clone(),
                 title: n.title.clone(),
                 path: n.path.to_string_lossy().to_string(),
                 score: s,
                 reasons: r,
                 filetags: n.filetags.clone(),
+                scores: fs,
             })
             .collect();
         let output = SuggestOutput {
@@ -197,7 +212,7 @@ pub fn run(
     } else {
         println!("Suggestions for \"{}\":", node.title);
         println!();
-        for (i, (n, score, reasons)) in scored.iter().enumerate() {
+        for (i, (n, score, reasons, _fs)) in scored.iter().enumerate() {
             println!(
                 "{:3}. {:45} score: {:5.0}",
                 i + 1,

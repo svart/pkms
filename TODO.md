@@ -37,11 +37,11 @@ These directly impact how effectively AI agents (and power users) can use pkms p
 
 ### Context & AI integration
 
-- [ ] **`context` — improve token estimation**: The current heuristic (`word_count * (1.0 + avg_word_len / 10.0)`) is crude. Use a character-based estimate (tokens ≈ chars / 4 for English) or add a `tiktoken-rs` integration. Document the estimation formula.
-- [ ] **`context` — add `--include-outgoing` / `--include-incoming` flags**: Currently `--depth` controls both. Sometimes you only want backlinks or only outgoing.
-- [ ] **`context` — add `--template` flag**: Allow a custom prompt template string with `{{title}}`, `{{content}}`, `{{neighbors}}`, `{{backlinks}}` placeholders.
-- [ ] **`suggest` — add `--json` output for programmatic consumption**: Already has `Serialize`, verify JSON output from `--json` works correctly and contains all scoring factors.
-- [ ] **`suggest` — expose per-factor scores in output**: So AI agents can understand WHY a note was suggested. Add `scores: HashMap<String, f64>` to the output struct.
+- [x] **`context` — improve token estimation**: The current heuristic (`word_count * (1.0 + avg_word_len / 10.0)`) is crude. Use a character-based estimate (tokens ≈ chars / 4 for English) or add a `tiktoken-rs` integration. Document the estimation formula.
+- [x] **`context` — add `--include-outgoing` / `--include-incoming` flags**: Currently `--depth` controls both. Sometimes you only want backlinks or only outgoing.
+- [x] **`context` — add `--template` flag**: Allow a custom prompt template string with `{{title}}`, `{{content}}`, `{{neighbors}}`, `{{backlinks}}` placeholders.
+- [x] **`suggest` — add `--json` output for programmatic consumption**: Already has `Serialize`, verify JSON output from `--json` works correctly and contains all scoring factors.
+- [x] **`suggest` — expose per-factor scores in output**: So AI agents can understand WHY a note was suggested. Add `scores: HashMap<String, f64>` to the output struct.
 
 ### CLI for automation
 

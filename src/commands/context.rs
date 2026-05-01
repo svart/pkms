@@ -3,6 +3,8 @@ use crate::graph::Graph;
 use anyhow::Result;
 use serde::Serialize;
 
+const DEFAULT_TEMPLATE: &str = "# {{title}}\nUUID: {{uuid}}\nPath: {{path}}\n{{#tags}}Tags: {{tags}}\n{{/tags}}{{#aliases}}Aliases: {{aliases}}\n{{/aliases}}\n--- Content ---\n{{content}}--- End Content ---\n\n{{neighbors}}{{backlinks}}";
+
 #[derive(Serialize)]
 pub struct ContextOutput {
     pub target: String,
@@ -18,67 +20,70 @@ pub fn run(
     target: &str,
     depth: u32,
     max_tokens: Option<usize>,
+    include_outgoing: Option<bool>,
+    include_incoming: Option<bool>,
+    template: Option<&str>,
     db_cli: Option<&std::path::Path>,
 ) -> Result<()> {
     let graph = Graph::load(config, db_cli, false)?;
-
     let node = graph.resolve_target(target)?.clone();
-
     let content = std::fs::read_to_string(&node.path).unwrap_or_default();
     let neighbors = graph.get_neighbors(&node.uuid, depth);
 
-    let mut ctx = String::new();
+    let show_outgoing = include_outgoing.unwrap_or(true);
+    let show_incoming = include_incoming.unwrap_or(true);
 
-    ctx.push_str(&format!("# {}\n", node.title));
-    ctx.push_str(&format!("UUID: {}\n", node.uuid));
-    ctx.push_str(&format!("Path: {}\n", node.path.display()));
-    if !node.filetags.is_empty() {
-        ctx.push_str(&format!("Tags: {}\n", node.filetags.join(", ")));
-    }
-    if !node.aliases.is_empty() {
-        ctx.push_str(&format!("Aliases: {}\n", node.aliases.join(", ")));
-    }
-    ctx.push('\n');
-
-    ctx.push_str("--- Content ---\n");
-    ctx.push_str(&content);
-    if !content.ends_with('\n') {
-        ctx.push('\n');
-    }
-    ctx.push_str("--- End Content ---\n\n");
+    let mut neighbors_text = String::new();
+    let mut backlinks_text = String::new();
 
     for d in 1..=depth {
         if let Some(ns) = neighbors.get(&d) {
-            if !ns.outgoing.is_empty() || !ns.incoming.is_empty() {
-                ctx.push_str(&format!("=== Depth {} ===\n", d));
-
-                if !ns.outgoing.is_empty() {
-                    ctx.push_str("Forward links:\n");
-                    for n in &ns.outgoing {
-                        let short = truncate_content(&read_content(&n.path), 200);
-                        ctx.push_str(&format!("\n  → {} ({})\n", n.title, n.uuid));
-                        ctx.push_str(&format!("    Path: {}\n", n.path.display()));
-                        if !short.is_empty() {
-                            ctx.push_str(&format!("    {}", short));
-                        }
+            if show_outgoing && !ns.outgoing.is_empty() {
+                neighbors_text.push_str(&format!("=== Depth {} ===\n", d));
+                neighbors_text.push_str("Forward links:\n");
+                for n in &ns.outgoing {
+                    let short = truncate_content(&read_content(&n.path), 200);
+                    neighbors_text.push_str(&format!("\n  → {} ({})\n", n.title, n.uuid));
+                    neighbors_text.push_str(&format!("    Path: {}\n", n.path.display()));
+                    if !short.is_empty() {
+                        neighbors_text.push_str(&format!("    {}", short));
                     }
                 }
+                neighbors_text.push('\n');
+            }
 
-                if !ns.incoming.is_empty() {
-                    ctx.push_str("\nBacklinks:\n");
-                    for n in &ns.incoming {
-                        ctx.push_str(&format!("\n  ← {} ({})\n", n.title, n.uuid));
-                        ctx.push_str(&format!("    Path: {}\n", n.path.display()));
-                    }
+            if show_incoming && !ns.incoming.is_empty() {
+                backlinks_text.push_str(&format!("=== Depth {} ===\n", d));
+                backlinks_text.push_str("Backlinks:\n");
+                for n in &ns.incoming {
+                    backlinks_text.push_str(&format!("\n  ← {} ({})\n", n.title, n.uuid));
+                    backlinks_text.push_str(&format!("    Path: {}\n", n.path.display()));
                 }
-                ctx.push('\n');
+                backlinks_text.push('\n');
             }
         }
     }
 
-    if let Some(max) = max_tokens {
-        ctx = truncate_by_tokens(&ctx, max);
-    }
+    let tags_str = node.filetags.join(", ");
+    let aliases_str = node.aliases.join(", ");
+
+    let tmpl = template.unwrap_or(DEFAULT_TEMPLATE);
+    let ctx = render_template(tmpl, &ContextVars {
+        title: &node.title,
+        uuid: &node.uuid,
+        path: &node.path.to_string_lossy(),
+        tags: &tags_str,
+        aliases: &aliases_str,
+        content: &content,
+        neighbors: &neighbors_text,
+        backlinks: &backlinks_text,
+    });
+
+    let ctx = if let Some(max) = max_tokens {
+        truncate_by_tokens(&ctx, max)
+    } else {
+        ctx
+    };
 
     let final_tokens = estimate_tokens(&ctx);
 
@@ -105,6 +110,66 @@ pub fn run(
     Ok(())
 }
 
+struct ContextVars<'a> {
+    title: &'a str,
+    uuid: &'a str,
+    path: &'a str,
+    tags: &'a str,
+    aliases: &'a str,
+    content: &'a str,
+    neighbors: &'a str,
+    backlinks: &'a str,
+}
+
+fn render_template(template: &str, vars: &ContextVars) -> String {
+    let mut result = template.to_string();
+
+    // Simple conditional blocks: {{#key}}...{{/key}}
+    // Keep content only if the value is non-empty
+    let conditionals = [
+        ("tags", vars.tags),
+        ("aliases", vars.aliases),
+        ("neighbors", vars.neighbors),
+        ("backlinks", vars.backlinks),
+    ];
+    for (key, val) in &conditionals {
+        let start_tag = format!("{{{{#{}}}}}", key);
+        let end_tag = format!("{{{{/{}}}}}", key);
+        if val.is_empty() {
+            // Remove the entire block
+            while let Some(start) = result.find(&start_tag) {
+                if let Some(end) = result[start..].find(&end_tag) {
+                    let end = start + end + end_tag.len();
+                    result.replace_range(start..end, "");
+                } else {
+                    break;
+                }
+            }
+        } else {
+            // Remove tags but keep content
+            result = result.replace(&start_tag, "");
+            result = result.replace(&end_tag, "");
+        }
+    }
+
+    // Simple variable replacement
+    let replacements = [
+        ("title", vars.title),
+        ("uuid", vars.uuid),
+        ("path", vars.path),
+        ("tags", vars.tags),
+        ("aliases", vars.aliases),
+        ("content", vars.content),
+        ("neighbors", vars.neighbors),
+        ("backlinks", vars.backlinks),
+    ];
+    for (key, val) in &replacements {
+        result = result.replace(&format!("{{{{{}}}}}", key), val);
+    }
+
+    result
+}
+
 fn read_content(path: &std::path::Path) -> String {
     std::fs::read_to_string(path).unwrap_or_default()
 }
@@ -118,28 +183,124 @@ fn truncate_content(s: &str, max_chars: usize) -> String {
     truncated
 }
 
+/// Estimate tokens using character-based heuristic: tokens ≈ chars / 4.
+/// This is a rough estimate for English text at ~4 chars/token.
+/// For code or mixed content, actual token count may vary by model.
 fn estimate_tokens(text: &str) -> usize {
-    let words: Vec<&str> = text.split_whitespace().collect();
-    let word_count = words.len();
-    let avg_word_len: f64 = words
-        .iter()
-        .map(|w| w.len() as f64)
-        .sum::<f64>()
-        / word_count.max(1) as f64;
-    (word_count as f64 * (1.0 + avg_word_len / 10.0)).round() as usize
+    text.chars().count() / 4
 }
 
 fn truncate_by_tokens(text: &str, max_tokens: usize) -> String {
-    let words: Vec<&str> = text.split_whitespace().collect();
-    let mut token_count = 0;
-    let mut result = Vec::new();
-    for word in words {
-        let word_tokens = 1 + (word.len() as f64 / 10.0).ceil() as usize;
-        if token_count + word_tokens > max_tokens {
-            break;
-        }
-        token_count += word_tokens;
-        result.push(word);
+    let max_chars = max_tokens * 4;
+    if text.chars().count() <= max_chars {
+        return text.to_string();
     }
-    result.join(" ")
+    text.chars().take(max_chars).collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_estimate_tokens_empty() {
+        assert_eq!(estimate_tokens(""), 0);
+    }
+
+    #[test]
+    fn test_estimate_tokens_short() {
+        // "hello world" = 11 chars / 4 = 2
+        assert_eq!(estimate_tokens("hello world"), 2);
+    }
+
+    #[test]
+    fn test_estimate_tokens_rounds_down() {
+        // "abc" = 3 chars / 4 = 0
+        assert_eq!(estimate_tokens("abc"), 0);
+    }
+
+    #[test]
+    fn test_truncate_by_tokens_short() {
+        let text = "hello world this is a test";
+        assert_eq!(truncate_by_tokens(text, 100), text);
+    }
+
+    #[test]
+    fn test_truncate_by_tokens_long() {
+        let text = "a".repeat(100);
+        // 100 chars / 4 = 25 tokens, so 50 tokens = 200 chars
+        let truncated = truncate_by_tokens(&text, 10);
+        assert_eq!(truncated.len(), 40); // 10 tokens * 4 chars
+    }
+
+    #[test]
+    fn test_render_template_basic() {
+        let vars = ContextVars {
+            title: "My Note",
+            uuid: "abcd",
+            path: "/a.org",
+            tags: "tag1, tag2",
+            aliases: "",
+            content: "some content",
+            neighbors: "",
+            backlinks: "",
+        };
+        let result = render_template("Title: {{title}}\nUUID: {{uuid}}", &vars);
+        assert_eq!(result, "Title: My Note\nUUID: abcd");
+    }
+
+    #[test]
+    fn test_render_template_conditional_present() {
+        let vars = ContextVars {
+            title: "Note",
+            uuid: "x",
+            path: "/x.org",
+            tags: "mytag",
+            aliases: "",
+            content: "body",
+            neighbors: "",
+            backlinks: "",
+        };
+        let result = render_template("{{#tags}}Tags: {{tags}}{{/tags}}", &vars);
+        assert_eq!(result, "Tags: mytag");
+    }
+
+    #[test]
+    fn test_render_template_conditional_empty() {
+        let vars = ContextVars {
+            title: "Note",
+            uuid: "x",
+            path: "/x.org",
+            tags: "",
+            aliases: "",
+            content: "body",
+            neighbors: "",
+            backlinks: "",
+        };
+        let result = render_template("before{{#tags}}Tags: {{tags}}{{/tags}}after", &vars);
+        assert_eq!(result, "beforeafter");
+    }
+
+    #[test]
+    fn test_default_template() {
+        let vars = ContextVars {
+            title: "My Note",
+            uuid: "uu-id-1234",
+            path: "/path/to/note.org",
+            tags: "tag1",
+            aliases: "",
+            content: "file content\nsecond line",
+            neighbors: "\n  → Linked Note\n",
+            backlinks: "",
+        };
+        let result = render_template(DEFAULT_TEMPLATE, &vars);
+        assert!(result.contains("My Note"));
+        assert!(result.contains("uu-id-1234"));
+        assert!(result.contains("file content"));
+        assert!(result.contains("Linked Note"));
+        assert!(!result.contains("{{title}}"), "all placeholders should be replaced");
+        assert!(!result.contains("{{#tags}}"), "conditional tags tag should be removed");
+        assert!(!result.contains("{{/tags}}"), "conditional tags end should be removed");
+        assert!(result.contains("Tags: tag1"));
+    }
 }

@@ -52,8 +52,8 @@ fn main() -> ExitCode {
             commands::hubs::run(&cfg, use_json, ndjson, *limit, cli.db.as_deref())
                 .map(|_| ExitCode::SUCCESS)
         }
-        Command::Context { target, depth, max_tokens } => {
-            commands::context::run(&cfg, use_json, quiet, target, *depth, *max_tokens, cli.db.as_deref())
+        Command::Context { target, depth, max_tokens, include_outgoing, include_incoming, template } => {
+            commands::context::run(&cfg, use_json, quiet, target, *depth, *max_tokens, *include_outgoing, *include_incoming, template.as_deref(), cli.db.as_deref())
                 .map(|_| ExitCode::SUCCESS)
         }
         Command::Resolve { target, tags, search, limit, fields } => {

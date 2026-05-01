@@ -60,6 +60,12 @@ pub enum Command {
         depth: u32,
         #[arg(short, long, help = "Maximum tokens in output")]
         max_tokens: Option<usize>,
+        #[arg(long, help = "Include forward/outgoing links (default: true)")]
+        include_outgoing: Option<bool>,
+        #[arg(long, help = "Include backlinks/incoming links (default: true)")]
+        include_incoming: Option<bool>,
+        #[arg(long, value_name = "TEMPLATE", help = "Template with {{title}}, {{content}}, {{neighbors}}, {{backlinks}} placeholders")]
+        template: Option<String>,
     },
     #[command(about = "Fast UUID/title resolution without full graph load")]
     Resolve {
