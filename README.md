@@ -2,6 +2,12 @@
 
 A CLI tool for navigating, managing, and validating org-roam personal knowledge management systems.
 
+**Design principle: stateless single-run tool.** Each invocation reads the org files from disk, performs
+the requested operation, prints output, and exits. No state is persisted between runs — no cache file,
+database, daemon, watch mode, or server. This keeps the tool simple, predictable, and easy to debug.
+Future development must preserve this stateless model. If state is needed (e.g., for performance),
+it must be recomputed from the org files on every run rather than loaded from a persistent cache.
+
 ## Install
 
 ```bash

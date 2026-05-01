@@ -62,6 +62,18 @@ tests/
 4. **`src/main.rs`** — Add `Command::<Name> => commands::<name>::run(...)` arm
 5. **`tests/integration.rs`** — Add test calling the binary
 
+## Architecture: stateless single-run model
+
+`pkms` is designed as a pure CLI pipeline — parse args, load org files from disk, compute, print, exit.
+There is **no state persisted between invocations**:
+- No cache files, databases, or daemon processes
+- No server mode, watch mode, or background workers
+- `Graph::load()` re-scans and re-parses every `.org` file on each invocation (~3s for 750 files)
+- Every command's `run()` is a self-contained function with no side effects beyond reading/writing org files
+
+**Do not introduce** statefulness (caches, databases, daemon mode) in future development.
+If performance optimization is needed, compute from scratch on every run — do not persist state.
+
 ## Code conventions
 
 - **No comments** unless the logic is non-obvious. Code should be self-documenting.
