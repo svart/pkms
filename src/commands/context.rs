@@ -17,16 +17,28 @@ pub fn run(
     config: &Config,
     json: bool,
     quiet: bool,
-    target: &str,
+    target: Option<&str>,
     depth: u32,
     max_tokens: Option<usize>,
     include_outgoing: Option<bool>,
     include_incoming: Option<bool>,
     template: Option<&str>,
+    input_json: Option<&std::path::PathBuf>,
     db_cli: Option<&std::path::Path>,
 ) -> Result<()> {
+    let target = match (target, input_json) {
+        (Some(t), _) => t.to_string(),
+        (None, Some(path)) => {
+            let content = std::fs::read_to_string(path)?;
+            let params: serde_json::Value = serde_json::from_str(&content)?;
+            params.get("target").and_then(|v| v.as_str().map(|s| s.to_string()))
+                .ok_or_else(|| anyhow::anyhow!("No target specified in JSON"))?
+        }
+        (None, None) => anyhow::bail!("No target specified. Provide a target or use --input-json"),
+    };
+
     let graph = Graph::load(config, db_cli, false)?;
-    let node = graph.resolve_target(target)?.clone();
+    let node = graph.resolve_target(&target)?.clone();
     let content = std::fs::read_to_string(&node.path).unwrap_or_default();
     let neighbors = graph.get_neighbors(&node.uuid, depth);
 

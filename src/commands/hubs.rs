@@ -1,5 +1,6 @@
 use crate::config::Config;
 use crate::graph::Graph;
+use crate::parser::Link;
 use anyhow::Result;
 use serde::Serialize;
 
@@ -48,7 +49,7 @@ pub fn run(
                 let outgoing = n
                     .outgoing
                     .iter()
-                    .filter(|l| matches!(l, crate::parser::Link::Internal(_)))
+                    .filter(|l| matches!(l, Link::Internal(_)))
                     .count();
                 let incoming = graph.backlinks.get(&n.uuid).map_or(0, |v| v.len());
                 HubEntry {
@@ -77,7 +78,7 @@ pub fn run(
             let outgoing = node
                 .outgoing
                 .iter()
-                .filter(|l| matches!(l, crate::parser::Link::Internal(_)))
+                .filter(|l| matches!(l, Link::Internal(_)))
                 .count();
             let incoming = graph.backlinks.get(&node.uuid).map_or(0, |v| v.len());
             let short = if node.uuid.len() > 8 { &node.uuid[..8] } else { &node.uuid };

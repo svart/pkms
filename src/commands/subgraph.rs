@@ -4,6 +4,25 @@ use anyhow::Result;
 use serde::Serialize;
 
 #[derive(Serialize)]
+pub struct SubgraphNode {
+    pub uuid: String,
+    pub title: String,
+    pub path: String,
+    pub filetags: Vec<String>,
+}
+
+impl From<&crate::graph::Node> for SubgraphNode {
+    fn from(n: &crate::graph::Node) -> Self {
+        SubgraphNode {
+            uuid: n.uuid.clone(),
+            title: n.title.clone(),
+            path: n.path.to_string_lossy().to_string(),
+            filetags: n.filetags.clone(),
+        }
+    }
+}
+
+#[derive(Serialize)]
 pub struct SubgraphOutput {
     pub root_uuid: String,
     pub root_title: String,
@@ -11,7 +30,7 @@ pub struct SubgraphOutput {
     pub vertex_count: usize,
     pub edge_count: usize,
     pub avg_vertex_order: f64,
-    pub nodes: Vec<serde_json::Value>,
+    pub nodes: Vec<SubgraphNode>,
     pub edges: Vec<EdgeEntry>,
 }
 
@@ -25,45 +44,29 @@ pub fn run(
     config: &Config,
     json: bool,
     verbose: bool,
-    target: &str,
+    target: Option<&str>,
     depth: u32,
+    input_json: Option<&std::path::PathBuf>,
     db_cli: Option<&std::path::Path>,
 ) -> Result<()> {
+    let target = match (target, input_json) {
+        (Some(t), _) => t.to_string(),
+        (None, Some(path)) => {
+            let content = std::fs::read_to_string(path)?;
+            let params: serde_json::Value = serde_json::from_str(&content)?;
+            params.get("target").and_then(|v| v.as_str().map(|s| s.to_string()))
+                .ok_or_else(|| anyhow::anyhow!("No target specified in JSON"))?
+        }
+        (None, None) => anyhow::bail!("No target specified. Provide a target or use --input-json"),
+    };
+
     let graph = Graph::load(config, db_cli, verbose)?;
 
-    let root = graph.resolve_target(target)?.clone();
+    let root = graph.resolve_target(&target)?.clone();
     let sub = graph.collect_subgraph(&root.uuid, depth);
 
     if json {
-        let nodes: Vec<serde_json::Value> = sub
-            .nodes
-            .iter()
-            .map(|n| {
-                let mut map = serde_json::Map::new();
-                map.insert(
-                    "uuid".to_string(),
-                    serde_json::Value::String(n.uuid.clone()),
-                );
-                map.insert(
-                    "title".to_string(),
-                    serde_json::Value::String(n.title.clone()),
-                );
-                map.insert(
-                    "path".to_string(),
-                    serde_json::Value::String(n.path.to_string_lossy().to_string()),
-                );
-                map.insert(
-                    "filetags".to_string(),
-                    serde_json::Value::Array(
-                        n.filetags
-                            .iter()
-                            .map(|t| serde_json::Value::String(t.clone()))
-                            .collect(),
-                    ),
-                );
-                serde_json::Value::Object(map)
-            })
-            .collect();
+        let nodes: Vec<SubgraphNode> = sub.nodes.iter().map(SubgraphNode::from).collect();
 
         let edges: Vec<EdgeEntry> = sub
             .edges

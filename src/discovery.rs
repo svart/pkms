@@ -1,17 +1,10 @@
 use anyhow::Result;
 use std::path::{Path, PathBuf};
-use std::time::SystemTime;
 use walkdir::WalkDir;
 
 #[derive(Debug, Clone)]
 pub struct FileEntry {
     pub path: PathBuf,
-    #[allow(dead_code)]
-    pub filename: String,
-    #[allow(dead_code)]
-    pub mtime: SystemTime,
-    #[allow(dead_code)]
-    pub size: u64,
 }
 
 pub fn discover_files(root: &Path, ignore_patterns: &[String]) -> Result<Vec<FileEntry>> {
@@ -31,7 +24,6 @@ pub fn discover_files(root: &Path, ignore_patterns: &[String]) -> Result<Vec<Fil
         .follow_links(false)
         .into_iter()
         .filter_entry(move |e| {
-            // Always include the root entry itself
             if e.path() == root_clone {
                 return true;
             }
@@ -40,12 +32,8 @@ pub fn discover_files(root: &Path, ignore_patterns: &[String]) -> Result<Vec<Fil
     {
         let entry = entry?;
         if entry.file_type().is_file() && entry.path().extension().map_or(false, |e| e == "org") {
-            let metadata = entry.metadata()?;
             entries.push(FileEntry {
                 path: entry.path().to_path_buf(),
-                filename: entry.file_name().to_string_lossy().to_string(),
-                mtime: metadata.modified().unwrap_or(SystemTime::UNIX_EPOCH),
-                size: metadata.len(),
             });
         }
     }

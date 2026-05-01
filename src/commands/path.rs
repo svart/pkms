@@ -22,15 +22,20 @@ pub fn run(
     config: &Config,
     json: bool,
     verbose: bool,
-    from: &str,
-    to: &str,
+    from: Option<&str>,
+    to: Option<&str>,
     max_depth: Option<u32>,
     db_cli: Option<&std::path::Path>,
 ) -> Result<()> {
+    let from = from.ok_or_else(|| anyhow::anyhow!("No source specified. Provide --from or use --input-json"))?;
+    let to = to.ok_or_else(|| anyhow::anyhow!("No target specified. Provide --to or use --input-json"))?;
+
     let graph = Graph::load(config, db_cli, verbose)?;
 
-    let from_node = graph.find_node(from).cloned();
-    let to_node = graph.find_node(to).cloned();
+    let from_node = graph.find_node(from);
+    let to_node = graph.find_node(to);
+
+    let (from_str, to_str) = (from.to_string(), to.to_string());
 
     match (from_node, to_node) {
         (Some(f), Some(t)) => {
@@ -53,8 +58,8 @@ pub fn run(
                     None => (false, 0, vec![]),
                 };
                 let output = PathOutput {
-                    from: f.title,
-                    to: t.title,
+                    from: f.title.clone(),
+                    to: t.title.clone(),
                     found,
                     hops,
                     path: path_nodes,
@@ -92,8 +97,8 @@ pub fn run(
                 }
             }
         }
-        (None, _) => anyhow::bail!("Source note not found: {}", from),
-        (_, None) => anyhow::bail!("Target note not found: {}", to),
+        (None, _) => anyhow::bail!("Source note not found: {}", from_str),
+        (_, None) => anyhow::bail!("Target note not found: {}", to_str),
     }
 
     Ok(())

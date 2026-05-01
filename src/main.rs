@@ -67,8 +67,8 @@ fn main() -> ExitCode {
             commands::check::run(&cfg, use_json, cli.verbose, cli.db.as_deref())
                 .map(|healthy| if healthy { ExitCode::SUCCESS } else { ExitCode::from(1) })
         }
-        Command::Validate { target } => {
-            commands::validate::run(&cfg, use_json, cli.verbose, target, cli.db.as_deref())
+        Command::Validate { target, input_json } => {
+            commands::validate::run(&cfg, use_json, cli.verbose, target.as_deref(), input_json.as_ref(), cli.db.as_deref())
                 .map(|_| ExitCode::SUCCESS)
         }
         Command::Stats { days } => {
@@ -87,8 +87,8 @@ fn main() -> ExitCode {
             commands::hubs::run(&cfg, use_json, ndjson, no_header, count_only, *limit, cli.db.as_deref())
                 .map(|_| ExitCode::SUCCESS)
         }
-        Command::Context { target, depth, max_tokens, include_outgoing, include_incoming, template } => {
-            commands::context::run(&cfg, use_json, quiet, target, *depth, *max_tokens, *include_outgoing, *include_incoming, template.as_deref(), cli.db.as_deref())
+        Command::Context { target, depth, max_tokens, include_outgoing, include_incoming, template, input_json } => {
+            commands::context::run(&cfg, use_json, quiet, target.as_deref(), *depth, *max_tokens, *include_outgoing, *include_incoming, template.as_deref(), input_json.as_ref(), cli.db.as_deref())
                 .map(|_| ExitCode::SUCCESS)
         }
         Command::Resolve { target, tags, search, limit, fields } => {
@@ -99,8 +99,8 @@ fn main() -> ExitCode {
             commands::fix::run(&cfg, use_json, cli.verbose, broken_uuid, target, *apply, cli.db.as_deref())
                 .map(|_| ExitCode::SUCCESS)
         }
-        Command::Suggest { target, limit } => {
-            commands::suggest::run(&cfg, use_json, cli.verbose, target, *limit, cli.db.as_deref())
+        Command::Suggest { target, limit, input_json } => {
+            commands::suggest::run(&cfg, use_json, cli.verbose, target.as_deref(), *limit, input_json.as_ref(), cli.db.as_deref())
                 .map(|_| ExitCode::SUCCESS)
         }
         Command::New { title, create, tags, aliases } => {
@@ -114,8 +114,8 @@ fn main() -> ExitCode {
                 Err(e) => Err(e),
             }
         }
-        Command::Query { terms, tag, limit } => {
-            commands::query::run(&cfg, use_json, ndjson, no_header, count_only, cli.verbose, terms, tag.as_deref(), *limit, cli.db.as_deref())
+        Command::Query { terms, tag, limit, input_json } => {
+            commands::query::run(&cfg, use_json, ndjson, no_header, count_only, cli.verbose, terms.as_deref(), tag.as_deref(), *limit, input_json.as_ref(), cli.db.as_deref())
                 .map(|_| ExitCode::SUCCESS)
         }
         Command::Info => {
@@ -125,12 +125,15 @@ fn main() -> ExitCode {
         Command::InitConfig { db } => {
             init_config(db.as_deref(), cli.json)
         }
-        Command::Path { from, to, max_depth } => {
-            commands::path::run(&cfg, use_json, cli.verbose, from, to, *max_depth, cli.db.as_deref())
-                .map(|_| ExitCode::SUCCESS)
+        Command::Path { from, to, max_depth, input_json } => {
+            match load_path_params(input_json, from, to, *max_depth) {
+                Ok((f, t, md)) => commands::path::run(&cfg, use_json, cli.verbose, f.as_deref(), t.as_deref(), md, cli.db.as_deref())
+                    .map(|_| ExitCode::SUCCESS),
+                Err(e) => Err(e),
+            }
         }
-        Command::Subgraph { target, depth } => {
-            commands::subgraph::run(&cfg, use_json, cli.verbose, target, *depth, cli.db.as_deref())
+        Command::Subgraph { target, depth, input_json } => {
+            commands::subgraph::run(&cfg, use_json, cli.verbose, target.as_deref(), *depth, input_json.as_ref(), cli.db.as_deref())
                 .map(|_| ExitCode::SUCCESS)
         }
         Command::Tags { tag } => {
@@ -169,6 +172,24 @@ fn load_get_params(
         Ok((t, d, o, g))
     } else {
         Ok((target.clone(), depth, out, show_graph))
+    }
+}
+
+fn load_path_params(
+    input_json: &Option<std::path::PathBuf>,
+    from: &Option<String>,
+    to: &Option<String>,
+    max_depth: Option<u32>,
+) -> Result<(Option<String>, Option<String>, Option<u32>)> {
+    if let Some(json_path) = input_json {
+        let content = std::fs::read_to_string(json_path)?;
+        let params: serde_json::Value = serde_json::from_str(&content)?;
+        let f = params.get("from").and_then(|v| v.as_str().map(|s| s.to_string()));
+        let t = params.get("to").and_then(|v| v.as_str().map(|s| s.to_string()));
+        let md = params.get("max_depth").and_then(|v| v.as_u64()).map(|v| v as u32).or(max_depth);
+        Ok((f, t, md))
+    } else {
+        Ok((from.clone(), to.clone(), max_depth))
     }
 }
 

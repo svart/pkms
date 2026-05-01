@@ -5,25 +5,33 @@ use rayon::prelude::*;
 use serde::Serialize;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::SystemTime;
-
-static NEXT_ID: AtomicUsize = AtomicUsize::new(0);
 
 #[derive(Debug, Clone, Serialize)]
 pub struct Node {
-    #[allow(dead_code)]
-    pub id: usize,
     pub uuid: String,
     pub title: String,
     pub path: PathBuf,
     pub filetags: Vec<String>,
     pub aliases: Vec<String>,
     pub refs: Vec<String>,
-    #[allow(dead_code)]
-    pub content_hash: String,
     pub outgoing: Vec<Link>,
     pub headings_count: usize,
+}
+
+impl Node {
+    pub fn from_parsed(uuid: String, title: String, path: PathBuf, parsed: &ParsedNote) -> Self {
+        Node {
+            uuid,
+            title,
+            path,
+            filetags: parsed.filetags.clone(),
+            aliases: parsed.roam_aliases.clone(),
+            refs: parsed.roam_refs.clone(),
+            outgoing: parsed.outgoing.clone(),
+            headings_count: parsed.headings.len(),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -51,6 +59,7 @@ pub struct Graph {
     pub nodes: HashMap<String, Node>,
     pub path_to_uuid: HashMap<PathBuf, String>,
     pub title_to_uuid: HashMap<String, Vec<String>>,
+    pub alias_to_uuid: HashMap<String, Vec<String>>,
     pub backlinks: HashMap<String, Vec<String>>,
     pub broken_links: Vec<(String, String)>,
     pub parse_errors: Vec<(PathBuf, String)>,
@@ -63,15 +72,15 @@ impl Graph {
         let mut nodes = HashMap::new();
         let mut path_to_uuid = HashMap::new();
         let mut title_to_uuid: HashMap<String, Vec<String>> = HashMap::new();
+        let mut alias_to_uuid: HashMap<String, Vec<String>> = HashMap::new();
         let mut parse_errors = Vec::new();
         let mut skipped_files = Vec::new();
-        let mut uuid_to_outgoing: HashMap<String, Vec<Link>> = HashMap::new();
-        let mut uuid_to_path: HashMap<String, PathBuf> = HashMap::new();
         let mut missing_titles = Vec::new();
         let mut seen_uuids: HashMap<String, PathBuf> = HashMap::new();
         let mut duplicate_uuids = Vec::new();
         let mut seen_titles: HashMap<String, PathBuf> = HashMap::new();
         let mut duplicate_titles = Vec::new();
+        let mut uuid_to_outgoing: HashMap<String, Vec<Link>> = HashMap::new();
 
         for result in results {
             if let Some(err) = result.parse_error {
@@ -83,12 +92,12 @@ impl Graph {
             let parsed = result.parsed;
             let path = result.path;
 
-            let Some(uuid) = parsed.uuid else {
+            let Some(uuid) = parsed.uuid.as_ref() else {
                 skipped_files.push(path);
                 continue;
             };
 
-            if let Some(existing) = seen_uuids.get(&uuid) {
+            if let Some(existing) = seen_uuids.get(uuid) {
                 duplicate_uuids.push(DuplicateEntry {
                     value: uuid.clone(),
                     paths: vec![
@@ -97,9 +106,8 @@ impl Graph {
                     ],
                 });
                 continue;
-            } else {
-                seen_uuids.insert(uuid.clone(), path.clone());
             }
+            seen_uuids.insert(uuid.clone(), path.clone());
 
             let title = match parsed.title.clone() {
                 Some(t) => t,
@@ -123,27 +131,20 @@ impl Graph {
                 seen_titles.insert(title.clone(), path.clone());
             }
 
-            let id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
-            let headings_count = parsed.headings.len();
+            // Build alias index
+            for alias in &parsed.roam_aliases {
+                alias_to_uuid
+                    .entry(alias.clone())
+                    .or_default()
+                    .push(uuid.clone());
+            }
 
-            let node = Node {
-                id,
-                uuid: uuid.clone(),
-                title: title.clone(),
-                path: path.clone(),
-                filetags: parsed.filetags,
-                aliases: parsed.roam_aliases,
-                refs: parsed.roam_refs,
-                content_hash: parsed.content_hash,
-                outgoing: parsed.outgoing.clone(),
-                headings_count,
-            };
+            let node = Node::from_parsed(uuid.clone(), title.clone(), path.clone(), &parsed);
 
             nodes.insert(uuid.clone(), node);
-            path_to_uuid.insert(path.clone(), uuid.clone());
+            path_to_uuid.insert(path, uuid.clone());
             title_to_uuid.entry(title).or_default().push(uuid.clone());
             uuid_to_outgoing.insert(uuid.clone(), parsed.outgoing);
-            uuid_to_path.insert(uuid, path);
         }
 
         let mut backlinks: HashMap<String, Vec<String>> = HashMap::new();
@@ -164,7 +165,6 @@ impl Graph {
             }
         }
 
-        // Deduplicate broken links
         broken_links.sort();
         broken_links.dedup();
 
@@ -172,6 +172,7 @@ impl Graph {
             nodes,
             path_to_uuid,
             title_to_uuid,
+            alias_to_uuid,
             backlinks,
             broken_links,
             parse_errors,
@@ -235,26 +236,17 @@ impl Graph {
                 return self.nodes.get(uuid);
             }
         }
-        for node in self.nodes.values() {
-            if node.aliases.iter().any(|a| a == target) {
-                return Some(node);
+        if let Some(uuids) = self.alias_to_uuid.get(target) {
+            if let Some(uuid) = uuids.first() {
+                return self.nodes.get(uuid);
             }
         }
         None
     }
 
-    #[allow(dead_code)]
     pub fn resolve_target(&self, target: &str) -> anyhow::Result<&Node> {
         self.find_node(target)
             .ok_or_else(|| anyhow::anyhow!("Note not found: {}", target))
-    }
-
-    pub fn find_node_exact(&self, target: &str) -> Option<&Node> {
-        self.nodes.get(target)
-            .or_else(|| {
-                let p = PathBuf::from(target);
-                self.path_to_uuid.get(&p).and_then(|u| self.nodes.get(u))
-            })
     }
 
     pub fn get_neighbors(&self, uuid: &str, max_depth: u32) -> HashMap<u32, NeighborSet> {
@@ -516,20 +508,6 @@ impl Graph {
         results
     }
 
-    #[allow(dead_code)]
-    pub fn search_by_ref(&self, terms: &str) -> Vec<(&Node, String)> {
-        let query = terms.to_lowercase();
-        let mut results = Vec::new();
-        for node in self.nodes.values() {
-            for ref_ in &node.refs {
-                if ref_.to_lowercase().contains(&query) {
-                    results.push((node, ref_.clone()));
-                }
-            }
-        }
-        results
-    }
-
     pub fn all_tags(&self) -> Vec<(String, usize)> {
         let mut tag_counts: HashMap<String, usize> = HashMap::new();
         for node in self.nodes.values() {
@@ -741,7 +719,6 @@ impl Subgraph {
 mod tests {
     use super::*;
     use crate::parser::ParsedNote;
-    use proptest::prelude::*;
 
     fn make_note(uuid: &str, title: &str, outgoing: Vec<Link>) -> FileScanResult {
         FileScanResult {
@@ -754,7 +731,6 @@ mod tests {
                 roam_refs: vec![],
                 outgoing,
                 headings: vec![],
-                content_hash: "abc".to_string(),
             },
             parse_error: None,
         }
@@ -777,7 +753,6 @@ mod tests {
                 roam_refs: vec![],
                 outgoing,
                 headings: vec![],
-                content_hash: "abc".to_string(),
             },
             parse_error: None,
         }
@@ -888,7 +863,6 @@ mod tests {
                 roam_refs: vec![],
                 outgoing: vec![],
                 headings: vec![],
-                content_hash: "abc".to_string(),
             },
             parse_error: None,
         }];
@@ -1056,9 +1030,8 @@ mod tests {
         #[test]
         fn test_graph_build_never_panics(
             uuids in proptest::collection::vec("[a-f0-9-]{1,36}", 0..5),
-            content_hashes in proptest::collection::vec(".*", 0..5),
         ) {
-            let results: Vec<FileScanResult> = uuids.iter().zip(content_hashes.iter()).map(|(uuid, ch)| {
+            let results: Vec<FileScanResult> = uuids.iter().map(|uuid| {
                 let parsed = ParsedNote {
                     uuid: if uuid.is_empty() { None } else { Some(uuid.clone()) },
                     title: Some("test".to_string()),
@@ -1067,7 +1040,6 @@ mod tests {
                     roam_refs: vec![],
                     outgoing: vec![],
                     headings: vec![],
-                    content_hash: ch.clone(),
                 };
                 FileScanResult {
                     path: PathBuf::from(format!("{}.org", uuid)),

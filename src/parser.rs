@@ -1,6 +1,5 @@
 use regex::Regex;
 use serde::Serialize;
-use std::hash::{DefaultHasher, Hash, Hasher};
 use std::sync::LazyLock;
 
 #[derive(Debug, Clone)]
@@ -12,7 +11,6 @@ pub struct ParsedNote {
     pub roam_refs: Vec<String>,
     pub outgoing: Vec<Link>,
     pub headings: Vec<Heading>,
-    pub content_hash: String,
 }
 
 impl ParsedNote {
@@ -25,7 +23,6 @@ impl ParsedNote {
             roam_refs: vec![],
             outgoing: vec![],
             headings: vec![],
-            content_hash: String::new(),
         }
     }
 }
@@ -33,23 +30,15 @@ impl ParsedNote {
 #[derive(Debug, Clone, Serialize)]
 pub enum Link {
     Internal(String),
-    #[allow(dead_code)]
     File(String),
-    #[allow(dead_code)]
     Url(String),
-    #[allow(dead_code)]
-    Attachment(String),
 }
 
 #[derive(Debug, Clone)]
 pub struct Heading {
-    #[allow(dead_code)]
     pub level: usize,
-    #[allow(dead_code)]
     pub title: String,
-    #[allow(dead_code)]
     pub todo_state: Option<String>,
-    #[allow(dead_code)]
     pub tags: Vec<String>,
 }
 
@@ -71,7 +60,6 @@ static FILETAGS_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"(?m)^#\+filetags:\s*(.+)$").unwrap());
 
 pub fn parse_note(content: &str) -> ParsedNote {
-    let content_hash = hash_content(content);
     let mut uuid = None;
     let mut title = None;
     let mut filetags = Vec::new();
@@ -166,7 +154,6 @@ pub fn parse_note(content: &str) -> ParsedNote {
         roam_refs,
         outgoing,
         headings,
-        content_hash,
     }
 }
 
@@ -191,19 +178,10 @@ fn parse_link(target: &str) -> Option<Link> {
     if let Some(rest) = target.strip_prefix("file:") {
         return Some(Link::File(rest.to_string()));
     }
-    if let Some(rest) = target.strip_prefix("attachment:") {
-        return Some(Link::Attachment(rest.to_string()));
-    }
     if target.starts_with("http://") || target.starts_with("https://") {
         return Some(Link::Url(target.to_string()));
     }
     None
-}
-
-fn hash_content(content: &str) -> String {
-    let mut hasher = DefaultHasher::new();
-    content.hash(&mut hasher);
-    format!("{:x}", hasher.finish())
 }
 
 #[cfg(test)]
@@ -245,7 +223,7 @@ Some content here."#;
         assert_eq!(note.filetags, vec!["book", "tech"]);
         assert_eq!(note.roam_aliases, vec!["Test", "Alias"]);
         assert_eq!(note.roam_refs, vec!["https://example.com"]);
-        assert_eq!(note.outgoing.len(), 4);
+        assert_eq!(note.outgoing.len(), 3);
         assert!(matches!(note.outgoing[0], Link::Internal(_)));
     }
 

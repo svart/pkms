@@ -37,11 +37,23 @@ pub fn run(
     no_header: bool,
     count_only: bool,
     verbose: bool,
-    terms: &str,
+    terms: Option<&str>,
     tag_filter: Option<&str>,
     limit: Option<usize>,
+    input_json: Option<&std::path::PathBuf>,
     db_cli: Option<&std::path::Path>,
 ) -> Result<()> {
+    let terms = match (terms, input_json) {
+        (Some(t), _) => t.to_string(),
+        (None, Some(path)) => {
+            let content = std::fs::read_to_string(path)?;
+            let params: serde_json::Value = serde_json::from_str(&content)?;
+            params.get("terms").and_then(|v| v.as_str().map(|s| s.to_string()))
+                .ok_or_else(|| anyhow::anyhow!("No terms specified in JSON"))?
+        }
+        (None, None) => anyhow::bail!("No search terms specified. Provide terms or use --input-json"),
+    };
+
     let db_root = config.resolve_db_root(db_cli)?;
     let ignore = config.resolve_ignore_patterns();
 
@@ -74,7 +86,6 @@ pub fn run(
                         roam_refs: vec![],
                         outgoing: vec![],
                         headings: vec![],
-                        content_hash: String::new(),
                     },
                     parse_error: Some(format!("IO error: {}", e)),
                 },
@@ -84,8 +95,8 @@ pub fn run(
 
     let graph = Graph::build(results);
 
-    let title_results = graph.search(terms);
-    let content_results = graph.search_content(terms);
+    let title_results = graph.search(&terms);
+    let content_results = graph.search_content(&terms);
 
     // Build map of content matches
     let mut content_map: std::collections::HashMap<String, Vec<ContextLine>> =

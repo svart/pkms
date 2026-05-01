@@ -1,20 +1,43 @@
 use crate::config::Config;
-use crate::graph::Graph;
+use crate::graph::{Graph, Node};
 use anyhow::Result;
 use serde::Serialize;
+use std::collections::HashMap;
 use std::io::BufRead;
 use std::path::PathBuf;
 
 #[derive(Serialize)]
+pub struct NodeJson {
+    pub uuid: String,
+    pub title: String,
+    pub path: String,
+    pub filetags: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub content: Option<String>,
+}
+
+impl NodeJson {
+    fn from_node(node: &Node, content: Option<&str>) -> Self {
+        NodeJson {
+            uuid: node.uuid.clone(),
+            title: node.title.clone(),
+            path: node.path.to_string_lossy().to_string(),
+            filetags: node.filetags.clone(),
+            content: content.map(|c| c.to_string()),
+        }
+    }
+}
+
+#[derive(Serialize)]
 pub struct GetOutput {
-    pub node: serde_json::Value,
-    pub neighbors: std::collections::HashMap<u32, NeighborOutput>,
+    pub node: NodeJson,
+    pub neighbors: HashMap<u32, NeighborOutput>,
 }
 
 #[derive(Serialize)]
 pub struct NeighborOutput {
-    pub outgoing: Vec<serde_json::Value>,
-    pub incoming: Vec<serde_json::Value>,
+    pub outgoing: Vec<NodeJson>,
+    pub incoming: Vec<NodeJson>,
 }
 
 pub fn run(
@@ -84,18 +107,18 @@ pub fn run(
         };
 
         if json {
-            let node_json = node_to_json(&node, node_content.as_deref());
-            let mut neigh_json = std::collections::HashMap::new();
+            let node_json = NodeJson::from_node(&node, node_content.as_deref());
+            let mut neigh_json = HashMap::new();
             for (d, ns) in &neighbors {
-                let outgoing: Vec<serde_json::Value> = ns
+                let outgoing: Vec<NodeJson> = ns
                     .outgoing
                     .iter()
-                    .map(|n| node_to_json(n, None))
+                    .map(|n| NodeJson::from_node(n, None))
                     .collect();
-                let incoming: Vec<serde_json::Value> = ns
+                let incoming: Vec<NodeJson> = ns
                     .incoming
                     .iter()
-                    .map(|n| node_to_json(n, None))
+                    .map(|n| NodeJson::from_node(n, None))
                     .collect();
                 neigh_json.insert(*d, NeighborOutput { outgoing, incoming });
             }
@@ -224,22 +247,4 @@ fn print_graph(
     }
 }
 
-fn node_to_json(node: &crate::graph::Node, content: Option<&str>) -> serde_json::Value {
-    let mut map = serde_json::Map::new();
-    map.insert("uuid".to_string(), serde_json::Value::String(node.uuid.clone()));
-    map.insert("title".to_string(), serde_json::Value::String(node.title.clone()));
-    map.insert(
-        "path".to_string(),
-        serde_json::Value::String(node.path.to_string_lossy().to_string()),
-    );
-    map.insert(
-        "filetags".to_string(),
-        serde_json::Value::Array(
-            node.filetags.iter().map(|t| serde_json::Value::String(t.clone())).collect(),
-        ),
-    );
-    if let Some(c) = content {
-        map.insert("content".to_string(), serde_json::Value::String(c.to_string()));
-    }
-    serde_json::Value::Object(map)
-}
+
