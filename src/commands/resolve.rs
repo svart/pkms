@@ -60,11 +60,13 @@ fn scan_files(root: &Path, ignore_patterns: &[String]) -> Vec<ResolvedNote> {
         }
 
         let Ok(content) = std::fs::read_to_string(entry.path()) else { continue };
-        // Only read first ~30 lines for header metadata
-        let header: Vec<&str> = content.lines().take(30).collect();
+        let header: Vec<&str> = content.lines().take(100).collect();
         let header_str = header.join("\n");
 
-        let uuid = UUID_RE.captures(&header_str).and_then(|c| c.get(1)).map(|m| m.as_str().to_string());
+        // Use the LAST :ID: in the header (notes may have migrated UUIDs via duplicate drawers)
+        let uuid = UUID_RE.captures_iter(&header_str).last()
+            .and_then(|c| c.get(1))
+            .map(|m| m.as_str().to_string());
         let Some(uuid) = uuid else { continue };
 
         let title = TITLE_RE.captures(&header_str).and_then(|c| c.get(1)).map(|m| m.as_str().trim().to_string()).unwrap_or_default();
@@ -82,7 +84,7 @@ fn scan_files(root: &Path, ignore_patterns: &[String]) -> Vec<ResolvedNote> {
             .unwrap_or_default();
 
         let aliases = ALIASES_RE
-            .captures(&header_str)
+            .captures_iter(&header_str).last()
             .map(|c| {
                 c.get(1)
                     .map_or("", |m| m.as_str())

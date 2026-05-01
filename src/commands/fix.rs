@@ -54,8 +54,18 @@ pub fn run(
         anyhow::bail!("Invalid UUID format: {}", broken_uuid);
     };
 
-    // Resolve replacement
-    let replacement = graph.find_node(target).map(|n| (n.uuid.clone(), n.title.clone()));
+    // Resolve replacement — support UUID, title, path, or prefix
+    let replacement = graph.find_node(target).map(|n| (n.uuid.clone(), n.title.clone()))
+        .or_else(|| {
+            // Try prefix matching in existing nodes
+            let prefix_matches: Vec<&String> = graph.nodes.keys().filter(|u| u.starts_with(target)).collect();
+            if prefix_matches.len() == 1 {
+                let uuid = prefix_matches[0].clone();
+                graph.nodes.get(&uuid).map(|n| (n.uuid.clone(), n.title.clone()))
+            } else {
+                None
+            }
+        });
     let (replacement_uuid, replacement_title) = match replacement {
         Some((u, t)) => (u, t),
         None => anyhow::bail!("Replacement target not found: {}", target),
