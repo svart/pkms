@@ -32,6 +32,7 @@ pub enum Link {
     Internal(String),
     File(String),
     Url(String),
+    Attachment(String),
 }
 
 #[derive(Debug, Clone)]
@@ -178,6 +179,9 @@ fn parse_link(target: &str) -> Option<Link> {
     if let Some(rest) = target.strip_prefix("file:") {
         return Some(Link::File(rest.to_string()));
     }
+    if let Some(rest) = target.strip_prefix("attachment:") {
+        return Some(Link::Attachment(rest.to_string()));
+    }
     if target.starts_with("http://") || target.starts_with("https://") {
         return Some(Link::Url(target.to_string()));
     }
@@ -223,7 +227,7 @@ Some content here."#;
         assert_eq!(note.filetags, vec!["book", "tech"]);
         assert_eq!(note.roam_aliases, vec!["Test", "Alias"]);
         assert_eq!(note.roam_refs, vec!["https://example.com"]);
-        assert_eq!(note.outgoing.len(), 3);
+        assert_eq!(note.outgoing.len(), 4);
         assert!(matches!(note.outgoing[0], Link::Internal(_)));
     }
 

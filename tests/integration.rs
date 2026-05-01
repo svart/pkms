@@ -168,6 +168,20 @@ Final section.
     )
     .unwrap();
 
+    // Attachment Link Note -- has attachment: links
+    fs::write(
+        common.join("20220101000010-attachment.org"),
+        r#":PROPERTIES:
+:ID:       aaaaaaaa-aaaa-4aaa-aaaa-bbbbbbbbbbbb
+:END:
+#+title: Attachment Link Note
+
+[[attachment:image.png][Image]]
+[[attachment:data/file.txt][Data File]]
+"#,
+    )
+    .unwrap();
+
     // Duplicate UUID note -- same UUID as Note A
     fs::write(
         personal.join("20220101000009-duplicate.org"),
@@ -420,7 +434,7 @@ fn test_context_depth_2() {
 #[test]
 fn test_context_note_not_found() {
     let (_dir, root) = setup_db();
-    let (stdout, _stderr, status) =
+    let (_stdout, _stderr, status) =
         run(&["--db", root.to_str().unwrap(), "context", "Nonexistent"]);
     assert!(!status.success());
 }
@@ -948,6 +962,73 @@ fn test_tags_tag_filter_json() {
     assert!(status.success());
     assert_eq!(v["tags"][0]["tag"], "learning");
     assert!(v["tags"][0]["notes"].as_array().map_or(false, |n| !n.is_empty()));
+}
+
+// ----------------------------------------------------------------
+// FILE LINK CHECK
+// ----------------------------------------------------------------
+#[test]
+fn test_check_file_links_human() {
+    let (_dir, root) = setup_db();
+    let (stdout, _stderr, status) = run(&["--db", root.to_str().unwrap(), "check", "--file-links"]);
+    assert!(!status.success());
+    assert!(stdout.contains("Broken files:"));
+    assert!(stdout.contains("File Link Note"));
+}
+
+#[test]
+fn test_check_file_links_json() {
+    let (_dir, root) = setup_db();
+    let (v, status) = run_json(&["--db", root.to_str().unwrap(), "--json", "check", "--file-links"]);
+    assert!(!status.success());
+    assert!(v.get("broken_file_links").is_some());
+    let broken_files = v["broken_file_links"].as_array().unwrap();
+    assert!(broken_files.len() >= 1, "expected broken file links");
+    assert!(broken_files[0]["source_title"].is_string());
+    assert!(broken_files[0]["target_path"].is_string());
+}
+
+// ----------------------------------------------------------------
+// ATTACHMENT LINK CHECK
+// ----------------------------------------------------------------
+#[test]
+fn test_check_attachment_links_human() {
+    let (_dir, root) = setup_db();
+    let (stdout, _stderr, status) =
+        run(&["--db", root.to_str().unwrap(), "check", "--attachment-links"]);
+    assert!(!status.success());
+    assert!(stdout.contains("Broken attach:"));
+    assert!(stdout.contains("Attachment Link Note"));
+}
+
+#[test]
+fn test_check_attachment_links_json() {
+    let (_dir, root) = setup_db();
+    let (v, status) = run_json(&["--db", root.to_str().unwrap(), "--json", "check", "--attachment-links"]);
+    assert!(!status.success());
+    assert!(v.get("broken_attachment_links").is_some());
+    let broken_attach = v["broken_attachment_links"].as_array().unwrap();
+    assert!(broken_attach.len() >= 1, "expected broken attachment links");
+    assert!(broken_attach[0]["source_title"].is_string());
+    assert!(broken_attach[0]["target_path"].is_string());
+}
+
+#[test]
+fn test_check_file_and_attachment_links_json() {
+    let (_dir, root) = setup_db();
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--json",
+        "check",
+        "--file-links",
+        "--attachment-links",
+    ]);
+    assert!(!status.success());
+    assert!(v.get("broken_file_links").is_some());
+    assert!(v.get("broken_attachment_links").is_some());
+    assert!(v["broken_file_links"].as_array().unwrap().len() >= 1);
+    assert!(v["broken_attachment_links"].as_array().unwrap().len() >= 1);
 }
 
 // ----------------------------------------------------------------

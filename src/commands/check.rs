@@ -1,7 +1,9 @@
 use crate::config::Config;
 use crate::graph::{DuplicateInfo, Graph, GraphStats};
+use crate::parser::Link;
 use anyhow::Result;
 use serde::Serialize;
+use std::path::Path;
 
 #[derive(Serialize)]
 pub struct CheckOutput {
@@ -9,6 +11,8 @@ pub struct CheckOutput {
     pub stats: GraphStats,
     pub duplicates: DuplicateInfo,
     pub broken_links: Vec<BrokenLinkEntry>,
+    pub broken_file_links: Vec<BrokenFileLinkEntry>,
+    pub broken_attachment_links: Vec<BrokenAttachmentLinkEntry>,
     pub failed_files: Vec<FailedFileEntry>,
     pub healthy: bool,
 }
@@ -21,18 +25,89 @@ pub struct BrokenLinkEntry {
 }
 
 #[derive(Serialize)]
+pub struct BrokenFileLinkEntry {
+    pub source_uuid: String,
+    pub source_title: String,
+    pub target_path: String,
+}
+
+#[derive(Serialize)]
+pub struct BrokenAttachmentLinkEntry {
+    pub source_uuid: String,
+    pub source_title: String,
+    pub target_path: String,
+}
+
+#[derive(Serialize)]
 pub struct FailedFileEntry {
     pub path: String,
     pub error: String,
 }
 
-pub fn run(config: &Config, json: bool, verbose: bool, db_cli: Option<&std::path::Path>) -> Result<bool> {
+fn link_target_exists(target: &str, db_root: &Path) -> bool {
+    let path = Path::new(target);
+    if path.is_absolute() {
+        path.exists()
+    } else {
+        db_root.join(path).exists()
+    }
+}
+
+pub fn run(
+    config: &Config,
+    json: bool,
+    verbose: bool,
+    db_cli: Option<&std::path::Path>,
+    file_links: bool,
+    attachment_links: bool,
+) -> Result<bool> {
     let graph = Graph::load(config, db_cli, verbose)?;
     let stats = graph.stats();
+    let db_root = config.resolve_db_root(db_cli)?;
+
+    let mut broken_file = Vec::new();
+    let mut broken_attachment = Vec::new();
+
+    if file_links {
+        for node in graph.nodes.values() {
+            for link in &node.outgoing {
+                if let Link::File(target) = link {
+                    if !link_target_exists(target, &db_root) {
+                        broken_file.push(BrokenFileLinkEntry {
+                            source_uuid: node.uuid.clone(),
+                            source_title: node.title.clone(),
+                            target_path: target.clone(),
+                        });
+                    }
+                }
+            }
+        }
+    }
+
+    if attachment_links {
+        for node in graph.nodes.values() {
+            for link in &node.outgoing {
+                if let Link::Attachment(target) = link {
+                    if !link_target_exists(target, &db_root) {
+                        broken_attachment.push(BrokenAttachmentLinkEntry {
+                            source_uuid: node.uuid.clone(),
+                            source_title: node.title.clone(),
+                            target_path: target.clone(),
+                        });
+                    }
+                }
+            }
+        }
+    }
+
+    let broken_file_links_count = broken_file.len();
+    let broken_attachment_links_count = broken_attachment.len();
 
     let healthy = stats.broken_link_count == 0
         && stats.parse_error_count == 0
-        && stats.duplicate_uuid_count == 0;
+        && stats.duplicate_uuid_count == 0
+        && broken_file_links_count == 0
+        && broken_attachment_links_count == 0;
 
     if json {
         let broken = graph
@@ -59,22 +134,18 @@ pub fn run(config: &Config, json: bool, verbose: bool, db_cli: Option<&std::path
             .collect();
 
         let output = CheckOutput {
-            db_root: graph
-                .nodes
-                .values()
-                .next()
-                .and_then(|n| n.path.parent())
-                .map(|p| p.to_string_lossy().to_string())
-                .unwrap_or_default(),
+            db_root: db_root.to_string_lossy().to_string(),
             stats,
             duplicates: graph.duplicates,
             broken_links: broken,
+            broken_file_links: broken_file,
+            broken_attachment_links: broken_attachment,
             failed_files: failed,
             healthy,
         };
         println!("{}", serde_json::to_string_pretty(&output)?);
     } else {
-        println!("Database: {}", graph.nodes.values().next().and_then(|n| n.path.parent()).map(|p| p.display().to_string()).unwrap_or_default());
+        println!("Database: {}", db_root.display());
         println!("  Notes:          {}", stats.total_notes);
         println!("  Links:          {} (internal: {}, file: {}, url: {})",
             stats.total_links,
@@ -84,6 +155,12 @@ pub fn run(config: &Config, json: bool, verbose: bool, db_cli: Option<&std::path
         );
         println!("  Orphans:        {}", stats.orphan_notes);
         println!("  Broken links:   {}", stats.broken_link_count);
+        if file_links {
+            println!("  Broken files:   {}", broken_file_links_count);
+        }
+        if attachment_links {
+            println!("  Broken attach:  {}", broken_attachment_links_count);
+        }
         println!("  Parse errors:   {}", stats.parse_error_count);
         println!("  Skipped files:  {}", stats.skipped_count);
         println!("  Dup UUIDs:      {}", stats.duplicate_uuid_count);
@@ -128,6 +205,22 @@ pub fn run(config: &Config, json: bool, verbose: bool, db_cli: Option<&std::path
                     .map(|n| n.title.as_str())
                     .unwrap_or("?");
                 println!("  {} -> {}", title, tgt);
+            }
+        }
+
+        if !broken_file.is_empty() {
+            println!();
+            println!("Broken file links:");
+            for entry in &broken_file {
+                println!("  {} -> {}", entry.source_title, entry.target_path);
+            }
+        }
+
+        if !broken_attachment.is_empty() {
+            println!();
+            println!("Broken attachment links:");
+            for entry in &broken_attachment {
+                println!("  {} -> {}", entry.source_title, entry.target_path);
             }
         }
 

@@ -42,6 +42,30 @@
         "required": ["source_uuid", "source_title", "target_uuid"]
       }
     },
+    "broken_file_links": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "source_uuid": { "type": "string" },
+          "source_title": { "type": "string" },
+          "target_path": { "type": "string" }
+        },
+        "required": ["source_uuid", "source_title", "target_path"]
+      }
+    },
+    "broken_attachment_links": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "source_uuid": { "type": "string" },
+          "source_title": { "type": "string" },
+          "target_path": { "type": "string" }
+        },
+        "required": ["source_uuid", "source_title", "target_path"]
+      }
+    },
     "failed_files": {
       "type": "array",
       "items": {
@@ -55,7 +79,7 @@
     },
     "healthy": { "type": "boolean" }
   },
-  "required": ["stats", "healthy", "broken_links", "duplicates"],
+  "required": ["stats", "healthy", "broken_links", "broken_file_links", "broken_attachment_links", "duplicates"],
   "definitions": {
     "DuplicateEntry": {
       "type": "object",

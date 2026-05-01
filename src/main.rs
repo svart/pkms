@@ -63,8 +63,8 @@ fn main() -> ExitCode {
     };
 
     let result: Result<ExitCode> = match &cli.command {
-        Command::Check => {
-            commands::check::run(&cfg, use_json, cli.verbose, cli.db.as_deref())
+        Command::Check { file_links, attachment_links } => {
+            commands::check::run(&cfg, use_json, cli.verbose, cli.db.as_deref(), *file_links, *attachment_links)
                 .map(|healthy| if healthy { ExitCode::SUCCESS } else { ExitCode::from(1) })
         }
         Command::Validate { target, input_json } => {

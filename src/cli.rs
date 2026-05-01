@@ -41,7 +41,12 @@ pub struct Cli {
 #[derive(Subcommand)]
 pub enum Command {
     #[command(about = "Verify health of the entire org-roam database")]
-    Check,
+    Check {
+        #[arg(long, help = "Check that file: link targets exist on disk")]
+        file_links: bool,
+        #[arg(long, help = "Check that attachment: link targets exist on disk")]
+        attachment_links: bool,
+    },
     #[command(about = "Validate health of a specific note")]
     Validate {
         #[arg(help = "UUID, file path, or note title")]
