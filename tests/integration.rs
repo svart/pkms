@@ -1179,6 +1179,23 @@ fn test_get_from_stdin() {
 }
 
 // ----------------------------------------------------------------
+// CLI AUTOMATION: --example flag
+// ----------------------------------------------------------------
+#[test]
+fn test_example_flag() {
+    let (stdout, _stderr, status) = run(&["--example", "path"]);
+    assert!(status.success());
+    assert!(stdout.contains("Note A"));
+}
+
+#[test]
+fn test_example_context() {
+    let (stdout, _stderr, status) = run(&["--example", "context"]);
+    assert!(status.success());
+    assert!(stdout.contains("--depth"));
+}
+
+// ----------------------------------------------------------------
 // --json exit code 1 for business-logic failure
 // ----------------------------------------------------------------
 #[test]

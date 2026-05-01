@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "title": "CheckOutput",
+  "type": "object",
+  "properties": {
+    "db_root": { "type": "string" },
+    "stats": {
+      "type": "object",
+      "properties": {
+        "total_notes": { "type": "integer" },
+        "total_links": { "type": "integer" },
+        "total_internal_links": { "type": "integer" },
+        "total_file_links": { "type": "integer" },
+        "total_url_links": { "type": "integer" },
+        "orphan_notes": { "type": "integer" },
+        "broken_link_count": { "type": "integer" },
+        "skipped_count": { "type": "integer" },
+        "parse_error_count": { "type": "integer" },
+        "duplicate_uuid_count": { "type": "integer" },
+        "duplicate_title_count": { "type": "integer" },
+        "missing_title_count": { "type": "integer" }
+      },
+      "required": ["total_notes", "total_links", "broken_link_count"]
+    },
+    "duplicates": {
+      "type": "object",
+      "properties": {
+        "duplicate_uuids": { "type": "array", "items": { "$ref": "#/definitions/DuplicateEntry" } },
+        "duplicate_titles": { "type": "array", "items": { "$ref": "#/definitions/DuplicateEntry" } },
+        "missing_titles": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "broken_links": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "source_uuid": { "type": "string" },
+          "source_title": { "type": "string" },
+          "target_uuid": { "type": "string" }
+        },
+        "required": ["source_uuid", "source_title", "target_uuid"]
+      }
+    },
+    "failed_files": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "path": { "type": "string" },
+          "error": { "type": "string" }
+        },
+        "required": ["path", "error"]
+      }
+    },
+    "healthy": { "type": "boolean" }
+  },
+  "required": ["stats", "healthy", "broken_links", "duplicates"],
+  "definitions": {
+    "DuplicateEntry": {
+      "type": "object",
+      "properties": {
+        "value": { "type": "string" },
+        "paths": { "type": "array", "items": { "type": "string" } }
+      },
+      "required": ["value", "paths"]
+    }
+  }
+}

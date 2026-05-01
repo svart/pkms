@@ -48,13 +48,10 @@ These directly impact how effectively AI agents (and power users) can use pkms p
 - [x] **Add `--no-header` flag**: For `resolve`, `tags`, `broken`, `orphans`, `hubs`, suppress column headers in human output. Easier to `grep`/`cut`/`awk`.
 - [x] **Add `--count` flag**: For list commands, only show the count of results, not the list itself.
 - [x] **Support piping UUIDs**: Design a "batch" mode where commands accept UUIDs from stdin. E.g., `echo "aaaa-bbbb" | pkms get --depth 2 --from-stdin`. Or `pkms get --from-file /tmp/uuids.txt`.
-- [ ] **JSON input for targets**: Support `--input-json <file>` for passing complex query parameters (e.g., multiple targets, filter criteria) as JSON instead of CLI args.
-
-### Documentation
-
-- [ ] **Add a JSON schema reference**: Create a JSON Schema file for every command's output. AI agents can use this to validate and parse responses reliably.
-- [ ] **Add `--example` flag to commands**: Each command should be able to print a usage example: `pkms path --example` → `pkms path "Note A" "Note B"`.
-- [ ] **Update AGENTS.md with JSON output schemas**: Document the exact JSON structure for each command so AI agents can reliably parse them.
+- [x] **JSON input for targets**: Support `--input-json <file>` for passing complex query parameters (e.g., multiple targets, filter criteria) as JSON instead of CLI args.
+- [x] **Add a JSON schema reference**: Create a JSON Schema file for every command's output. AI agents can use this to validate and parse responses reliably.
+- [x] **Add `--example` flag to commands**: Each command should be able to print a usage example: `pkms path --example` → `pkms path "Note A" "Note B"`.
+- [x] **Update AGENTS.md with JSON output schemas**: Document the exact JSON structure for each command so AI agents can reliably parse them.
 
 ---
 
@@ -64,7 +61,7 @@ These directly impact how effectively AI agents (and power users) can use pkms p
 - [x] **Add error-path integration tests**: Note not found, invalid UUID format, missing `--db` argument, empty database, malformed `.org` files.
 - [x] **Add JSON schema validation in tests**: For `--json` output, parse with `serde_json` and verify struct fields are present and correctly typed, not just string-contains checks.
 - [ ] **Add snapshot testing**: Use `insta` crate for golden-file testing of human-readable output. Protects against accidental format changes that AI agents might rely on.
-- [ ] **Add property-based tests for graph operations**: Fuzz `Graph::build()` with random `FileScanResult` vectors, ensure no panics. Similarly for `find_node()` with edge-case inputs.
+- [x] **Add property-based tests for graph operations**: Fuzz `Graph::build()` with random `FileScanResult` vectors, ensure no panics. Similarly for `find_node()` with edge-case inputs.
 - [x] **Test duplicate UUID detection**: Create a test DB with duplicate UUIDs and verify `check` reports them. Currently untested.
 - [x] **Test duplicate title detection**: Same as above.
 - [x] **Test the `--json` flag on ALL commands**: A single parameterized test that runs every command with `--json` and asserts the output is valid JSON. Use the mock DB.

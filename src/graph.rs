@@ -741,6 +741,7 @@ impl Subgraph {
 mod tests {
     use super::*;
     use crate::parser::ParsedNote;
+    use proptest::prelude::*;
 
     fn make_note(uuid: &str, title: &str, outgoing: Vec<Link>) -> FileScanResult {
         FileScanResult {
@@ -1049,5 +1050,43 @@ mod tests {
         assert_eq!(tags.len(), 2);
         let alpha_count = tags.iter().find(|(t, _)| t == "alpha").map(|(_, c)| *c).unwrap();
         assert_eq!(alpha_count, 2);
+    }
+
+    proptest::proptest! {
+        #[test]
+        fn test_graph_build_never_panics(
+            uuids in proptest::collection::vec("[a-f0-9-]{1,36}", 0..5),
+            content_hashes in proptest::collection::vec(".*", 0..5),
+        ) {
+            let results: Vec<FileScanResult> = uuids.iter().zip(content_hashes.iter()).map(|(uuid, ch)| {
+                let parsed = ParsedNote {
+                    uuid: if uuid.is_empty() { None } else { Some(uuid.clone()) },
+                    title: Some("test".to_string()),
+                    filetags: vec![],
+                    roam_aliases: vec![],
+                    roam_refs: vec![],
+                    outgoing: vec![],
+                    headings: vec![],
+                    content_hash: ch.clone(),
+                };
+                FileScanResult {
+                    path: PathBuf::from(format!("{}.org", uuid)),
+                    parsed,
+                    parse_error: None,
+                }
+            }).collect();
+            let _graph = Graph::build(results);
+        }
+
+        #[test]
+        fn test_find_node_never_panics(
+            uuid in "[a-f0-9-]{0,36}",
+            search in ".{0,20}",
+        ) {
+            let results = vec![make_note("test-uuid", "Test Title", vec![])];
+            let graph = Graph::build(results);
+            let _ = graph.find_node(&uuid);
+            let _ = graph.find_node(&search);
+        }
     }
 }

@@ -4,7 +4,7 @@
 
 ```bash
 cargo build                    # Build the binary
-cargo test                     # Run all unit + integration tests (26 tests, ~1s)
+cargo test                     # Run all unit + integration tests (124+ tests, ~1s)
 cargo test --test integration  # Integration tests only (mock DB)
 target/debug/pkms --help       # Verify CLI works
 ```
@@ -40,8 +40,9 @@ src/
     tags.rs         # List filetags with counts
     new.rs          # Generate UUID + filename for new note
     context.rs      # Build AI context window with token budget
+schemas/            # JSON Schema files for every command's --json output
 tests/
-  integration.rs    # 15 integration tests with temp mock DB
+  integration.rs    # 79 integration tests with temp mock DB
 ```
 
 ## How to add a new command
@@ -81,12 +82,38 @@ Every command's `run()` follows the same pattern:
 4. If `json`, print `serde_json::to_string_pretty(&output_struct)?`
 5. Otherwise, print human-readable output with `println!`
 
+## JSON output schemas
+
+Every command's `--json` output has a corresponding JSON Schema in `schemas/<command>.json`.
+These schemas define the exact structure and types for reliable programmatic consumption.
+
+| Command     | Schema file             | Top-level keys |
+|-------------|------------------------|----------------|
+| `check`     | `schemas/check.json`   | `db_root`, `stats`, `duplicates`, `broken_links`, `failed_files`, `healthy` |
+| `stats`     | `schemas/stats.json`   | `db_root`, `total_notes`, `total_links`, `hubs`, `directories`, `recent_notes` |
+| `resolve`   | `schemas/resolve.json` | `query`, `total`, `results[]` (uuid, title, path, filetags, aliases) |
+| `suggest`   | `schemas/suggest.json` | `target`, `target_uuid`, `suggestions[]` (uuid, title, score, scores{}, reasons[]) |
+| `query`     | `schemas/query.json`   | `query`, `total_results`, `results[]` (uuid, title, score, matches[], content_matches[]) |
+| `context`   | `schemas/context.json` | `target`, `context`, `estimated_tokens`, `depth` |
+| `validate`  | —                      | `uuid`, `title`, `path`, `healthy`, `issues[]`, `broken_internal[]` |
+| `orphans`   | —                      | `count`, `orphans[]` (uuid, title, path, filetags) |
+| `broken`    | —                      | `count`, `links[]` (source_uuid, source_title, target_uuid) |
+| `hubs`      | —                      | `limit`, `hubs[]` (rank, uuid, title, degree, outgoing, incoming) |
+| `tags`      | —                      | `tags[]` (tag, count, notes[]) |
+| `get`       | —                      | `node` (uuid, title, path, filetags), `neighbors` |
+| `path`      | —                      | `from`, `to`, `found`, `hops`, `path[]` (uuid, title) |
+| `subgraph`  | —                      | `root_uuid`, `root_title`, `vertex_count`, `edge_count`, `nodes[]`, `edges[]` |
+| `fix`       | —                      | `broken_uuid`, `replacement_uuid`, `replacement_title`, `files_affected[]`, `total_replacements`, `applied` |
+| `new`       | —                      | `uuid`, `filename`, `path`, `title`, `created` |
+| `info`      | —                      | `config`, `config_path`, `cli_overrides` |
+
 ## Testing patterns
 
 - **Unit tests** live in each module under `#[cfg(test)] mod tests { ... }`
 - **Integration tests** in `tests/integration.rs` spawn the actual binary with a temp mock DB
-- **Property-based tests** in `parser.rs` use `proptest` (slug roundtrip, UUID format, panic fuzzing)
-- Mock DB helper in `tests/integration.rs::setup_db()` creates a 5-note graph with known broken links and orphans
+- **Property-based tests** in `graph.rs` and `parser.rs` use `proptest` (random Graph::Build fuzzing, slug roundtrip, UUID format, panic fuzzing)
+- **JSON schema validation**: All commands are tested with `--json` via `test_all_commands_json`, verifying valid JSON output for every command
+- Mock DB helper in `tests/integration.rs::setup_db()` creates a 10+ note graph with duplicate UUIDs, broken links, filetags, aliases, and headings
 
 ## When modifying the database
 
@@ -96,6 +123,17 @@ target/debug/pkms --db ~/Documents/org <command>
 ```
 
 Changes to files in `~/Documents/org` are tracked by git. Always run `check` after modifications to verify no new issues introduced.
+
+## CLI automation flags
+
+| Flag              | Description                                      |
+|-------------------|--------------------------------------------------|
+| `--no-header`     | Suppress column headers in human output          |
+| `--count`         | Show only the result count                       |
+| `--from-stdin`    | Read targets from stdin (one per line)           |
+| `--from-file`     | Read targets from a file (one per line)          |
+| `--input-json`    | Read command parameters from a JSON file         |
+| `--example`       | Show a usage example for the command and exit    |
 
 ## Related
 
