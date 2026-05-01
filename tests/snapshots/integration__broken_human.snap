@@ -1,0 +1,6 @@
+---
+source: tests/integration.rs
+expression: "normalize_snapshot(&stdout, &root)"
+---
+Broken links (1):
+  Broken Note -> ffffffff-ffff-4fff-ffff-ffffffffffff

@@ -1220,3 +1220,38 @@ fn test_json_error_exit_code() {
         assert!(v.get("error").is_some(), "Expected error key for {:?}", args_refs);
     }
 }
+
+// ----------------------------------------------------------------
+// SNAPSHOT TESTS: human output golden files
+// ----------------------------------------------------------------
+fn normalize_snapshot(output: &str, root: &std::path::Path) -> String {
+    output.replace(root.to_str().unwrap(), "<DB_ROOT>")
+}
+
+#[test]
+fn test_snapshot_broken() {
+    let (_dir, root) = setup_db();
+    let (stdout, _stderr, _status) = run(&["--db", root.to_str().unwrap(), "broken"]);
+    insta::assert_snapshot!("broken_human", normalize_snapshot(&stdout, &root));
+}
+
+#[test]
+fn test_snapshot_tags() {
+    let (_dir, root) = setup_db();
+    let (stdout, _stderr, _status) = run(&["--db", root.to_str().unwrap(), "tags"]);
+    insta::assert_snapshot!("tags_human", normalize_snapshot(&stdout, &root));
+}
+
+#[test]
+fn test_snapshot_path() {
+    let (_dir, root) = setup_db();
+    let (stdout, _stderr, _status) = run(&["--db", root.to_str().unwrap(), "path", "Note A", "Note C"]);
+    insta::assert_snapshot!("path_human", normalize_snapshot(&stdout, &root));
+}
+
+#[test]
+fn test_snapshot_resolve() {
+    let (_dir, root) = setup_db();
+    let (stdout, _stderr, _status) = run(&["--db", root.to_str().unwrap(), "resolve", "Note"]);
+    insta::assert_snapshot!("resolve_query_human", normalize_snapshot(&stdout, &root));
+}

@@ -60,7 +60,7 @@ These directly impact how effectively AI agents (and power users) can use pkms p
 - [x] **Add integration tests for remaining commands**: `fix`, `suggest`, `resolve`, `subgraph`, `validate` (json), `tags --tag`, `stats --days`, `get --graph`, `get --out`, `context --max-tokens`.
 - [x] **Add error-path integration tests**: Note not found, invalid UUID format, missing `--db` argument, empty database, malformed `.org` files.
 - [x] **Add JSON schema validation in tests**: For `--json` output, parse with `serde_json` and verify struct fields are present and correctly typed, not just string-contains checks.
-- [ ] **Add snapshot testing**: Use `insta` crate for golden-file testing of human-readable output. Protects against accidental format changes that AI agents might rely on.
+- [x] **Add snapshot testing**: Use `insta` crate for golden-file testing of human-readable output. Protects against accidental format changes that AI agents might rely on.
 - [x] **Add property-based tests for graph operations**: Fuzz `Graph::build()` with random `FileScanResult` vectors, ensure no panics. Similarly for `find_node()` with edge-case inputs.
 - [x] **Test duplicate UUID detection**: Create a test DB with duplicate UUIDs and verify `check` reports them. Currently untested.
 - [x] **Test duplicate title detection**: Same as above.
