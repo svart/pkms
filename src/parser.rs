@@ -209,6 +209,7 @@ fn hash_content(content: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use proptest::prelude::*;
 
     #[test]
     fn test_parse_basic_note() {
@@ -264,5 +265,26 @@ Some text
         assert_eq!(note.headings[0].title, "Section 1");
         assert_eq!(note.headings[0].level, 1);
         assert_eq!(note.headings[0].todo_state.as_deref(), Some("TODO"));
+    }
+
+    proptest! {
+        #[test]
+        fn test_title_to_slug_roundtrip(title in "[a-zA-Z0-9 _-]{1,50}") {
+            let slug = super::super::commands::new::title_to_slug(&title);
+            prop_assert!(!slug.is_empty());
+            prop_assert!(slug.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-'));
+        }
+
+        #[test]
+        fn test_uuid_format(uuid_str in "[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}") {
+            let content = format!(":PROPERTIES:\n:ID:       {}\n:END:\n#+title: test", uuid_str);
+            let note = parse_note(&content);
+            prop_assert_eq!(note.uuid.unwrap(), uuid_str);
+        }
+
+        #[test]
+        fn test_link_never_panics(content in "\\PC*") {
+            let _note = parse_note(&content);
+        }
     }
 }

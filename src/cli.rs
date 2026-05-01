@@ -26,6 +26,29 @@ pub enum Command {
         #[arg(help = "UUID, file path, or note title")]
         target: String,
     },
+    #[command(about = "Comprehensive database statistics")]
+    Stats {
+        #[arg(short, long, help = "Show notes modified in last N days")]
+        days: Option<u32>,
+    },
+    #[command(about = "List orphan notes (no incoming or outgoing links)")]
+    Orphans,
+    #[command(about = "List broken/dangling links")]
+    Broken,
+    #[command(about = "List most-connected notes (hubs)")]
+    Hubs {
+        #[arg(short, long, default_value = "10", help = "Number of top hubs to show")]
+        limit: usize,
+    },
+    #[command(about = "Build a context window for AI consumption")]
+    Context {
+        #[arg(help = "UUID, file path, or note title")]
+        target: String,
+        #[arg(short, long, default_value = "1", help = "Traversal depth")]
+        depth: u32,
+        #[arg(short, long, help = "Maximum tokens in output")]
+        max_tokens: Option<usize>,
+    },
     #[command(about = "Generate a filename and UUID for a new note")]
     New {
         #[arg(help = "Title of the new note")]
@@ -84,14 +107,5 @@ pub enum Command {
     Tags {
         #[arg(short, long, help = "List all notes with this tag")]
         tag: Option<String>,
-    },
-    #[command(name = "add-link", about = "Add a link from one note to another")]
-    AddLink {
-        #[arg(help = "Source note (UUID, path, or title)")]
-        source: String,
-        #[arg(help = "Target note (UUID, path, or title)")]
-        target: String,
-        #[arg(short, long, help = "Custom link description (default: target title)")]
-        description: Option<String>,
     },
 }

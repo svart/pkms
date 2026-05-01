@@ -2,98 +2,191 @@
 
 A CLI tool for navigating, managing, and validating org-roam personal knowledge management systems.
 
-## Overview
-
-`pkms` helps AI agents and users interact with an org-roam database of interconnected notes. It provides commands for database health checks, note retrieval with graph traversal, fuzzy search, new note creation, and link validation.
-
-## Quick Start
+## Install
 
 ```bash
-# Check health of the entire database (exit code 1 if issues found)
-pkms --db ~/Documents/org check
-
-# Validate a specific note with full health report
-pkms --db ~/Documents/org validate <uuid-or-path>
-
-# Generate filename and UUID for a new note
-pkms --db ~/Documents/org new "My Note Title"
-
-# Retrieve a note with its neighbors at depth 2
-pkms --db ~/Documents/org get <uuid> --depth 2
-
-# Visual ASCII graph of a note's neighborhood
-pkms --db ~/Documents/org get "note title" --depth 1 --graph
-
-# Fuzzy search across notes
-pkms --db ~/Documents/org query "search terms"
-
-# JSON output for AI consumption
-pkms --db ~/Documents/org --json query "rust"
-
-# Find shortest path between two notes
-pkms --db ~/Documents/org path "note A" "note B"
-
-# Export subgraph around a note
-pkms --db ~/Documents/org subgraph <uuid> --depth 2
-
-# List all filetags with note counts
-pkms --db ~/Documents/org tags
-
-# List notes with a specific tag
-pkms --db ~/Documents/org tags --tag book
-
-# Add a link from one note to another
-pkms --db ~/Documents/org add-link <source> <target>
-
-# Show current configuration
-pkms info
+cargo install --path .
 ```
 
-## Commands
+Or run directly:
 
-| Command       | Description                                      |
-|---------------|--------------------------------------------------|
-| `check`       | Verify health of the entire org-roam database     |
-| `validate`    | Validate health of a specific note                |
-| `get`         | Retrieve a note with neighbors at depth N         |
-| `query`       | Fuzzy search across note titles and content       |
-| `path`        | Find shortest path between two notes              |
-| `subgraph`    | Export subgraph around a note with stats          |
-| `tags`        | List all filetags with note counts                |
-| `new`         | Generate a filename and UUID for a new note       |
-| `add-link`    | Add a link from one note to another               |
-| `info`        | Show current pkms configuration                   |
-| `init-config` | Generate default config file                      |
-
-## Global Flags
-
-| Flag         | Description                                         |
-|--------------|-----------------------------------------------------|
-| `--db`       | Path to org-roam database root (overrides config)   |
-| `--json`     | Structured JSON output for AI/script consumption    |
+```bash
+cargo run -- <args>
+```
 
 ## Configuration
 
-The tool reads `~/.config/pkms.toml` for persistent settings:
+`pkms` reads `~/.config/pkms.toml` for persistent settings:
 
 ```toml
 # Path to the org-roam database root
 db_root = "/home/user/Documents/org"
 
-# Directory where new notes should be created (relative to db_root or absolute)
+# Directory where new notes are created (relative to db_root or absolute)
 new_notes_dir = "roam"
 
-# Glob patterns to ignore during file discovery
-ignore_patterns = [".attach", ".git", "*.bak"]
+# Glob patterns to skip during file discovery
+ignore_patterns = [".attach", "*.bak"]
 ```
 
-The `--db` CLI flag overrides the `db_root` from config. If no config file and no `--db` are provided, the tool errors with instructions.
+The `--db` flag overrides `db_root` from the config. If neither is provided, the tool errors with instructions.
+
+## Global Flags
+
+| Flag       | Description                                       |
+|------------|---------------------------------------------------|
+| `--db`     | Path to org-roam database root (overrides config) |
+| `--json`   | Structured JSON output for AI/script consumption  |
+| `-v`       | Verbose output during processing                  |
+
+## Commands
+
+### Health & Validation
+
+```
+pkms check                    # Full database health scan
+pkms validate <target>        # Validate a specific note
+```
+
+`check` scans all notes, validates IDs/titles, detects broken links,
+orphans, duplicates, and reports statistics. Returns exit code 1 if
+issues are found.
+
+`validate` checks a single note: UUID format, title presence, all
+outgoing links (internal + file existence), and lists backlinks.
+
+### Graph Navigation
+
+```
+pkms get <target> --depth 2           # Retrieve note with neighbors
+pkms get <target> --depth 1 --graph   # ASCII art visualization
+pkms path <from> <to>                 # Shortest path between notes
+pkms subgraph <target> --depth 2      # Export subgraph with stats
+```
+
+`get` traverses the link graph up to N hops, showing forward links
+and backlinks at each depth. `--graph` renders a tree visualization.
+
+`path` finds the shortest connection through the directed graph using
+BFS, traversing both outgoing and incoming links.
+
+`subgraph` exports all nodes and edges within depth with graph
+density statistics (vertex count, edge count, avg order).
+
+### Search & Query
+
+```
+pkms query "search terms"             # Fuzzy search titles + content
+pkms query "search terms" --tag book  # Filter by filetag
+pkms query "search terms" --limit 5   # Limit results
+pkms tags                             # List all filetags with counts
+pkms tags --tag book                  # List notes with a specific tag
+```
+
+`query` searches note titles, aliases, filetags, refs, and content.
+Results are scored and sorted by relevance.
+
+### Statistics & Introspection
+
+```
+pkms stats                     # Comprehensive database statistics
+pkms stats --days 30           # Include recently modified notes
+pkms orphans                   # List notes with no links
+pkms broken                    # List all dangling/broken links
+pkms hubs                      # List most-connected notes
+pkms hubs --limit 20           # Show top 20 hubs
+```
+
+`stats` shows total notes, links breakdown, orphans, broken links,
+disk size, directory breakdown, and top hub nodes.
+
+### AI Integration
+
+```
+pkms context <target> --depth 2                # Build AI context window
+pkms context <target> --depth 1 --max-tokens 2000   # With token budget
+```
+
+`context` produces a formatted text with the note's full content and
+linked neighbors at each depth, suitable for LLM consumption.
+`--max-tokens` truncates output to fit within the token budget.
+
+### Note Creation
+
+```
+pkms new "My Note"                         # Dry-run (just shows filename/UUID)
+pkms new "My Note" --create                # Write boilerplate file
+pkms new "My Note" --create --tags "tag1,tag2"  # With filetags
+pkms new "My Note" --create --aliases "Alias1,Alias2"  # With aliases
+```
+
+`new` generates a UUID v4 and a timestamped filename
+(`YYYYMMDDHHMMSS-slug.org`) in the configured `new_notes_dir`.
+Without `--create`, it only prints the generated values (dry-run).
+
+### Configuration
+
+```
+pkms info                          # Show resolved configuration
+pkms init-config                   # Generate default config file
+pkms init-config --db ~/Documents/org  # With db_root pre-filled
+```
+
+### All Commands
+
+| Command       | Description                                      |
+|---------------|--------------------------------------------------|
+| `check`       | Full database health scan                        |
+| `validate`    | Validate a specific note                         |
+| `stats`       | Comprehensive database statistics                |
+| `orphans`     | List orphan notes (no links)                     |
+| `broken`      | List broken/dangling links                       |
+| `hubs`        | List most-connected notes                        |
+| `context`     | Build AI context window                          |
+| `get`         | Retrieve note with neighbors                     |
+| `path`        | Shortest path between two notes                  |
+| `subgraph`    | Export subgraph with stats                       |
+| `query`       | Fuzzy search titles and content                  |
+| `tags`        | List filetags with counts                        |
+| `new`         | Generate filename/UUID for a new note            |
+| `info`        | Show current configuration                       |
+| `init-config` | Generate default config file                     |
+
+## JSON Output
+
+Every command supports `--json` for structured, machine-parseable
+output. This is designed for AI agent consumption:
+
+```bash
+pkms --db ~/Documents/org --json check
+pkms --db ~/Documents/org --json query "rust"
+pkms --db ~/Documents/org --json stats
+pkms --db ~/Documents/org --json context "note title" --depth 2
+```
 
 ## Database Format
 
 The tool expects an [org-roam](https://www.orgroam.com/) directory with:
+
 - Notes named `YYYYMMDDHHMMSS-slug.org` with UUID v4 `:ID:` properties
-- Internal links using `[[id:<uuid>][description]]` format
+- Titles via `#+title:` keyword (case-insensitive)
+- File-level tags via `#+filetags: :tag1:tag2:`
+- Internal links: `[[id:<uuid>][description]]`
+- File/URL/attachment links also recognized
 - Subdirectories: `roam/`, `roam/common/`, `roam/personal/`, `roam/biblio/`
 
-See [TODO.md](./TODO.md) for the full implementation roadmap.
+## Exit Codes
+
+| Code | Meaning                   |
+|------|---------------------------|
+| 0    | Success / healthy         |
+| 1    | Issues found / error      |
+
+## Development
+
+```bash
+cargo test                    # Run unit + integration tests
+cargo run -- --db <path> <command>  # Test against real database
+```
+
+See [TODO.md](./TODO.md) for the implementation roadmap.
