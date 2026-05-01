@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "title": "ContextOutput",
+  "type": "object",
+  "properties": {
+    "target": { "type": "string" },
+    "context": { "type": "string" },
+    "estimated_tokens": { "type": "integer" },
+    "depth": { "type": "integer" }
+  },
+  "required": ["target", "context", "estimated_tokens", "depth"]
+}

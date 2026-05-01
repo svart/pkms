@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "title": "QueryOutput",
+  "type": "object",
+  "properties": {
+    "query": { "type": "string" },
+    "total_results": { "type": "integer" },
+    "results": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "uuid": { "type": "string" },
+          "title": { "type": "string" },
+          "path": { "type": "string" },
+          "filetags": { "type": "array", "items": { "type": "string" } },
+          "score": { "type": "number" },
+          "matches": { "type": "array", "items": { "type": "string" } },
+          "content_matches": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "line": { "type": "integer" },
+                "text": { "type": "string" }
+              },
+              "required": ["line", "text"]
+            }
+          }
+        },
+        "required": ["uuid", "title", "score"]
+      }
+    }
+  },
+  "required": ["query", "total_results", "results"]
+}
