@@ -1,10 +1,7 @@
 use crate::config::Config;
-use crate::discovery::discover_files;
-use crate::graph::{FileScanResult, Graph};
-use crate::parser::parse_note;
+use crate::graph::Graph;
 use crate::util;
 use anyhow::Result;
-use rayon::prelude::*;
 use serde::Serialize;
 
 #[derive(Serialize)]
@@ -48,43 +45,7 @@ pub fn run(
 
     let db_root = config.resolve_db_root(db_cli)?;
     let ignore = config.resolve_ignore_patterns();
-
-    let files = discover_files(&db_root, &ignore)?;
-
-    if verbose {
-        eprintln!("Found {} .org files, parsing...", files.len());
-    }
-
-    let results: Vec<FileScanResult> = files
-        .into_par_iter()
-        .map(|entry| {
-            let path = entry.path.clone();
-            match std::fs::read_to_string(&path) {
-                Ok(content) => {
-                    let parsed = parse_note(&content);
-                    FileScanResult {
-                        path,
-                        parsed,
-                        parse_error: None,
-                    }
-                }
-                Err(e) => FileScanResult {
-                    path,
-                    parsed: crate::parser::ParsedNote {
-                        uuid: None,
-                        title: None,
-                        filetags: vec![],
-                        roam_aliases: vec![],
-                        roam_refs: vec![],
-                        outgoing: vec![],
-                        headings: vec![],
-                    },
-                    parse_error: Some(format!("IO error: {}", e)),
-                },
-            }
-        })
-        .collect();
-
+    let results = Graph::scan(&db_root, &ignore, verbose)?;
     let graph = Graph::build(results);
 
     let title_results = graph.search(&terms);
