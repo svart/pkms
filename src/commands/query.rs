@@ -28,6 +28,7 @@ pub struct ContextLine {
     pub text: String,
 }
 
+#[allow(clippy::too_many_lines)]
 pub fn run(
     config: &Config,
     json: bool,
@@ -41,7 +42,12 @@ pub fn run(
     input_json: Option<&std::path::PathBuf>,
     db_cli: Option<&std::path::Path>,
 ) -> Result<()> {
-    let terms = util::load_input_target(input_json, terms, "terms", "No search terms specified. Provide terms or use --input-json")?;
+    let terms = util::load_input_target(
+        input_json,
+        terms,
+        "terms",
+        "No search terms specified. Provide terms or use --input-json",
+    )?;
 
     let db_root = config.resolve_db_root(db_cli)?;
     let ignore = config.resolve_ignore_patterns();
@@ -112,7 +118,11 @@ pub fn run(
     }
 
     // Sort by score descending
-    combined.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+    combined.sort_by(|a, b| {
+        b.score
+            .partial_cmp(&a.score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
 
     // Filter by tag
     if let Some(tag) = tag_filter {
@@ -125,33 +135,28 @@ pub fn run(
     }
 
     if count_only {
-        return util::print_count(combined.len(), json);
+        util::print_count(combined.len(), json);
+        return Ok(());
     }
 
     if json {
         if ndjson {
             return util::print_ndjson(&combined);
-        } else {
-            let output = QueryOutput {
-                query: terms.to_string(),
-                total_results: combined.len(),
-                results: combined,
-            };
-            println!("{}", serde_json::to_string_pretty(&output)?);
         }
+        let output = QueryOutput {
+            query: terms.to_string(),
+            total_results: combined.len(),
+            results: combined,
+        };
+        println!("{}", serde_json::to_string_pretty(&output)?);
     } else {
         if !no_header {
-            println!("Query: {}", terms);
+            println!("Query: {terms}");
             println!("Results: {}", combined.len());
             println!();
         }
         for (i, r) in combined.iter().enumerate() {
-            println!(
-                "{:3}. {}  (score: {:.1})",
-                i + 1,
-                r.title,
-                r.score
-            );
+            println!("{:3}. {}  (score: {:.1})", i + 1, r.title, r.score);
             println!("       UUID: {}", r.uuid);
             if !r.matches.is_empty() {
                 println!("       Matches: {}", r.matches.join(", "));

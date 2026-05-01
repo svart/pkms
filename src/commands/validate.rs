@@ -31,6 +31,7 @@ pub struct BacklinkEntry {
     pub title: String,
 }
 
+#[allow(clippy::too_many_lines)]
 pub fn run(
     config: &Config,
     json: bool,
@@ -39,7 +40,12 @@ pub fn run(
     input_json: Option<&std::path::PathBuf>,
     db_cli: Option<&std::path::Path>,
 ) -> Result<()> {
-    let target = util::load_input_target(input_json, target, "target", "No target specified. Provide a target or use --input-json")?;
+    let target = util::load_input_target(
+        input_json,
+        target,
+        "target",
+        "No target specified. Provide a target or use --input-json",
+    )?;
 
     let graph = Graph::load(config, db_cli, verbose)?;
 
@@ -66,10 +72,8 @@ pub fn run(
 
     for link in &node.outgoing {
         match link {
-            Link::Internal(uuid) => {
-                if !graph.nodes.contains_key(uuid) {
-                    broken_internal.push(uuid.clone());
-                }
+            Link::Internal(uuid) if !graph.nodes.contains_key(uuid) => {
+                broken_internal.push(uuid.clone());
             }
             Link::File(path_str) => {
                 let file_path = Path::new(path_str);
@@ -94,13 +98,10 @@ pub fn run(
     let backlink_entries: Vec<BacklinkEntry> = incoming
         .iter()
         .filter_map(|uuid| {
-            graph
-                .nodes
-                .get(uuid)
-                .map(|n| BacklinkEntry {
-                    uuid: n.uuid.clone(),
-                    title: n.title.clone(),
-                })
+            graph.nodes.get(uuid).map(|n| BacklinkEntry {
+                uuid: n.uuid.clone(),
+                title: n.title.clone(),
+            })
         })
         .collect();
 
@@ -148,15 +149,23 @@ pub fn run(
         println!("  Headings: {}", node.headings_count);
         println!();
         println!("Links:");
-        println!("  Outgoing: {} ({} internal)", node.outgoing.len(), outgoing_internal.len());
+        println!(
+            "  Outgoing: {} ({} internal)",
+            node.outgoing.len(),
+            outgoing_internal.len()
+        );
         println!("  Incoming: {}", incoming.len());
-        println!("  Broken:   {} internal, {} file", broken_internal.len(), broken_files.len());
+        println!(
+            "  Broken:   {} internal, {} file",
+            broken_internal.len(),
+            broken_files.len()
+        );
 
         if !broken_internal.is_empty() {
             println!();
             println!("Broken internal links:");
             for uuid in &broken_internal {
-                println!("  -> {}", uuid);
+                println!("  -> {uuid}");
             }
         }
 
@@ -164,15 +173,19 @@ pub fn run(
             println!();
             println!("Broken file links:");
             for path in &broken_files {
-                println!("  -> {}", path);
+                println!("  -> {path}");
             }
         }
 
-        if !issues.is_empty() && issues.iter().any(|i| i.starts_with("Invalid") || i.starts_with("Missing")) {
+        if !issues.is_empty()
+            && issues
+                .iter()
+                .any(|i| i.starts_with("Invalid") || i.starts_with("Missing"))
+        {
             println!();
             for i in &issues {
                 if i.starts_with("Invalid") || i.starts_with("Missing") {
-                    println!("Issue: {}", i);
+                    println!("Issue: {i}");
                 }
             }
         }

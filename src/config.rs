@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -59,14 +59,12 @@ impl Config {
         self.ignore_patterns.clone().unwrap_or_default()
     }
 
-    pub fn resolved_info(&self, db_root: &PathBuf, new_notes_dir: &PathBuf) -> ConfigInfo {
+    pub fn resolved_info(&self, db_root: &Path, new_notes_dir: &Path) -> ConfigInfo {
         ConfigInfo {
-            db_root: db_root.clone(),
-            new_notes_dir: new_notes_dir.clone(),
+            db_root: db_root.to_path_buf(),
+            new_notes_dir: new_notes_dir.to_path_buf(),
             ignore_patterns: self.resolve_ignore_patterns(),
-            has_config_file: dirs::config_dir()
-                .map(|d| d.join("pkms.toml").exists())
-                .unwrap_or(false),
+            has_config_file: dirs::config_dir().is_some_and(|d| d.join("pkms.toml").exists()),
         }
     }
 }

@@ -38,7 +38,8 @@ pub fn run(
     if let Some(tag) = tag_filter {
         let notes = graph.notes_by_tag(tag);
         if count_only {
-            return util::print_count(notes.len(), json);
+            util::print_count(notes.len(), json);
+            return Ok(());
         }
         if json {
             let notes_json: Vec<TagNote> = notes
@@ -51,19 +52,18 @@ pub fn run(
                 .collect();
             if ndjson {
                 return util::print_ndjson(&notes_json);
-            } else {
-                let output = TagsOutput {
-                    tags: vec![TagEntry {
-                        tag: tag.to_string(),
-                        count: notes.len(),
-                        notes: notes_json,
-                    }],
-                };
-                println!("{}", serde_json::to_string_pretty(&output)?);
             }
+            let output = TagsOutput {
+                tags: vec![TagEntry {
+                    tag: tag.to_string(),
+                    count: notes.len(),
+                    notes: notes_json,
+                }],
+            };
+            println!("{}", serde_json::to_string_pretty(&output)?);
         } else {
             if !no_header {
-                println!("Tag: {}", tag);
+                println!("Tag: {tag}");
                 println!("Notes: {}", notes.len());
             }
             for n in &notes {
@@ -73,7 +73,8 @@ pub fn run(
     } else {
         let tags = graph.all_tags();
         if count_only {
-            return util::print_count(tags.len(), json);
+            util::print_count(tags.len(), json);
+            return Ok(());
         }
         if json {
             let entries: Vec<TagEntry> = tags
@@ -86,16 +87,15 @@ pub fn run(
                 .collect();
             if ndjson {
                 return util::print_ndjson(&entries);
-            } else {
-                let output = TagsOutput { tags: entries };
-                println!("{}", serde_json::to_string_pretty(&output)?);
             }
+            let output = TagsOutput { tags: entries };
+            println!("{}", serde_json::to_string_pretty(&output)?);
         } else {
             if !no_header {
                 println!("Filetags (count):");
             }
             for (tag, count) in &tags {
-                println!("  {:30} {}", tag, count);
+                println!("  {tag:30} {count}");
             }
             if !no_header {
                 println!();

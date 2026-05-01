@@ -24,7 +24,7 @@ impl NodeJson {
             title: node.title.clone(),
             path: util::path_string(&node.path),
             filetags: node.filetags.clone(),
-            content: content.map(|c| c.to_string()),
+            content: content.map(std::string::ToString::to_string),
         }
     }
 }
@@ -41,6 +41,7 @@ pub struct NeighborOutput {
     pub incoming: Vec<NodeJson>,
 }
 
+#[allow(clippy::too_many_lines)]
 pub fn run(
     config: &Config,
     json: bool,
@@ -54,18 +55,33 @@ pub fn run(
     db_cli: Option<&std::path::Path>,
 ) -> Result<()> {
     let targets: Vec<String> = if from_stdin {
-        std::io::stdin().lock().lines().filter_map(|l| {
-            let line = l.ok()?;
-            let trimmed = line.trim().to_string();
-            if trimmed.is_empty() { None } else { Some(trimmed) }
-        }).collect()
+        std::io::stdin()
+            .lock()
+            .lines()
+            .filter_map(|l| {
+                let line = l.ok()?;
+                let trimmed = line.trim().to_string();
+                if trimmed.is_empty() {
+                    None
+                } else {
+                    Some(trimmed)
+                }
+            })
+            .collect()
     } else if let Some(file) = from_file {
         let f = std::fs::File::open(file)?;
-        std::io::BufReader::new(f).lines().filter_map(|l| {
-            let line = l.ok()?;
-            let trimmed = line.trim().to_string();
-            if trimmed.is_empty() { None } else { Some(trimmed) }
-        }).collect()
+        std::io::BufReader::new(f)
+            .lines()
+            .filter_map(|l| {
+                let line = l.ok()?;
+                let trimmed = line.trim().to_string();
+                if trimmed.is_empty() {
+                    None
+                } else {
+                    Some(trimmed)
+                }
+            })
+            .collect()
     } else if let Some(t) = target {
         vec![t.to_string()]
     } else {
@@ -86,11 +102,16 @@ pub fn run(
             Ok(n) => n.clone(),
             Err(e) => {
                 if batch_mode {
-                    if !first { print!("\n") }
+                    if !first {
+                        println!();
+                    }
                     if json {
-                        println!("{}", serde_json::json!({"error": e.to_string(), "target": target_str}));
+                        println!(
+                            "{}",
+                            serde_json::json!({"error": e.to_string(), "target": target_str})
+                        );
                     } else {
-                        println!("Error: {} (target: {})", e, target_str);
+                        println!("Error: {e} (target: {target_str})");
                     }
                     first = false;
                     continue;
@@ -128,7 +149,9 @@ pub fn run(
                 neighbors: neigh_json,
             };
             if batch_mode {
-                if !first { print!("\n") }
+                if !first {
+                    println!();
+                }
                 println!("{}", serde_json::to_string(&output)?);
             } else {
                 println!("{}", serde_json::to_string_pretty(&output)?);
@@ -143,13 +166,11 @@ pub fn run(
             if !node.filetags.is_empty() {
                 println!("  Tags:   {}", node.filetags.join(", "));
             }
-            if show_content {
-                if let Some(content) = node_content {
-                    println!();
-                    println!("--- Content ---");
-                    println!("{}", content);
-                    println!("--- End ---");
-                }
+            if show_content && let Some(content) = node_content {
+                println!();
+                println!("--- Content ---");
+                println!("{content}");
+                println!("--- End ---");
             }
 
             if show_graph {
@@ -158,7 +179,7 @@ pub fn run(
                 for d in 1..=depth {
                     if let Some(ns) = neighbors.get(&d) {
                         println!();
-                        println!("Depth {}:", d);
+                        println!("Depth {d}:");
                         if !ns.outgoing.is_empty() {
                             println!("  Forward links:");
                             for n in &ns.outgoing {
@@ -193,53 +214,57 @@ fn print_graph(
     neighbors: &std::collections::HashMap<u32, crate::graph::NeighborSet>,
     max_depth: u32,
 ) {
-    let label = |n: &crate::graph::Node| {
-        format!("{} ({})", n.title, util::short_uuid(&n.uuid))
-    };
+    let label = |n: &crate::graph::Node| format!("{} ({})", n.title, util::short_uuid(&n.uuid));
 
     println!();
     let depth1 = neighbors.get(&1);
 
     // Print backlinks (incoming at depth 1)
-    if let Some(ns) = depth1 {
-        if !ns.incoming.is_empty() {
-            for (i, n) in ns.incoming.iter().enumerate() {
-                let prefix = if i == ns.incoming.len() - 1 { "└─ " } else { "├─ " };
-                println!("{} {}", prefix, label(n));
-            }
-            println!("│");
+    if let Some(ns) = depth1
+        && !ns.incoming.is_empty()
+    {
+        for (i, n) in ns.incoming.iter().enumerate() {
+            let prefix = if i == ns.incoming.len() - 1 {
+                "└─ "
+            } else {
+                "├─ "
+            };
+            println!("{} {}", prefix, label(n));
         }
+        println!("│");
     }
 
     // Print current node
     println!("● {}", label(node));
 
     // Print outgoing
-    if let Some(ns) = depth1 {
-        if !ns.outgoing.is_empty() {
-            println!("│");
-            for (i, n) in ns.outgoing.iter().enumerate() {
-                let prefix = if i == ns.outgoing.len() - 1 { "└─ " } else { "├─ " };
-                println!("{} {}", prefix, label(n));
-            }
+    if let Some(ns) = depth1
+        && !ns.outgoing.is_empty()
+    {
+        println!("│");
+        for (i, n) in ns.outgoing.iter().enumerate() {
+            let prefix = if i == ns.outgoing.len() - 1 {
+                "└─ "
+            } else {
+                "├─ "
+            };
+            println!("{} {}", prefix, label(n));
         }
     }
 
     // Deeper levels
     for d in 2..=max_depth {
-        if let Some(ns) = neighbors.get(&d) {
-            if !ns.outgoing.is_empty() || !ns.incoming.is_empty() {
-                println!();
-                println!("Depth {}:", d);
-                for n in &ns.outgoing {
-                    println!("  → {}", label(n));
-                }
-                for n in &ns.incoming {
-                    println!("  ← {}", label(n));
-                }
+        if let Some(ns) = neighbors.get(&d)
+            && (!ns.outgoing.is_empty() || !ns.incoming.is_empty())
+        {
+            println!();
+            println!("Depth {d}:");
+            for n in &ns.outgoing {
+                println!("  → {}", label(n));
+            }
+            for n in &ns.incoming {
+                println!("  ← {}", label(n));
             }
         }
     }
 }
-
-

@@ -102,7 +102,11 @@ fn test_duplicate_uuid_detection() {
         make_note("dup-uuid", "Second", vec![]),
     ];
     let graph = Graph::build(results);
-    assert_eq!(graph.nodes.len(), 1, "only one node should exist for unique UUID");
+    assert_eq!(
+        graph.nodes.len(),
+        1,
+        "only one node should exist for unique UUID"
+    );
     assert_eq!(graph.duplicates.duplicate_uuids.len(), 1);
     assert_eq!(graph.duplicates.duplicate_uuids[0].value, "dup-uuid");
 }
@@ -258,7 +262,14 @@ fn test_backlinks_count() {
 #[test]
 fn test_hubs_ordering() {
     let results = vec![
-        make_note("a", "Hub A", vec![Link::Internal("x".to_string()), Link::Internal("y".to_string())]),
+        make_note(
+            "a",
+            "Hub A",
+            vec![
+                Link::Internal("x".to_string()),
+                Link::Internal("y".to_string()),
+            ],
+        ),
         make_note("b", "Hub B", vec![Link::Internal("x".to_string())]),
         make_note("x", "X", vec![]),
         make_note("y", "Y", vec![]),

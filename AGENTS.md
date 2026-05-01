@@ -1,15 +1,17 @@
 # AGENTS.md — pkms project guide for AI agents
 
-## Build & Test
+## Build, Lint & Test
+
+After changes, run these commands **in this strict order**:
 
 ```bash
-cargo build                    # Build the binary
-cargo test                     # Run all unit + integration tests (124+ tests, ~1s)
-cargo test --test integration  # Integration tests only (mock DB)
-target/debug/pkms --help       # Verify CLI works
+cargo fmt --check              # 1. Check formatting (fail if unformatted)
+cargo clippy -- -D warnings    # 2. Lint with clippy (deny all warnings)
+cargo build                    # 3. Build the binary
+cargo test                     # 4. Run all unit + integration tests (138+ tests, ~1s)
+cargo test --test integration  # 5. Integration tests only (mock DB)
+target/debug/pkms --help       # 6. Verify CLI works
 ```
-
-No lint or formatting commands are configured. The project has no clippy or rustfmt CI.
 
 ## Project structure
 
@@ -20,7 +22,14 @@ src/
   config.rs         # ~/.config/pkms.toml loading, merging with CLI --db flag
   discovery.rs      # Recursive .org file discovery with ignore patterns
   parser.rs         # org-mode parser: IDs, titles, filetags, aliases, refs, links, headings
-  graph.rs          # In-memory graph: Node, Link, Graph, BFS pathfinding, subgraph
+  util.rs           # Shared helpers: load_input_target, print_count, print_ndjson, short_uuid
+  graph/            # In-memory graph module (split into submodules)
+    mod.rs          # Struct defs: Node, Graph, FileScanResult; load/scan/find_node/resolve_target
+    builder.rs      # Graph::build constructor
+    traversal.rs    # get_neighbors, find_shortest_path, collect_subgraph (BFS)
+    search.rs       # search, search_content, all_tags, notes_by_tag
+    analytics.rs    # hubs, orphan_nodes, broken_links_list, stats, directory_breakdown
+    tests.rs        # Unit + proptest tests for graph
   commands/         # One file per subcommand
     mod.rs          # Module declarations only
     info.rs         # Show resolved config
@@ -61,7 +70,8 @@ tests/
 - **`Graph::load(config, db_cli, verbose)`** to load the full database (discovers + parses 750+ files, ~3s). Expensive — cache results when possible.
 - **`resolve`** command is fast (~0.5s) because it scans only file headers. Use for quick lookups.
 - **`#[allow(dead_code)]`** on struct fields kept for future use. Remove if never needed after implementation.
-- **Prefix unused params** with `_` (e.g., `_verbose`).
+- **Use `util::load_input_target`** for `--input-json` parsing instead of inline match.
+- **Use `util::print_count`** and **`util::print_ndjson`** for count/ndjson output patterns.
 
 ## Graph data model
 
@@ -71,7 +81,7 @@ Link::Internal(String) | File(String) | Url(String) | Attachment(String)
 Graph { nodes: HashMap<uuid, Node>, path_to_uuid, title_to_uuid, backlinks, broken_links, ... }
 ```
 
-`Graph::build(results)` processes `FileScanResult`s and produces the graph with backlinks and broken link detection. The `load()` static method is the main entry point — it discovers files, parses them, and builds the graph.
+`Graph::build(results)` processes `FileScanResult`s and produces the graph with backlinks and broken link detection. The `load()` static method is the main entry point — it calls `scan()` to discover and parse files, then `build()` to construct the graph. The `scan()` method can be called independently for commands that need the raw results.
 
 ## Command pattern
 

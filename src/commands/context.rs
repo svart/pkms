@@ -3,6 +3,7 @@ use crate::graph::Graph;
 use crate::util;
 use anyhow::Result;
 use serde::Serialize;
+use std::fmt::Write;
 
 const DEFAULT_TEMPLATE: &str = "# {{title}}\nUUID: {{uuid}}\nPath: {{path}}\n{{#tags}}Tags: {{tags}}\n{{/tags}}{{#aliases}}Aliases: {{aliases}}\n{{/aliases}}\n--- Content ---\n{{content}}--- End Content ---\n\n{{neighbors}}{{backlinks}}";
 
@@ -27,7 +28,12 @@ pub fn run(
     input_json: Option<&std::path::PathBuf>,
     db_cli: Option<&std::path::Path>,
 ) -> Result<()> {
-    let target = util::load_input_target(input_json, target, "target", "No target specified. Provide a target or use --input-json")?;
+    let target = util::load_input_target(
+        input_json,
+        target,
+        "target",
+        "No target specified. Provide a target or use --input-json",
+    )?;
 
     let graph = Graph::load(config, db_cli, false)?;
     let node = graph.resolve_target(&target)?.clone();
@@ -43,25 +49,25 @@ pub fn run(
     for d in 1..=depth {
         if let Some(ns) = neighbors.get(&d) {
             if show_outgoing && !ns.outgoing.is_empty() {
-                neighbors_text.push_str(&format!("=== Depth {} ===\n", d));
+                let _ = writeln!(neighbors_text, "=== Depth {d} ===");
                 neighbors_text.push_str("Forward links:\n");
                 for n in &ns.outgoing {
                     let short = truncate_content(&read_content(&n.path), 200);
-                    neighbors_text.push_str(&format!("\n  → {} ({})\n", n.title, n.uuid));
-                    neighbors_text.push_str(&format!("    Path: {}\n", n.path.display()));
+                    let _ = write!(neighbors_text, "\n  → {} ({})\n", n.title, n.uuid);
+                    let _ = writeln!(neighbors_text, "    Path: {}", n.path.display());
                     if !short.is_empty() {
-                        neighbors_text.push_str(&format!("    {}", short));
+                        let _ = write!(neighbors_text, "    {short}");
                     }
                 }
                 neighbors_text.push('\n');
             }
 
             if show_incoming && !ns.incoming.is_empty() {
-                backlinks_text.push_str(&format!("=== Depth {} ===\n", d));
+                let _ = writeln!(backlinks_text, "=== Depth {d} ===");
                 backlinks_text.push_str("Backlinks:\n");
                 for n in &ns.incoming {
-                    backlinks_text.push_str(&format!("\n  ← {} ({})\n", n.title, n.uuid));
-                    backlinks_text.push_str(&format!("    Path: {}\n", n.path.display()));
+                    let _ = write!(backlinks_text, "\n  ← {} ({})\n", n.title, n.uuid);
+                    let _ = writeln!(backlinks_text, "    Path: {}", n.path.display());
                 }
                 backlinks_text.push('\n');
             }
@@ -72,16 +78,19 @@ pub fn run(
     let aliases_str = node.aliases.join(", ");
 
     let tmpl = template.unwrap_or(DEFAULT_TEMPLATE);
-    let ctx = render_template(tmpl, &ContextVars {
-        title: &node.title,
-        uuid: &node.uuid,
-        path: &node.path.to_string_lossy(),
-        tags: &tags_str,
-        aliases: &aliases_str,
-        content: &content,
-        neighbors: &neighbors_text,
-        backlinks: &backlinks_text,
-    });
+    let ctx = render_template(
+        tmpl,
+        &ContextVars {
+            title: &node.title,
+            uuid: &node.uuid,
+            path: &node.path.to_string_lossy(),
+            tags: &tags_str,
+            aliases: &aliases_str,
+            content: &content,
+            neighbors: &neighbors_text,
+            backlinks: &backlinks_text,
+        },
+    );
 
     let ctx = if let Some(max) = max_tokens {
         truncate_by_tokens(&ctx, max)
@@ -100,7 +109,7 @@ pub fn run(
         };
         println!("{}", serde_json::to_string_pretty(&output)?);
     } else {
-        println!("{}", ctx);
+        println!("{ctx}");
         if !quiet {
             eprintln!(
                 "[context: ~{} tokens, depth: {}, max_tokens: {}]",
@@ -137,8 +146,8 @@ fn render_template(template: &str, vars: &ContextVars) -> String {
         ("backlinks", vars.backlinks),
     ];
     for (key, val) in &conditionals {
-        let start_tag = format!("{{{{#{}}}}}", key);
-        let end_tag = format!("{{{{/{}}}}}", key);
+        let start_tag = format!("{{{{#{key}}}}}");
+        let end_tag = format!("{{{{/{key}}}}}");
         if val.is_empty() {
             // Remove the entire block
             while let Some(start) = result.find(&start_tag) {
@@ -168,7 +177,7 @@ fn render_template(template: &str, vars: &ContextVars) -> String {
         ("backlinks", vars.backlinks),
     ];
     for (key, val) in &replacements {
-        result = result.replace(&format!("{{{{{}}}}}", key), val);
+        result = result.replace(&format!("{{{{{key}}}}}"), val);
     }
 
     result
@@ -334,9 +343,18 @@ mod tests {
         assert!(result.contains("uu-id-1234"));
         assert!(result.contains("file content"));
         assert!(result.contains("Linked Note"));
-        assert!(!result.contains("{{title}}"), "all placeholders should be replaced");
-        assert!(!result.contains("{{#tags}}"), "conditional tags tag should be removed");
-        assert!(!result.contains("{{/tags}}"), "conditional tags end should be removed");
+        assert!(
+            !result.contains("{{title}}"),
+            "all placeholders should be replaced"
+        );
+        assert!(
+            !result.contains("{{#tags}}"),
+            "conditional tags tag should be removed"
+        );
+        assert!(
+            !result.contains("{{/tags}}"),
+            "conditional tags end should be removed"
+        );
         assert!(result.contains("Tags: tag1"));
     }
 }

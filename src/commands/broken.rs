@@ -30,7 +30,8 @@ pub fn run(
 
     let count = links.len();
     if count_only {
-        return util::print_count(count, json);
+        util::print_count(count, json);
+        return Ok(());
     }
 
     if json {
@@ -44,19 +45,18 @@ pub fn run(
             .collect();
         if ndjson {
             return util::print_ndjson(&entries);
-        } else {
-            let output = BrokenOutput {
-                count: entries.len(),
-                links: entries,
-            };
-            println!("{}", serde_json::to_string_pretty(&output)?);
         }
+        let output = BrokenOutput {
+            count: entries.len(),
+            links: entries,
+        };
+        println!("{}", serde_json::to_string_pretty(&output)?);
     } else {
         if !no_header {
-            println!("Broken links ({}):", count);
+            println!("Broken links ({count}):");
         }
         for (_src, title, tgt) in &links {
-            println!("  {} -> {}", title, tgt);
+            println!("  {title} -> {tgt}");
         }
     }
 

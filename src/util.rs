@@ -15,20 +15,19 @@ pub fn load_input_target(
             let params: serde_json::Value = serde_json::from_str(&content)?;
             params
                 .get(field)
-                .and_then(|v| v.as_str().map(|s| s.to_string()))
-                .ok_or_else(|| anyhow::anyhow!("No '{}' specified in JSON", field))
+                .and_then(|v| v.as_str().map(std::string::ToString::to_string))
+                .ok_or_else(|| anyhow::anyhow!("No '{field}' specified in JSON"))
         }
         (None, None) => anyhow::bail!(error_msg),
     }
 }
 
-pub fn print_count(count: usize, json: bool) -> Result<()> {
+pub fn print_count(count: usize, json: bool) {
     if json {
         println!("{}", serde_json::json!({"count": count}));
     } else {
-        println!("{}", count);
+        println!("{count}");
     }
-    Ok(())
 }
 
 pub fn print_ndjson<T: Serialize>(entries: &[T]) -> Result<()> {
@@ -39,11 +38,7 @@ pub fn print_ndjson<T: Serialize>(entries: &[T]) -> Result<()> {
 }
 
 pub fn short_uuid(uuid: &str) -> &str {
-    if uuid.len() > 8 {
-        &uuid[..8]
-    } else {
-        uuid
-    }
+    if uuid.len() > 8 { &uuid[..8] } else { uuid }
 }
 
 pub fn path_string(path: &Path) -> String {

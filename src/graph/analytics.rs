@@ -17,11 +17,11 @@ impl Graph {
                     .iter()
                     .filter(|l| matches!(l, Link::Internal(_)))
                     .count();
-                let incoming = self.backlinks.get(&n.uuid).map_or(0, |v| v.len());
+                let incoming = self.backlinks.get(&n.uuid).map_or(0, std::vec::Vec::len);
                 (n, outgoing + incoming)
             })
             .collect();
-        degrees.sort_by(|a, b| b.1.cmp(&a.1));
+        degrees.sort_by_key(|b| std::cmp::Reverse(b.1));
         degrees.truncate(limit);
         degrees
     }
@@ -37,7 +37,7 @@ impl Graph {
             *dirs.entry(dir).or_default() += 1;
         }
         let mut result: Vec<_> = dirs.into_iter().collect();
-        result.sort_by(|a, b| b.1.cmp(&a.1));
+        result.sort_by_key(|b| std::cmp::Reverse(b.1));
         result
     }
 
@@ -50,8 +50,7 @@ impl Graph {
     }
 
     pub fn notes_since(&self, days: u32) -> Vec<&super::Node> {
-        let cutoff =
-            SystemTime::now() - std::time::Duration::from_secs(days as u64 * 86400);
+        let cutoff = SystemTime::now() - std::time::Duration::from_secs(u64::from(days) * 86400);
         self.nodes
             .values()
             .filter(|n| {
@@ -59,7 +58,7 @@ impl Graph {
                     .metadata()
                     .ok()
                     .and_then(|m| m.modified().ok())
-                    .map_or(false, |t| t >= cutoff)
+                    .is_some_and(|t| t >= cutoff)
             })
             .collect()
     }
@@ -69,10 +68,7 @@ impl Graph {
             .values()
             .filter(|n| {
                 let has_outgoing = n.outgoing.iter().any(|l| matches!(l, Link::Internal(_)));
-                let has_incoming = self
-                    .backlinks
-                    .get(&n.uuid)
-                    .map_or(false, |b| !b.is_empty());
+                let has_incoming = self.backlinks.get(&n.uuid).is_some_and(|b| !b.is_empty());
                 !has_outgoing && !has_incoming
             })
             .collect()

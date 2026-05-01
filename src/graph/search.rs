@@ -25,7 +25,7 @@ impl Graph {
                     words.iter().filter(|w| alias_lower.contains(*w)).count();
                 if words_in_alias > 0 {
                     score += words_in_alias as f64 * 8.0;
-                    matches.push(format!("alias: {}", alias));
+                    matches.push(format!("alias: {alias}"));
                 }
             }
 
@@ -33,14 +33,14 @@ impl Graph {
                 let ref_lower = ref_.to_lowercase();
                 if words.iter().any(|w| ref_lower.contains(*w)) {
                     score += 6.0;
-                    matches.push(format!("ref: {}", ref_));
+                    matches.push(format!("ref: {ref_}"));
                 }
             }
 
             for tag in &node.filetags {
                 if words.iter().any(|w| tag.contains(*w)) {
                     score += 5.0;
-                    matches.push(format!("tag: {}", tag));
+                    matches.push(format!("tag: {tag}"));
                 }
             }
 

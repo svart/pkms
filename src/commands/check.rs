@@ -54,6 +54,7 @@ fn link_target_exists(target: &str, db_root: &Path) -> bool {
     }
 }
 
+#[allow(clippy::too_many_lines)]
 pub fn run(
     config: &Config,
     json: bool,
@@ -72,14 +73,14 @@ pub fn run(
     if file_links {
         for node in graph.nodes.values() {
             for link in &node.outgoing {
-                if let Link::File(target) = link {
-                    if !link_target_exists(target, &db_root) {
-                        broken_file.push(BrokenFileLinkEntry {
-                            source_uuid: node.uuid.clone(),
-                            source_title: node.title.clone(),
-                            target_path: target.clone(),
-                        });
-                    }
+                if let Link::File(target) = link
+                    && !link_target_exists(target, &db_root)
+                {
+                    broken_file.push(BrokenFileLinkEntry {
+                        source_uuid: node.uuid.clone(),
+                        source_title: node.title.clone(),
+                        target_path: target.clone(),
+                    });
                 }
             }
         }
@@ -88,14 +89,14 @@ pub fn run(
     if attachment_links {
         for node in graph.nodes.values() {
             for link in &node.outgoing {
-                if let Link::Attachment(target) = link {
-                    if !link_target_exists(target, &db_root) {
-                        broken_attachment.push(BrokenAttachmentLinkEntry {
-                            source_uuid: node.uuid.clone(),
-                            source_title: node.title.clone(),
-                            target_path: target.clone(),
-                        });
-                    }
+                if let Link::Attachment(target) = link
+                    && !link_target_exists(target, &db_root)
+                {
+                    broken_attachment.push(BrokenAttachmentLinkEntry {
+                        source_uuid: node.uuid.clone(),
+                        source_title: node.title.clone(),
+                        target_path: target.clone(),
+                    });
                 }
             }
         }
@@ -148,7 +149,8 @@ pub fn run(
     } else {
         println!("Database: {}", db_root.display());
         println!("  Notes:          {}", stats.total_notes);
-        println!("  Links:          {} (internal: {}, file: {}, url: {})",
+        println!(
+            "  Links:          {} (internal: {}, file: {}, url: {})",
             stats.total_links,
             stats.total_internal_links,
             stats.total_file_links,
@@ -157,10 +159,10 @@ pub fn run(
         println!("  Orphans:        {}", stats.orphan_notes);
         println!("  Broken links:   {}", stats.broken_link_count);
         if file_links {
-            println!("  Broken files:   {}", broken_file_links_count);
+            println!("  Broken files:   {broken_file_links_count}");
         }
         if attachment_links {
-            println!("  Broken attach:  {}", broken_attachment_links_count);
+            println!("  Broken attach:  {broken_attachment_links_count}");
         }
         println!("  Parse errors:   {}", stats.parse_error_count);
         println!("  Skipped files:  {}", stats.skipped_count);
@@ -192,7 +194,7 @@ pub fn run(
             println!();
             println!("Missing #+title:");
             for p in &graph.duplicates.missing_titles {
-                println!("  {}", p);
+                println!("  {p}");
             }
         }
 
@@ -200,12 +202,8 @@ pub fn run(
             println!();
             println!("Broken links:");
             for (src, tgt) in &graph.broken_links {
-                let title = graph
-                    .nodes
-                    .get(src)
-                    .map(|n| n.title.as_str())
-                    .unwrap_or("?");
-                println!("  {} -> {}", title, tgt);
+                let title = graph.nodes.get(src).map_or("?", |n| n.title.as_str());
+                println!("  {title} -> {tgt}");
             }
         }
 
@@ -249,5 +247,9 @@ pub fn run(
         }
     }
 
-    if healthy { Ok(ExitCode::SUCCESS) } else { Ok(ExitCode::from(1)) }
+    if healthy {
+        Ok(ExitCode::SUCCESS)
+    } else {
+        Ok(ExitCode::from(1))
+    }
 }

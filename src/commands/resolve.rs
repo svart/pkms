@@ -26,11 +26,9 @@ pub struct ResolveOutput {
     pub results: Vec<ResolvedNote>,
 }
 
-static UUID_RE: LazyLock<Regex> =
-    LazyLock::new(|| {
-        Regex::new(r":ID:\s+([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})")
-            .unwrap()
-    });
+static UUID_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r":ID:\s+([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})").unwrap()
+});
 
 static ALIASES_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r":ROAM_ALIASES:\s+(.*)").unwrap());
@@ -48,26 +46,36 @@ fn scan_files(root: &Path, ignore_patterns: &[String]) -> Vec<ResolvedNote> {
         .follow_links(false)
         .into_iter()
         .filter_entry(move |e| {
-            if e.path() == root_clone { return true; }
+            if e.path() == root_clone {
+                return true;
+            }
             !discovery::is_ignored(e, &compiled_patterns)
         })
     {
         let Ok(entry) = entry else { continue };
-        if !entry.file_type().is_file() || entry.path().extension().map_or(true, |e| e != "org") {
+        if !entry.file_type().is_file() || entry.path().extension().is_none_or(|e| e != "org") {
             continue;
         }
 
-        let Ok(content) = std::fs::read_to_string(entry.path()) else { continue };
+        let Ok(content) = std::fs::read_to_string(entry.path()) else {
+            continue;
+        };
         let header: Vec<&str> = content.lines().take(100).collect();
         let header_str = header.join("\n");
 
         // Use the LAST :ID: in the header (notes may have migrated UUIDs via duplicate drawers)
-        let uuid = UUID_RE.captures_iter(&header_str).last()
+        let uuid = UUID_RE
+            .captures_iter(&header_str)
+            .last()
             .and_then(|c| c.get(1))
             .map(|m| m.as_str().to_string());
         let Some(uuid) = uuid else { continue };
 
-        let title = TITLE_RE.captures(&header_str).and_then(|c| c.get(1)).map(|m| m.as_str().trim().to_string()).unwrap_or_default();
+        let title = TITLE_RE
+            .captures(&header_str)
+            .and_then(|c| c.get(1))
+            .map(|m| m.as_str().trim().to_string())
+            .unwrap_or_default();
 
         let filetags = FILETAGS_RE
             .captures(&header_str)
@@ -82,7 +90,8 @@ fn scan_files(root: &Path, ignore_patterns: &[String]) -> Vec<ResolvedNote> {
             .unwrap_or_default();
 
         let aliases = ALIASES_RE
-            .captures_iter(&header_str).last()
+            .captures_iter(&header_str)
+            .last()
             .map(|c| {
                 c.get(1)
                     .map_or("", |m| m.as_str())
@@ -104,6 +113,7 @@ fn scan_files(root: &Path, ignore_patterns: &[String]) -> Vec<ResolvedNote> {
     notes
 }
 
+#[allow(clippy::too_many_lines)]
 pub fn run(
     config: &Config,
     json: bool,
@@ -124,7 +134,7 @@ pub fn run(
     let limit = limit.unwrap_or(30);
     let query = target.unwrap_or("");
     let query_lower = query.to_lowercase();
-    let search_lower = search.map(|s| s.to_lowercase());
+    let search_lower = search.map(str::to_lowercase);
 
     let mut results: Vec<ResolvedNote> = notes
         .into_iter()
@@ -139,17 +149,21 @@ pub fn run(
                 if n.title.to_lowercase().contains(&query_lower) {
                     return true;
                 }
-                if n.aliases.iter().any(|a| a.to_lowercase().contains(&query_lower)) {
+                if n.aliases
+                    .iter()
+                    .any(|a| a.to_lowercase().contains(&query_lower))
+                {
                     return true;
                 }
             }
-            if let Some(ref s) = search_lower {
-                if n.title.to_lowercase().contains(s) || n.aliases.iter().any(|a| a.to_lowercase().contains(s)) {
-                    return true;
-                }
+            if let Some(ref s) = search_lower
+                && (n.title.to_lowercase().contains(s)
+                    || n.aliases.iter().any(|a| a.to_lowercase().contains(s)))
+            {
+                return true;
             }
             if let Some(t) = tags {
-                let wanted: Vec<&str> = t.split(',').map(|t| t.trim()).collect();
+                let wanted: Vec<&str> = t.split(',').map(str::trim).collect();
                 if wanted.iter().any(|w| n.filetags.contains(&w.to_string())) {
                     return true;
                 }
@@ -160,18 +174,20 @@ pub fn run(
 
     // Sort: exact UUID match first, then title match, then prefix match
     results.sort_by(|a, b| {
-        let a_score = score_match(&a, query, &query_lower);
-        let b_score = score_match(&b, query, &query_lower);
+        let a_score = score_match(a, query, &query_lower);
+        let b_score = score_match(b, query, &query_lower);
         b_score.cmp(&a_score)
     });
 
     results.truncate(limit);
 
     if count_only {
-        return util::print_count(results.len(), json);
+        util::print_count(results.len(), json);
+        return Ok(());
     }
 
-    let field_set: Option<HashSet<String>> = fields.map(|f| f.split(',').map(|s| s.trim().to_string()).collect());
+    let field_set: Option<HashSet<String>> =
+        fields.map(|f| f.split(',').map(|s| s.trim().to_string()).collect());
 
     if json {
         if ndjson {
@@ -180,18 +196,17 @@ pub fn run(
                 println!("{}", serde_json::to_string(&v)?);
             }
             return Ok(());
-        } else {
-            let output = ResolveOutput {
-                query: query.to_string(),
-                total: results.len(),
-                results,
-            };
-            println!("{}", serde_json::to_string_pretty(&output)?);
         }
+        let output = ResolveOutput {
+            query: query.to_string(),
+            total: results.len(),
+            results,
+        };
+        println!("{}", serde_json::to_string_pretty(&output)?);
     } else {
         if !no_header {
             if !query.is_empty() {
-                println!("Resolved: \"{}\"", query);
+                println!("Resolved: \"{query}\"");
             }
             println!("Total: {}", results.len());
         }
@@ -227,7 +242,9 @@ pub fn run(
 }
 
 fn filter_fields(value: &serde_json::Value, fields: &Option<HashSet<String>>) -> serde_json::Value {
-    let Some(fs) = fields else { return value.clone() };
+    let Some(fs) = fields else {
+        return value.clone();
+    };
     match value {
         serde_json::Value::Object(map) => {
             let mut filtered = serde_json::Map::new();
@@ -292,7 +309,14 @@ mod tests {
             filetags: vec![],
             aliases: vec![],
         };
-        assert_eq!(score_match(&note, "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa", &"aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa".to_lowercase()), 100);
+        assert_eq!(
+            score_match(
+                &note,
+                "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa",
+                &"aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa".to_lowercase()
+            ),
+            100
+        );
     }
 
     #[test]
@@ -304,7 +328,10 @@ mod tests {
             filetags: vec![],
             aliases: vec![],
         };
-        assert_eq!(score_match(&note, "Exact Title", &"exact title".to_lowercase()), 80);
+        assert_eq!(
+            score_match(&note, "Exact Title", &"exact title".to_lowercase()),
+            80
+        );
     }
 
     #[test]

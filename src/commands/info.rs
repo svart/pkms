@@ -34,8 +34,14 @@ pub fn run(config: &Config, json: bool, db_cli: Option<&std::path::Path>) -> Res
         println!("{}", serde_json::to_string_pretty(&output)?);
     } else {
         println!("pkms configuration");
-        println!("  config file:  ~/.config/pkms.toml ({})", 
-            if info.has_config_file { "found" } else { "not found" });
+        println!(
+            "  config file:  ~/.config/pkms.toml ({})",
+            if info.has_config_file {
+                "found"
+            } else {
+                "not found"
+            }
+        );
         println!("  db_root:      {}", info.db_root.display());
         println!("  new_notes:    {}", info.new_notes_dir.display());
         if !info.ignore_patterns.is_empty() {

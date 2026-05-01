@@ -1,6 +1,7 @@
 use crate::config::Config;
 use anyhow::Result;
 use serde::Serialize;
+use std::fmt::Write;
 use std::path::PathBuf;
 
 #[derive(Serialize)]
@@ -28,7 +29,7 @@ pub fn run(
     let slug = title_to_slug(title);
     let now = chrono::Utc::now();
     let timestamp = now.format("%Y%m%d%H%M%S").to_string();
-    let filename = format!("{}-{}.org", timestamp, slug);
+    let filename = format!("{timestamp}-{slug}.org");
     let path = new_notes_dir.join(&filename);
 
     // Ensure target directory exists
@@ -38,28 +39,24 @@ pub fn run(
 
     let mut created = false;
     if create {
-        let mut content = format!(
-            ":PROPERTIES:\n:ID:       {}\n:END:\n#+title: {}\n",
-            uuid, title
-        );
+        let mut content = format!(":PROPERTIES:\n:ID:       {uuid}\n:END:\n#+title: {title}\n");
 
         if let Some(tags_str) = tags {
-            let tags_list: Vec<&str> = tags_str.split(',').map(|t| t.trim()).collect();
+            let tags_list: Vec<&str> = tags_str.split(',').map(str::trim).collect();
             if !tags_list.is_empty() {
-                let ft = tags_list
-                    .iter()
-                    .map(|t| format!(":{}:", t))
-                    .collect::<Vec<_>>()
-                    .join("");
-                content.push_str(&format!("#+filetags: {}\n", ft));
+                let ft = tags_list.iter().fold(String::new(), |mut acc, t| {
+                    let _ = write!(acc, ":{t}:");
+                    acc
+                });
+                let _ = writeln!(content, "#+filetags: {ft}");
             }
         }
 
         if let Some(aliases_str) = aliases {
-            let aliases_list: Vec<&str> = aliases_str.split(',').map(|a| a.trim()).collect();
+            let aliases_list: Vec<&str> = aliases_str.split(',').map(str::trim).collect();
             if !aliases_list.is_empty() {
                 content.push_str(":PROPERTIES:\n");
-                content.push_str(&format!(":ROAM_ALIASES: {}\n", aliases_list.join(" ")));
+                let _ = writeln!(content, ":ROAM_ALIASES: {}", aliases_list.join(" "));
                 content.push_str(":END:\n");
             }
         }
@@ -100,8 +97,7 @@ pub fn title_to_slug(title: &str) -> String {
         .chars()
         .map(|c| match c {
             'a'..='z' | '0'..='9' => c,
-            '_' => '_',
-            ' ' | '-' => '_',
+            '_' | ' ' | '-' => '_',
             _ if c.is_whitespace() => '_',
             _ => '-',
         })

@@ -27,8 +27,11 @@ pub fn run(
     max_depth: Option<u32>,
     db_cli: Option<&std::path::Path>,
 ) -> Result<()> {
-    let from = from.ok_or_else(|| anyhow::anyhow!("No source specified. Provide --from or use --input-json"))?;
-    let to = to.ok_or_else(|| anyhow::anyhow!("No target specified. Provide --to or use --input-json"))?;
+    let from = from.ok_or_else(|| {
+        anyhow::anyhow!("No source specified. Provide --from or use --input-json")
+    })?;
+    let to =
+        to.ok_or_else(|| anyhow::anyhow!("No target specified. Provide --to or use --input-json"))?;
 
     let graph = Graph::load(config, db_cli, verbose)?;
 
@@ -65,40 +68,25 @@ pub fn run(
                     path: path_nodes,
                 };
                 println!("{}", serde_json::to_string_pretty(&output)?);
+            } else if let Some(uuids) = path_uuids {
+                let hops = uuids.len() - 1;
+                println!("Shortest path between \"{}\" and \"{}\":", f.title, t.title);
+                println!("  {hops} hop(s)");
+                println!();
+                for (i, uuid) in uuids.iter().enumerate() {
+                    let title = graph.nodes.get(uuid).map_or("?", |n| n.title.as_str());
+                    let arrow = if i < uuids.len() - 1 { " →" } else { "" };
+                    println!("  {}. {}{}", i + 1, title, arrow);
+                }
             } else {
-                match path_uuids {
-                    Some(uuids) => {
-                        let hops = uuids.len() - 1;
-                        println!(
-                            "Shortest path between \"{}\" and \"{}\":",
-                            f.title, t.title
-                        );
-                        println!("  {} hop(s)", hops);
-                        println!();
-                        for (i, uuid) in uuids.iter().enumerate() {
-                            let title = graph
-                                .nodes
-                                .get(uuid)
-                                .map(|n| n.title.as_str())
-                                .unwrap_or("?");
-                            let arrow = if i < uuids.len() - 1 { " →" } else { "" };
-                            println!("  {}. {}{}", i + 1, title, arrow);
-                        }
-                    }
-                    None => {
-                        println!(
-                            "No path found between \"{}\" and \"{}\"",
-                            f.title, t.title
-                        );
-                        if max_depth.is_some() {
-                            println!("  (try increasing --max-depth)");
-                        }
-                    }
+                println!("No path found between \"{}\" and \"{}\"", f.title, t.title);
+                if max_depth.is_some() {
+                    println!("  (try increasing --max-depth)");
                 }
             }
         }
-        (None, _) => anyhow::bail!("Source note not found: {}", from_str),
-        (_, None) => anyhow::bail!("Target note not found: {}", to_str),
+        (None, _) => anyhow::bail!("Source note not found: {from_str}"),
+        (_, None) => anyhow::bail!("Target note not found: {to_str}"),
     }
 
     Ok(())

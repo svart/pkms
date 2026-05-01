@@ -104,7 +104,10 @@ pub fn run(
     } else {
         println!("Database: {}", db_root.display());
         println!("  Notes:             {}", stats.total_notes);
-        println!("  Links:             {} (avg: {:.2}/note)", stats.total_links, avg);
+        println!(
+            "  Links:             {} (avg: {:.2}/note)",
+            stats.total_links, avg
+        );
         println!("    Internal:        {}", stats.total_internal_links);
         println!("    File:            {}", stats.total_file_links);
         println!("    URL:             {}", stats.total_url_links);
@@ -120,8 +123,12 @@ pub fn run(
             println!();
             println!("Directories:");
             for (dir, count) in &dirs {
-                let display = if dir.is_empty() { "(root)" } else { dir.as_str() };
-                println!("  {:40} {}", display, count);
+                let display = if dir.is_empty() {
+                    "(root)"
+                } else {
+                    dir.as_str()
+                };
+                println!("  {display:40} {count}");
             }
         }
         println!();

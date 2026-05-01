@@ -5,6 +5,7 @@ use crate::parser::Link;
 use super::{DuplicateEntry, DuplicateInfo, FileScanResult, Graph, Node};
 
 impl Graph {
+    #[allow(clippy::too_many_lines)]
     pub fn build(results: Vec<FileScanResult>) -> Self {
         let mut nodes = HashMap::new();
         let mut path_to_uuid = HashMap::new();
@@ -46,14 +47,13 @@ impl Graph {
             }
             seen_uuids.insert(uuid.clone(), path.clone());
 
-            let title = match parsed.title.clone() {
-                Some(t) => t,
-                None => {
-                    missing_titles.push(path.clone());
-                    path.file_stem()
-                        .map(|s| s.to_string_lossy().to_string())
-                        .unwrap_or_default()
-                }
+            let title = if let Some(t) = parsed.title.clone() {
+                t
+            } else {
+                missing_titles.push(path.clone());
+                path.file_stem()
+                    .map(|s| s.to_string_lossy().to_string())
+                    .unwrap_or_default()
             };
 
             if let Some(existing) = seen_titles.get(&title) {

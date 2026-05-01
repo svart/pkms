@@ -50,7 +50,12 @@ pub fn run(
     input_json: Option<&std::path::PathBuf>,
     db_cli: Option<&std::path::Path>,
 ) -> Result<()> {
-    let target = util::load_input_target(input_json, target, "target", "No target specified. Provide a target or use --input-json")?;
+    let target = util::load_input_target(
+        input_json,
+        target,
+        "target",
+        "No target specified. Provide a target or use --input-json",
+    )?;
 
     let graph = Graph::load(config, db_cli, verbose)?;
 
@@ -96,9 +101,9 @@ pub fn run(
             println!();
             println!("Edges:");
             for (s, t) in &sub.edges {
-                let st = graph.nodes.get(s).map(|n| n.title.as_str()).unwrap_or("?");
-                let tt = graph.nodes.get(t).map(|n| n.title.as_str()).unwrap_or("?");
-                println!("  {} -> {}", st, tt);
+                let st = graph.nodes.get(s).map_or("?", |n| n.title.as_str());
+                let tt = graph.nodes.get(t).map_or("?", |n| n.title.as_str());
+                println!("  {st} -> {tt}");
             }
         }
     }

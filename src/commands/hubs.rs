@@ -34,7 +34,8 @@ pub fn run(
     let hubs = graph.hubs(limit);
 
     if count_only {
-        return util::print_count(hubs.len(), json);
+        util::print_count(hubs.len(), json);
+        return Ok(());
     }
 
     if json {
@@ -47,7 +48,7 @@ pub fn run(
                     .iter()
                     .filter(|l| matches!(l, Link::Internal(_)))
                     .count();
-                let incoming = graph.backlinks.get(&n.uuid).map_or(0, |v| v.len());
+                let incoming = graph.backlinks.get(&n.uuid).map_or(0, std::vec::Vec::len);
                 HubEntry {
                     rank: i + 1,
                     uuid: n.uuid.clone(),
@@ -60,13 +61,15 @@ pub fn run(
             .collect();
         if ndjson {
             return util::print_ndjson(&entries);
-        } else {
-            let output = HubsOutput { limit, hubs: entries };
-            println!("{}", serde_json::to_string_pretty(&output)?);
         }
+        let output = HubsOutput {
+            limit,
+            hubs: entries,
+        };
+        println!("{}", serde_json::to_string_pretty(&output)?);
     } else {
         if !no_header {
-            println!("Top {} hubs:", limit);
+            println!("Top {limit} hubs:");
         }
         for (i, (node, deg)) in hubs.iter().enumerate() {
             let outgoing = node
@@ -74,7 +77,10 @@ pub fn run(
                 .iter()
                 .filter(|l| matches!(l, Link::Internal(_)))
                 .count();
-            let incoming = graph.backlinks.get(&node.uuid).map_or(0, |v| v.len());
+            let incoming = graph
+                .backlinks
+                .get(&node.uuid)
+                .map_or(0, std::vec::Vec::len);
             println!(
                 "  {:3}. {:40} {} links ({} out / {} in)  {}",
                 i + 1,

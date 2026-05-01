@@ -36,6 +36,7 @@ pub enum Link {
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct Heading {
     pub level: usize,
     pub title: String,
@@ -87,21 +88,25 @@ pub fn parse_note(content: &str) -> ParsedNote {
                 match key {
                     PROP_ID => uuid = Some(value.to_string()),
                     PROP_ROAM_ALIASES => {
-                        roam_aliases =
-                            value.split_whitespace().map(|s| s.to_string()).collect()
+                        roam_aliases = value
+                            .split_whitespace()
+                            .map(std::string::ToString::to_string)
+                            .collect();
                     }
                     PROP_ROAM_REFS => {
-                        roam_refs =
-                            value.split_whitespace().map(|s| s.to_string()).collect()
+                        roam_refs = value
+                            .split_whitespace()
+                            .map(std::string::ToString::to_string)
+                            .collect();
                     }
                     _ => {}
                 }
             }
         } else {
-            if let Some(cap) = TITLE_RE.captures(line) {
-                if title.is_none() {
-                    title = Some(cap[1].trim().to_string());
-                }
+            if let Some(cap) = TITLE_RE.captures(line)
+                && title.is_none()
+            {
+                title = Some(cap[1].trim().to_string());
             }
 
             if let Some(cap) = FILETAGS_RE.captures(line) {
@@ -114,28 +119,28 @@ pub fn parse_note(content: &str) -> ParsedNote {
                 }
             }
 
-            if let Some(cap) = HEADING_RE.captures(line) {
-                if cap[1].len() > 1 || cap.get(3).map_or(false, |m| !m.as_str().is_empty()) {
-                    let level = cap[1].len();
-                    let todo_state = cap.get(2).map(|m| m.as_str().to_string());
-                    let heading_title = cap.get(3).map_or("", |m| m.as_str()).to_string();
-                    let tags = cap
-                        .get(4)
-                        .map(|m| {
-                            m.as_str()
-                                .split(':')
-                                .filter(|t| !t.is_empty())
-                                .map(|t| t.to_string())
-                                .collect()
-                        })
-                        .unwrap_or_default();
-                    headings.push(Heading {
-                        level,
-                        title: heading_title,
-                        todo_state,
-                        tags,
-                    });
-                }
+            if let Some(cap) = HEADING_RE.captures(line)
+                && (cap[1].len() > 1 || cap.get(3).is_some_and(|m| !m.as_str().is_empty()))
+            {
+                let level = cap[1].len();
+                let todo_state = cap.get(2).map(|m| m.as_str().to_string());
+                let heading_title = cap.get(3).map_or("", |m| m.as_str()).to_string();
+                let tags = cap
+                    .get(4)
+                    .map(|m| {
+                        m.as_str()
+                            .split(':')
+                            .filter(|t| !t.is_empty())
+                            .map(std::string::ToString::to_string)
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                headings.push(Heading {
+                    level,
+                    title: heading_title,
+                    todo_state,
+                    tags,
+                });
             }
 
             for cap in LINK_RE.captures_iter(line) {
@@ -160,13 +165,13 @@ pub fn parse_note(content: &str) -> ParsedNote {
 
 fn parse_property(line: &str) -> Option<(&str, &str)> {
     let line = line.trim();
-    if line.starts_with(':') {
-        if let Some(end) = line[1..].find(':') {
-            let key = &line[1..=end];
-            let value = line[end + 2..].trim();
-            if !key.is_empty() && !value.is_empty() {
-                return Some((key, value));
-            }
+    if line.starts_with(':')
+        && let Some(end) = line[1..].find(':')
+    {
+        let key = &line[1..=end];
+        let value = line[end + 2..].trim();
+        if !key.is_empty() && !value.is_empty() {
+            return Some((key, value));
         }
     }
     None

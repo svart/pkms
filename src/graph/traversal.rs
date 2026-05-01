@@ -77,7 +77,7 @@ impl Graph {
         queue.push_back((from_uuid.clone(), vec![from_uuid]));
 
         while let Some((current, path)) = queue.pop_front() {
-            if max_depth.map_or(false, |md| path.len() as u32 > md) {
+            if max_depth.is_some_and(|md| path.len() as u32 > md) {
                 continue;
             }
 
@@ -186,7 +186,7 @@ impl Graph {
 
         Subgraph {
             root_uuid,
-            nodes: sorted_nodes.into_iter().map(|n| n.clone()).collect(),
+            nodes: sorted_nodes.into_iter().cloned().collect(),
             edges,
             vertex_count,
             edge_count,

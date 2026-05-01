@@ -5,7 +5,7 @@ pub mod traversal;
 
 use crate::config::Config;
 use crate::discovery::discover_files;
-use crate::parser::{parse_note, Link, ParsedNote};
+use crate::parser::{Link, ParsedNote, parse_note};
 use rayon::prelude::*;
 use serde::Serialize;
 use std::collections::HashMap;
@@ -72,7 +72,11 @@ pub struct Graph {
 }
 
 impl Graph {
-    pub fn scan(db_root: &Path, ignore: &[String], verbose: bool) -> anyhow::Result<Vec<FileScanResult>> {
+    pub fn scan(
+        db_root: &Path,
+        ignore: &[String],
+        verbose: bool,
+    ) -> anyhow::Result<Vec<FileScanResult>> {
         if verbose {
             eprintln!("Scanning: {}", db_root.display());
         }
@@ -99,7 +103,7 @@ impl Graph {
                     Err(e) => FileScanResult {
                         path,
                         parsed: ParsedNote::empty(),
-                        parse_error: Some(format!("IO error: {}", e)),
+                        parse_error: Some(format!("IO error: {e}")),
                     },
                 }
             })
@@ -122,22 +126,22 @@ impl Graph {
         if let Some(uuid) = self.path_to_uuid.get(&PathBuf::from(target)) {
             return self.nodes.get(uuid);
         }
-        if let Some(uuids) = self.title_to_uuid.get(target) {
-            if let Some(uuid) = uuids.first() {
-                return self.nodes.get(uuid);
-            }
+        if let Some(uuids) = self.title_to_uuid.get(target)
+            && let Some(uuid) = uuids.first()
+        {
+            return self.nodes.get(uuid);
         }
-        if let Some(uuids) = self.alias_to_uuid.get(target) {
-            if let Some(uuid) = uuids.first() {
-                return self.nodes.get(uuid);
-            }
+        if let Some(uuids) = self.alias_to_uuid.get(target)
+            && let Some(uuid) = uuids.first()
+        {
+            return self.nodes.get(uuid);
         }
         None
     }
 
     pub fn resolve_target(&self, target: &str) -> anyhow::Result<&Node> {
         self.find_node(target)
-            .ok_or_else(|| anyhow::anyhow!("Note not found: {}", target))
+            .ok_or_else(|| anyhow::anyhow!("Note not found: {target}"))
     }
 }
 

@@ -13,6 +13,7 @@ pub struct FixOutput {
     pub applied: bool,
 }
 
+#[allow(clippy::too_many_lines)]
 pub fn run(
     config: &Config,
     json: bool,
@@ -31,44 +32,70 @@ pub fn run(
         broken_uuid.to_string()
     } else if broken_uuid.len() == 8 {
         // Check existing nodes first
-        let matches: Vec<&String> = graph.nodes.keys().filter(|u| u.starts_with(broken_uuid)).collect();
-        if matches.len() == 1 {
-            matches[0].clone()
-        } else if matches.len() > 1 {
-            anyhow::bail!("Multiple existing UUIDs match prefix '{}': {:?}", broken_uuid, matches);
-        } else {
-            // Check broken links (deduplicate by target UUID)
-            let mut seen = std::collections::HashSet::new();
-            let broken_matches: Vec<&String> = graph.broken_links.iter().filter_map(|(_, tgt)| {
-                if tgt.starts_with(broken_uuid) && seen.insert(tgt.as_str()) { Some(tgt) } else { None }
-            }).collect();
-            if broken_matches.len() == 1 {
-                broken_matches[0].clone()
-            } else if broken_matches.is_empty() {
-                anyhow::bail!("No UUID matches prefix '{}' in nodes or broken links", broken_uuid);
-            } else {
-                anyhow::bail!("Multiple broken UUIDs match prefix '{}': {:?}", broken_uuid, broken_matches);
+        let matches: Vec<&String> = graph
+            .nodes
+            .keys()
+            .filter(|u| u.starts_with(broken_uuid))
+            .collect();
+        match matches.len().cmp(&1) {
+            std::cmp::Ordering::Equal => matches[0].clone(),
+            std::cmp::Ordering::Greater => {
+                anyhow::bail!("Multiple existing UUIDs match prefix '{broken_uuid}': {matches:?}")
+            }
+            std::cmp::Ordering::Less => {
+                // Check broken links (deduplicate by target UUID)
+                let mut seen = std::collections::HashSet::new();
+                let broken_matches: Vec<&String> = graph
+                    .broken_links
+                    .iter()
+                    .filter_map(|(_, tgt)| {
+                        if tgt.starts_with(broken_uuid) && seen.insert(tgt.as_str()) {
+                            Some(tgt)
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
+                if broken_matches.len() == 1 {
+                    broken_matches[0].clone()
+                } else if broken_matches.is_empty() {
+                    anyhow::bail!(
+                        "No UUID matches prefix '{broken_uuid}' in nodes or broken links"
+                    );
+                } else {
+                    anyhow::bail!(
+                        "Multiple broken UUIDs match prefix '{broken_uuid}': {broken_matches:?}"
+                    );
+                }
             }
         }
     } else {
-        anyhow::bail!("Invalid UUID format: {}", broken_uuid);
+        anyhow::bail!("Invalid UUID format: {broken_uuid}");
     };
 
     // Resolve replacement — support UUID, title, path, or prefix
-    let replacement = graph.find_node(target).map(|n| (n.uuid.clone(), n.title.clone()))
+    let replacement = graph
+        .find_node(target)
+        .map(|n| (n.uuid.clone(), n.title.clone()))
         .or_else(|| {
             // Try prefix matching in existing nodes
-            let prefix_matches: Vec<&String> = graph.nodes.keys().filter(|u| u.starts_with(target)).collect();
+            let prefix_matches: Vec<&String> = graph
+                .nodes
+                .keys()
+                .filter(|u| u.starts_with(target))
+                .collect();
             if prefix_matches.len() == 1 {
                 let uuid = prefix_matches[0].clone();
-                graph.nodes.get(&uuid).map(|n| (n.uuid.clone(), n.title.clone()))
+                graph
+                    .nodes
+                    .get(&uuid)
+                    .map(|n| (n.uuid.clone(), n.title.clone()))
             } else {
                 None
             }
         });
-    let (replacement_uuid, replacement_title) = match replacement {
-        Some((u, t)) => (u, t),
-        None => anyhow::bail!("Replacement target not found: {}", target),
+    let Some((replacement_uuid, replacement_title)) = replacement else {
+        anyhow::bail!("Replacement target not found: {target}")
     };
 
     // Find all files containing the broken UUID
@@ -81,18 +108,14 @@ pub fn run(
         .into_iter()
         .filter_entry(|e| !e.file_name().to_string_lossy().starts_with('.'))
     {
-        let entry = match entry {
-            Ok(e) => e,
-            _ => continue,
-        };
-        if !entry.file_type().is_file() || entry.path().extension().map_or(true, |e| e != "org") {
+        let Ok(entry) = entry else { continue };
+        if !entry.file_type().is_file() || entry.path().extension().is_none_or(|e| e != "org") {
             continue;
         }
 
         let path = entry.path();
-        let content = match std::fs::read_to_string(path) {
-            Ok(c) => c,
-            _ => continue,
+        let Ok(content) = std::fs::read_to_string(path) else {
+            continue;
         };
 
         let count = content.matches(broken_str).count();
@@ -120,18 +143,29 @@ pub fn run(
         println!("{}", serde_json::to_string_pretty(&output)?);
     } else {
         if apply {
-            println!("Fixed {} broken link(s) in {} file(s):", total_replacements, files_affected.len());
+            println!(
+                "Fixed {} broken link(s) in {} file(s):",
+                total_replacements,
+                files_affected.len()
+            );
         } else {
-            println!("Would fix {} broken link(s) in {} file(s):", total_replacements, files_affected.len());
-            println!("  Broken UUID: {}", broken);
-            println!("  Replace with: {} ({})", output.replacement_title, replacement_uuid);
+            println!(
+                "Would fix {} broken link(s) in {} file(s):",
+                total_replacements,
+                files_affected.len()
+            );
+            println!("  Broken UUID: {broken}");
+            println!(
+                "  Replace with: {} ({})",
+                output.replacement_title, replacement_uuid
+            );
             println!("  (use --apply to apply)");
         }
         for f in &files_affected {
-            println!("  {}", f);
+            println!("  {f}");
         }
         if verbose {
-            println!("  ({} replacement(s) total)", total_replacements);
+            println!("  ({total_replacements} replacement(s) total)");
         }
     }
 
