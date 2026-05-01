@@ -1,5 +1,11 @@
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, ValueEnum};
 use std::path::PathBuf;
+
+#[derive(Clone, ValueEnum)]
+pub enum OutputFormat {
+    Json,
+    Ndjson,
+}
 
 #[derive(Parser)]
 #[command(name = "pkms", version, about = "org-roam PKMS navigation and validation tool")]
@@ -15,6 +21,9 @@ pub struct Cli {
 
     #[arg(global = true, short = 'q', long, help = "Suppress non-essential stderr output")]
     pub quiet: bool,
+
+    #[arg(global = true, long, value_enum, value_name = "FMT", help = "Output format: json, ndjson (implies machine-readable output)")]
+    pub output_format: Option<OutputFormat>,
 
     #[command(subcommand)]
     pub command: Command,
@@ -62,6 +71,8 @@ pub enum Command {
         search: Option<String>,
         #[arg(short, long, default_value = "30", help = "Maximum results")]
         limit: Option<usize>,
+        #[arg(long, value_name = "FIELDS", help = "Comma-separated fields: uuid,title,path,tags,aliases")]
+        fields: Option<String>,
     },
     #[command(about = "Fix broken links by replacing UUIDs across the database")]
     Fix {

@@ -243,6 +243,11 @@ impl Graph {
     }
 
     #[allow(dead_code)]
+    pub fn resolve_target(&self, target: &str) -> anyhow::Result<&Node> {
+        self.find_node(target)
+            .ok_or_else(|| anyhow::anyhow!("Note not found: {}", target))
+    }
+
     pub fn find_node_exact(&self, target: &str) -> Option<&Node> {
         self.nodes.get(target)
             .or_else(|| {

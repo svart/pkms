@@ -2,6 +2,7 @@ use crate::config::Config;
 use anyhow::Result;
 use regex::Regex;
 use serde::Serialize;
+use std::collections::HashSet;
 use std::path::Path;
 use std::sync::LazyLock;
 use walkdir::WalkDir;
@@ -109,11 +110,12 @@ fn scan_files(root: &Path, ignore_patterns: &[String]) -> Vec<ResolvedNote> {
 pub fn run(
     config: &Config,
     json: bool,
-    _verbose: bool,
+    ndjson: bool,
     target: Option<&str>,
     tags: Option<&str>,
     search: Option<&str>,
     limit: Option<usize>,
+    fields: Option<&str>,
     db_cli: Option<&std::path::Path>,
 ) -> Result<()> {
     let db_root = config.resolve_db_root(db_cli)?;
@@ -166,13 +168,22 @@ pub fn run(
 
     results.truncate(limit);
 
+    let field_set: Option<HashSet<String>> = fields.map(|f| f.split(',').map(|s| s.trim().to_string()).collect());
+
     if json {
-        let output = ResolveOutput {
-            query: query.to_string(),
-            total: results.len(),
-            results,
-        };
-        println!("{}", serde_json::to_string_pretty(&output)?);
+        if ndjson {
+            for note in &results {
+                let v = filter_fields(&serde_json::to_value(note)?, &field_set);
+                println!("{}", serde_json::to_string(&v)?);
+            }
+        } else {
+            let output = ResolveOutput {
+                query: query.to_string(),
+                total: results.len(),
+                results,
+            };
+            println!("{}", serde_json::to_string_pretty(&output)?);
+        }
     } else {
         if !query.is_empty() {
             println!("Resolved: \"{}\"", query);
@@ -180,15 +191,49 @@ pub fn run(
         println!("Total: {}", results.len());
         for note in &results {
             let short = if note.uuid.len() > 8 { &note.uuid[..8] } else { &note.uuid };
-            println!("  {} ({})", note.title, short);
-            println!("         UUID: {}", note.uuid);
-            if !note.filetags.is_empty() {
-                println!("         Tags: {}", note.filetags.join(", "));
+            if let Some(ref fs) = field_set {
+                if fs.contains("title") {
+                    println!("  {} ({})", note.title, short);
+                }
+                if fs.contains("uuid") {
+                    println!("         UUID: {}", note.uuid);
+                }
+                if fs.contains("path") {
+                    println!("         Path: {}", note.path);
+                }
+                if fs.contains("tags") && !note.filetags.is_empty() {
+                    println!("         Tags: {}", note.filetags.join(", "));
+                }
+                if fs.contains("aliases") && !note.aliases.is_empty() {
+                    println!("         Aliases: {}", note.aliases.join(", "));
+                }
+            } else {
+                println!("  {} ({})", note.title, short);
+                println!("         UUID: {}", note.uuid);
+                if !note.filetags.is_empty() {
+                    println!("         Tags: {}", note.filetags.join(", "));
+                }
             }
         }
     }
 
     Ok(())
+}
+
+fn filter_fields(value: &serde_json::Value, fields: &Option<HashSet<String>>) -> serde_json::Value {
+    let Some(fs) = fields else { return value.clone() };
+    match value {
+        serde_json::Value::Object(map) => {
+            let mut filtered = serde_json::Map::new();
+            for (k, v) in map {
+                if fs.contains(k) || k == "score" || k == "matches" || k == "content_matches" {
+                    filtered.insert(k.clone(), v.clone());
+                }
+            }
+            serde_json::Value::Object(filtered)
+        }
+        _ => value.clone(),
+    }
 }
 
 fn score_match(note: &ResolvedNote, query: &str, query_lower: &str) -> usize {

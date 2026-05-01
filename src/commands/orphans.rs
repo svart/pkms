@@ -20,7 +20,7 @@ pub struct OrphanEntry {
 pub fn run(
     config: &Config,
     json: bool,
-    _verbose: bool,
+    ndjson: bool,
     db_cli: Option<&std::path::Path>,
 ) -> Result<()> {
     let graph = Graph::load(config, db_cli, false)?;
@@ -36,11 +36,17 @@ pub fn run(
                 filetags: n.filetags.clone(),
             })
             .collect();
-        let output = OrphansOutput {
-            count: orphans.len(),
-            orphans: entries,
-        };
-        println!("{}", serde_json::to_string_pretty(&output)?);
+        if ndjson {
+            for e in &entries {
+                println!("{}", serde_json::to_string(e)?);
+            }
+        } else {
+            let output = OrphansOutput {
+                count: orphans.len(),
+                orphans: entries,
+            };
+            println!("{}", serde_json::to_string_pretty(&output)?);
+        }
     } else {
         println!("Orphan notes ({}):", orphans.len());
         for n in &orphans {

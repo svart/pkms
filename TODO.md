@@ -30,10 +30,10 @@ These directly impact how effectively AI agents (and power users) can use pkms p
 
 ### Machine-parseable output
 
-- [ ] **Add `--output-format` flag** (or `--csv`, `--ndjson`): For commands that list items (`broken`, `orphans`, `hubs`, `resolve`, `query`, `tags`), support simple line-based formats that are easier to pipe through shell tools. NDJSON (one JSON object per line) is ideal for AI scripts.
-- [ ] **`resolve` should accept `--json` for machine use**: Currently `resolve` only outputs JSON when `--json` is used. But its human output is already structured as a table; make the JSON output a proper `Vec<ResolveEntry>` with UUID, title, path, filetags.
-- [ ] **`resolve` output fields**: Add `--fields uuid,title,path,tags` to select columns. Default all for human, explicit for scripts.
-- [ ] **Consistent target resolution across commands**: Every command that accepts a `<target>` should produce the same error format when the target is not found. Create a shared `resolve_target_or_die()` helper function.
+- [x] **Add `--output-format` flag** (or `--csv`, `--ndjson`): For commands that list items (`broken`, `orphans`, `hubs`, `resolve`, `query`, `tags`), support simple line-based formats that are easier to pipe through shell tools. NDJSON (one JSON object per line) is ideal for AI scripts.
+- [x] **`resolve` should accept `--json` for machine use**: Currently `resolve` only outputs JSON when `--json` is used. But its human output is already structured as a table; make the JSON output a proper `Vec<ResolveEntry>` with UUID, title, path, filetags.
+- [x] **`resolve` output fields**: Add `--fields uuid,title,path,tags` to select columns. Default all for human, explicit for scripts.
+- [x] **Consistent target resolution across commands**: Every command that accepts a `<target>` should produce the same error format when the target is not found. Create a shared `resolve_target_or_die()` helper function.
 
 ### Context & AI integration
 

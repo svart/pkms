@@ -22,7 +22,7 @@ pub struct HubEntry {
 pub fn run(
     config: &Config,
     json: bool,
-    _verbose: bool,
+    ndjson: bool,
     limit: usize,
     db_cli: Option<&std::path::Path>,
 ) -> Result<()> {
@@ -50,8 +50,14 @@ pub fn run(
                 }
             })
             .collect();
-        let output = HubsOutput { limit, hubs: entries };
-        println!("{}", serde_json::to_string_pretty(&output)?);
+        if ndjson {
+            for e in &entries {
+                println!("{}", serde_json::to_string(e)?);
+            }
+        } else {
+            let output = HubsOutput { limit, hubs: entries };
+            println!("{}", serde_json::to_string_pretty(&output)?);
+        }
     } else {
         println!("Top {} hubs:", limit);
         for (i, (node, deg)) in hubs.iter().enumerate() {

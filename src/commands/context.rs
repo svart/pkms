@@ -22,10 +22,7 @@ pub fn run(
 ) -> Result<()> {
     let graph = Graph::load(config, db_cli, false)?;
 
-    let node = graph
-        .find_node(target)
-        .cloned()
-        .ok_or_else(|| anyhow::anyhow!("Note not found: {}", target))?;
+    let node = graph.resolve_target(target)?.clone();
 
     let content = std::fs::read_to_string(&node.path).unwrap_or_default();
     let neighbors = graph.get_neighbors(&node.uuid, depth);

@@ -25,6 +25,7 @@ pub struct TagNote {
 pub fn run(
     config: &Config,
     json: bool,
+    ndjson: bool,
     verbose: bool,
     tag_filter: Option<&str>,
     db_cli: Option<&std::path::Path>,
@@ -42,14 +43,20 @@ pub fn run(
                     path: n.path.to_string_lossy().to_string(),
                 })
                 .collect();
-            let output = TagsOutput {
-                tags: vec![TagEntry {
-                    tag: tag.to_string(),
-                    count: notes.len(),
-                    notes: notes_json,
-                }],
-            };
-            println!("{}", serde_json::to_string_pretty(&output)?);
+            if ndjson {
+                for n in &notes_json {
+                    println!("{}", serde_json::to_string(n)?);
+                }
+            } else {
+                let output = TagsOutput {
+                    tags: vec![TagEntry {
+                        tag: tag.to_string(),
+                        count: notes.len(),
+                        notes: notes_json,
+                    }],
+                };
+                println!("{}", serde_json::to_string_pretty(&output)?);
+            }
         } else {
             println!("Tag: {}", tag);
             println!("Notes: {}", notes.len());
@@ -68,8 +75,14 @@ pub fn run(
                     notes: vec![],
                 })
                 .collect();
-            let output = TagsOutput { tags: entries };
-            println!("{}", serde_json::to_string_pretty(&output)?);
+            if ndjson {
+                for e in &entries {
+                    println!("{}", serde_json::to_string(e)?);
+                }
+            } else {
+                let output = TagsOutput { tags: entries };
+                println!("{}", serde_json::to_string_pretty(&output)?);
+            }
         } else {
             println!("Filetags (count):");
             for (tag, count) in &tags {

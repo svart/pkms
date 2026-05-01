@@ -33,6 +33,7 @@ pub struct ContextLine {
 pub fn run(
     config: &Config,
     json: bool,
+    ndjson: bool,
     verbose: bool,
     terms: &str,
     tag_filter: Option<&str>,
@@ -158,12 +159,18 @@ pub fn run(
     }
 
     if json {
-        let output = QueryOutput {
-            query: terms.to_string(),
-            total_results: combined.len(),
-            results: combined,
-        };
-        println!("{}", serde_json::to_string_pretty(&output)?);
+        if ndjson {
+            for r in &combined {
+                println!("{}", serde_json::to_string(r)?);
+            }
+        } else {
+            let output = QueryOutput {
+                query: terms.to_string(),
+                total_results: combined.len(),
+                results: combined,
+            };
+            println!("{}", serde_json::to_string_pretty(&output)?);
+        }
     } else {
         println!("Query: {}", terms);
         println!("Results: {}", combined.len());
