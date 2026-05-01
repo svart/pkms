@@ -1,4 +1,5 @@
 use regex::Regex;
+use serde::Serialize;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::sync::LazyLock;
 
@@ -14,7 +15,22 @@ pub struct ParsedNote {
     pub content_hash: String,
 }
 
-#[derive(Debug, Clone)]
+impl ParsedNote {
+    pub fn empty() -> Self {
+        ParsedNote {
+            uuid: None,
+            title: None,
+            filetags: vec![],
+            roam_aliases: vec![],
+            roam_refs: vec![],
+            outgoing: vec![],
+            headings: vec![],
+            content_hash: String::new(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
 pub enum Link {
     Internal(String),
     #[allow(dead_code)]
@@ -49,7 +65,7 @@ static HEADING_RE: LazyLock<Regex> = LazyLock::new(|| {
 });
 
 static TITLE_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"(?m)^#\+title:\s*(.*)$").unwrap());
+    LazyLock::new(|| Regex::new(r"(?im)^#\+title:\s*(.*)$").unwrap());
 
 static FILETAGS_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"(?m)^#\+filetags:\s*(.+)$").unwrap());

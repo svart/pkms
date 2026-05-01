@@ -45,6 +45,8 @@ pub enum Command {
         depth: u32,
         #[arg(short, long, help = "Show full note content")]
         out: bool,
+        #[arg(short, long, help = "Show ASCII graph visualization")]
+        graph: bool,
     },
     #[command(about = "Fuzzy search across note titles and content")]
     Query {
@@ -61,5 +63,35 @@ pub enum Command {
     InitConfig {
         #[arg(short, long, help = "Database root path to write into config")]
         db: Option<PathBuf>,
+    },
+    #[command(name = "path", about = "Find shortest path between two notes")]
+    Path {
+        #[arg(help = "Source note (UUID, path, or title)")]
+        from: String,
+        #[arg(help = "Target note (UUID, path, or title)")]
+        to: String,
+        #[arg(short, long, help = "Maximum traversal depth")]
+        max_depth: Option<u32>,
+    },
+    #[command(about = "Export subgraph around a note")]
+    Subgraph {
+        #[arg(help = "Root note (UUID, path, or title)")]
+        target: String,
+        #[arg(short, long, default_value = "1", help = "Traversal depth")]
+        depth: u32,
+    },
+    #[command(about = "List all filetags with note counts")]
+    Tags {
+        #[arg(short, long, help = "List all notes with this tag")]
+        tag: Option<String>,
+    },
+    #[command(name = "add-link", about = "Add a link from one note to another")]
+    AddLink {
+        #[arg(help = "Source note (UUID, path, or title)")]
+        source: String,
+        #[arg(help = "Target note (UUID, path, or title)")]
+        target: String,
+        #[arg(short, long, help = "Custom link description (default: target title)")]
+        description: Option<String>,
     },
 }

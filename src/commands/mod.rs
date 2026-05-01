@@ -1,6 +1,10 @@
+pub mod add_link;
 pub mod check;
 pub mod get;
 pub mod info;
 pub mod new;
+pub mod path;
 pub mod query;
+pub mod subgraph;
+pub mod tags;
 pub mod validate;

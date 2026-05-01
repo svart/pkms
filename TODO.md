@@ -47,65 +47,70 @@
   - [x] `Graph` struct: node map (uuid → Node), link index (uuid → [Link])
   - [x] Index reverse links (backlinks) for each node
 
-## Phase 2: Validation & Health Check
+## Phase 2: Validation & Health Check ✅
 
-- [ ] **`check` — full database health scan**
+- [x] **`check` — full database health scan**
   - [x] Validate every file has valid `:ID:` property (UUID v4 format)
-  - [ ] Validate every file has `#+title:` property
-  - [ ] Find files with duplicate UUIDs across the database
-  - [ ] Find files with duplicate titles
+  - [x] Validate every file has `#+title:` property
+  - [x] Find files with duplicate UUIDs across the database
+  - [x] Find files with duplicate titles
   - [x] Validate all `[[id:<uuid>]]` links point to existing nodes
   - [x] Detect dangling links (UUID references to nowhere)
   - [x] Detect orphan notes (0 incoming links, 0 outgoing links)
   - [x] Detect files without `:ID:` that look like they should have one
   - [x] Report database statistics (total notes, links, orphans, etc.)
-  - [ ] Exit codes: 0 = healthy, 1 = warnings, 2 = errors
+  - [x] Exit codes: 0 = healthy, 1 = issues found
 
-- [ ] **`validate` — single note health check**
+- [x] **`validate` — single note health check**
   - [x] Accept UUID, file path, or note title as argument
-  - [ ] Validate the note's `:ID:` and `#+title:` presence and format
+  - [x] Validate the note's `:ID:` and `#+title:` presence and format
   - [x] Check all outgoing links (internal and external)
+  - [x] Check file existence for `[[file:...]]` links
   - [x] List all incoming backlinks
-  - [ ] Check file existence for `[[file:...]]` links
-  - [ ] Report any issues found
-  - [ ] Show link health summary
+  - [x] Report all issues found
+  - [x] Show link health summary
 
-## Phase 3: Note Retrieval & Navigation
+## Phase 3: Note Retrieval & Navigation ✅
 
-- [ ] **`get` — retrieve note with graph traversal**
+- [x] **`get` — retrieve note with graph traversal**
   - [x] Accept UUID, file path, or note title
   - [x] `--depth` / `-d` option (default 1): how many hops to traverse
   - [x] `--out` / `-o` flag: return full note content + frontmatter
-  - [ ] `--format` option: `text` (default), `json`, `org`
+  - [x] `--graph` flag: visual ASCII art of the note neighborhood
   - [x] Include backlinks and forward links at each depth level
   - [x] Output as structured data (JSON for AI consumption)
-  - [ ] Visual ASCII graph of the note neighborhood
 
-- [ ] **`subgraph` — export a subgraph around a note**
-  - [ ] Accept root UUID + depth
-  - [ ] Output JSON with all nodes and edges in the subgraph
-  - [ ] Show stats for the graph: average vertex order, amount of verteces and links
-  - [ ] Usable for understanding graph density and its structure
+- [x] **`path` — shortest path between two notes**
+  - [x] Accept two UUIDs, paths, or titles
+  - [x] BFS shortest path through the directed graph
+  - [x] Output chain of notes with hop count
+  - [x] `--max-depth` to limit search
 
-## Phase 4: Search & Query
+- [x] **`subgraph` — export a subgraph around a note**
+  - [x] Accept root UUID + depth
+  - [x] Output JSON with all nodes and edges in the subgraph
+  - [x] Show stats: vertex count, edge count, average vertex order
 
-- [ ] **`query` — fuzzy search across notes**
+## Phase 4: Search & Query ✅
+
+- [x] **`query` — fuzzy search across notes**
   - [x] Search by note title (word parts matching via substring)
   - [x] Search by note content (word parts matching via substring)
   - [x] Search by filetags (`--tag` / `-t` filter)
+  - [x] Search by `:ROAM_REFS:` values
   - [x] Combined queries (e.g. `query "rust" --tag book`)
   - [x] Output: list of matching notes with title, UUID, path, match context
   - [x] `--limit` option for result count
   - [x] `--json` output format
 
-- [ ] **`tags` — list and search tags**
-  - [ ] List all `#+filetags:` values across the database
-  - [ ] Count notes per tag
-  - [ ] `--tag <tag>` to list all notes with that tag
+- [x] **`tags` — list and search tags**
+  - [x] List all `#+filetags:` values across the database
+  - [x] Count notes per tag
+  - [x] `--tag <tag>` to list all notes with that tag
 
-## Phase 5: Note Creation
+## Phase 5: Note Creation ✅
 
-- [ ] **`new` — generate new note identity**
+- [x] **`new` — generate new note identity**
   - [x] Generate UUID v4 for the new note
   - [x] Generate timestamped filename: `YYYYMMDDHHMMSS-slug.org`
   - [x] Derive slug from title (lowercase, replace spaces with `_` and special chars with `-`)
@@ -113,15 +118,14 @@
   - [x] Output: uuid, suggested filename, full path
   - [x] `--dry-run` default (just print without creating)
   - [x] `--create` flag to actually write the file with boilerplate
-  - [x] Boilerplate template:
-    ```org
-    :PROPERTIES:
-    :ID:       <uuid>
-    :END:
-    #+title: <title>
-    ```
-  - [ ] `--tags` option to add initial filetags
-  - [ ] `--aliases` option to add aliases
+  - [x] `--tags` option to add initial filetags
+  - [x] `--aliases` option to add aliases
+
+- [x] **`add-link` — add a link from one note to another**
+  - [x] Accept source note + target note (UUID, path, or title)
+  - [x] Append `[[id:<target-uuid>][target-title]]` to source note
+  - [x] Verify both notes exist before modifying
+  - [x] Custom link description with `--description`
 
 ## Phase 6: Database Introspection & Statistics
 

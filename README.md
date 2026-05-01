@@ -9,10 +9,10 @@ A CLI tool for navigating, managing, and validating org-roam personal knowledge 
 ## Quick Start
 
 ```bash
-# Check health of the entire database
+# Check health of the entire database (exit code 1 if issues found)
 pkms --db ~/Documents/org check
 
-# Validate a specific note
+# Validate a specific note with full health report
 pkms --db ~/Documents/org validate <uuid-or-path>
 
 # Generate filename and UUID for a new note
@@ -21,11 +21,29 @@ pkms --db ~/Documents/org new "My Note Title"
 # Retrieve a note with its neighbors at depth 2
 pkms --db ~/Documents/org get <uuid> --depth 2
 
+# Visual ASCII graph of a note's neighborhood
+pkms --db ~/Documents/org get "note title" --depth 1 --graph
+
 # Fuzzy search across notes
 pkms --db ~/Documents/org query "search terms"
 
 # JSON output for AI consumption
 pkms --db ~/Documents/org --json query "rust"
+
+# Find shortest path between two notes
+pkms --db ~/Documents/org path "note A" "note B"
+
+# Export subgraph around a note
+pkms --db ~/Documents/org subgraph <uuid> --depth 2
+
+# List all filetags with note counts
+pkms --db ~/Documents/org tags
+
+# List notes with a specific tag
+pkms --db ~/Documents/org tags --tag book
+
+# Add a link from one note to another
+pkms --db ~/Documents/org add-link <source> <target>
 
 # Show current configuration
 pkms info
@@ -33,14 +51,19 @@ pkms info
 
 ## Commands
 
-| Command      | Description                                      |
-|--------------|--------------------------------------------------|
-| `check`      | Verify health of the entire org-roam database     |
-| `validate`   | Validate health of a specific note                |
-| `new`        | Generate a file name and UUID for a new note      |
-| `get`        | Retrieve a note with its neighbors at depth N     |
-| `query`      | Fuzzy search across note titles and content       |
-| `info`       | Show current pkms configuration                   |
+| Command       | Description                                      |
+|---------------|--------------------------------------------------|
+| `check`       | Verify health of the entire org-roam database     |
+| `validate`    | Validate health of a specific note                |
+| `get`         | Retrieve a note with neighbors at depth N         |
+| `query`       | Fuzzy search across note titles and content       |
+| `path`        | Find shortest path between two notes              |
+| `subgraph`    | Export subgraph around a note with stats          |
+| `tags`        | List all filetags with note counts                |
+| `new`         | Generate a filename and UUID for a new note       |
+| `add-link`    | Add a link from one note to another               |
+| `info`        | Show current pkms configuration                   |
+| `init-config` | Generate default config file                      |
 
 ## Global Flags
 

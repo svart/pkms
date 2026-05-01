@@ -1,8 +1,34 @@
 use crate::config::Config;
-use crate::discovery::discover_files;
-use crate::graph::{FileScanResult, Graph};
-use crate::parser::{parse_note, Link};
+use crate::graph::Graph;
+use crate::parser::Link;
 use anyhow::Result;
+use serde::Serialize;
+use std::path::Path;
+
+#[derive(Serialize)]
+pub struct ValidateOutput {
+    pub uuid: String,
+    pub title: String,
+    pub path: String,
+    pub filetags: Vec<String>,
+    pub aliases: Vec<String>,
+    pub refs: Vec<String>,
+    pub headings: usize,
+    pub outgoing: usize,
+    pub incoming: usize,
+    pub outgoing_internal: usize,
+    pub broken_internal: Vec<String>,
+    pub broken_files: Vec<String>,
+    pub backlinks: Vec<BacklinkEntry>,
+    pub issues: Vec<String>,
+    pub healthy: bool,
+}
+
+#[derive(Serialize)]
+pub struct BacklinkEntry {
+    pub uuid: String,
+    pub title: String,
+}
 
 pub fn run(
     config: &Config,
@@ -11,83 +37,102 @@ pub fn run(
     target: &str,
     db_cli: Option<&std::path::Path>,
 ) -> Result<()> {
-    let db_root = config.resolve_db_root(db_cli)?;
-    let ignore = config.resolve_ignore_patterns();
-
-    let files = discover_files(&db_root, &ignore)?;
-
-    let results: Vec<FileScanResult> = files
-        .into_iter()
-        .map(|entry| {
-            let path = entry.path.clone();
-            match std::fs::read_to_string(&path) {
-                Ok(content) => {
-                    let parsed = parse_note(&content);
-                    FileScanResult {
-                        path,
-                        parsed,
-                        parse_error: None,
-                    }
-                }
-                Err(e) => FileScanResult {
-                    path,
-                    parsed: crate::parser::ParsedNote {
-                        uuid: None,
-                        title: None,
-                        filetags: vec![],
-                        roam_aliases: vec![],
-                        roam_refs: vec![],
-                        outgoing: vec![],
-                        headings: vec![],
-                        content_hash: String::new(),
-                    },
-                    parse_error: Some(format!("IO error: {}", e)),
-                },
-            }
-        })
-        .collect();
-
-    let graph = Graph::build(results);
+    let graph = Graph::load(config, db_cli, verbose)?;
 
     let node = graph.find_node(target).map(|n| n.clone());
 
     match node {
         Some(node) => {
+            let mut issues = Vec::new();
+
+            // Validate :ID: format
+            let uuid_parts: Vec<&str> = node.uuid.split('-').collect();
+            if uuid_parts.len() != 5 {
+                issues.push(format!("Invalid UUID format: {}", node.uuid));
+            }
+
+            // Validate #+title:
+            let content = std::fs::read_to_string(&node.path).unwrap_or_default();
+            if !content.contains("#+title:") {
+                issues.push("Missing #+title: property".to_string());
+            }
+
             let outgoing_internal: Vec<&Link> = node
                 .outgoing
                 .iter()
                 .filter(|l| matches!(l, Link::Internal(_)))
                 .collect();
-            let broken: Vec<&Link> = outgoing_internal
-                .iter()
-                .filter(|l| {
-                    if let Link::Internal(uuid) = l {
-                        !graph.nodes.contains_key(uuid)
-                    } else {
-                        false
+            let mut broken_internal = Vec::new();
+            let mut broken_files = Vec::new();
+
+            for link in &node.outgoing {
+                match link {
+                    Link::Internal(uuid) => {
+                        if !graph.nodes.contains_key(uuid) {
+                            broken_internal.push(uuid.clone());
+                        }
                     }
-                })
-                .copied()
-                .collect();
+                    Link::File(path_str) => {
+                        let file_path = Path::new(path_str);
+                        // Try as absolute or relative to db root
+                        let db_root = config.resolve_db_root(db_cli).ok();
+                        let exists = if file_path.is_absolute() {
+                            file_path.exists()
+                        } else if let Some(ref root) = db_root {
+                            root.join(file_path).exists()
+                        } else {
+                            false
+                        };
+                        if !exists {
+                            broken_files.push(path_str.clone());
+                        }
+                    }
+                    _ => {}
+                }
+            }
+
             let incoming = graph.backlinks.get(&node.uuid).cloned().unwrap_or_default();
-            let broken_count = broken.len();
-            let incoming_count = incoming.len();
-            let outgoing_count = node.outgoing.len();
+
+            let backlink_entries: Vec<BacklinkEntry> = incoming
+                .iter()
+                .filter_map(|uuid| {
+                    graph
+                        .nodes
+                        .get(uuid)
+                        .map(|n| BacklinkEntry {
+                            uuid: n.uuid.clone(),
+                            title: n.title.clone(),
+                        })
+                })
+                .collect();
+
+            if !broken_internal.is_empty() {
+                issues.push(format!("{} broken internal link(s)", broken_internal.len()));
+            }
+            if !broken_files.is_empty() {
+                issues.push(format!("{} broken file link(s)", broken_files.len()));
+            }
+
+            let healthy = issues.is_empty();
 
             if json {
-                let output = serde_json::json!({
-                    "uuid": node.uuid,
-                    "title": node.title,
-                    "path": node.path.to_string_lossy(),
-                    "filetags": node.filetags,
-                    "aliases": node.aliases,
-                    "refs": node.refs,
-                    "headings": node.headings_count,
-                    "outgoing_links": outgoing_count,
-                    "incoming_links": incoming_count,
-                    "broken_links": broken_count,
-                    "healthy": broken_count == 0,
-                });
+                let output = ValidateOutput {
+                    uuid: node.uuid,
+                    title: node.title,
+                    path: node.path.to_string_lossy().to_string(),
+                    filetags: node.filetags,
+                    aliases: node.aliases,
+                    refs: node.refs,
+                    headings: node.headings_count,
+                    outgoing: node.outgoing.len(),
+                    incoming: incoming.len(),
+                    outgoing_internal: outgoing_internal.len(),
+                    broken_internal,
+                    broken_files,
+                    backlinks: backlink_entries,
+                    issues,
+                    healthy,
+                };
                 println!("{}", serde_json::to_string_pretty(&output)?);
             } else {
                 println!("Note: {}", node.title);
@@ -99,19 +144,37 @@ pub fn run(
                 if !node.aliases.is_empty() {
                     println!("  Aliases: {}", node.aliases.join(", "));
                 }
+                if !node.refs.is_empty() {
+                    println!("  Refs:   {}", node.refs.join(", "));
+                }
                 println!("  Headings: {}", node.headings_count);
                 println!();
                 println!("Links:");
-                println!("  Outgoing: {} ({} internal)", outgoing_count, outgoing_internal.len());
-                println!("  Incoming: {}", incoming_count);
-                println!("  Broken:   {}", broken_count);
+                println!("  Outgoing: {} ({} internal)", node.outgoing.len(), outgoing_internal.len());
+                println!("  Incoming: {}", incoming.len());
+                println!("  Broken:   {} internal, {} file", broken_internal.len(), broken_files.len());
 
-                if !broken.is_empty() {
+                if !broken_internal.is_empty() {
                     println!();
-                    println!("Broken links:");
-                    for l in &broken {
-                        if let Link::Internal(uuid) = l {
-                            println!("  -> {}", uuid);
+                    println!("Broken internal links:");
+                    for uuid in &broken_internal {
+                        println!("  -> {}", uuid);
+                    }
+                }
+
+                if !broken_files.is_empty() {
+                    println!();
+                    println!("Broken file links:");
+                    for path in &broken_files {
+                        println!("  -> {}", path);
+                    }
+                }
+
+                if !issues.is_empty() && issues.iter().any(|i| i.starts_with("Invalid") || i.starts_with("Missing")) {
+                    println!();
+                    for i in &issues {
+                        if i.starts_with("Invalid") || i.starts_with("Missing") {
+                            println!("Issue: {}", i);
                         }
                     }
                 }
@@ -119,22 +182,16 @@ pub fn run(
                 if verbose && !incoming.is_empty() {
                     println!();
                     println!("Backlinks:");
-                    for uuid in &incoming {
-                        let title = graph
-                            .nodes
-                            .get(uuid)
-                            .map(|n| n.title.as_str())
-                            .unwrap_or("?");
-                        println!("  {} ({})", title, uuid);
+                    for entry in &backlink_entries {
+                        println!("  {} ({})", entry.title, entry.uuid);
                     }
                 }
 
-                if broken_count == 0 {
-                    println!();
+                println!();
+                if healthy {
                     println!("Status: healthy");
                 } else {
-                    println!();
-                    println!("Status: {} broken link(s)", broken_count);
+                    println!("Status: {} issue(s)", issues.len());
                 }
             }
         }
