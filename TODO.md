@@ -72,13 +72,15 @@ These directly impact how effectively AI agents (and power users) can use pkms p
 ## P2 — Architecture & code quality
 
 - [ ] **Decouple parsing from graph building**: `parser.rs` returns `ParsedNote` with raw strings; `graph.rs::build()` converts to `Node`. Extract a `Node::from_parsed()` constructor. The current `Graph::build()` does too much (duplicate detection, backlink construction, broken link detection, node creation).
+- [ ] **Extend `--input-json` to more commands**: Currently only `get` supports `--input-json`. Extend to `context`, `suggest`, `query`, `validate`, `path`, `subgraph` for batch/AI-agent workflows.
 - [ ] **Add an alias index to `Graph`**: Replace O(n) linear scan in `find_node()` with a `HashMap<String, Vec<String>>` (alias → UUIDs). This matters at scale (750+ notes, each with multiple aliases).
-- [ ] **Remove `#[allow(dead_code)]` where possible**: Either use the fields or remove them. `Node.id` exists but is never accessed externally (auto-increment counter exists only for potential future use). `Node.content_hash` is stored but never compared. `Link::File`, `Link::Url`, `Link::Attachment` variants are parsed but never consumed (only counted in stats).
-- [ ] **Standardize serialization**: `get.rs` and `subgraph.rs` build `serde_json::Value` manually. Convert to derive-based `Serialize` structs like every other command.
+- [ ] **Remove `#[allow(dead_code)]` where possible**: Either use the fields or remove them. `Node.id` (graph.rs:15), `Node.content_hash` (graph.rs:23), `find_node_exact()` (graph.rs:246), `search_by_ref()` (graph.rs:519), `Heading.level/title/todo_state/tags` (parser.rs:46-52), `FileEntry.filename/mtime/size` (discovery.rs:9-13). `Link::File` and `Link::Url` are now consumed by validate/stats, but `Link::Attachment` remains unused.
+- [ ] **Standardize serialization**: `get.rs` and `subgraph.rs` build `serde_json::Value` manually via `node_to_json()`. Convert to derive-based `Serialize` structs like every other command.
 - [ ] **Reduce cloning in command code**: Many commands call `.cloned()` on `graph.nodes`. Prefer returning references or use `Arc` for shared data. At minimum, add a benchmark to measure the cost.
 - [ ] **`find_node_exact()` is unused**: Either remove it or use it in the relevant command path. Currently `#[allow(dead_code)]`.
+- [ ] **Clean up `hubs.rs` import**: Uses `crate::parser::Link::Internal` inline instead of importing `use crate::parser::Link` at the top (like `suggest.rs` and `validate.rs` do).
 - [ ] **Add `deny_unknown_fields` to config structs**: `#[serde(deny_unknown_fields)]` on the config deserialize struct to catch typos in `~/.config/pkms.toml`.
-- [ ] **Inconsistent import style**: Some files `use crate::graph::Graph; Graph::...` others `use crate::graph; graph::Graph::...`. Pick one convention (prefer the shorter one) and enforce.
+- [x] **Inconsistent import style**: Resolved — all command files now consistently use `use crate::graph::Graph;`.
 - [ ] **Lint setup**: Add `[lints]` section to `Cargo.toml` with `clippy::pedantic` or a curated subset. Create a CI workflow that runs `cargo clippy` and `cargo fmt --check`.
 
 ---
@@ -88,7 +90,7 @@ These directly impact how effectively AI agents (and power users) can use pkms p
 - [ ] **Graph caching**: Serialize the built graph to disk (e.g., `~/.cache/pkms/graph.bincode` or JSON) so subsequent commands in quick succession skip the 3s full rebuild. Invalidate cache when files change (check `content_hash` or mtime).
 - [ ] **Incremental parsing**: Only re-parse files whose mtime has changed since last build. Store timestamps alongside the cached graph.
 - [ ] **Add a `--no-content` flag to `Graph::load()`**: For commands that don't need full content (e.g., `stats`, `orphans`, `broken`, `hubs`), skip storing file contents in memory. Currently `Node` stores the full file content only in `get --out` and `context`; but the content is kept in the `ParsedNote` → `FileScanResult` pipeline.
-- [ ] **`resolve` command is already fast (~0.5s)**: Document it as the recommended first step for AI agent workflows. Ensure it stays fast by keeping its header-only scan pattern.
+- [x] **`resolve` command is already fast (~0.5s)**: Already documented in AGENTS.md as the recommended first step. Header-only scan pattern preserved during refactoring (hidden-directory root fix).
 - [ ] **Parallel file I/O**: Currently file reading happens in a `par_iter()` but each file read is synchronous. Use `tokio` + async reads for non-blocking I/O when scaling to 10k+ files (low priority).
 
 ---
