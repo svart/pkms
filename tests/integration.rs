@@ -1102,6 +1102,83 @@ fn test_all_commands_json() {
 }
 
 // ----------------------------------------------------------------
+// CLI AUTOMATION: --no-header
+// ----------------------------------------------------------------
+#[test]
+fn test_no_header_orphans() {
+    let (_dir, root) = setup_db();
+    let (stdout, _stderr, status) = run(&["--db", root.to_str().unwrap(), "orphans", "--no-header"]);
+    assert!(status.success());
+    // Should NOT contain "Orphan notes (N):" header
+    assert!(!stdout.contains("Orphan notes"), "no-header should suppress header: {}", stdout);
+    assert!(stdout.contains("Orphan Note"), "should still show items: {}", stdout);
+}
+
+#[test]
+fn test_no_header_broken() {
+    let (_dir, root) = setup_db();
+    let (stdout, _stderr, status) = run(&["--db", root.to_str().unwrap(), "broken", "--no-header"]);
+    assert!(status.success());
+    assert!(!stdout.contains("Broken links"), "no-header should suppress header: {}", stdout);
+    assert!(stdout.contains("Broken Note"), "should still show items: {}", stdout);
+}
+
+#[test]
+fn test_no_header_resolve() {
+    let (_dir, root) = setup_db();
+    let (stdout, _stderr, status) = run(&["--db", root.to_str().unwrap(), "resolve", "--no-header"]);
+    assert!(status.success());
+    assert!(!stdout.contains("Total:"), "no-header should suppress Total: {}", stdout);
+    assert!(stdout.contains("Note A"), "should still show items: {}", stdout);
+}
+
+#[test]
+fn test_count_only_broken() {
+    let (_dir, root) = setup_db();
+    let (stdout, _stderr, status) = run(&["--db", root.to_str().unwrap(), "broken", "--count"]);
+    assert!(status.success());
+    let count: usize = stdout.trim().parse().expect("--count should print just a number");
+    assert!(count >= 1, "expected at least 1 broken link");
+}
+
+#[test]
+fn test_count_only_orphans() {
+    let (_dir, root) = setup_db();
+    let (v, status) = run_json(&["--db", root.to_str().unwrap(), "--json", "orphans", "--count"]);
+    assert!(status.success());
+    assert!(v.get("count").is_some());
+    assert!(v["count"].as_u64().unwrap_or(0) >= 1);
+    // Should NOT have the full list
+    assert!(v.get("orphans").is_none());
+}
+
+// ----------------------------------------------------------------
+// CLI AUTOMATION: --from-stdin with get
+// ----------------------------------------------------------------
+#[test]
+fn test_get_from_stdin() {
+    let (_dir, root) = setup_db();
+    let mut child = std::process::Command::new(pkms_binary())
+        .args(&["--db", root.to_str().unwrap(), "get", "--from-stdin", "--depth", "0"])
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .unwrap();
+    {
+        let stdin = child.stdin.as_mut().unwrap();
+        use std::io::Write;
+        writeln!(stdin, "Note A").unwrap();
+        writeln!(stdin, "Note B").unwrap();
+    }
+    let output = child.wait_with_output().unwrap();
+    assert!(output.status.success(), "stderr: {}", String::from_utf8_lossy(&output.stderr));
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("Note A"), "stdout: {}", stdout);
+    assert!(stdout.contains("Note B"), "stdout: {}", stdout);
+}
+
+// ----------------------------------------------------------------
 // --json exit code 1 for business-logic failure
 // ----------------------------------------------------------------
 #[test]

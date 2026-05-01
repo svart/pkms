@@ -112,6 +112,8 @@ pub fn run(
     config: &Config,
     json: bool,
     ndjson: bool,
+    no_header: bool,
+    count_only: bool,
     target: Option<&str>,
     tags: Option<&str>,
     search: Option<&str>,
@@ -169,6 +171,15 @@ pub fn run(
 
     results.truncate(limit);
 
+    if count_only {
+        if json {
+            println!("{}", serde_json::json!({"count": results.len()}));
+        } else {
+            println!("{}", results.len());
+        }
+        return Ok(());
+    }
+
     let field_set: Option<HashSet<String>> = fields.map(|f| f.split(',').map(|s| s.trim().to_string()).collect());
 
     if json {
@@ -186,10 +197,12 @@ pub fn run(
             println!("{}", serde_json::to_string_pretty(&output)?);
         }
     } else {
-        if !query.is_empty() {
-            println!("Resolved: \"{}\"", query);
+        if !no_header {
+            if !query.is_empty() {
+                println!("Resolved: \"{}\"", query);
+            }
+            println!("Total: {}", results.len());
         }
-        println!("Total: {}", results.len());
         for note in &results {
             let short = if note.uuid.len() > 8 { &note.uuid[..8] } else { &note.uuid };
             if let Some(ref fs) = field_set {

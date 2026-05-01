@@ -23,11 +23,22 @@ pub fn run(
     config: &Config,
     json: bool,
     ndjson: bool,
+    no_header: bool,
+    count_only: bool,
     limit: usize,
     db_cli: Option<&std::path::Path>,
 ) -> Result<()> {
     let graph = Graph::load(config, db_cli, false)?;
     let hubs = graph.hubs(limit);
+
+    if count_only {
+        if json {
+            println!("{}", serde_json::json!({"count": hubs.len()}));
+        } else {
+            println!("{}", hubs.len());
+        }
+        return Ok(());
+    }
 
     if json {
         let entries: Vec<HubEntry> = hubs
@@ -59,7 +70,9 @@ pub fn run(
             println!("{}", serde_json::to_string_pretty(&output)?);
         }
     } else {
-        println!("Top {} hubs:", limit);
+        if !no_header {
+            println!("Top {} hubs:", limit);
+        }
         for (i, (node, deg)) in hubs.iter().enumerate() {
             let outgoing = node
                 .outgoing

@@ -34,6 +34,8 @@ pub fn run(
     config: &Config,
     json: bool,
     ndjson: bool,
+    no_header: bool,
+    count_only: bool,
     verbose: bool,
     terms: &str,
     tag_filter: Option<&str>,
@@ -158,6 +160,15 @@ pub fn run(
         combined.truncate(limit);
     }
 
+    if count_only {
+        if json {
+            println!("{}", serde_json::json!({"count": combined.len()}));
+        } else {
+            println!("{}", combined.len());
+        }
+        return Ok(());
+    }
+
     if json {
         if ndjson {
             for r in &combined {
@@ -172,9 +183,11 @@ pub fn run(
             println!("{}", serde_json::to_string_pretty(&output)?);
         }
     } else {
-        println!("Query: {}", terms);
-        println!("Results: {}", combined.len());
-        println!();
+        if !no_header {
+            println!("Query: {}", terms);
+            println!("Results: {}", combined.len());
+            println!();
+        }
         for (i, r) in combined.iter().enumerate() {
             println!(
                 "{:3}. {}  (score: {:.1})",

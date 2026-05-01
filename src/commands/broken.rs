@@ -20,10 +20,22 @@ pub fn run(
     config: &Config,
     json: bool,
     ndjson: bool,
+    no_header: bool,
+    count_only: bool,
     db_cli: Option<&std::path::Path>,
 ) -> Result<()> {
     let graph = Graph::load(config, db_cli, false)?;
     let links = graph.broken_links_list();
+
+    let count = links.len();
+    if count_only {
+        if json {
+            println!("{}", serde_json::json!({"count": count}));
+        } else {
+            println!("{}", count);
+        }
+        return Ok(());
+    }
 
     if json {
         let entries: Vec<BrokenEntry> = links
@@ -46,7 +58,9 @@ pub fn run(
             println!("{}", serde_json::to_string_pretty(&output)?);
         }
     } else {
-        println!("Broken links ({}):", links.len());
+        if !no_header {
+            println!("Broken links ({}):", count);
+        }
         for (_src, title, tgt) in &links {
             println!("  {} -> {}", title, tgt);
         }

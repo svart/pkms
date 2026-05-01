@@ -45,9 +45,9 @@ These directly impact how effectively AI agents (and power users) can use pkms p
 
 ### CLI for automation
 
-- [ ] **Add `--no-header` flag**: For `resolve`, `tags`, `broken`, `orphans`, `hubs`, suppress column headers in human output. Easier to `grep`/`cut`/`awk`.
-- [ ] **Add `--count` flag**: For list commands, only show the count of results, not the list itself.
-- [ ] **Support piping UUIDs**: Design a "batch" mode where commands accept UUIDs from stdin. E.g., `echo "aaaa-bbbb" | pkms get --depth 2 --from-stdin`. Or `pkms get --from-file /tmp/uuids.txt`.
+- [x] **Add `--no-header` flag**: For `resolve`, `tags`, `broken`, `orphans`, `hubs`, suppress column headers in human output. Easier to `grep`/`cut`/`awk`.
+- [x] **Add `--count` flag**: For list commands, only show the count of results, not the list itself.
+- [x] **Support piping UUIDs**: Design a "batch" mode where commands accept UUIDs from stdin. E.g., `echo "aaaa-bbbb" | pkms get --depth 2 --from-stdin`. Or `pkms get --from-file /tmp/uuids.txt`.
 - [ ] **JSON input for targets**: Support `--input-json <file>` for passing complex query parameters (e.g., multiple targets, filter criteria) as JSON instead of CLI args.
 
 ### Documentation

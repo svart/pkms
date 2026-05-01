@@ -25,6 +25,12 @@ pub struct Cli {
     #[arg(global = true, long, value_enum, value_name = "FMT", help = "Output format: json, ndjson (implies machine-readable output)")]
     pub output_format: Option<OutputFormat>,
 
+    #[arg(global = true, long, help = "Suppress column headers in human output")]
+    pub no_header: bool,
+
+    #[arg(global = true, long = "count", help = "Show only the count of results")]
+    pub count_only: bool,
+
     #[command(subcommand)]
     pub command: Command,
 }
@@ -110,13 +116,19 @@ pub enum Command {
     #[command(about = "Retrieve a note with its neighbors at specified depth")]
     Get {
         #[arg(help = "UUID, file path, or note title")]
-        target: String,
+        target: Option<String>,
         #[arg(short, long, default_value = "1", help = "Traversal depth")]
         depth: u32,
         #[arg(short, long, help = "Show full note content")]
         out: bool,
         #[arg(short, long, help = "Show ASCII graph visualization")]
         graph: bool,
+        #[arg(long, help = "Read targets from stdin, one per line")]
+        from_stdin: bool,
+        #[arg(long, value_name = "FILE", help = "Read targets from file, one per line")]
+        from_file: Option<PathBuf>,
+        #[arg(long, value_name = "FILE", help = "Read command parameters from JSON file")]
+        input_json: Option<PathBuf>,
     },
     #[command(about = "Fuzzy search across note titles and content")]
     Query {

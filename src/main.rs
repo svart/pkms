@@ -16,6 +16,8 @@ fn main() -> ExitCode {
     let use_json = cli.json || ndjson;
     let machine = use_json;
     let quiet = cli.quiet || use_json;
+    let no_header = cli.no_header;
+    let count_only = cli.count_only;
 
     let cfg = match config::Config::load() {
         Ok(c) => c,
@@ -41,15 +43,15 @@ fn main() -> ExitCode {
                 .map(|_| ExitCode::SUCCESS)
         }
         Command::Orphans => {
-            commands::orphans::run(&cfg, use_json, ndjson, cli.db.as_deref())
+            commands::orphans::run(&cfg, use_json, ndjson, no_header, count_only, cli.db.as_deref())
                 .map(|_| ExitCode::SUCCESS)
         }
         Command::Broken => {
-            commands::broken::run(&cfg, use_json, ndjson, cli.db.as_deref())
+            commands::broken::run(&cfg, use_json, ndjson, no_header, count_only, cli.db.as_deref())
                 .map(|_| ExitCode::SUCCESS)
         }
         Command::Hubs { limit } => {
-            commands::hubs::run(&cfg, use_json, ndjson, *limit, cli.db.as_deref())
+            commands::hubs::run(&cfg, use_json, ndjson, no_header, count_only, *limit, cli.db.as_deref())
                 .map(|_| ExitCode::SUCCESS)
         }
         Command::Context { target, depth, max_tokens, include_outgoing, include_incoming, template } => {
@@ -57,7 +59,7 @@ fn main() -> ExitCode {
                 .map(|_| ExitCode::SUCCESS)
         }
         Command::Resolve { target, tags, search, limit, fields } => {
-            commands::resolve::run(&cfg, use_json, ndjson, target.as_deref(), tags.as_deref(), search.as_deref(), *limit, fields.as_deref(), cli.db.as_deref())
+            commands::resolve::run(&cfg, use_json, ndjson, no_header, count_only, target.as_deref(), tags.as_deref(), search.as_deref(), *limit, fields.as_deref(), cli.db.as_deref())
                 .map(|_| ExitCode::SUCCESS)
         }
         Command::Fix { broken_uuid, target, apply } => {
@@ -72,12 +74,12 @@ fn main() -> ExitCode {
             commands::new::run(&cfg, use_json, title, *create, tags.as_deref(), aliases.as_deref(), cli.db.as_deref())
                 .map(|_| ExitCode::SUCCESS)
         }
-        Command::Get { target, depth, out, graph: show_graph } => {
-            commands::get::run(&cfg, use_json, cli.verbose, target, *depth, *out, *show_graph, cli.db.as_deref())
+        Command::Get { target, depth, out, graph: show_graph, from_stdin, from_file, input_json: _ } => {
+            commands::get::run(&cfg, use_json, cli.verbose, target.as_deref(), *depth, *out, *show_graph, *from_stdin, from_file.as_ref(), cli.db.as_deref())
                 .map(|_| ExitCode::SUCCESS)
         }
         Command::Query { terms, tag, limit } => {
-            commands::query::run(&cfg, use_json, ndjson, cli.verbose, terms, tag.as_deref(), *limit, cli.db.as_deref())
+            commands::query::run(&cfg, use_json, ndjson, no_header, count_only, cli.verbose, terms, tag.as_deref(), *limit, cli.db.as_deref())
                 .map(|_| ExitCode::SUCCESS)
         }
         Command::Info => {
@@ -96,7 +98,7 @@ fn main() -> ExitCode {
                 .map(|_| ExitCode::SUCCESS)
         }
         Command::Tags { tag } => {
-            commands::tags::run(&cfg, use_json, ndjson, cli.verbose, tag.as_deref(), cli.db.as_deref())
+            commands::tags::run(&cfg, use_json, ndjson, no_header, count_only, cli.verbose, tag.as_deref(), cli.db.as_deref())
                 .map(|_| ExitCode::SUCCESS)
         }
     };

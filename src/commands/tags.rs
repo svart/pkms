@@ -26,6 +26,8 @@ pub fn run(
     config: &Config,
     json: bool,
     ndjson: bool,
+    no_header: bool,
+    count_only: bool,
     verbose: bool,
     tag_filter: Option<&str>,
     db_cli: Option<&std::path::Path>,
@@ -34,6 +36,14 @@ pub fn run(
 
     if let Some(tag) = tag_filter {
         let notes = graph.notes_by_tag(tag);
+        if count_only {
+            if json {
+                println!("{}", serde_json::json!({"count": notes.len()}));
+            } else {
+                println!("{}", notes.len());
+            }
+            return Ok(());
+        }
         if json {
             let notes_json: Vec<TagNote> = notes
                 .iter()
@@ -58,14 +68,24 @@ pub fn run(
                 println!("{}", serde_json::to_string_pretty(&output)?);
             }
         } else {
-            println!("Tag: {}", tag);
-            println!("Notes: {}", notes.len());
+            if !no_header {
+                println!("Tag: {}", tag);
+                println!("Notes: {}", notes.len());
+            }
             for n in &notes {
                 println!("  {} ({})", n.title, n.uuid);
             }
         }
     } else {
         let tags = graph.all_tags();
+        if count_only {
+            if json {
+                println!("{}", serde_json::json!({"count": tags.len()}));
+            } else {
+                println!("{}", tags.len());
+            }
+            return Ok(());
+        }
         if json {
             let entries: Vec<TagEntry> = tags
                 .into_iter()
@@ -84,12 +104,16 @@ pub fn run(
                 println!("{}", serde_json::to_string_pretty(&output)?);
             }
         } else {
-            println!("Filetags (count):");
+            if !no_header {
+                println!("Filetags (count):");
+            }
             for (tag, count) in &tags {
                 println!("  {:30} {}", tag, count);
             }
-            println!();
-            println!("Total unique tags: {}", tags.len());
+            if !no_header {
+                println!();
+                println!("Total unique tags: {}", tags.len());
+            }
         }
     }
 
