@@ -43,6 +43,18 @@ fn main() -> Result<ExitCode> {
             commands::context::run(&cfg, cli.json, cli.verbose, target, *depth, *max_tokens, cli.db.as_deref())?;
             Ok(ExitCode::SUCCESS)
         }
+        Command::Resolve { target, tags, search, limit } => {
+            commands::resolve::run(&cfg, cli.json, cli.verbose, target.as_deref(), tags.as_deref(), search.as_deref(), *limit, cli.db.as_deref())?;
+            Ok(ExitCode::SUCCESS)
+        }
+        Command::Fix { broken_uuid, target, apply } => {
+            commands::fix::run(&cfg, cli.json, cli.verbose, broken_uuid, target, *apply, cli.db.as_deref())?;
+            Ok(ExitCode::SUCCESS)
+        }
+        Command::Suggest { target, limit } => {
+            commands::suggest::run(&cfg, cli.json, cli.verbose, target, *limit, cli.db.as_deref())?;
+            Ok(ExitCode::SUCCESS)
+        }
         Command::New { title, create, tags, aliases } => {
             commands::new::run(&cfg, cli.json, title, *create, tags.as_deref(), aliases.as_deref(), cli.db.as_deref())?;
             Ok(ExitCode::SUCCESS)

@@ -49,6 +49,33 @@ pub enum Command {
         #[arg(short, long, help = "Maximum tokens in output")]
         max_tokens: Option<usize>,
     },
+    #[command(about = "Fast UUID/title resolution without full graph load")]
+    Resolve {
+        #[arg(help = "UUID prefix, full UUID, or title to resolve")]
+        target: Option<String>,
+        #[arg(short, long, help = "Include notes with these filetags (comma-separated)")]
+        tags: Option<String>,
+        #[arg(short, long, help = "Search in aliases and titles (substring)")]
+        search: Option<String>,
+        #[arg(short, long, default_value = "30", help = "Maximum results")]
+        limit: Option<usize>,
+    },
+    #[command(about = "Fix broken links by replacing UUIDs across the database")]
+    Fix {
+        #[arg(help = "Broken UUID to replace")]
+        broken_uuid: String,
+        #[arg(help = "Replacement UUID or note title to resolve to")]
+        target: String,
+        #[arg(short, long, help = "Actually apply the fix (dry-run without this flag)")]
+        apply: bool,
+    },
+    #[command(about = "Suggest related notes for a target note")]
+    Suggest {
+        #[arg(help = "UUID, file path, or note title")]
+        target: String,
+        #[arg(short, long, default_value = "10", help = "Number of suggestions")]
+        limit: Option<usize>,
+    },
     #[command(about = "Generate a filename and UUID for a new note")]
     New {
         #[arg(help = "Title of the new note")]

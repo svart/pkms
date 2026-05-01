@@ -171,11 +171,6 @@
   - [x] Comprehensive README.md with examples for all commands
   - [x] Built-in `--help` for all commands and subcommands
 
-- [ ] **Packaging**
-  - [ ] GitHub Actions CI pipeline
-  - [ ] Pre-built binaries for Linux, macOS
-  - [ ] Homebrew formula (optional)
-
 ## Implementation Notes
 
 - Language: Rust (existing `Cargo.toml` with `edition = "2024"`)
