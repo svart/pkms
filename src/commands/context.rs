@@ -19,7 +19,6 @@ pub struct ContextOptions<'a> {
     pub target: Option<&'a str>,
     pub depth: u32,
     pub max_tokens: Option<usize>,
-    pub template: Option<&'a str>,
 }
 
 pub fn run(
@@ -72,9 +71,8 @@ pub fn run(
     let tags_str = node.filetags.join(", ");
     let aliases_str = node.aliases.join(", ");
 
-    let tmpl = opts.template.unwrap_or(DEFAULT_TEMPLATE);
     let rendered = render_template(
-        tmpl,
+        DEFAULT_TEMPLATE,
         &ContextVars {
             title: &node.title,
             uuid: &node.uuid,

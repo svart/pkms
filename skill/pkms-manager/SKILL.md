@@ -96,7 +96,6 @@ pkms --db ~/Documents/org new "Title" --create --aliases "alt1,alt2"
 pkms --db ~/Documents/org context <target> --depth 1
 
 pkms --db ~/Documents/org context <target> --depth 2 --max-tokens 2000
-pkms --db ~/Documents/org context <target> --template "{{title}}: {{content}}"
 ```
 ### Configuration
 ```

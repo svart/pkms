@@ -490,56 +490,6 @@ fn test_context_note_not_found() {
     assert!(!status.success());
 }
 
-#[test]
-fn test_context_template_custom() {
-    let (_dir, root) = setup_db();
-    let (v, status) = run_json(&[
-        "--db",
-        root.to_str().unwrap(),
-        "--output-format",
-        "json",
-        "context",
-        "Note A",
-        "--depth",
-        "1",
-        "--template",
-        "Title: {{title}}\nContent:\n{{content}}",
-    ]);
-    assert!(status.success());
-    let ctx = v["context"].as_str().unwrap_or("");
-    assert!(ctx.starts_with("Title: Note A"), "ctx: {}", ctx);
-    assert!(ctx.contains("Content:"));
-    assert!(
-        !ctx.contains("UUID:"),
-        "should not contain UUID from default template"
-    );
-}
-
-#[test]
-fn test_context_template_conditional() {
-    let (_dir, root) = setup_db();
-    let (v, status) = run_json(&[
-        "--db",
-        root.to_str().unwrap(),
-        "--output-format",
-        "json",
-        "context",
-        "Note A",
-        "--depth",
-        "0",
-        "--template",
-        "{{#tags}}has tags{{/tags}}{{#aliases}}has aliases{{/aliases}}",
-    ]);
-    assert!(status.success());
-    let ctx = v["context"].as_str().unwrap_or("");
-    // Note A has no tags or aliases, so both conditionals should be empty
-    assert_eq!(
-        ctx, "",
-        "expected empty output for missing conditionals, got: {}",
-        ctx
-    );
-}
-
 // ----------------------------------------------------------------
 // RESOLVE
 // ----------------------------------------------------------------

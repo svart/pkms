@@ -106,7 +106,6 @@ fn dispatch_mutating(
             target,
             depth,
             max_tokens,
-            template,
         } => commands::context::run(
             cfg,
             ctx,
@@ -114,7 +113,6 @@ fn dispatch_mutating(
                 target: target.as_deref(),
                 depth: *depth,
                 max_tokens: *max_tokens,
-                template: template.as_deref(),
             },
             cli.db.as_deref(),
         )

@@ -76,13 +76,6 @@ pub enum Command {
         depth: u32,
         #[arg(short, long, help = "Maximum tokens in output")]
         max_tokens: Option<usize>,
-        #[arg(
-            long,
-            value_name = "TEMPLATE",
-            help = "Template with {{title}}, {{uuid}}, {{path}}, {{tags}}, {{aliases}}, {{content}}, {{neighbors}}, {{backlinks}} placeholders",
-            long_help = "Template with placeholders. Default:\n# {{title}}\nUUID: {{uuid}}\nPath: {{path}}\n{{#tags}}Tags: {{tags}}\n{{/tags}}{{#aliases}}Aliases: {{aliases}}\n{{/aliases}}\n--- Content ---\n{{content}}--- End Content ---\n\n{{neighbors}}{{backlinks}}"
-        )]
-        template: Option<String>,
     },
     #[command(about = "Fast UUID/title resolution without full graph load")]
     Resolve {

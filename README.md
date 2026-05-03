@@ -143,14 +143,11 @@ Outputs the top N most relevant notes with per-factor breakdowns.
 ```
 pkms context <target> --depth 2                     # Build AI context window
 pkms context <target> --depth 1 --max-tokens 2000   # With token budget
-pkms context <target> --template "{{title}}: {{content}}"  # Custom template
 ```
 
 `context` produces a formatted text with the note's full content and
 linked neighbors at each depth, suitable for LLM consumption.
 `--max-tokens` truncates output to fit within the token budget.
-`--template` allows custom formatting with `{{title}}`, `{{content}}`,
-`{{neighbors}}`, and `{{backlinks}}` placeholders.
 
 ### Note Creation
 
