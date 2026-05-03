@@ -142,10 +142,19 @@ fn dispatch_mutating(
             apply,
         } => commands::fix::run(cfg, ctx, broken_uuid, target, *apply, cli.db.as_deref())
             .map(|()| ExitCode::SUCCESS)?,
-        Command::Suggest { target, limit } => {
-            commands::suggest::run(cfg, ctx, target.as_deref(), *limit, cli.db.as_deref())
-                .map(|()| ExitCode::SUCCESS)?
-        }
+        Command::Suggest {
+            target,
+            limit,
+            exclude_orphans,
+        } => commands::suggest::run(
+            cfg,
+            ctx,
+            target.as_deref(),
+            *limit,
+            *exclude_orphans,
+            cli.db.as_deref(),
+        )
+        .map(|()| ExitCode::SUCCESS)?,
         Command::New {
             title,
             create,

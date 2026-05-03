@@ -125,6 +125,8 @@ pub enum Command {
         target: Option<String>,
         #[arg(short, long, default_value = "10", help = "Number of suggestions")]
         limit: Option<usize>,
+        #[arg(long, help = "Exclude orphan notes from suggestions")]
+        exclude_orphans: bool,
     },
     #[command(about = "Generate a filename and UUID for a new note")]
     New {

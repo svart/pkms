@@ -128,12 +128,26 @@ fn compute_scores<'a>(
     target_tags: &HashSet<&str>,
     target_backlinks: &HashSet<&str>,
     target_outgoing: &HashSet<&str>,
+    exclude_orphans: bool,
 ) -> Vec<ScoredItem<'a>> {
     let mut scored: Vec<ScoredItem<'a>> = Vec::new();
 
     for other in graph.nodes.values() {
         if other.uuid == node.uuid {
             continue;
+        }
+        if exclude_orphans {
+            let has_outgoing = other
+                .outgoing
+                .iter()
+                .any(|l| matches!(l, Link::Internal(_)));
+            let has_incoming = graph
+                .backlinks
+                .get(&other.uuid)
+                .is_some_and(|b| !b.is_empty());
+            if !has_outgoing && !has_incoming {
+                continue;
+            }
         }
 
         let mut score = 0.0;
@@ -287,6 +301,7 @@ pub fn run(
     ctx: &OutputContext,
     target: Option<&str>,
     limit: Option<usize>,
+    exclude_orphans: bool,
     db_cli: Option<&std::path::Path>,
 ) -> Result<()> {
     let target = target.ok_or_else(|| anyhow::anyhow!("No target specified. Provide a target"))?;
@@ -360,6 +375,7 @@ pub fn run(
         &target_tags,
         &target_backlinks,
         &target_outgoing,
+        exclude_orphans,
     );
     scored.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
     scored.truncate(limit);

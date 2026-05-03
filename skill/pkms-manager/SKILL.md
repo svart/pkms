@@ -124,9 +124,10 @@ Every command that supports `--output-format json` has a corresponding JSON Sche
 When the user asks about a topic, use this sequence:
 1. Find hubs `pkms stats --hubs`.
 2. Go through the graph from related hub(s) note by note via forward and backward links exploring the area and collecting necessary information from notes content.
-1. `resolve` to find the note UUID quickly
-2. `context <uuid> --depth 2` to build a rich context window with linked neighbors
-3. For deeper exploration, `get <uuid>` for full content
+3. Use `suggest` subcommand to find more-or-less relevant notes.
+4. Use `query` and `resolve` for searching.
+5. `context <uuid> --depth 2` to build a rich context window with linked neighbors.
+6. For deeper exploration, `get <uuid>` for full content.
 
 ### Database Health Maintenance
 When the user mentions fixing their database:
@@ -159,10 +160,8 @@ Always use `--output-format json` for AI consumption. Each command has its own o
   - `suggest` returns `{"target", "target_uuid", "suggestions": [...]}`
 
 ### Linking Orphans to the Graph
-After `suggest` finds related notes, append links manually:
-```bash
-echo -e "\n[[id:<target-uuid>][link text]]" >> ~/Documents/org/<path-to-orphan>
-```
+After `suggest` finds related notes, create links manually.
+Always create contextual links by linking some terms in text created by you or already available. If you create text make sure that it is very relevant.
 
 **Note**: `suggest` works best for notes with descriptive titles and rich
 content. For short-content notes (e.g., "CQI", "MCS"), the content keyword
