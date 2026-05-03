@@ -3,7 +3,6 @@
 use crate::config::Config;
 use crate::graph::Graph;
 use crate::parser::Link;
-use crate::util;
 use anyhow::Result;
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
@@ -32,20 +31,14 @@ pub fn run(
     verbose: bool,
     target: Option<&str>,
     limit: Option<usize>,
-    input_json: Option<&std::path::PathBuf>,
     db_cli: Option<&std::path::Path>,
 ) -> Result<()> {
-    let target = util::load_input_target(
-        input_json,
-        target,
-        "target",
-        "No target specified. Provide a target or use --input-json",
-    )?;
+    let target = target.ok_or_else(|| anyhow::anyhow!("No target specified. Provide a target"))?;
 
     let graph = Graph::load(config, db_cli, false)?;
     let limit = limit.unwrap_or(10);
 
-    let node = graph.resolve_target(&target)?.clone();
+    let node = graph.resolve_target(target)?.clone();
 
     let target_lower = node.title.to_lowercase();
 

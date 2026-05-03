@@ -28,16 +28,9 @@ This plan identifies 18 concrete improvements organized by priority and effort.
 near-identical variant for `terms`. Meanwhile `get` and `path` offload this to `main.rs`
 helper functions — creating an inconsistency.
 
-**Fix:** Create a shared utility:
-
-```rust
-// src/util.rs (new file)
-pub fn load_input_target(input_json: Option<&PathBuf>, cli_target: Option<&str>, field: &str) -> Result<String>
-pub fn load_input_param<T: FromJsonValue>(input_json: Option<&PathBuf>, cli_value: T, field: &str, default: T) -> Result<T>
-```
-
-Delete `load_get_params()` and `load_path_params()` from `main.rs`. All 7 commands
-call the same utility.
+**Resolution:** Removed `--input-json`, `--from-stdin`, and `--from-file` flags entirely
+(2026-05-03). These automation-oriented flags were rarely used and added unnecessary
+complexity. All commands now accept targets directly as positional arguments.
 
 ### 1.2 Extract `count_only` early-return pattern
 
@@ -148,9 +141,9 @@ reusing scan results between commands in the future (e.g., a daemon mode).
 done in `main.rs` helper functions. Some extract only `target`, others extract multiple
 params. This inconsistency means developers must check each command individually.
 
-**Fix:** After Priority 1.1 is done, move ALL `input_json` handling into a single
-utility with a typed deserialization approach. Delete `load_get_params()` and
-`load_path_params()` from `main.rs`.
+**Resolution:** Removed `--input-json`, `--from-stdin`, and `--from-file` flags entirely
+(2026-05-03). Deleted `load_get_params()` and `load_path_params()` from `main.rs` along
+with `load_input_target()` from `util.rs`.
 
 ### 3.2 Unify `check` return type
 
@@ -287,7 +280,7 @@ Document commands in AGENTS.md to make agent use them always before committing c
 
 | Category | Count | Examples |
 |----------|-------|---------|
-| Duplicated code blocks | 8 patterns, 25+ instances | input_json parsing, count_only, ndjson, short UUID |
+| Duplicated code blocks | 7 patterns, 20+ instances | count_only, ndjson, short UUID |
 | Duplicated regex statics | 4 | UUID_RE, TITLE_RE, FILETAGS_RE, ALIASES_RE in resolve.rs + parser.rs |
 | Monolithic files >300 LOC | 3 | graph.rs (1064), resolve.rs (369), context.rs (318) |
 | Commands missing features | 12 | no_header, unused verbose/quiet params |

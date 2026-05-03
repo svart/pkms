@@ -72,7 +72,6 @@ pkms check                              # Full database health scan
 pkms check --file-links                 # Check file: links exist on disk
 pkms check --attachment-links           # Check attachment: links on disk
 pkms validate <target>                  # Validate a specific note
-pkms validate --input-json params.json  # Load target from JSON file
 ```
 
 `check` scans all notes, validates IDs/titles, detects broken links,
@@ -88,14 +87,9 @@ outgoing links (internal + file existence), and lists backlinks.
 pkms get <target> --depth 2                # Retrieve note with neighbors
 pkms get <target> --depth 1 --graph        # ASCII art visualization
 pkms get <target> --out                    # Show full note content
-pkms get --from-stdin                      # Read targets from stdin
-pkms get --from-file targets.txt           # Read targets from file
-pkms get --input-json params.json          # Load params from JSON
 pkms path <from> <to>                      # Shortest path between notes
 pkms path "A" "B" --max-depth 10           # Limit traversal depth
-pkms path --input-json params.json         # Load params from JSON
 pkms subgraph <target> --depth 2           # Export subgraph with stats
-pkms subgraph --input-json params.json     # Load params from JSON
 ```
 
 `get` traverses the link graph up to N hops, showing forward links
@@ -114,7 +108,6 @@ density statistics (vertex count, edge count, avg order).
 pkms query "search terms"                 # Fuzzy search titles + content
 pkms query "search terms" --tag book      # Filter by filetag
 pkms query "search terms" --limit 5       # Limit results
-pkms query --input-json params.json       # Load params from JSON
 pkms tags                                 # List all filetags with counts
 pkms tags --tag book                      # List notes with a specific tag
 ```
@@ -143,7 +136,6 @@ pkms fix <broken-uuid> <replacement>           # Dry-run (shows what would chang
 pkms fix <broken-uuid> <replacement> --apply   # Actually apply replacements
 pkms suggest <target>                          # Find related notes
 pkms suggest <target> --limit 5                # Limit suggestions
-pkms suggest --input-json params.json          # Load params from JSON
 ```
 
 `fix` replaces all occurrences of a broken UUID across the database with
@@ -162,7 +154,6 @@ pkms context <target> --depth 1 --max-tokens 2000   # With token budget
 pkms context <target> --include-outgoing false       # Skip forward links
 pkms context <target> --include-incoming false       # Skip backlinks
 pkms context <target> --template "{{title}}: {{content}}"  # Custom template
-pkms context --input-json params.json               # Load params from JSON
 ```
 
 `context` produces a formatted text with the note's full content and

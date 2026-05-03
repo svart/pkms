@@ -1,7 +1,6 @@
 use crate::config::Config;
 use crate::graph::Graph;
 use crate::parser::Link;
-use crate::util;
 use anyhow::Result;
 use serde::Serialize;
 use std::path::Path;
@@ -37,19 +36,13 @@ pub fn run(
     json: bool,
     verbose: bool,
     target: Option<&str>,
-    input_json: Option<&std::path::PathBuf>,
     db_cli: Option<&std::path::Path>,
 ) -> Result<()> {
-    let target = util::load_input_target(
-        input_json,
-        target,
-        "target",
-        "No target specified. Provide a target or use --input-json",
-    )?;
+    let target = target.ok_or_else(|| anyhow::anyhow!("No target specified. Provide a target"))?;
 
     let graph = Graph::load(config, db_cli, verbose)?;
 
-    let node = graph.resolve_target(&target)?.clone();
+    let node = graph.resolve_target(target)?.clone();
     let mut issues = Vec::new();
 
     let uuid_parts: Vec<&str> = node.uuid.split('-').collect();

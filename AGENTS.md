@@ -32,7 +32,7 @@ src/
   config.rs         # ~/.config/pkms.toml loading, merging with CLI --db flag
   discovery.rs      # Recursive .org file discovery with ignore patterns
   parser.rs         # org-mode parser: IDs, titles, filetags, aliases, refs, links, headings
-  util.rs           # Shared helpers: load_input_target, print_count, print_ndjson, short_uuid
+  util.rs           # Shared helpers: print_count, print_ndjson, short_uuid, path_string
   graph/            # In-memory graph module (split into submodules)
     mod.rs          # Struct defs: Node, Graph, FileScanResult; load/scan/find_node/resolve_target
     builder.rs      # Graph::build constructor
@@ -92,7 +92,6 @@ If performance optimization is needed, compute from scratch on every run — do 
 - **`Graph::load(config, db_cli, verbose)`** to load the full database (discovers + parses 750+ files, ~3s). Expensive — cache results when possible.
 - **`resolve`** command is fast (~0.5s) because it scans only file headers. Use for quick lookups.
 - **`#[allow(dead_code)]`** on struct fields kept for future use. Remove if never needed after implementation.
-- **Use `util::load_input_target`** for `--input-json` parsing instead of inline match.
 - **Use `util::print_count`** and **`util::print_ndjson`** for count/ndjson output patterns.
 
 ## Graph data model
@@ -147,15 +146,12 @@ These schemas define the exact structure and types for reliable programmatic con
 - **JSON schema validation**: All commands are tested with `--json` via `test_all_commands_json`, verifying valid JSON output for every command
 - Mock DB helper in `tests/integration.rs::setup_db()` creates a 10+ note graph with duplicate UUIDs, broken links, filetags, aliases, and headings
 
-## CLI automation flags
+## CLI flags
 
 | Flag              | Description                                      |
 |-------------------|--------------------------------------------------|
 | `--no-header`     | Suppress column headers in human output          |
 | `--count`         | Show only the result count                       |
-| `--from-stdin`    | Read targets from stdin (one per line)           |
-| `--from-file`     | Read targets from a file (one per line)          |
-| `--input-json`    | Read command parameters from a JSON file         |
 
 ## Related
 

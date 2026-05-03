@@ -1652,43 +1652,6 @@ fn test_count_only_orphans() {
 }
 
 // ----------------------------------------------------------------
-// CLI AUTOMATION: --from-stdin with get
-// ----------------------------------------------------------------
-#[test]
-fn test_get_from_stdin() {
-    let (_dir, root) = setup_db();
-    let mut child = std::process::Command::new(pkms_binary())
-        .args(&[
-            "--db",
-            root.to_str().unwrap(),
-            "get",
-            "--from-stdin",
-            "--depth",
-            "0",
-        ])
-        .stdin(std::process::Stdio::piped())
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
-        .spawn()
-        .unwrap();
-    {
-        let stdin = child.stdin.as_mut().unwrap();
-        use std::io::Write;
-        writeln!(stdin, "Note A").unwrap();
-        writeln!(stdin, "Note B").unwrap();
-    }
-    let output = child.wait_with_output().unwrap();
-    assert!(
-        output.status.success(),
-        "stderr: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("Note A"), "stdout: {}", stdout);
-    assert!(stdout.contains("Note B"), "stdout: {}", stdout);
-}
-
-// ----------------------------------------------------------------
 // --json exit code 1 for business-logic failure
 // ----------------------------------------------------------------
 #[test]

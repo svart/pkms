@@ -47,19 +47,13 @@ pub fn run(
     verbose: bool,
     target: Option<&str>,
     depth: u32,
-    input_json: Option<&std::path::PathBuf>,
     db_cli: Option<&std::path::Path>,
 ) -> Result<()> {
-    let target = util::load_input_target(
-        input_json,
-        target,
-        "target",
-        "No target specified. Provide a target or use --input-json",
-    )?;
+    let target = target.ok_or_else(|| anyhow::anyhow!("No target specified. Provide a target"))?;
 
     let graph = Graph::load(config, db_cli, verbose)?;
 
-    let root = graph.resolve_target(&target)?.clone();
+    let root = graph.resolve_target(target)?.clone();
     let sub = graph.collect_subgraph(&root.uuid, depth);
 
     if json {

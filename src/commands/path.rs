@@ -27,11 +27,8 @@ pub fn run(
     max_depth: Option<u32>,
     db_cli: Option<&std::path::Path>,
 ) -> Result<()> {
-    let from = from.ok_or_else(|| {
-        anyhow::anyhow!("No source specified. Provide --from or use --input-json")
-    })?;
-    let to =
-        to.ok_or_else(|| anyhow::anyhow!("No target specified. Provide --to or use --input-json"))?;
+    let from = from.ok_or_else(|| anyhow::anyhow!("No source specified. Provide --from"))?;
+    let to = to.ok_or_else(|| anyhow::anyhow!("No target specified. Provide --to"))?;
 
     let graph = Graph::load(config, db_cli, verbose)?;
 

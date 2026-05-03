@@ -1,6 +1,5 @@
 use crate::config::Config;
 use crate::graph::Graph;
-use crate::util;
 use anyhow::Result;
 use serde::Serialize;
 use std::fmt::Write;
@@ -25,18 +24,12 @@ pub fn run(
     include_outgoing: Option<bool>,
     include_incoming: Option<bool>,
     template: Option<&str>,
-    input_json: Option<&std::path::PathBuf>,
     db_cli: Option<&std::path::Path>,
 ) -> Result<()> {
-    let target = util::load_input_target(
-        input_json,
-        target,
-        "target",
-        "No target specified. Provide a target or use --input-json",
-    )?;
+    let target = target.ok_or_else(|| anyhow::anyhow!("No target specified. Provide a target"))?;
 
     let graph = Graph::load(config, db_cli, false)?;
-    let node = graph.resolve_target(&target)?.clone();
+    let node = graph.resolve_target(target)?.clone();
     let content = std::fs::read_to_string(&node.path).unwrap_or_default();
     let neighbors = graph.get_neighbors(&node.uuid, depth);
 

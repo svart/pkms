@@ -39,23 +39,17 @@ pub fn run(
     terms: Option<&str>,
     tag_filter: Option<&str>,
     limit: Option<usize>,
-    input_json: Option<&std::path::PathBuf>,
     db_cli: Option<&std::path::Path>,
 ) -> Result<()> {
-    let terms = util::load_input_target(
-        input_json,
-        terms,
-        "terms",
-        "No search terms specified. Provide terms or use --input-json",
-    )?;
+    let terms = terms.ok_or_else(|| anyhow::anyhow!("No search terms specified. Provide terms"))?;
 
     let db_root = config.resolve_db_root(db_cli)?;
     let ignore = config.resolve_ignore_patterns();
     let results = Graph::scan(&db_root, &ignore, verbose)?;
     let graph = Graph::build(results);
 
-    let title_results = graph.search(&terms);
-    let content_results = graph.search_content(&terms);
+    let title_results = graph.search(terms);
+    let content_results = graph.search_content(terms);
 
     // Build map of content matches
     let mut content_map: std::collections::HashMap<String, Vec<ContextLine>> =

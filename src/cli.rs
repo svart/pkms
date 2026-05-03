@@ -69,12 +69,6 @@ pub enum Command {
     Validate {
         #[arg(help = "UUID, file path, or note title")]
         target: Option<String>,
-        #[arg(
-            long,
-            value_name = "FILE",
-            help = "Read command parameters from JSON file"
-        )]
-        input_json: Option<PathBuf>,
     },
     #[command(about = "Comprehensive database statistics")]
     Stats {
@@ -108,12 +102,6 @@ pub enum Command {
             help = "Template with {{title}}, {{content}}, {{neighbors}}, {{backlinks}} placeholders"
         )]
         template: Option<String>,
-        #[arg(
-            long,
-            value_name = "FILE",
-            help = "Read command parameters from JSON file"
-        )]
-        input_json: Option<PathBuf>,
     },
     #[command(about = "Fast UUID/title resolution without full graph load")]
     Resolve {
@@ -155,12 +143,6 @@ pub enum Command {
         target: Option<String>,
         #[arg(short, long, default_value = "10", help = "Number of suggestions")]
         limit: Option<usize>,
-        #[arg(
-            long,
-            value_name = "FILE",
-            help = "Read command parameters from JSON file"
-        )]
-        input_json: Option<PathBuf>,
     },
     #[command(about = "Generate a filename and UUID for a new note")]
     New {
@@ -183,20 +165,6 @@ pub enum Command {
         out: bool,
         #[arg(short, long, help = "Show ASCII graph visualization")]
         graph: bool,
-        #[arg(long, help = "Read targets from stdin, one per line")]
-        from_stdin: bool,
-        #[arg(
-            long,
-            value_name = "FILE",
-            help = "Read targets from file, one per line"
-        )]
-        from_file: Option<PathBuf>,
-        #[arg(
-            long,
-            value_name = "FILE",
-            help = "Read command parameters from JSON file"
-        )]
-        input_json: Option<PathBuf>,
     },
     #[command(about = "Fuzzy search across note titles and content")]
     Query {
@@ -206,12 +174,6 @@ pub enum Command {
         tag: Option<String>,
         #[arg(short, long, help = "Maximum results")]
         limit: Option<usize>,
-        #[arg(
-            long,
-            value_name = "FILE",
-            help = "Read command parameters from JSON file"
-        )]
-        input_json: Option<PathBuf>,
     },
     #[command(about = "Show current pkms configuration")]
     Info,
@@ -228,12 +190,6 @@ pub enum Command {
         to: Option<String>,
         #[arg(short, long, help = "Maximum traversal depth")]
         max_depth: Option<u32>,
-        #[arg(
-            long,
-            value_name = "FILE",
-            help = "Read command parameters from JSON file"
-        )]
-        input_json: Option<PathBuf>,
     },
     #[command(about = "Export subgraph around a note")]
     Subgraph {
@@ -241,12 +197,6 @@ pub enum Command {
         target: Option<String>,
         #[arg(short, long, default_value = "1", help = "Traversal depth")]
         depth: u32,
-        #[arg(
-            long,
-            value_name = "FILE",
-            help = "Read command parameters from JSON file"
-        )]
-        input_json: Option<PathBuf>,
     },
     #[command(about = "List all filetags with note counts")]
     Tags {

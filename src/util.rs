@@ -1,26 +1,6 @@
 use anyhow::Result;
 use serde::Serialize;
-use std::path::{Path, PathBuf};
-
-pub fn load_input_target(
-    input_json: Option<&PathBuf>,
-    cli_target: Option<&str>,
-    field: &'static str,
-    error_msg: &'static str,
-) -> Result<String> {
-    match (cli_target, input_json) {
-        (Some(t), _) => Ok(t.to_string()),
-        (None, Some(path)) => {
-            let content = std::fs::read_to_string(path)?;
-            let params: serde_json::Value = serde_json::from_str(&content)?;
-            params
-                .get(field)
-                .and_then(|v| v.as_str().map(std::string::ToString::to_string))
-                .ok_or_else(|| anyhow::anyhow!("No '{field}' specified in JSON"))
-        }
-        (None, None) => anyhow::bail!(error_msg),
-    }
-}
+use std::path::Path;
 
 pub fn print_count(count: usize, json: bool) {
     if json {

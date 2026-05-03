@@ -52,24 +52,18 @@ Use `resolve` for quick lookups (only reads file headers). Returns UUID, title, 
 ```
 pkms --db ~/Documents/org --json query "search terms" --limit 10
 pkms --db ~/Documents/org --json query "terms" --tag book
-pkms --db ~/Documents/org --json query --input-json params.json
 ```
 ### Retrieve Notes
 ```
 pkms --db ~/Documents/org --json get <uuid-or-title> --depth 1
 pkms --db ~/Documents/org get <uuid-or-title> --depth 1 --graph   # ASCII tree
 pkms --db ~/Documents/org get <uuid-or-title> --out                # Full content
-pkms --db ~/Documents/org get --from-stdin                          # Read targets from stdin
-pkms --db ~/Documents/org get --from-file targets.txt               # Read targets from file
-pkms --db ~/Documents/org get --input-json params.json              # JSON params
 ```
 ### Graph Navigation
 ```
 pkms --db ~/Documents/org --json path "note A" "note B"               # Shortest path
 pkms --db ~/Documents/org --json path "A" "B" --max-depth 10         # Limit traversal depth
-pkms --db ~/Documents/org --json path --input-json params.json       # JSON params
 pkms --db ~/Documents/org --json subgraph <uuid> --depth 2            # Subgraph export
-pkms --db ~/Documents/org --json subgraph --input-json params.json   # JSON params
 ```
 ### Health & Validation
 
@@ -82,7 +76,6 @@ pkms --db ~/Documents/org check                                 # Full scan, exi
 pkms --db ~/Documents/org check --file-links                     # Also check file: links exist on disk
 pkms --db ~/Documents/org check --attachment-links               # Also check attachment: links exist
 pkms --db ~/Documents/org --json validate <target>                # Single note health
-pkms --db ~/Documents/org --json validate --input-json params.json
 pkms --db ~/Documents/org --json orphans                         # Orphan notes
 pkms --db ~/Documents/org --json broken                          # Broken links
 pkms --db ~/Documents/org --json stats                           # DB statistics
@@ -97,7 +90,7 @@ pkms --db ~/Documents/org tags --tag <tag>                       # Notes with a 
 pkms --db ~/Documents/org fix <broken-uuid> <replacement>         # Dry-run
 pkms --db ~/Documents/org fix <broken-uuid> <replacement> --apply # Apply
 pkms --db ~/Documents/org --json suggest <target>                  # Related notes
-pkms --db ~/Documents/org suggest --limit 5 --input-json params.json
+pkms --db ~/Documents/org suggest <target> --limit 5
 ```
 ### Create Notes
 ```
@@ -113,7 +106,6 @@ pkms --db ~/Documents/org context <target> --depth 2 --max-tokens 2000
 pkms --db ~/Documents/org context <target> --include-outgoing false
 pkms --db ~/Documents/org context <target> --include-incoming false
 pkms --db ~/Documents/org context <target> --template "{{title}}: {{content}}"
-pkms --db ~/Documents/org context --input-json params.json
 ```
 ### Configuration
 ```
