@@ -118,18 +118,18 @@ fn dispatch_mutating(
         )
         .map(|()| ExitCode::SUCCESS)?,
         Command::Resolve {
-            target,
+            uuid,
+            title,
             tags,
-            search,
             limit,
             fields,
         } => commands::resolve::run(
             cfg,
             ctx,
             &commands::resolve::ResolveOptions {
-                target: target.as_deref(),
+                uuid: uuid.as_deref(),
+                title: title.as_deref(),
                 tags: tags.as_deref(),
-                search: search.as_deref(),
                 limit: *limit,
                 fields: fields.as_deref(),
             },

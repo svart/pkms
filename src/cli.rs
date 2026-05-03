@@ -79,17 +79,25 @@ pub enum Command {
     },
     #[command(about = "Fast UUID/title resolution without full graph load")]
     Resolve {
-        #[arg(help = "UUID prefix, full UUID, or title to resolve")]
-        target: Option<String>,
         #[arg(
-            short,
             long,
-            help = "Include notes with these filetags (comma-separated)"
+            help = "Search by UUID (substring match)",
+            required_unless_present_any = ["title", "tags"]
+        )]
+        uuid: Option<String>,
+        #[arg(
+            long,
+            help = "Search by title (substring match)",
+            required_unless_present_any = ["uuid", "tags"]
+        )]
+        title: Option<String>,
+        #[arg(
+            long,
+            help = "Include notes with these filetags (comma-separated)",
+            required_unless_present_any = ["uuid", "title"]
         )]
         tags: Option<String>,
-        #[arg(short, long, help = "Search in aliases and titles (substring)")]
-        search: Option<String>,
-        #[arg(short, long, default_value = "30", help = "Maximum results")]
+        #[arg(long, default_value = "30", help = "Maximum results")]
         limit: Option<usize>,
         #[arg(
             long,

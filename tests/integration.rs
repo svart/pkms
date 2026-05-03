@@ -496,7 +496,8 @@ fn test_context_note_not_found() {
 #[test]
 fn test_resolve_human() {
     let (_dir, root) = setup_db();
-    let (stdout, _stderr, status) = run(&["--db", root.to_str().unwrap(), "resolve"]);
+    let (stdout, _stderr, status) =
+        run(&["--db", root.to_str().unwrap(), "resolve", "--title", "Note"]);
     assert!(status.success());
     assert!(stdout.contains("Note A") || stdout.contains("Total:"));
 }
@@ -510,6 +511,8 @@ fn test_resolve_json() {
         "--output-format",
         "json",
         "resolve",
+        "--title",
+        "Note",
     ]);
     assert!(status.success());
     assert!(v.get("query").is_some());
@@ -528,6 +531,8 @@ fn test_resolve_ndjson() {
         "--output-format",
         "ndjson",
         "resolve",
+        "--title",
+        "Note",
     ]);
     assert!(status.success());
     for line in stdout.lines() {
@@ -545,6 +550,7 @@ fn test_resolve_query() {
         "--output-format",
         "json",
         "resolve",
+        "--title",
         "Note",
     ]);
     assert!(status.success());
@@ -562,6 +568,8 @@ fn test_resolve_fields_human() {
         "--db",
         root.to_str().unwrap(),
         "resolve",
+        "--title",
+        "Note",
         "--fields",
         "uuid,title",
     ]);
@@ -578,6 +586,8 @@ fn test_resolve_fields_ndjson() {
         "--output-format",
         "ndjson",
         "resolve",
+        "--title",
+        "Note",
         "--fields",
         "uuid,title",
     ]);
@@ -1219,6 +1229,8 @@ fn test_empty_db_resolve() {
         "--output-format",
         "json",
         "resolve",
+        "--title",
+        "nothing",
     ]);
     assert!(status.success());
     assert_eq!(v["total"], 0);
@@ -1332,6 +1344,8 @@ fn test_all_commands_json() {
                 "--output-format".into(),
                 "json".into(),
                 "resolve".into(),
+                "--title".into(),
+                "Note".into(),
             ],
             true,
         ),
@@ -1540,6 +1554,7 @@ fn test_snapshot_path() {
 #[test]
 fn test_snapshot_resolve() {
     let (_dir, root) = setup_db();
-    let (stdout, _stderr, _status) = run(&["--db", root.to_str().unwrap(), "resolve", "Note"]);
+    let (stdout, _stderr, _status) =
+        run(&["--db", root.to_str().unwrap(), "resolve", "--title", "Note"]);
     insta::assert_snapshot!("resolve_query_human", normalize_snapshot(&stdout, &root));
 }

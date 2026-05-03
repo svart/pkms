@@ -35,11 +35,11 @@ These flags work with every command:
 
 ### UUID Resolution
 ```
-pkms --db ~/Documents/org --output-format json resolve <search-term>
-pkms --db ~/Documents/org --output-format json resolve --search <substring>
+pkms --db ~/Documents/org --output-format json resolve --uuid <uuid>
+pkms --db ~/Documents/org --output-format json resolve --title "search term"
 pkms --db ~/Documents/org --output-format json resolve --tags "tag1,tag2"
-pkms --db ~/Documents/org --output-format json resolve --limit 20
-pkms --db ~/Documents/org --output-format json resolve "uuid" --fields uuid,title,path
+pkms --db ~/Documents/org --output-format json resolve --title "term" --limit 20
+pkms --db ~/Documents/org --output-format json resolve --uuid <uuid> --fields uuid,title,path
 ```
 Use `resolve` for quick lookups (only reads file headers). Returns UUID, title, path, tags, aliases. `--fields` selects which columns to include, `--limit` caps results.
 
@@ -132,15 +132,15 @@ When the user asks about a topic, use this sequence:
 When the user mentions fixing their database:
 1. `check` to see the health status and exit code
 2. `broken` to list all broken links grouped by target UUID
-3. `resolve <concept>` to find the correct replacement note UUID
+3. `resolve --title <concept>` to find the correct replacement note UUID
 4. `fix <broken-uuid> <replacement> --apply` for each broken UUID batch
 5. `orphans` to find notes needing connections
-6. `resolve <orphan-title>` to find the orphan's UUID, then `suggest <uuid>` to find related notes for linking
+6. `resolve --title <orphan-title>` to find the orphan's UUID, then `suggest <uuid>` to find related notes for linking
 
 ### Note Discovery
 When the user wants to find something in their notes:
 1. `query "terms" --output-format json --limit 20` for broad search
-2. `resolve <term>` for fast targeted lookup
+2. `resolve --title <term>` for fast targeted lookup
 3. `stats --tags` to browse by filetag
 4. `stats --hubs` to find highly-connected "hub" notes
 
@@ -166,7 +166,7 @@ echo -e "\n[[id:<target-uuid>][link text]]" >> ~/Documents/org/<path-to-orphan>
 
 **Note**: `suggest` works best for notes with descriptive titles and rich
 content. For short-content notes (e.g., "CQI", "MCS"), the content keyword
-matching may produce noisy results. In those cases, use `resolve <topic>`
+matching may produce noisy results. In those cases, use `resolve --title <topic>`
 to find the correct related note directly, or use `query <terms> --limit 10`
 for broader discovery.
 

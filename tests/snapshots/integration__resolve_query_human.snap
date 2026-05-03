@@ -3,26 +3,25 @@ source: tests/integration.rs
 assertion_line: 1337
 expression: "normalize_snapshot(&stdout, &root)"
 ---
-Resolved: "Note"
 Total: 10
-  Headings Note (77777777)
+  Note C
+         UUID: cccccccc-cccc-4ccc-cccc-cccccccccccc
+  Note B
+         UUID: bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb
+  Note A
+         UUID: aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa
+  Headings Note
          UUID: 77777777-7777-4777-7777-777777777777
-  Orphan Note (dddddddd)
+  Orphan Note
          UUID: dddddddd-dddd-4ddd-dddd-dddddddddddd
-  Attachment Link Note (aaaaaaaa)
+  Attachment Link Note
          UUID: aaaaaaaa-aaaa-4aaa-aaaa-bbbbbbbbbbbb
-  File Link Note (88888888)
+  File Link Note
          UUID: 88888888-8888-4888-8888-888888888888
-  Aliased Note (66666666)
+  Aliased Note
          UUID: 66666666-6666-4666-6666-666666666666
-  Tagged Note (55555555)
+  Tagged Note
          UUID: 55555555-5555-4555-5555-555555555555
          Tags: learning, emacs
-  Broken Note (eeeeeeee)
+  Broken Note
          UUID: eeeeeeee-eeee-4eee-eeee-eeeeeeeeeeee
-  Note C (cccccccc)
-         UUID: cccccccc-cccc-4ccc-cccc-cccccccccccc
-  Note B (bbbbbbbb)
-         UUID: bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb
-  Note A (aaaaaaaa)
-         UUID: aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa
