@@ -85,7 +85,6 @@ pkms get <target> --depth 1 --graph        # ASCII art visualization
 pkms get <target> --out                    # Show full note content
 pkms path <from> <to>                      # Shortest path between notes
 pkms path "A" "B" --max-depth 10           # Limit traversal depth
-pkms subgraph <target> --depth 2           # Export subgraph with stats
 ```
 
 `get` traverses the link graph up to N hops, showing forward links
@@ -95,17 +94,12 @@ and backlinks at each depth. `--graph` renders a tree visualization.
 `path` finds the shortest connection through the directed graph using
 BFS, traversing both outgoing and incoming links.
 
-`subgraph` exports all nodes and edges within depth with graph
-density statistics (vertex count, edge count, avg order).
-
 ### Search & Query
 
 ```
 pkms query "search terms"                 # Fuzzy search titles + content
 pkms query "search terms" --tag book      # Filter by filetag
 pkms query "search terms" --limit 5       # Limit results
-pkms tags                                 # List all filetags with counts
-pkms tags --tag book                      # List notes with a specific tag
 ```
 
 `query` searches note titles, aliases, filetags, refs, and content.
@@ -116,14 +110,15 @@ Results are scored and sorted by relevance.
 ```
 pkms stats                     # Comprehensive database statistics
 pkms stats --days 30           # Include recently modified notes
+pkms stats --hubs              # Show most-connected notes
+pkms stats --hubs 20           # Show top 20 hubs
+pkms stats --tags              # List all filetags with counts
 pkms orphans                   # List notes with no links
 pkms broken                    # List all dangling/broken links
-pkms hubs                      # List most-connected notes
-pkms hubs --limit 20           # Show top 20 hubs
 ```
 
 `stats` shows total notes, links breakdown, orphans, broken links,
-disk size, directory breakdown, and top hub nodes.
+and disk size. Pass `--hubs` or `--tags` for additional detail.
 
 ### Fix Issues
 
@@ -186,19 +181,16 @@ pkms init-config --db ~/Documents/org  # With db_root pre-filled
 |---------------|--------------------------------------------------|
 | `check`       | Full database health scan                        |
 | `validate`    | Validate a specific note                         |
-| `stats`       | Comprehensive database statistics                |
+| `stats`       | Comprehensive database statistics (+ --hubs, --tags) |
 | `orphans`     | List orphan notes (no links)                     |
 | `broken`      | List broken/dangling links                       |
-| `hubs`        | List most-connected notes                        |
 | `resolve`     | Fast UUID/title resolution (header-only scan)    |
 | `fix`         | Replace broken UUIDs across all files            |
 | `suggest`     | Find related notes by multi-factor scoring       |
 | `context`     | Build AI context window                          |
 | `get`         | Retrieve note with neighbors                     |
 | `path`        | Shortest path between two notes                  |
-| `subgraph`    | Export subgraph with stats                       |
 | `query`       | Fuzzy search titles and content                  |
-| `tags`        | List filetags with counts                        |
 | `new`         | Generate filename/UUID for a new note            |
 | `info`        | Show current configuration                       |
 | `init-config` | Generate default config file                     |

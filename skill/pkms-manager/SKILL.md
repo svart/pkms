@@ -58,7 +58,6 @@ pkms --db ~/Documents/org get <uuid-or-title> --out                # Full conten
 ```
 pkms --db ~/Documents/org --output-format json path "note A" "note B"               # Shortest path
 pkms --db ~/Documents/org --output-format json path "A" "B" --max-depth 10         # Limit traversal depth
-pkms --db ~/Documents/org --output-format json subgraph <uuid> --depth 2            # Subgraph export
 ```
 ### Health & Validation
 
@@ -75,10 +74,9 @@ pkms --db ~/Documents/org --output-format json orphans                         #
 pkms --db ~/Documents/org --output-format json broken                          # Broken links
 pkms --db ~/Documents/org --output-format json stats                           # DB statistics
 pkms --db ~/Documents/org --output-format json stats --days 30                 # Recent changes
-pkms --db ~/Documents/org --output-format json hubs                            # Most-connected notes
-pkms --db ~/Documents/org hubs --limit 5                         # Top 5 hubs
-pkms --db ~/Documents/org tags                                   # Filetags with counts
-pkms --db ~/Documents/org tags --tag <tag>                       # Notes with a tag
+pkms --db ~/Documents/org --output-format json stats --hubs                    # Most-connected notes
+pkms --db ~/Documents/org stats --hubs 5                        # Top 5 hubs
+pkms --db ~/Documents/org stats --tags                          # Filetags with counts
 ```
 ### Fix Issues
 ```
@@ -117,7 +115,7 @@ Every command that supports `--output-format json` has a corresponding JSON Sche
 | Command     | Schema file              | Top-level keys |
 |-------------|-------------------------|----------------|
 | `check`     | `schemas/check.json`    | `db_root`, `stats`, `duplicates`, `broken_links`, `broken_file_links`, `broken_attachment_links`, `failed_files`, `healthy` |
-| `stats`     | `schemas/stats.json`    | `db_root`, `total_notes`, `total_links`, `hubs`, `directories`, `recent_notes` |
+| `stats`     | `schemas/stats.json`    | `db_root`, `total_notes`, `total_links`, `directories`, `recent_notes` |
 | `resolve`   | `schemas/resolve.json`  | `query`, `total`, `results[]` (uuid, title, path, filetags, aliases) |
 | `suggest`   | `schemas/suggest.json`  | `target`, `target_uuid`, `suggestions[]` (uuid, title, score, scores{}, reasons[]) |
 | `query`     | `schemas/query.json`    | `query`, `total_results`, `results[]` (uuid, title, score, matches[], content_matches[]) |
@@ -127,7 +125,7 @@ Every command that supports `--output-format json` has a corresponding JSON Sche
 
 ### Research / Context Building
 When the user asks about a topic, use this sequence:
-1. Find hubs `pkms hubs --limit <NUMBER>`.
+1. Find hubs `pkms stats --hubs`.
 2. Go through the graph from related hub(s) note by note via forward and backward links exploring the area and collecting necessary information from notes content.
 1. `resolve` to find the note UUID quickly
 2. `context <uuid> --depth 2` to build a rich context window with linked neighbors
@@ -146,21 +144,21 @@ When the user mentions fixing their database:
 When the user wants to find something in their notes:
 1. `query "terms" --output-format json --limit 20` for broad search
 2. `resolve <term>` for fast targeted lookup
-3. `tags` to browse by filetag
-4. `hubs` to find highly-connected "hub" notes
+3. `stats --tags` to browse by filetag
+4. `stats --hubs` to find highly-connected "hub" notes
 
 ### JSON Output Shapes
 
 Always use `--output-format json` for AI consumption. Each command has its own output shape — refer to the JSON schemas for precise field definitions. Common patterns:
 
-- **Single-item commands** (`check`, `stats`, `validate`, `get`, `context`, `fix`, `new`, `path`, `subgraph`, `info`): each returns a top-level object with command-specific keys.
+- **Single-item commands** (`check`, `validate`, `get`, `context`, `fix`, `new`, `path`, `info`): each returns a top-level object with command-specific keys. `stats` is also single-item unless `--hubs` or `--tags` is passed.
 - **List commands** use varying key names for their result arrays:
   - `resolve` returns `{"query", "total", "results": [...]}`
   - `query` returns `{"query", "total_results", "results": [...]}`
   - `orphans` returns `{"count", "orphans": [...]}`
   - `broken` returns `{"count", "links": [...]}`
-  - `hubs` returns `{"limit", "hubs": [...]}`
-  - `tags` returns `{"tags": [...]}`
+  - `stats --hubs` returns `{"limit", "hubs": [...]}`
+  - `stats --tags` returns `{"tags": [...]}`
   - `suggest` returns `{"target", "target_uuid", "suggestions": [...]}`
 
 ### Linking Orphans to the Graph

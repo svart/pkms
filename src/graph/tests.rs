@@ -297,26 +297,6 @@ fn test_url_and_file_links_not_counted_as_broken() {
 }
 
 #[test]
-fn test_notes_by_tag() {
-    let results = vec![
-        make_note_full("a", "Tagged A", vec![], vec!["foo".to_string()], vec![]),
-        make_note_full(
-            "b",
-            "Tagged B",
-            vec![],
-            vec!["foo".to_string(), "bar".to_string()],
-            vec![],
-        ),
-        make_note_full("c", "Plain C", vec![], vec![], vec![]),
-    ];
-    let graph = Graph::build(results);
-    let foo_notes = graph.notes_by_tag("foo");
-    assert_eq!(foo_notes.len(), 2);
-    let bar_notes = graph.notes_by_tag("bar");
-    assert_eq!(bar_notes.len(), 1);
-}
-
-#[test]
 fn test_all_tags() {
     let results = vec![
         make_note_full("a", "A", vec![], vec!["alpha".to_string()], vec![]),

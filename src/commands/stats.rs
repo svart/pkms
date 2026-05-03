@@ -1,6 +1,9 @@
+use crate::cli::OutputFormat;
 use crate::config::Config;
 use crate::graph::Graph;
 use crate::output::OutputContext;
+use crate::parser::Link;
+use crate::util;
 use anyhow::Result;
 use serde::Serialize;
 
@@ -17,7 +20,6 @@ pub struct StatsOutput {
     pub broken_links: usize,
     pub disk_size_bytes: u64,
     pub directories: Vec<DirEntry>,
-    pub hubs: Vec<HubEntry>,
     pub recent_notes: Option<Vec<RecentNote>>,
 }
 
@@ -28,10 +30,19 @@ pub struct DirEntry {
 }
 
 #[derive(Serialize)]
-pub struct HubEntry {
+pub struct HubEntryDetailed {
+    pub rank: usize,
     pub uuid: String,
     pub title: String,
     pub degree: usize,
+    pub outgoing: usize,
+    pub incoming: usize,
+}
+
+#[derive(Serialize)]
+pub struct HubsOutput {
+    pub limit: usize,
+    pub hubs: Vec<HubEntryDetailed>,
 }
 
 #[derive(Serialize)]
@@ -41,15 +52,148 @@ pub struct RecentNote {
     pub path: String,
 }
 
-#[allow(clippy::cast_precision_loss)]
+#[derive(Serialize)]
+pub struct TagsOutput {
+    pub tags: Vec<TagEntry>,
+}
+
+#[derive(Serialize)]
+pub struct TagEntry {
+    pub tag: String,
+    pub count: usize,
+    pub notes: Vec<TagNote>,
+}
+
+#[derive(Serialize)]
+pub struct TagNote {
+    pub uuid: String,
+    pub title: String,
+    pub path: String,
+}
+
 pub fn run(
     config: &Config,
     ctx: &OutputContext,
     days: Option<u32>,
+    hubs_limit: Option<usize>,
+    show_tags: bool,
     db_cli: Option<&std::path::Path>,
 ) -> Result<()> {
     let graph = Graph::load(config, db_cli)?;
     let db_root = config.resolve_db_root(db_cli)?;
+
+    if let Some(limit) = hubs_limit {
+        return print_hubs(ctx, &graph, limit);
+    }
+
+    if show_tags {
+        return print_tags(ctx, &graph);
+    }
+
+    print_stats(config, ctx, days, &graph, &db_root)
+}
+
+fn print_hubs(ctx: &OutputContext, graph: &Graph, limit: usize) -> Result<()> {
+    let hubs = graph.hubs(limit);
+
+    let entries: Vec<HubEntryDetailed> = hubs
+        .iter()
+        .enumerate()
+        .map(|(i, (n, deg))| {
+            let outgoing = n
+                .outgoing
+                .iter()
+                .filter(|l| matches!(l, Link::Internal(_)))
+                .count();
+            let incoming = graph.backlinks.get(&n.uuid).map_or(0, std::vec::Vec::len);
+            HubEntryDetailed {
+                rank: i + 1,
+                uuid: n.uuid.clone(),
+                title: n.title.clone(),
+                degree: *deg,
+                outgoing,
+                incoming,
+            }
+        })
+        .collect();
+
+    match ctx.format {
+        OutputFormat::Text => {
+            println!("Top {limit} hubs:");
+            for (i, (node, deg)) in hubs.iter().enumerate() {
+                let outgoing = node
+                    .outgoing
+                    .iter()
+                    .filter(|l| matches!(l, Link::Internal(_)))
+                    .count();
+                let incoming = graph
+                    .backlinks
+                    .get(&node.uuid)
+                    .map_or(0, std::vec::Vec::len);
+                println!(
+                    "  {:3}. {:40} {} links ({} out / {} in)  {}",
+                    i + 1,
+                    node.title,
+                    deg,
+                    outgoing,
+                    incoming,
+                    util::short_uuid(&node.uuid)
+                );
+            }
+        }
+        OutputFormat::Json => {
+            ctx.print_json(&HubsOutput {
+                limit,
+                hubs: entries,
+            })?;
+        }
+        OutputFormat::Ndjson => {
+            ctx.print_ndjson(&entries)?;
+        }
+    }
+
+    Ok(())
+}
+
+fn print_tags(ctx: &OutputContext, graph: &Graph) -> Result<()> {
+    let tags = graph.all_tags();
+    let entries: Vec<TagEntry> = tags
+        .iter()
+        .map(|(tag, count)| TagEntry {
+            tag: tag.clone(),
+            count: *count,
+            notes: vec![],
+        })
+        .collect();
+
+    match ctx.format {
+        OutputFormat::Text => {
+            println!("Filetags (count):");
+            for (tag, count) in &tags {
+                println!("  {tag:30} {count}");
+            }
+            println!();
+            println!("Total unique tags: {}", tags.len());
+        }
+        OutputFormat::Json => {
+            ctx.print_json(&TagsOutput { tags: entries })?;
+        }
+        OutputFormat::Ndjson => {
+            ctx.print_ndjson(&entries)?;
+        }
+    }
+
+    Ok(())
+}
+
+#[allow(clippy::cast_precision_loss)]
+fn print_stats(
+    _config: &Config,
+    ctx: &OutputContext,
+    days: Option<u32>,
+    graph: &Graph,
+    db_root: &std::path::Path,
+) -> Result<()> {
     let stats = graph.stats();
 
     let avg = if stats.total_notes > 0 {
@@ -58,8 +202,7 @@ pub fn run(
         0.0
     };
 
-    let dirs = graph.directory_breakdown(&db_root);
-    let hubs = graph.hubs(10);
+    let dirs = graph.directory_breakdown(db_root);
     let disk_size = graph.disk_size();
 
     if ctx.is_json() {
@@ -79,14 +222,6 @@ pub fn run(
                 .map(|(d, c)| DirEntry {
                     directory: d,
                     count: c,
-                })
-                .collect(),
-            hubs: hubs
-                .into_iter()
-                .map(|(n, d)| HubEntry {
-                    uuid: n.uuid.clone(),
-                    title: n.title.clone(),
-                    degree: d,
                 })
                 .collect(),
             recent_notes: days.map(|d| {
@@ -120,11 +255,6 @@ pub fn run(
             let recent = graph.notes_since(d);
             println!("  Recent ({} days):   {}", d, recent.len());
         }
-        println!();
-        println!("Top hubs:");
-        for (i, (node, deg)) in hubs.iter().enumerate() {
-            println!("  {:3}. {:40} {} links", i + 1, node.title, deg);
-        }
     }
 
     Ok(())
@@ -134,7 +264,7 @@ fn format_size(bytes: u64) -> String {
     const UNITS: &[&str] = &["B", "KB", "MB", "GB"];
     let mut unit = 0;
     let mut scaled = bytes;
-    while scaled > 1024 && unit < UNITS.len() - 1 {
+    while scaled >= 1024 && unit < UNITS.len() - 1 {
         scaled /= 1024;
         unit += 1;
     }

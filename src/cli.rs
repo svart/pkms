@@ -54,16 +54,20 @@ pub enum Command {
     Stats {
         #[arg(short, long, help = "Show notes modified in last N days")]
         days: Option<u32>,
+        #[arg(
+            long,
+            num_args = 0..=1,
+            default_missing_value = "10",
+            help = "Show most-connected notes (default limit: 10)"
+        )]
+        hubs: Option<usize>,
+        #[arg(long, help = "List all filetags with note counts")]
+        tags: bool,
     },
     #[command(about = "List orphan notes (no incoming or outgoing links)")]
     Orphans,
     #[command(about = "List broken/dangling links")]
     Broken,
-    #[command(about = "List most-connected notes (hubs)")]
-    Hubs {
-        #[arg(short, long, default_value = "10", help = "Number of top hubs to show")]
-        limit: usize,
-    },
     #[command(about = "Build a context window for AI consumption")]
     Context {
         #[arg(help = "UUID, file path, or note title")]
@@ -170,10 +174,5 @@ pub enum Command {
         to: Option<String>,
         #[arg(short, long, help = "Maximum traversal depth")]
         max_depth: Option<u32>,
-    },
-    #[command(about = "List all filetags with note counts")]
-    Tags {
-        #[arg(short, long, help = "List all notes with this tag")]
-        tag: Option<String>,
     },
 }

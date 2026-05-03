@@ -337,7 +337,6 @@ fn test_stats_json() {
     ]);
     assert!(status.success());
     assert!(v.get("total_notes").is_some());
-    assert!(v.get("hubs").is_some());
     assert!(v.get("directories").is_some());
 }
 
@@ -447,42 +446,30 @@ fn test_broken_ndjson() {
 // HUBS
 // ----------------------------------------------------------------
 #[test]
-fn test_hubs_human() {
+fn test_stats_hubs() {
     let (_dir, root) = setup_db();
-    let (_stdout, _stderr, status) = run(&["--db", root.to_str().unwrap(), "hubs"]);
+    let (_stdout, _stderr, status) = run(&["--db", root.to_str().unwrap(), "stats", "--hubs"]);
     assert!(status.success());
 }
 
 #[test]
-fn test_hubs_json() {
+fn test_stats_hubs_json() {
     let (_dir, root) = setup_db();
     let (v, status) = run_json(&[
         "--db",
         root.to_str().unwrap(),
         "--output-format",
         "json",
-        "hubs",
+        "stats",
+        "--hubs",
     ]);
     assert!(status.success());
-    assert!(v["hubs"].as_array().map_or(false, |h| !h.is_empty()));
+    assert!(
+        v.get("hubs")
+            .and_then(|h| h.as_array())
+            .map_or(false, |h| !h.is_empty())
+    );
     assert!(v["hubs"][0]["uuid"].is_string());
-}
-
-#[test]
-fn test_hubs_ndjson() {
-    let (_dir, root) = setup_db();
-    let (stdout, _stderr, status) = run(&[
-        "--db",
-        root.to_str().unwrap(),
-        "--output-format",
-        "ndjson",
-        "hubs",
-    ]);
-    assert!(status.success());
-    for line in stdout.lines() {
-        let v: serde_json::Value = serde_json::from_str(line).unwrap();
-        assert!(v.get("uuid").is_some());
-    }
 }
 
 // ----------------------------------------------------------------
@@ -1136,73 +1123,27 @@ fn test_path_not_found() {
 // TAGS
 // ----------------------------------------------------------------
 #[test]
-fn test_tags_human() {
+fn test_stats_tags() {
     let (_dir, root) = setup_db();
-    let (stdout, _stderr, status) = run(&["--db", root.to_str().unwrap(), "tags"]);
+    let (stdout, _stderr, status) = run(&["--db", root.to_str().unwrap(), "stats", "--tags"]);
     assert!(status.success());
     assert!(stdout.contains("learning") || stdout.contains("emacs"));
 }
 
 #[test]
-fn test_tags_json() {
+fn test_stats_tags_json() {
     let (_dir, root) = setup_db();
     let (v, status) = run_json(&[
         "--db",
         root.to_str().unwrap(),
         "--output-format",
         "json",
-        "tags",
+        "stats",
+        "--tags",
     ]);
     assert!(status.success());
     assert!(v["tags"].as_array().map_or(false, |t| !t.is_empty()));
     assert!(v["tags"][0]["tag"].is_string());
-}
-
-#[test]
-fn test_tags_ndjson() {
-    let (_dir, root) = setup_db();
-    let (stdout, _stderr, status) = run(&[
-        "--db",
-        root.to_str().unwrap(),
-        "--output-format",
-        "ndjson",
-        "tags",
-    ]);
-    assert!(status.success());
-    for line in stdout.lines() {
-        let v: serde_json::Value = serde_json::from_str(line).unwrap();
-        assert!(v.get("tag").is_some());
-    }
-}
-
-#[test]
-fn test_tags_tag_filter() {
-    let (_dir, root) = setup_db();
-    let (stdout, _stderr, status) =
-        run(&["--db", root.to_str().unwrap(), "tags", "--tag", "learning"]);
-    assert!(status.success());
-    assert!(stdout.contains("Tag: learning") || stdout.contains("Tagged Note"));
-}
-
-#[test]
-fn test_tags_tag_filter_json() {
-    let (_dir, root) = setup_db();
-    let (v, status) = run_json(&[
-        "--db",
-        root.to_str().unwrap(),
-        "--output-format",
-        "json",
-        "tags",
-        "--tag",
-        "learning",
-    ]);
-    assert!(status.success());
-    assert_eq!(v["tags"][0]["tag"], "learning");
-    assert!(
-        v["tags"][0]["notes"]
-            .as_array()
-            .map_or(false, |n| !n.is_empty())
-    );
 }
 
 // ----------------------------------------------------------------
@@ -1487,7 +1428,8 @@ fn test_all_commands_json() {
                 db.clone(),
                 "--output-format".into(),
                 "json".into(),
-                "hubs".into(),
+                "stats".into(),
+                "--hubs".into(),
             ],
             true,
         ),
@@ -1497,7 +1439,8 @@ fn test_all_commands_json() {
                 db.clone(),
                 "--output-format".into(),
                 "json".into(),
-                "tags".into(),
+                "stats".into(),
+                "--tags".into(),
             ],
             true,
         ),
@@ -1721,13 +1664,6 @@ fn test_snapshot_broken() {
     let (_dir, root) = setup_db();
     let (stdout, _stderr, _status) = run(&["--db", root.to_str().unwrap(), "broken"]);
     insta::assert_snapshot!("broken_human", normalize_snapshot(&stdout, &root));
-}
-
-#[test]
-fn test_snapshot_tags() {
-    let (_dir, root) = setup_db();
-    let (stdout, _stderr, _status) = run(&["--db", root.to_str().unwrap(), "tags"]);
-    insta::assert_snapshot!("tags_human", normalize_snapshot(&stdout, &root));
 }
 
 #[test]

@@ -1,9 +1,0 @@
----
-source: tests/integration.rs
-expression: "normalize_snapshot(&stdout, &root)"
----
-Filetags (count):
-  emacs                          1
-  learning                       1
-
-Total unique tags: 2

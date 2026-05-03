@@ -87,11 +87,4 @@ impl Graph {
         tags.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
         tags
     }
-
-    pub fn notes_by_tag(&self, tag: &str) -> Vec<&super::Node> {
-        self.nodes
-            .values()
-            .filter(|n| n.filetags.iter().any(|t| t == tag))
-            .collect()
-    }
 }

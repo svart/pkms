@@ -38,8 +38,8 @@ src/
   graph/            # In-memory graph module (split into submodules)
     mod.rs          # Struct defs: Node, Graph, FileScanResult; load/scan/find_node/resolve_target
     builder.rs      # Graph::build constructor
-    traversal.rs    # get_neighbors, find_shortest_path, collect_subgraph (BFS)
-    search.rs       # search, search_content, all_tags, notes_by_tag
+    traversal.rs    # get_neighbors, find_shortest_path (BFS)
+    search.rs       # search, search_content, all_tags
     analytics.rs    # hubs, orphan_nodes, broken_links_list, stats, directory_breakdown
     tests.rs        # Unit + proptest tests for graph
   commands/         # One file per subcommand
@@ -47,18 +47,15 @@ src/
     info.rs         # Show resolved config
     check.rs        # Full DB health scan, returns healthy: bool
     validate.rs     # Single note health check
-    stats.rs        # Comprehensive statistics
+    stats.rs        # Comprehensive statistics (+ --hubs, --tags flags)
     orphans.rs      # List orphan notes
     broken.rs       # List broken links
-    hubs.rs         # List most-connected notes
     resolve.rs      # Fast UUID resolution (header-only scan, ~0.5s)
     fix.rs          # Replace broken UUIDs across all files
     suggest.rs      # Find related notes by multi-factor scoring (takes UUID only)
     get.rs          # Retrieve note with neighbors at depth N
     path.rs         # Shortest path (BFS) between two notes
-    subgraph.rs     # Export subgraph with stats
     query.rs        # Fuzzy search titles + content
-    tags.rs         # List filetags with counts
     new.rs          # Generate UUID + filename for new note
     context.rs      # Build AI context window with token budget
 schemas/            # JSON Schema files for every command's JSON output
@@ -69,7 +66,7 @@ tests/
 ## How to add a new command
 
 1. **`src/cli.rs`** — Add variant to `Command` enum with clap attributes
-2. **`src/commands/<name>.rs`** — Create file with `pub fn run(...)` that accepts `&Config, &OutputContext, verbose: bool, ...` and returns `anyhow::Result<()>`
+2. **`src/commands/<name>.rs`** — Create file with `pub fn run(...)` that accepts `&Config, &OutputContext, ...` and returns `anyhow::Result<()>`
 3. **`src/commands/mod.rs`** — Add `pub mod <name>;`
 4. **`src/main.rs`** — Add `Command::<Name> => commands::<name>::run(...)` arm
 5. **`tests/integration.rs`** — Add test calling the binary
@@ -91,7 +88,7 @@ If performance optimization is needed, compute from scratch on every run — do 
 - **No comments** unless the logic is non-obvious. Code should be self-documenting.
 - **`anyhow::Result`** for all fallible functions. No custom error types.
 - **`serde::Serialize`** for all output structs. Every command supports `--output-format json`.
-- **`Graph::load(config, db_cli, verbose)`** to load the full database (discovers + parses 750+ files, ~3s). Expensive — cache results when possible.
+- **`Graph::load(config, db_cli)`** to load the full database (discovers + parses 750+ files, ~3s). Expensive — cache results when possible.
 - **`resolve`** command is fast (~0.5s) because it scans only file headers. Use for quick lookups.
 - **`#[allow(dead_code)]`** on struct fields kept for future use. Remove if never needed after implementation.
 - **Use `ctx.print_count`**, **`ctx.print_json`**, and **`ctx.print_ndjson`** from `OutputContext` for output dispatch. Every command receives `&OutputContext`.
@@ -109,8 +106,8 @@ Graph { nodes: HashMap<uuid, Node>, path_to_uuid, title_to_uuid, backlinks, brok
 ## Command pattern
 
 Every command's `run()` follows the same pattern:
-1. Accept `&Config, &OutputContext, verbose: bool, ...specific_args..., db_cli: Option<&Path>`
-2. Call `Graph::load(config, db_cli, verbose)` if the full graph is needed
+1. Accept `&Config, &OutputContext, ...specific_args..., db_cli: Option<&Path>`
+2. Call `Graph::load(config, db_cli)` if the full graph is needed
 3. Perform the command logic
 4. Dispatch output using `ctx.print_json()`, `ctx.print_ndjson()`, or the `OutputFormat` match
 5. For text output, format with `println!`
@@ -123,7 +120,7 @@ These schemas define the exact structure and types for reliable programmatic con
 | Command     | Schema file             | Top-level keys |
 |-------------|------------------------|----------------|
 | `check`     | `schemas/check.json`   | `db_root`, `stats`, `duplicates`, `broken_links`, `failed_files`, `healthy` |
-| `stats`     | `schemas/stats.json`   | `db_root`, `total_notes`, `total_links`, `hubs`, `directories`, `recent_notes` |
+| `stats`     | `schemas/stats.json`   | `db_root`, `total_notes`, `total_links`, `directories`, `recent_notes` |
 | `resolve`   | `schemas/resolve.json` | `query`, `total`, `results[]` (uuid, title, path, filetags, aliases) |
 | `suggest`   | `schemas/suggest.json` | `target`, `target_uuid`, `suggestions[]` (uuid, title, score, scores{}, reasons[]) |
 | `query`     | `schemas/query.json`   | `query`, `total_results`, `results[]` (uuid, title, score, matches[], content_matches[]) |
@@ -131,11 +128,8 @@ These schemas define the exact structure and types for reliable programmatic con
 | `validate`  | —                      | `uuid`, `title`, `path`, `healthy`, `issues[]`, `broken_internal[]` |
 | `orphans`   | —                      | `count`, `orphans[]` (uuid, title, path, filetags) |
 | `broken`    | —                      | `count`, `links[]` (source_uuid, source_title, target_uuid) |
-| `hubs`      | —                      | `limit`, `hubs[]` (rank, uuid, title, degree, outgoing, incoming) |
-| `tags`      | —                      | `tags[]` (tag, count, notes[]) |
 | `get`       | —                      | `node` (uuid, title, path, filetags), `neighbors` |
 | `path`      | —                      | `from`, `to`, `found`, `hops`, `path[]` (uuid, title) |
-| `subgraph`  | —                      | `root_uuid`, `root_title`, `vertex_count`, `edge_count`, `nodes[]`, `edges[]` |
 | `fix`       | —                      | `broken_uuid`, `replacement_uuid`, `replacement_title`, `files_affected[]`, `total_replacements`, `applied` |
 | `new`       | —                      | `uuid`, `filename`, `path`, `title`, `created` |
 | `info`      | —                      | `config`, `config_path`, `cli_overrides` |

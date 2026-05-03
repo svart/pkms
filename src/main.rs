@@ -66,8 +66,9 @@ fn dispatch_simple(
             commands::validate::run(cfg, ctx, target.as_deref(), cli.db.as_deref())
                 .map(|()| ExitCode::SUCCESS)?
         }
-        Command::Stats { days } => {
-            commands::stats::run(cfg, ctx, *days, cli.db.as_deref()).map(|()| ExitCode::SUCCESS)?
+        Command::Stats { days, hubs, tags } => {
+            commands::stats::run(cfg, ctx, *days, *hubs, *tags, cli.db.as_deref())
+                .map(|()| ExitCode::SUCCESS)?
         }
         Command::Orphans => {
             commands::orphans::run(cfg, ctx, cli.db.as_deref()).map(|()| ExitCode::SUCCESS)?
@@ -75,15 +76,10 @@ fn dispatch_simple(
         Command::Broken => {
             commands::broken::run(cfg, ctx, cli.db.as_deref()).map(|()| ExitCode::SUCCESS)?
         }
-        Command::Hubs { limit } => {
-            commands::hubs::run(cfg, ctx, *limit, cli.db.as_deref()).map(|()| ExitCode::SUCCESS)?
-        }
         Command::Info => {
             commands::info::run(cfg, ctx, cli.db.as_deref()).map(|()| ExitCode::SUCCESS)?
         }
         Command::InitConfig { db } => init_config(db.as_deref(), ctx)?,
-        Command::Tags { tag } => commands::tags::run(cfg, ctx, tag.as_deref(), cli.db.as_deref())
-            .map(|()| ExitCode::SUCCESS)?,
         _ => return Ok(None),
     }))
 }
