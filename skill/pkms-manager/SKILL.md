@@ -160,14 +160,17 @@ Always use `--output-format json` for AI consumption. Each command has its own o
   - `suggest` returns `{"target", "target_uuid", "suggestions": [...]}`
 
 ### Linking Orphans to the Graph
-After `suggest` finds related notes, create links manually.
-Always create contextual links by linking some terms in text created by you or already available. If you create text make sure that it is very relevant.
 
-**Note**: `suggest` works best for notes with descriptive titles and rich
-content. For short-content notes (e.g., "CQI", "MCS"), the content keyword
-matching may produce noisy results. In those cases, use `resolve --title <topic>`
-to find the correct related note directly, or use `query <terms> --limit 10`
-for broader discovery.
+1. `orphans` to list all orphans. Pick ones with clear thematic connections.
+2. `suggest <uuid> --limit 10` to find related notes. For short-content notes where `suggest` is noisy, use `resolve --title <topic>` or `query <terms> --limit 10` instead.
+3. **Analyze suggestions** — read the orphan's content and at least 5-8 top suggestions to confirm connections are real.
+4. If suggestions still not so relevant you may create "adoption" note to smoothly connect current orphan to the graph. Fill new note with short portion of relevant information.
+4. Always **inline links** when content exists: embed `[[id:<full-uuid>][description]]` into existing sentences. E.g. "A systematic framework for technical [[id:63649b3f-5168-4fdc-96ec-1911a91b54a5][documentation]] authoring." If content does not exist, create highly relevant content for the note.
+5. **Use full UUIDs** (dashed format), not short 8-char UUIDs. Every link must match the `:ID:` property exactly.
+6. **Backlinks sparingly** — only add a link *from* an existing note *to* the orphan when there is genuine contextual reason (shared topic, direct dependency, natural cross-reference). Do not mechanically pair every forward link with a backlink.
+7. If mentioning orphan in already existing note is natural just create this link without adding direct forward link from orphan.
+8. `validate <uuid>` each changed note to confirm no broken links.
+9. `check` to verify overall database health.
 
 ### JSON Parsing for AI Agents
 
