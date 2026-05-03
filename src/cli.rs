@@ -52,13 +52,6 @@ pub struct Cli {
     #[arg(global = true, long = "count", help = "Show only the count of results")]
     pub count_only: bool,
 
-    #[arg(
-        global = true,
-        long,
-        help = "Show usage example for the given command and exit"
-    )]
-    pub example: bool,
-
     #[command(subcommand)]
     pub command: Command,
 }

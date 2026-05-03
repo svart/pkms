@@ -9,11 +9,11 @@ This skill helps you work with the `pkms` CLI tool to manage an org-roam databas
 
 ## Tool location
 
-The `pkms` binary is at `/home/svart/work/my-projects/pkms/target/debug/pkms`. The org-roam database is at `~/Documents/org`. You can also use `cargo run -- <args>` from `/home/svart/work/my-projects/pkms/`.
+The `pkms` binary should be available. The org-roam database is at `~/Documents/org`.
 
 ## Database
 
-The org-roam database at `~/Documents/org` contains ~760 org-mode notes organized as:
+The org-roam database org-mode notes organized as:
 - `roam/common/` — technical reference notes (681 files, heavily interlinked)
 - `roam/personal/` — personal/life notes (73 files)
 - `roam/biblio/` — book annotations
@@ -35,7 +35,6 @@ These flags work with every command:
 | `-q` / `--quiet` | Suppress non-essential stderr output |
 | `--no-header` | Suppress column headers in human output |
 | `--count` | Show only the count of results |
-| `--example` | Show usage example for the given command and exit |
 
 ## Commands reference
 
@@ -73,6 +72,11 @@ pkms --db ~/Documents/org --json subgraph <uuid> --depth 2            # Subgraph
 pkms --db ~/Documents/org --json subgraph --input-json params.json   # JSON params
 ```
 ### Health & Validation
+
+Always run `pkms validate` on each note you created or changed after finishing edititing.
+Always run `pkms check` to verify that database is in valid state after your changes.
+If new problems appeared - fix them.
+
 ```
 pkms --db ~/Documents/org check                                 # Full scan, exit code 1 if issues
 pkms --db ~/Documents/org check --file-links                     # Also check file: links exist on disk
@@ -136,6 +140,8 @@ Every command that supports `--json` has a corresponding JSON Schema in `schemas
 
 ### Research / Context Building
 When the user asks about a topic, use this sequence:
+1. Find hubs `pkms hubs --limit <NUMBER>`.
+2. Go through the graph from related hub(s) note by note via forward and backward links exploring the area and collecting necessary information from notes content.
 1. `resolve` to find the note UUID quickly
 2. `context <uuid> --depth 2` to build a rich context window with linked neighbors
 3. For deeper exploration, `get <uuid> --out` for full content
@@ -143,7 +149,7 @@ When the user asks about a topic, use this sequence:
 ### Database Health Maintenance
 When the user mentions fixing their database:
 1. `check` to see the health status and exit code
-2. `broken --json` to list all broken links grouped by target UUID
+2. `broken` to list all broken links grouped by target UUID
 3. `resolve <concept>` to find the correct replacement note UUID
 4. `fix <broken-uuid> <replacement> --apply` for each broken UUID batch
 5. `orphans` to find notes needing connections

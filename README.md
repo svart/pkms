@@ -48,7 +48,6 @@ The `--db` flag overrides `db_root` from the config. If neither is provided, the
 | `-q` / `--quiet`        | Suppress non-essential stderr output              |
 | `--no-header`           | Suppress column headers in human output           |
 | `--count`               | Show only the count of results                    |
-| `--example`             | Show usage example for the command and exit       |
 
 ## Commands
 

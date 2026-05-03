@@ -1356,8 +1356,14 @@ fn test_empty_db_resolve() {
 // ----------------------------------------------------------------
 #[test]
 fn test_missing_db_json_error() {
-    let (stdout, _stderr, status) = run(&["--json", "stats"]);
-    assert!(!status.success());
+    let dir = tempfile::tempdir().unwrap();
+    let output = std::process::Command::new(pkms_binary())
+        .args(["--json", "stats"])
+        .env("XDG_CONFIG_HOME", dir.path())
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+    assert!(!output.status.success());
     let v: serde_json::Value = serde_json::from_str(stdout.trim())
         .unwrap_or_else(|_| panic!("Expected JSON error, got: {}", stdout));
     assert!(v.get("error").is_some());
@@ -1680,23 +1686,6 @@ fn test_get_from_stdin() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("Note A"), "stdout: {}", stdout);
     assert!(stdout.contains("Note B"), "stdout: {}", stdout);
-}
-
-// ----------------------------------------------------------------
-// CLI AUTOMATION: --example flag
-// ----------------------------------------------------------------
-#[test]
-fn test_example_flag() {
-    let (stdout, _stderr, status) = run(&["--example", "path"]);
-    assert!(status.success());
-    assert!(stdout.contains("Note A"));
-}
-
-#[test]
-fn test_example_context() {
-    let (stdout, _stderr, status) = run(&["--example", "context"]);
-    assert!(status.success());
-    assert!(stdout.contains("--depth"));
 }
 
 // ----------------------------------------------------------------

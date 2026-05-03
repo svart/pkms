@@ -13,6 +13,16 @@ cargo test --test integration  # 5. Integration tests only (mock DB)
 target/debug/pkms --help       # 6. Verify CLI works
 ```
 
+IMPORTANT: All tests **MUST** pass. Fix all issues which appear when running these commands.
+
+## Committing changes
+
+When you are done when changes, before committing the work into git do next:
+- check that AGENTS.md, README.md and SKILL.md has necessary information, if not update them accordingly;
+- update the the version of the package in Cargo.toml.
+
+Then commit changes.
+
 ## Project structure
 
 ```
@@ -137,15 +147,6 @@ These schemas define the exact structure and types for reliable programmatic con
 - **JSON schema validation**: All commands are tested with `--json` via `test_all_commands_json`, verifying valid JSON output for every command
 - Mock DB helper in `tests/integration.rs::setup_db()` creates a 10+ note graph with duplicate UUIDs, broken links, filetags, aliases, and headings
 
-## When modifying the database
-
-The test DB at `~/Documents/org` contains ~762 real notes. Commands run against it with:
-```bash
-target/debug/pkms --db ~/Documents/org <command>
-```
-
-Changes to files in `~/Documents/org` are tracked by git. Always run `check` after modifications to verify no new issues introduced.
-
 ## CLI automation flags
 
 | Flag              | Description                                      |
@@ -155,7 +156,6 @@ Changes to files in `~/Documents/org` are tracked by git. Always run `check` aft
 | `--from-stdin`    | Read targets from stdin (one per line)           |
 | `--from-file`     | Read targets from a file (one per line)          |
 | `--input-json`    | Read command parameters from a JSON file         |
-| `--example`       | Show a usage example for the command and exit    |
 
 ## Related
 
