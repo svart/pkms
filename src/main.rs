@@ -61,7 +61,15 @@ fn dispatch_simple(
         Command::Check {
             file_links,
             attachment_links,
-        } => commands::check::run(cfg, ctx, cli.db.as_deref(), *file_links, *attachment_links)?,
+            id_links,
+        } => commands::check::run(
+            cfg,
+            ctx,
+            cli.db.as_deref(),
+            *file_links,
+            *attachment_links,
+            *id_links,
+        )?,
         Command::Validate { target } => {
             commands::validate::run(cfg, ctx, target.as_deref(), cli.db.as_deref())
                 .map(|()| ExitCode::SUCCESS)?
@@ -72,9 +80,6 @@ fn dispatch_simple(
         }
         Command::Orphans => {
             commands::orphans::run(cfg, ctx, cli.db.as_deref()).map(|()| ExitCode::SUCCESS)?
-        }
-        Command::Broken => {
-            commands::broken::run(cfg, ctx, cli.db.as_deref()).map(|()| ExitCode::SUCCESS)?
         }
         Command::Info => {
             commands::info::run(cfg, ctx, cli.db.as_deref()).map(|()| ExitCode::SUCCESS)?

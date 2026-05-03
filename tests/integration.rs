@@ -398,52 +398,7 @@ fn test_orphans_ndjson() {
 }
 
 // ----------------------------------------------------------------
-// BROKEN
-// ----------------------------------------------------------------
-#[test]
-fn test_broken_human() {
-    let (_dir, root) = setup_db();
-    let (stdout, _stderr, status) = run(&["--db", root.to_str().unwrap(), "broken"]);
-    assert!(status.success());
-    assert!(stdout.contains("Broken Note"));
-}
-
-#[test]
-fn test_broken_json() {
-    let (_dir, root) = setup_db();
-    let (v, status) = run_json(&[
-        "--db",
-        root.to_str().unwrap(),
-        "--output-format",
-        "json",
-        "broken",
-    ]);
-    assert!(status.success());
-    assert!(v["count"].as_u64().unwrap_or(0) >= 1);
-    assert!(v["links"][0]["source_uuid"].is_string());
-}
-
-#[test]
-fn test_broken_ndjson() {
-    let (_dir, root) = setup_db();
-    let (stdout, _stderr, status) = run(&[
-        "--db",
-        root.to_str().unwrap(),
-        "--output-format",
-        "ndjson",
-        "broken",
-    ]);
-    assert!(status.success());
-    let lines: Vec<&str> = stdout.lines().collect();
-    assert!(lines.len() >= 1);
-    for line in &lines {
-        let v: serde_json::Value = serde_json::from_str(line).unwrap();
-        assert!(v.get("source_uuid").is_some());
-    }
-}
-
-// ----------------------------------------------------------------
-// HUBS
+// STATS
 // ----------------------------------------------------------------
 #[test]
 fn test_stats_hubs() {
@@ -1232,6 +1187,37 @@ fn test_check_file_and_attachment_links_json() {
     assert!(v["broken_attachment_links"].as_array().unwrap().len() >= 1);
 }
 
+#[test]
+fn test_check_id_links_json() {
+    let (_dir, root) = setup_db();
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "check",
+        "--id-links",
+    ]);
+    assert!(!status.success());
+    assert!(
+        v["broken_links"]
+            .as_array()
+            .map_or(false, |a| !a.is_empty())
+    );
+    assert!(v["broken_links"][0]["source_uuid"].is_string());
+    // file and attachment checks should be empty when only --id-links
+    assert_eq!(
+        v["broken_file_links"].as_array().unwrap().len(),
+        0,
+        "expected no file links with --id-links only"
+    );
+    assert_eq!(
+        v["broken_attachment_links"].as_array().unwrap().len(),
+        0,
+        "expected no attachment links with --id-links only"
+    );
+}
+
 // ----------------------------------------------------------------
 // ERROR PATH: note not found (with --output-format json, expect structured error)
 // ----------------------------------------------------------------
@@ -1418,9 +1404,12 @@ fn test_all_commands_json() {
                 db.clone(),
                 "--output-format".into(),
                 "json".into(),
-                "broken".into(),
+                "check".into(),
+                "--file-links".into(),
+                "--attachment-links".into(),
+                "--id-links".into(),
             ],
-            true,
+            false,
         ),
         (
             vec![
@@ -1657,13 +1646,6 @@ fn test_json_error_exit_code() {
 // ----------------------------------------------------------------
 fn normalize_snapshot(output: &str, root: &std::path::Path) -> String {
     output.replace(root.to_str().unwrap(), "<DB_ROOT>")
-}
-
-#[test]
-fn test_snapshot_broken() {
-    let (_dir, root) = setup_db();
-    let (stdout, _stderr, _status) = run(&["--db", root.to_str().unwrap(), "broken"]);
-    insta::assert_snapshot!("broken_human", normalize_snapshot(&stdout, &root));
 }
 
 #[test]

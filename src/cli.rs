@@ -44,6 +44,8 @@ pub enum Command {
         file_links: bool,
         #[arg(long, help = "Check that attachment: link targets exist on disk")]
         attachment_links: bool,
+        #[arg(long, help = "Check that id: link targets exist in the database")]
+        id_links: bool,
     },
     #[command(about = "Validate health of a specific note")]
     Validate {
@@ -66,8 +68,6 @@ pub enum Command {
     },
     #[command(about = "List orphan notes (no incoming or outgoing links)")]
     Orphans,
-    #[command(about = "List broken/dangling links")]
-    Broken,
     #[command(about = "Build a context window for AI consumption")]
     Context {
         #[arg(help = "UUID, file path, or note title")]

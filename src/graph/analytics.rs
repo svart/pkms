@@ -74,20 +74,6 @@ impl Graph {
             .collect()
     }
 
-    pub fn broken_links_list(&self) -> Vec<(String, String, String)> {
-        self.broken_links
-            .iter()
-            .map(|(src, tgt)| {
-                let title = self
-                    .nodes
-                    .get(src)
-                    .map(|n| n.title.clone())
-                    .unwrap_or_default();
-                (src.clone(), title, tgt.clone())
-            })
-            .collect()
-    }
-
     pub fn stats(&self) -> GraphStats {
         let total_notes = self.nodes.len();
         let total_internal_links: usize = self

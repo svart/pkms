@@ -26,14 +26,14 @@ pub struct BrokenLinkEntry {
     pub target_uuid: String,
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 pub struct BrokenFileLinkEntry {
     pub source_uuid: String,
     pub source_title: String,
     pub target_path: String,
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 pub struct BrokenAttachmentLinkEntry {
     pub source_uuid: String,
     pub source_title: String,
@@ -55,28 +55,123 @@ fn link_target_exists(target: &str, db_root: &Path) -> bool {
     }
 }
 
+pub fn run(
+    config: &Config,
+    ctx: &OutputContext,
+    db_cli: Option<&std::path::Path>,
+    file_links: bool,
+    attachment_links: bool,
+    id_links: bool,
+) -> Result<ExitCode> {
+    let graph = Graph::load(config, db_cli)?;
+    let db_root = config.resolve_db_root(db_cli)?;
+
+    let show_id = id_links || !(file_links || attachment_links);
+    let show_file = file_links || !(id_links || attachment_links);
+    let show_attach = attachment_links || !(file_links || id_links);
+
+    let mut broken_file = Vec::new();
+    let mut broken_attachment = Vec::new();
+
+    if show_file {
+        for node in graph.nodes.values() {
+            for link in &node.outgoing {
+                if let Link::File(target) = link
+                    && !link_target_exists(target, &db_root)
+                {
+                    broken_file.push(BrokenFileLinkEntry {
+                        source_uuid: node.uuid.clone(),
+                        source_title: node.title.clone(),
+                        target_path: target.clone(),
+                    });
+                }
+            }
+        }
+    }
+
+    if show_attach {
+        for node in graph.nodes.values() {
+            for link in &node.outgoing {
+                if let Link::Attachment(target) = link
+                    && !link_target_exists(target, &db_root)
+                {
+                    broken_attachment.push(BrokenAttachmentLinkEntry {
+                        source_uuid: node.uuid.clone(),
+                        source_title: node.title.clone(),
+                        target_path: target.clone(),
+                    });
+                }
+            }
+        }
+    }
+
+    let broken_file_count = broken_file.len();
+    let broken_attachment_count = broken_attachment.len();
+    let broken_internal = if show_id {
+        graph.stats().broken_link_count
+    } else {
+        0
+    };
+    let healthy = broken_internal == 0
+        && broken_file_count == 0
+        && broken_attachment_count == 0
+        && (!show_id || graph.stats().parse_error_count == 0)
+        && (!show_id || graph.stats().duplicate_uuid_count == 0);
+
+    if ctx.is_json() {
+        print_check_json(
+            ctx,
+            &graph,
+            &db_root,
+            &broken_file,
+            &broken_attachment,
+            show_id,
+        )?;
+    } else {
+        print_check_text(
+            &graph,
+            &db_root,
+            &broken_file,
+            &broken_attachment,
+            show_id,
+            show_file,
+            show_attach,
+        );
+    }
+
+    if healthy {
+        Ok(ExitCode::SUCCESS)
+    } else {
+        Ok(ExitCode::from(1))
+    }
+}
+
 fn print_check_json(
     ctx: &OutputContext,
     graph: &Graph,
     db_root: &Path,
-    broken_file: Vec<BrokenFileLinkEntry>,
-    broken_attachment: Vec<BrokenAttachmentLinkEntry>,
-    healthy: bool,
+    broken_file: &[BrokenFileLinkEntry],
+    broken_attachment: &[BrokenAttachmentLinkEntry],
+    show_id: bool,
 ) -> Result<()> {
     let stats = graph.stats();
-    let broken = graph
-        .broken_links
-        .iter()
-        .map(|(src, tgt)| BrokenLinkEntry {
-            source_uuid: src.clone(),
-            source_title: graph
-                .nodes
-                .get(src)
-                .map(|n| n.title.clone())
-                .unwrap_or_default(),
-            target_uuid: tgt.clone(),
-        })
-        .collect();
+    let broken = if show_id {
+        graph
+            .broken_links
+            .iter()
+            .map(|(src, tgt)| BrokenLinkEntry {
+                source_uuid: src.clone(),
+                source_title: graph
+                    .nodes
+                    .get(src)
+                    .map(|n| n.title.clone())
+                    .unwrap_or_default(),
+                target_uuid: tgt.clone(),
+            })
+            .collect()
+    } else {
+        vec![]
+    };
 
     let failed = graph
         .parse_errors
@@ -89,13 +184,17 @@ fn print_check_json(
 
     let output = CheckOutput {
         db_root: db_root.to_string_lossy().to_string(),
-        stats,
+        stats: stats.clone(),
         duplicates: graph.duplicates.clone(),
         broken_links: broken,
-        broken_file_links: broken_file,
-        broken_attachment_links: broken_attachment,
+        broken_file_links: broken_file.to_vec(),
+        broken_attachment_links: broken_attachment.to_vec(),
         failed_files: failed,
-        healthy,
+        healthy: stats.broken_link_count == 0
+            && stats.parse_error_count == 0
+            && stats.duplicate_uuid_count == 0
+            && broken_file.is_empty()
+            && broken_attachment.is_empty(),
     };
     ctx.print_json(&output)
 }
@@ -103,19 +202,20 @@ fn print_check_json(
 fn print_check_text(
     graph: &Graph,
     db_root: &Path,
-    file_links: bool,
-    attachment_links: bool,
     broken_file: &[BrokenFileLinkEntry],
     broken_attachment: &[BrokenAttachmentLinkEntry],
+    show_id: bool,
+    show_file: bool,
+    show_attach: bool,
 ) {
     let stats = graph.stats();
-    let healthy = stats.broken_link_count == 0
-        && stats.parse_error_count == 0
-        && stats.duplicate_uuid_count == 0
+    let broken_internal_count = if show_id { stats.broken_link_count } else { 0 };
+    let healthy = broken_internal_count == 0
         && broken_file.is_empty()
-        && broken_attachment.is_empty();
-    let broken_file_links_count = broken_file.len();
-    let broken_attachment_links_count = broken_attachment.len();
+        && broken_attachment.is_empty()
+        && (!show_id || stats.parse_error_count == 0)
+        && (!show_id || stats.duplicate_uuid_count == 0);
+
     println!("Database: {}", db_root.display());
     println!("  Notes:          {}", stats.total_notes);
     println!(
@@ -126,48 +226,54 @@ fn print_check_text(
         stats.total_url_links,
     );
     println!("  Orphans:        {}", stats.orphan_notes);
-    println!("  Broken links:   {}", stats.broken_link_count);
-    if file_links {
-        println!("  Broken files:   {broken_file_links_count}");
-    }
-    if attachment_links {
-        println!("  Broken attach:  {broken_attachment_links_count}");
-    }
-    println!("  Parse errors:   {}", stats.parse_error_count);
-    println!("  Skipped files:  {}", stats.skipped_count);
-    println!("  Dup UUIDs:      {}", stats.duplicate_uuid_count);
-    println!("  Dup titles:     {}", stats.duplicate_title_count);
-    println!("  Missing titles: {}", stats.missing_title_count);
 
-    if !graph.duplicates.duplicate_uuids.is_empty() {
-        println!();
-        println!("Duplicate UUIDs:");
-        for d in &graph.duplicates.duplicate_uuids {
-            for p in &d.paths {
-                println!("  {} -> {}", d.value, p);
+    if show_id {
+        println!("  Broken links:   {}", stats.broken_link_count);
+        println!("  Parse errors:   {}", stats.parse_error_count);
+        println!("  Skipped files:  {}", stats.skipped_count);
+        println!("  Dup UUIDs:      {}", stats.duplicate_uuid_count);
+        println!("  Dup titles:     {}", stats.duplicate_title_count);
+        println!("  Missing titles: {}", stats.missing_title_count);
+    }
+
+    if show_file {
+        println!("  Broken files:   {}", broken_file.len());
+    }
+    if show_attach {
+        println!("  Broken attach:  {}", broken_attachment.len());
+    }
+
+    if show_id {
+        if !graph.duplicates.duplicate_uuids.is_empty() {
+            println!();
+            println!("Duplicate UUIDs:");
+            for d in &graph.duplicates.duplicate_uuids {
+                for p in &d.paths {
+                    println!("  {} -> {}", d.value, p);
+                }
+            }
+        }
+
+        if !graph.duplicates.duplicate_titles.is_empty() {
+            println!();
+            println!("Duplicate titles:");
+            for d in &graph.duplicates.duplicate_titles {
+                for p in &d.paths {
+                    println!("  \"{}\" -> {}", d.value, p);
+                }
+            }
+        }
+
+        if !graph.duplicates.missing_titles.is_empty() {
+            println!();
+            println!("Missing #+title:");
+            for p in &graph.duplicates.missing_titles {
+                println!("  {p}");
             }
         }
     }
 
-    if !graph.duplicates.duplicate_titles.is_empty() {
-        println!();
-        println!("Duplicate titles:");
-        for d in &graph.duplicates.duplicate_titles {
-            for p in &d.paths {
-                println!("  \"{}\" -> {}", d.value, p);
-            }
-        }
-    }
-
-    if !graph.duplicates.missing_titles.is_empty() {
-        println!();
-        println!("Missing #+title:");
-        for p in &graph.duplicates.missing_titles {
-            println!("  {p}");
-        }
-    }
-
-    if !graph.broken_links.is_empty() {
+    if show_id && !graph.broken_links.is_empty() {
         println!();
         println!("Broken links:");
         for (src, tgt) in &graph.broken_links {
@@ -197,87 +303,5 @@ fn print_check_text(
         println!("Status: healthy");
     } else {
         println!("Status: issues found");
-    }
-}
-
-pub fn run(
-    config: &Config,
-    ctx: &OutputContext,
-    db_cli: Option<&std::path::Path>,
-    file_links: bool,
-    attachment_links: bool,
-) -> Result<ExitCode> {
-    let graph = Graph::load(config, db_cli)?;
-    let stats = graph.stats();
-    let db_root = config.resolve_db_root(db_cli)?;
-
-    let mut broken_file = Vec::new();
-    let mut broken_attachment = Vec::new();
-
-    if file_links {
-        for node in graph.nodes.values() {
-            for link in &node.outgoing {
-                if let Link::File(target) = link
-                    && !link_target_exists(target, &db_root)
-                {
-                    broken_file.push(BrokenFileLinkEntry {
-                        source_uuid: node.uuid.clone(),
-                        source_title: node.title.clone(),
-                        target_path: target.clone(),
-                    });
-                }
-            }
-        }
-    }
-
-    if attachment_links {
-        for node in graph.nodes.values() {
-            for link in &node.outgoing {
-                if let Link::Attachment(target) = link
-                    && !link_target_exists(target, &db_root)
-                {
-                    broken_attachment.push(BrokenAttachmentLinkEntry {
-                        source_uuid: node.uuid.clone(),
-                        source_title: node.title.clone(),
-                        target_path: target.clone(),
-                    });
-                }
-            }
-        }
-    }
-
-    let broken_file_links_count = broken_file.len();
-    let broken_attachment_links_count = broken_attachment.len();
-
-    let healthy = stats.broken_link_count == 0
-        && stats.parse_error_count == 0
-        && stats.duplicate_uuid_count == 0
-        && broken_file_links_count == 0
-        && broken_attachment_links_count == 0;
-
-    if ctx.is_json() {
-        print_check_json(
-            ctx,
-            &graph,
-            &db_root,
-            broken_file,
-            broken_attachment,
-            healthy,
-        )?;
-    } else {
-        print_check_text(
-            &graph,
-            &db_root,
-            file_links,
-            attachment_links,
-            &broken_file,
-            &broken_attachment,
-        );
-    }
-
-    if healthy {
-        Ok(ExitCode::SUCCESS)
-    } else {
-        Ok(ExitCode::from(1))
     }
 }
