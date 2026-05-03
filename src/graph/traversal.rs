@@ -18,10 +18,10 @@ impl Graph {
             for uid in &current {
                 if let Some(node) = self.nodes.get(uid) {
                     for link in &node.outgoing {
-                        if let Link::Internal(target) = link {
-                            if visited.insert(target.clone()) {
-                                next.push(target.clone());
-                            }
+                        if let Link::Internal(target) = link
+                            && visited.insert(target.clone())
+                        {
+                            next.push(target.clone());
                             if let Some(target_node) = self.nodes.get(target) {
                                 neighbors.outgoing.push(target_node.clone());
                             } else {
@@ -35,9 +35,9 @@ impl Graph {
                     for buid in backlinks {
                         if visited.insert(buid.clone()) {
                             next.push(buid.clone());
-                        }
-                        if let Some(back_node) = self.nodes.get(buid) {
-                            neighbors.incoming.push(back_node.clone());
+                            if let Some(back_node) = self.nodes.get(buid) {
+                                neighbors.incoming.push(back_node.clone());
+                            }
                         }
                     }
                 }
