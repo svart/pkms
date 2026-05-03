@@ -901,23 +901,17 @@ fn test_get_json() {
 }
 
 #[test]
-fn test_get_out() {
+fn test_get_no_content() {
     let (_dir, root) = setup_db();
-    let (stdout, _stderr, status) =
-        run(&["--db", root.to_str().unwrap(), "get", "Note A", "--out"]);
+    let (stdout, _stderr, status) = run(&[
+        "--db",
+        root.to_str().unwrap(),
+        "get",
+        "Note A",
+        "--no-content",
+    ]);
     assert!(status.success());
-    assert!(stdout.contains("--- Content ---"));
-}
-
-#[test]
-fn test_get_graph() {
-    let (_dir, root) = setup_db();
-    let (stdout, _stderr, status) =
-        run(&["--db", root.to_str().unwrap(), "get", "Note A", "--graph"]);
-    assert!(status.success());
-    assert!(
-        stdout.contains("\u{2514}") || stdout.contains("\u{2502}") || stdout.contains("\u{25cf}")
-    );
+    assert!(!stdout.contains("--- Content ---"));
 }
 
 #[test]

@@ -43,8 +43,7 @@ pub struct NeighborOutput {
 pub struct GetOptions<'a> {
     pub target: Option<&'a str>,
     pub depth: u32,
-    pub show_content: bool,
-    pub show_graph: bool,
+    pub no_content: bool,
 }
 
 pub fn run(
@@ -57,18 +56,17 @@ pub fn run(
         .target
         .ok_or_else(|| anyhow::anyhow!("No target specified"))?;
     let depth = opts.depth;
-    let show_content = opts.show_content;
-    let show_graph = opts.show_graph;
+    let no_content = opts.no_content;
 
     let graph = Graph::load(config, db_cli)?;
 
     let node = graph.resolve_target(target)?.clone();
     let neighbors = graph.get_neighbors(&node.uuid, depth);
 
-    let node_content = if show_content {
-        std::fs::read_to_string(&node.path).ok()
-    } else {
+    let node_content = if no_content {
         None
+    } else {
+        std::fs::read_to_string(&node.path).ok()
     };
 
     if ctx.is_json() {
@@ -99,35 +97,31 @@ pub fn run(
         if !node.filetags.is_empty() {
             println!("  Tags:   {}", node.filetags.join(", "));
         }
-        if show_content && let Some(content) = node_content {
+        if let Some(content) = node_content {
             println!();
             println!("--- Content ---");
             println!("{content}");
             println!("--- End ---");
         }
 
-        if show_graph {
-            print_graph(&node, &neighbors, depth);
-        } else {
-            for d in 1..=depth {
-                if let Some(ns) = neighbors.get(&d) {
-                    println!();
-                    println!("Depth {d}:");
-                    if !ns.outgoing.is_empty() {
-                        println!("  Forward links:");
-                        for n in &ns.outgoing {
-                            print_node_short(n, "    ");
-                        }
+        for d in 1..=depth {
+            if let Some(ns) = neighbors.get(&d) {
+                println!();
+                println!("Depth {d}:");
+                if !ns.outgoing.is_empty() {
+                    println!("  Forward links:");
+                    for n in &ns.outgoing {
+                        print_node_short(n, "    ");
                     }
-                    if !ns.incoming.is_empty() {
-                        println!("  Backlinks:");
-                        for n in &ns.incoming {
-                            print_node_short(n, "    ");
-                        }
+                }
+                if !ns.incoming.is_empty() {
+                    println!("  Backlinks:");
+                    for n in &ns.incoming {
+                        print_node_short(n, "    ");
                     }
-                    if ns.outgoing.is_empty() && ns.incoming.is_empty() {
-                        println!("  (no connections at this depth)");
-                    }
+                }
+                if ns.outgoing.is_empty() && ns.incoming.is_empty() {
+                    println!("  (no connections at this depth)");
                 }
             }
         }
@@ -138,60 +132,4 @@ pub fn run(
 
 fn print_node_short(n: &crate::graph::Node, indent: &str) {
     println!("{}{} ({})", indent, n.title, util::short_uuid(&n.uuid));
-}
-
-fn print_graph(
-    node: &crate::graph::Node,
-    neighbors: &std::collections::HashMap<u32, crate::graph::NeighborSet>,
-    max_depth: u32,
-) {
-    let label = |n: &crate::graph::Node| format!("{} ({})", n.title, util::short_uuid(&n.uuid));
-
-    println!();
-    let depth1 = neighbors.get(&1);
-
-    if let Some(ns) = depth1
-        && !ns.incoming.is_empty()
-    {
-        for (i, n) in ns.incoming.iter().enumerate() {
-            let prefix = if i == ns.incoming.len() - 1 {
-                "└─ "
-            } else {
-                "├─ "
-            };
-            println!("{} {}", prefix, label(n));
-        }
-        println!("│");
-    }
-
-    println!("● {}", label(node));
-
-    if let Some(ns) = depth1
-        && !ns.outgoing.is_empty()
-    {
-        println!("│");
-        for (i, n) in ns.outgoing.iter().enumerate() {
-            let prefix = if i == ns.outgoing.len() - 1 {
-                "└─ "
-            } else {
-                "├─ "
-            };
-            println!("{} {}", prefix, label(n));
-        }
-    }
-
-    for d in 2..=max_depth {
-        if let Some(ns) = neighbors.get(&d)
-            && (!ns.outgoing.is_empty() || !ns.incoming.is_empty())
-        {
-            println!();
-            println!("Depth {d}:");
-            for n in &ns.outgoing {
-                println!("  → {}", label(n));
-            }
-            for n in &ns.incoming {
-                println!("  ← {}", label(n));
-            }
-        }
-    }
 }

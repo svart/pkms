@@ -145,10 +145,8 @@ pub enum Command {
         target: Option<String>,
         #[arg(short, long, default_value = "1", help = "Traversal depth")]
         depth: u32,
-        #[arg(short, long, help = "Show full note content")]
-        out: bool,
-        #[arg(short, long, help = "Show ASCII graph visualization")]
-        graph: bool,
+        #[arg(long, help = "Suppress note content output")]
+        no_content: bool,
     },
     #[command(about = "Fuzzy search across note titles and content")]
     Query {

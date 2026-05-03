@@ -51,8 +51,7 @@ pkms --db ~/Documents/org --output-format json query "terms" --tag book
 ### Retrieve Notes
 ```
 pkms --db ~/Documents/org --output-format json get <uuid-or-title> --depth 1
-pkms --db ~/Documents/org get <uuid-or-title> --depth 1 --graph   # ASCII tree
-pkms --db ~/Documents/org get <uuid-or-title> --out                # Full content
+pkms --db ~/Documents/org get <uuid-or-title> --depth 1 --no-content   # Suppress content
 ```
 ### Graph Navigation
 ```
@@ -129,7 +128,7 @@ When the user asks about a topic, use this sequence:
 2. Go through the graph from related hub(s) note by note via forward and backward links exploring the area and collecting necessary information from notes content.
 1. `resolve` to find the note UUID quickly
 2. `context <uuid> --depth 2` to build a rich context window with linked neighbors
-3. For deeper exploration, `get <uuid> --out` for full content
+3. For deeper exploration, `get <uuid>` for full content
 
 ### Database Health Maintenance
 When the user mentions fixing their database:

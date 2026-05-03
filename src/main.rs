@@ -170,16 +170,14 @@ fn dispatch_mutating(
         Command::Get {
             target,
             depth,
-            out,
-            graph: show_graph,
+            no_content,
         } => commands::get::run(
             cfg,
             ctx,
             &commands::get::GetOptions {
                 target: target.as_deref(),
                 depth: *depth,
-                show_content: *out,
-                show_graph: *show_graph,
+                no_content: *no_content,
             },
             cli.db.as_deref(),
         )
