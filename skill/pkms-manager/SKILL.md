@@ -162,7 +162,7 @@ Always use `--output-format json` for AI consumption. Each command has its own o
 ### Linking Orphans to the Graph
 
 1. `orphans` to list all orphans. Pick ones with clear thematic connections.
-2. `suggest <uuid> --limit 10` to find related notes. For short-content notes where `suggest` is noisy, use `resolve --title <topic>` or `query <terms> --limit 10` instead.
+2. `suggest <uuid> --limit 10` to find related notes. For short-content notes where `suggest` is noisy, use `query` and `resolve` instead.
 3. **Analyze suggestions** — read the orphan's content and at least 5-8 top suggestions to confirm connections are real.
 4. If suggestions still not so relevant you may create "adoption" note to smoothly connect current orphan to the graph. Fill new note with short portion of relevant information.
 4. Always **inline links** when content exists: embed `[[id:<full-uuid>][description]]` into existing sentences. E.g. "A systematic framework for technical [[id:63649b3f-5168-4fdc-96ec-1911a91b54a5][documentation]] authoring." If content does not exist, create highly relevant content for the note.
