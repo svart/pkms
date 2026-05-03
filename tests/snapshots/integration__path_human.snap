@@ -5,6 +5,6 @@ expression: "normalize_snapshot(&stdout, &root)"
 Shortest path between "Note A" and "Note C":
   2 hop(s)
 
-  1. Note A →
-  2. Note B →
+  1. Note A
+  2. Note B
   3. Note C

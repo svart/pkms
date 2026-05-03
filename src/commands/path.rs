@@ -72,8 +72,7 @@ pub fn run(
                 println!();
                 for (i, uuid) in uuids.iter().enumerate() {
                     let title = graph.nodes.get(uuid).map_or("?", |n| n.title.as_str());
-                    let arrow = if i < uuids.len() - 1 { " →" } else { "" };
-                    println!("  {}. {}{}", i + 1, title, arrow);
+                    println!("  {}. {}", i + 1, title);
                 }
             } else {
                 println!("No path found between \"{}\" and \"{}\"", f.title, t.title);
