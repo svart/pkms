@@ -1,8 +1,9 @@
 use clap::{Parser, Subcommand, ValueEnum};
 use std::path::PathBuf;
 
-#[derive(Clone, ValueEnum)]
+#[derive(Clone, PartialEq, ValueEnum)]
 pub enum OutputFormat {
+    Text,
     Json,
     Ndjson,
 }
@@ -39,7 +40,7 @@ pub struct Cli {
         long,
         value_enum,
         value_name = "FMT",
-        help = "Output format: json, ndjson (implies machine-readable output)"
+        help = "Output format: text, json, ndjson"
     )]
     pub output_format: Option<OutputFormat>,
 

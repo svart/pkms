@@ -1,5 +1,7 @@
+use crate::cli::OutputFormat;
 use crate::config::Config;
 use crate::graph::Graph;
+use crate::output::OutputContext;
 use crate::util;
 use anyhow::Result;
 use serde::Serialize;
@@ -25,10 +27,7 @@ pub struct TagNote {
 
 pub fn run(
     config: &Config,
-    json: bool,
-    ndjson: bool,
-    no_header: bool,
-    count_only: bool,
+    ctx: &OutputContext,
     verbose: bool,
     tag_filter: Option<&str>,
     db_cli: Option<&std::path::Path>,
@@ -37,69 +36,77 @@ pub fn run(
 
     if let Some(tag) = tag_filter {
         let notes = graph.notes_by_tag(tag);
-        if count_only {
-            util::print_count(notes.len(), json);
+        if ctx.count_only {
+            ctx.print_count(notes.len());
             return Ok(());
         }
-        if json {
-            let notes_json: Vec<TagNote> = notes
-                .iter()
-                .map(|n| TagNote {
-                    uuid: n.uuid.clone(),
-                    title: n.title.clone(),
-                    path: util::path_string(&n.path),
-                })
-                .collect();
-            if ndjson {
-                return util::print_ndjson(&notes_json);
+
+        let notes_json: Vec<TagNote> = notes
+            .iter()
+            .map(|n| TagNote {
+                uuid: n.uuid.clone(),
+                title: n.title.clone(),
+                path: util::path_string(&n.path),
+            })
+            .collect();
+
+        match ctx.format {
+            OutputFormat::Text => {
+                if !ctx.no_header {
+                    println!("Tag: {tag}");
+                    println!("Notes: {}", notes.len());
+                }
+                for n in &notes {
+                    println!("  {} ({})", n.title, n.uuid);
+                }
             }
-            let output = TagsOutput {
-                tags: vec![TagEntry {
-                    tag: tag.to_string(),
-                    count: notes.len(),
-                    notes: notes_json,
-                }],
-            };
-            println!("{}", serde_json::to_string_pretty(&output)?);
-        } else {
-            if !no_header {
-                println!("Tag: {tag}");
-                println!("Notes: {}", notes.len());
+            OutputFormat::Json => {
+                ctx.print_json(&TagsOutput {
+                    tags: vec![TagEntry {
+                        tag: tag.to_string(),
+                        count: notes.len(),
+                        notes: notes_json,
+                    }],
+                })?;
             }
-            for n in &notes {
-                println!("  {} ({})", n.title, n.uuid);
+            OutputFormat::Ndjson => {
+                ctx.print_ndjson(&notes_json)?;
             }
         }
     } else {
         let tags = graph.all_tags();
-        if count_only {
-            util::print_count(tags.len(), json);
+        if ctx.count_only {
+            ctx.print_count(tags.len());
             return Ok(());
         }
-        if json {
-            let entries: Vec<TagEntry> = tags
-                .into_iter()
-                .map(|(tag, count)| TagEntry {
-                    tag,
-                    count,
-                    notes: vec![],
-                })
-                .collect();
-            if ndjson {
-                return util::print_ndjson(&entries);
+
+        let entries: Vec<TagEntry> = tags
+            .iter()
+            .map(|(tag, count)| TagEntry {
+                tag: tag.clone(),
+                count: *count,
+                notes: vec![],
+            })
+            .collect();
+
+        match ctx.format {
+            OutputFormat::Text => {
+                if !ctx.no_header {
+                    println!("Filetags (count):");
+                }
+                for (tag, count) in &tags {
+                    println!("  {tag:30} {count}");
+                }
+                if !ctx.no_header {
+                    println!();
+                    println!("Total unique tags: {}", tags.len());
+                }
             }
-            let output = TagsOutput { tags: entries };
-            println!("{}", serde_json::to_string_pretty(&output)?);
-        } else {
-            if !no_header {
-                println!("Filetags (count):");
+            OutputFormat::Json => {
+                ctx.print_json(&TagsOutput { tags: entries })?;
             }
-            for (tag, count) in &tags {
-                println!("  {tag:30} {count}");
-            }
-            if !no_header {
-                println!();
-                println!("Total unique tags: {}", tags.len());
+            OutputFormat::Ndjson => {
+                ctx.print_ndjson(&entries)?;
             }
         }
     }

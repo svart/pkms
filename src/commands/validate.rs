@@ -1,5 +1,6 @@
 use crate::config::Config;
 use crate::graph::Graph;
+use crate::output::OutputContext;
 use crate::parser::Link;
 use anyhow::Result;
 use serde::Serialize;
@@ -33,7 +34,7 @@ pub struct BacklinkEntry {
 #[allow(clippy::too_many_lines)]
 pub fn run(
     config: &Config,
-    json: bool,
+    ctx: &OutputContext,
     verbose: bool,
     target: Option<&str>,
     db_cli: Option<&std::path::Path>,
@@ -107,7 +108,7 @@ pub fn run(
 
     let healthy = issues.is_empty();
 
-    if json {
+    if ctx.is_json() {
         let output = ValidateOutput {
             uuid: node.uuid,
             title: node.title,
@@ -125,7 +126,7 @@ pub fn run(
             issues,
             healthy,
         };
-        println!("{}", serde_json::to_string_pretty(&output)?);
+        ctx.print_json(&output)?;
     } else {
         println!("Note: {}", node.title);
         println!("  UUID:   {}", node.uuid);

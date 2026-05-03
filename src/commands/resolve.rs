@@ -1,7 +1,8 @@
+use crate::cli::OutputFormat;
 use crate::config::Config;
 use crate::discovery;
+use crate::output::OutputContext;
 use crate::parser::{FILETAGS_RE, TITLE_RE};
-use crate::util;
 use anyhow::Result;
 use regex::Regex;
 use serde::Serialize;
@@ -63,7 +64,6 @@ fn scan_files(root: &Path, ignore_patterns: &[String]) -> Vec<ResolvedNote> {
         let header: Vec<&str> = content.lines().take(100).collect();
         let header_str = header.join("\n");
 
-        // Use the LAST :ID: in the header (notes may have migrated UUIDs via duplicate drawers)
         let uuid = UUID_RE
             .captures_iter(&header_str)
             .last()
@@ -116,10 +116,7 @@ fn scan_files(root: &Path, ignore_patterns: &[String]) -> Vec<ResolvedNote> {
 #[allow(clippy::too_many_lines)]
 pub fn run(
     config: &Config,
-    json: bool,
-    ndjson: bool,
-    no_header: bool,
-    count_only: bool,
+    ctx: &OutputContext,
     target: Option<&str>,
     tags: Option<&str>,
     search: Option<&str>,
@@ -172,7 +169,6 @@ pub fn run(
         })
         .collect();
 
-    // Sort: exact UUID match first, then title match, then prefix match
     results.sort_by(|a, b| {
         let a_score = score_match(a, query, &query_lower);
         let b_score = score_match(b, query, &query_lower);
@@ -181,59 +177,65 @@ pub fn run(
 
     results.truncate(limit);
 
-    if count_only {
-        util::print_count(results.len(), json);
+    if ctx.count_only && ctx.format != OutputFormat::Ndjson {
+        ctx.print_count(results.len());
         return Ok(());
     }
 
     let field_set: Option<HashSet<String>> =
         fields.map(|f| f.split(',').map(|s| s.trim().to_string()).collect());
 
-    if json {
-        if ndjson {
+    match ctx.format {
+        OutputFormat::Text => {
+            if !ctx.no_header {
+                if !query.is_empty() {
+                    println!("Resolved: \"{query}\"");
+                }
+                println!("Total: {}", results.len());
+            }
+            for note in &results {
+                let short = if note.uuid.len() > 8 {
+                    &note.uuid[..8]
+                } else {
+                    &note.uuid
+                };
+                if let Some(ref fs) = field_set {
+                    if fs.contains("title") {
+                        println!("  {} ({})", note.title, short);
+                    }
+                    if fs.contains("uuid") {
+                        println!("         UUID: {}", note.uuid);
+                    }
+                    if fs.contains("path") {
+                        println!("         Path: {}", note.path);
+                    }
+                    if fs.contains("tags") && !note.filetags.is_empty() {
+                        println!("         Tags: {}", note.filetags.join(", "));
+                    }
+                    if fs.contains("aliases") && !note.aliases.is_empty() {
+                        println!("         Aliases: {}", note.aliases.join(", "));
+                    }
+                } else {
+                    println!("  {} ({})", note.title, short);
+                    println!("         UUID: {}", note.uuid);
+                    if !note.filetags.is_empty() {
+                        println!("         Tags: {}", note.filetags.join(", "));
+                    }
+                }
+            }
+        }
+        OutputFormat::Json => {
+            let output = ResolveOutput {
+                query: query.to_string(),
+                total: results.len(),
+                results,
+            };
+            ctx.print_json(&output)?;
+        }
+        OutputFormat::Ndjson => {
             for note in &results {
                 let v = filter_fields(&serde_json::to_value(note)?, &field_set);
                 println!("{}", serde_json::to_string(&v)?);
-            }
-            return Ok(());
-        }
-        let output = ResolveOutput {
-            query: query.to_string(),
-            total: results.len(),
-            results,
-        };
-        println!("{}", serde_json::to_string_pretty(&output)?);
-    } else {
-        if !no_header {
-            if !query.is_empty() {
-                println!("Resolved: \"{query}\"");
-            }
-            println!("Total: {}", results.len());
-        }
-        for note in &results {
-            let short = util::short_uuid(&note.uuid);
-            if let Some(ref fs) = field_set {
-                if fs.contains("title") {
-                    println!("  {} ({})", note.title, short);
-                }
-                if fs.contains("uuid") {
-                    println!("         UUID: {}", note.uuid);
-                }
-                if fs.contains("path") {
-                    println!("         Path: {}", note.path);
-                }
-                if fs.contains("tags") && !note.filetags.is_empty() {
-                    println!("         Tags: {}", note.filetags.join(", "));
-                }
-                if fs.contains("aliases") && !note.aliases.is_empty() {
-                    println!("         Aliases: {}", note.aliases.join(", "));
-                }
-            } else {
-                println!("  {} ({})", note.title, short);
-                println!("         UUID: {}", note.uuid);
-                if !note.filetags.is_empty() {
-                    println!("         Tags: {}", note.filetags.join(", "));
-                }
             }
         }
     }

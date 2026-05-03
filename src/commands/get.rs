@@ -1,5 +1,6 @@
 use crate::config::Config;
 use crate::graph::{Graph, Node};
+use crate::output::OutputContext;
 use crate::util;
 use anyhow::Result;
 use serde::Serialize;
@@ -42,7 +43,7 @@ pub struct NeighborOutput {
 #[allow(clippy::too_many_lines)]
 pub fn run(
     config: &Config,
-    json: bool,
+    ctx: &OutputContext,
     verbose: bool,
     target: Option<&str>,
     depth: u32,
@@ -63,7 +64,7 @@ pub fn run(
         None
     };
 
-    if json {
+    if ctx.is_json() {
         let node_json = NodeJson::from_node(&node, node_content.as_deref());
         let mut neigh_json = HashMap::new();
         for (d, ns) in &neighbors {
@@ -83,7 +84,7 @@ pub fn run(
             node: node_json,
             neighbors: neigh_json,
         };
-        println!("{}", serde_json::to_string_pretty(&output)?);
+        ctx.print_json(&output)?;
     } else {
         println!("Note: {}", node.title);
         println!("  UUID:   {}", node.uuid);
@@ -142,7 +143,6 @@ fn print_graph(
     println!();
     let depth1 = neighbors.get(&1);
 
-    // Print backlinks (incoming at depth 1)
     if let Some(ns) = depth1
         && !ns.incoming.is_empty()
     {
@@ -157,10 +157,8 @@ fn print_graph(
         println!("│");
     }
 
-    // Print current node
     println!("● {}", label(node));
 
-    // Print outgoing
     if let Some(ns) = depth1
         && !ns.outgoing.is_empty()
     {
@@ -175,7 +173,6 @@ fn print_graph(
         }
     }
 
-    // Deeper levels
     for d in 2..=max_depth {
         if let Some(ns) = neighbors.get(&d)
             && (!ns.outgoing.is_empty() || !ns.incoming.is_empty())

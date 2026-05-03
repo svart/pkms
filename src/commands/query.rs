@@ -1,6 +1,7 @@
+use crate::cli::OutputFormat;
 use crate::config::Config;
 use crate::graph::Graph;
-use crate::util;
+use crate::output::OutputContext;
 use anyhow::Result;
 use serde::Serialize;
 
@@ -31,10 +32,7 @@ pub struct ContextLine {
 #[allow(clippy::too_many_lines)]
 pub fn run(
     config: &Config,
-    json: bool,
-    ndjson: bool,
-    no_header: bool,
-    count_only: bool,
+    ctx: &OutputContext,
     verbose: bool,
     terms: Option<&str>,
     tag_filter: Option<&str>,
@@ -51,11 +49,10 @@ pub fn run(
     let title_results = graph.search(terms);
     let content_results = graph.search_content(terms);
 
-    // Build map of content matches
     let mut content_map: std::collections::HashMap<String, Vec<ContextLine>> =
         std::collections::HashMap::new();
     for (uuid, _title, lines) in &content_results {
-        let ctx: Vec<ContextLine> = lines
+        let ctx_lines: Vec<ContextLine> = lines
             .iter()
             .map(|l| {
                 let (line_str, text) = l.split_once(": ").unwrap_or(("0", l));
@@ -65,7 +62,7 @@ pub fn run(
                 }
             })
             .collect();
-        content_map.insert(uuid.clone(), ctx);
+        content_map.insert(uuid.clone(), ctx_lines);
     }
 
     let mut combined: Vec<QueryResultEntry> = title_results
@@ -85,12 +82,11 @@ pub fn run(
         })
         .collect();
 
-    // Add content-only matches
     for (uuid, title, lines) in content_results {
         if combined.iter().any(|r| r.uuid == uuid) {
             continue;
         }
-        let ctx: Vec<ContextLine> = lines
+        let ctx_lines: Vec<ContextLine> = lines
             .iter()
             .map(|l| {
                 let (line_str, text) = l.split_once(": ").unwrap_or(("0", l));
@@ -107,62 +103,61 @@ pub fn run(
             filetags: vec![],
             score: 1.0,
             matches: vec!["content match".to_string()],
-            content_matches: ctx,
+            content_matches: ctx_lines,
         });
     }
 
-    // Sort by score descending
     combined.sort_by(|a, b| {
         b.score
             .partial_cmp(&a.score)
             .unwrap_or(std::cmp::Ordering::Equal)
     });
 
-    // Filter by tag
     if let Some(tag) = tag_filter {
         combined.retain(|r| r.filetags.iter().any(|t| t == tag));
     }
 
-    // Apply limit
     if let Some(limit) = limit {
         combined.truncate(limit);
     }
 
-    if count_only {
-        util::print_count(combined.len(), json);
+    if ctx.count_only {
+        ctx.print_count(combined.len());
         return Ok(());
     }
 
-    if json {
-        if ndjson {
-            return util::print_ndjson(&combined);
-        }
-        let output = QueryOutput {
-            query: terms.to_string(),
-            total_results: combined.len(),
-            results: combined,
-        };
-        println!("{}", serde_json::to_string_pretty(&output)?);
-    } else {
-        if !no_header {
-            println!("Query: {terms}");
-            println!("Results: {}", combined.len());
-            println!();
-        }
-        for (i, r) in combined.iter().enumerate() {
-            println!("{:3}. {}  (score: {:.1})", i + 1, r.title, r.score);
-            println!("       UUID: {}", r.uuid);
-            if !r.matches.is_empty() {
-                println!("       Matches: {}", r.matches.join(", "));
+    match ctx.format {
+        OutputFormat::Text => {
+            if !ctx.no_header {
+                println!("Query: {terms}");
+                println!("Results: {}", combined.len());
+                println!();
             }
-            if !r.content_matches.is_empty() {
-                for cm in &r.content_matches[..std::cmp::min(3, r.content_matches.len())] {
-                    println!("       > {}", cm.text);
+            for (i, r) in combined.iter().enumerate() {
+                println!("{:3}. {}  (score: {:.1})", i + 1, r.title, r.score);
+                println!("       UUID: {}", r.uuid);
+                if !r.matches.is_empty() {
+                    println!("       Matches: {}", r.matches.join(", "));
                 }
-                if r.content_matches.len() > 3 {
-                    println!("       ... and {} more", r.content_matches.len() - 3);
+                if !r.content_matches.is_empty() {
+                    for cm in &r.content_matches[..std::cmp::min(3, r.content_matches.len())] {
+                        println!("       > {}", cm.text);
+                    }
+                    if r.content_matches.len() > 3 {
+                        println!("       ... and {} more", r.content_matches.len() - 3);
+                    }
                 }
             }
+        }
+        OutputFormat::Json => {
+            ctx.print_json(&QueryOutput {
+                query: terms.to_string(),
+                total_results: combined.len(),
+                results: combined,
+            })?;
+        }
+        OutputFormat::Ndjson => {
+            ctx.print_ndjson(&combined)?;
         }
     }
 

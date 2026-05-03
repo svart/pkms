@@ -1,5 +1,6 @@
 use crate::config::Config;
 use crate::graph::Graph;
+use crate::output::OutputContext;
 use anyhow::Result;
 use serde::Serialize;
 
@@ -42,7 +43,7 @@ pub struct RecentNote {
 
 pub fn run(
     config: &Config,
-    json: bool,
+    ctx: &OutputContext,
     verbose: bool,
     days: Option<u32>,
     db_cli: Option<&std::path::Path>,
@@ -61,7 +62,7 @@ pub fn run(
     let hubs = graph.hubs(10);
     let disk_size = graph.disk_size();
 
-    if json {
+    if ctx.is_json() {
         let output = StatsOutput {
             db_root: db_root.to_string_lossy().to_string(),
             total_notes: stats.total_notes,
@@ -100,7 +101,7 @@ pub fn run(
                     .collect()
             }),
         };
-        println!("{}", serde_json::to_string_pretty(&output)?);
+        ctx.print_json(&output)?;
     } else {
         println!("Database: {}", db_root.display());
         println!("  Notes:             {}", stats.total_notes);

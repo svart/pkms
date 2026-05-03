@@ -1,5 +1,6 @@
 use crate::config::Config;
 use crate::graph::Graph;
+use crate::output::OutputContext;
 use crate::util;
 use anyhow::Result;
 use serde::Serialize;
@@ -43,7 +44,7 @@ pub struct EdgeEntry {
 
 pub fn run(
     config: &Config,
-    json: bool,
+    ctx: &OutputContext,
     verbose: bool,
     target: Option<&str>,
     depth: u32,
@@ -56,7 +57,7 @@ pub fn run(
     let root = graph.resolve_target(target)?.clone();
     let sub = graph.collect_subgraph(&root.uuid, depth);
 
-    if json {
+    if ctx.is_json() {
         let nodes: Vec<SubgraphNode> = sub.nodes.iter().map(SubgraphNode::from).collect();
 
         let edges: Vec<EdgeEntry> = sub
@@ -78,7 +79,7 @@ pub fn run(
             nodes,
             edges,
         };
-        println!("{}", serde_json::to_string_pretty(&output)?);
+        ctx.print_json(&output)?;
     } else {
         println!("Subgraph around \"{}\" (depth: {})", root.title, depth);
         println!("  Vertices: {}", sub.vertex_count);

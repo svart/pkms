@@ -1,5 +1,6 @@
 use crate::config::Config;
 use crate::graph::Graph;
+use crate::output::OutputContext;
 use anyhow::Result;
 use serde::Serialize;
 use std::fmt::Write;
@@ -16,7 +17,7 @@ pub struct ContextOutput {
 
 pub fn run(
     config: &Config,
-    json: bool,
+    ctx: &OutputContext,
     quiet: bool,
     target: Option<&str>,
     depth: u32,
@@ -71,7 +72,7 @@ pub fn run(
     let aliases_str = node.aliases.join(", ");
 
     let tmpl = template.unwrap_or(DEFAULT_TEMPLATE);
-    let ctx = render_template(
+    let rendered = render_template(
         tmpl,
         &ContextVars {
             title: &node.title,
@@ -85,24 +86,24 @@ pub fn run(
         },
     );
 
-    let ctx = if let Some(max) = max_tokens {
-        truncate_by_tokens(&ctx, max)
+    let rendered = if let Some(max) = max_tokens {
+        truncate_by_tokens(&rendered, max)
     } else {
-        ctx
+        rendered
     };
 
-    let final_tokens = estimate_tokens(&ctx);
+    let final_tokens = estimate_tokens(&rendered);
 
-    if json {
+    if ctx.is_json() {
         let output = ContextOutput {
             target: node.title,
-            context: ctx,
+            context: rendered,
             estimated_tokens: final_tokens,
             depth,
         };
-        println!("{}", serde_json::to_string_pretty(&output)?);
+        ctx.print_json(&output)?;
     } else {
-        println!("{ctx}");
+        println!("{rendered}");
         if !quiet {
             eprintln!(
                 "[context: ~{} tokens, depth: {}, max_tokens: {}]",
@@ -130,8 +131,6 @@ struct ContextVars<'a> {
 fn render_template(template: &str, vars: &ContextVars) -> String {
     let mut result = template.to_string();
 
-    // Simple conditional blocks: {{#key}}...{{/key}}
-    // Keep content only if the value is non-empty
     let conditionals = [
         ("tags", vars.tags),
         ("aliases", vars.aliases),
@@ -142,7 +141,6 @@ fn render_template(template: &str, vars: &ContextVars) -> String {
         let start_tag = format!("{{{{#{key}}}}}");
         let end_tag = format!("{{{{/{key}}}}}");
         if val.is_empty() {
-            // Remove the entire block
             while let Some(start) = result.find(&start_tag) {
                 if let Some(end) = result[start..].find(&end_tag) {
                     let end = start + end + end_tag.len();
@@ -152,13 +150,11 @@ fn render_template(template: &str, vars: &ContextVars) -> String {
                 }
             }
         } else {
-            // Remove tags but keep content
             result = result.replace(&start_tag, "");
             result = result.replace(&end_tag, "");
         }
     }
 
-    // Simple variable replacement
     let replacements = [
         ("title", vars.title),
         ("uuid", vars.uuid),
@@ -266,7 +262,6 @@ mod tests {
     #[test]
     fn test_truncate_by_tokens_long() {
         let text = "aaaa bbbb cccc dddd";
-        // 4 words → 4 tokens, truncating at 2 tokens → first 2 start positions
         let truncated = truncate_by_tokens(text, 2);
         assert!(truncated.len() < text.len());
     }

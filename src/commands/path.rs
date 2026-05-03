@@ -1,5 +1,6 @@
 use crate::config::Config;
 use crate::graph::Graph;
+use crate::output::OutputContext;
 use anyhow::Result;
 use serde::Serialize;
 
@@ -20,7 +21,7 @@ pub struct PathNode {
 
 pub fn run(
     config: &Config,
-    json: bool,
+    ctx: &OutputContext,
     verbose: bool,
     from: Option<&str>,
     to: Option<&str>,
@@ -41,7 +42,7 @@ pub fn run(
         (Some(f), Some(t)) => {
             let path_uuids = graph.find_shortest_path(&f.uuid, &t.uuid, max_depth);
 
-            if json {
+            if ctx.is_json() {
                 let (found, hops, path_nodes) = match &path_uuids {
                     Some(uuids) => {
                         let nodes: Vec<PathNode> = uuids
@@ -64,7 +65,7 @@ pub fn run(
                     hops,
                     path: path_nodes,
                 };
-                println!("{}", serde_json::to_string_pretty(&output)?);
+                ctx.print_json(&output)?;
             } else if let Some(uuids) = path_uuids {
                 let hops = uuids.len() - 1;
                 println!("Shortest path between \"{}\" and \"{}\":", f.title, t.title);

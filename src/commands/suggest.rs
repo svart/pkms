@@ -2,6 +2,7 @@
 
 use crate::config::Config;
 use crate::graph::Graph;
+use crate::output::OutputContext;
 use crate::parser::Link;
 use anyhow::Result;
 use serde::Serialize;
@@ -27,7 +28,7 @@ pub struct Suggestion {
 
 pub fn run(
     config: &Config,
-    json: bool,
+    ctx: &OutputContext,
     verbose: bool,
     target: Option<&str>,
     limit: Option<usize>,
@@ -46,18 +47,15 @@ pub fn run(
 
     let target_lower = node.title.to_lowercase();
 
-    // Extract meaningful keywords from target's title (words > 2 chars)
     let target_keywords: HashSet<String> = target_lower
         .split_whitespace()
         .filter(|w| w.len() > 2)
         .map(std::string::ToString::to_string)
         .collect();
 
-    // Extract keywords from target's full content
     let mut content_keywords: HashSet<String> = HashSet::new();
     if let Ok(content) = std::fs::read_to_string(&node.path) {
         let content_lower = content.to_lowercase();
-        // Take first 100 unique meaningful words from content
         for word in content_lower.split_whitespace() {
             let clean: String = word
                 .trim_matches(|c: char| !c.is_alphanumeric())
@@ -110,7 +108,6 @@ pub fn run(
         let mut reasons = Vec::new();
         let mut factor_scores: HashMap<String, f64> = HashMap::new();
 
-        // 1. Title keyword match (strongest signal)
         let other_lower = other.title.to_lowercase();
         let other_words: Vec<&str> = other_lower.split_whitespace().collect();
         let title_overlap: usize = other_words
@@ -124,7 +121,6 @@ pub fn run(
             reasons.push(format!("shared title: \"{}\"", other.title));
         }
 
-        // 2. Content keyword match (scan other note's content for target's keywords)
         if !content_keywords.is_empty()
             && let Ok(other_content) = std::fs::read_to_string(&other.path)
         {
@@ -143,7 +139,6 @@ pub fn run(
             }
         }
 
-        // 3. Shared tags (strong signal)
         let tag_overlap: usize = other
             .filetags
             .iter()
@@ -156,7 +151,6 @@ pub fn run(
             reasons.push("shared tags".to_string());
         }
 
-        // 4. Shared backlinks (co-citation)
         let other_backlinks: HashSet<&str> = graph
             .backlinks
             .get(&other.uuid)
@@ -170,7 +164,6 @@ pub fn run(
             reasons.push(format!("{shared_backlinks} shared backlinks"));
         }
 
-        // 5. Shared outgoing links
         let other_outgoing: HashSet<&str> = other
             .outgoing
             .iter()
@@ -190,7 +183,6 @@ pub fn run(
             reasons.push(format!("{shared_outgoing} shared outgoing"));
         }
 
-        // 6. Directory proximity (same parent dir)
         if let (Some(tp), Some(op)) = (node.path.parent(), other.path.parent())
             && tp == op
             && score > 0.0
@@ -208,7 +200,7 @@ pub fn run(
     scored.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
     scored.truncate(limit);
 
-    if json {
+    if ctx.is_json() {
         let suggestions: Vec<Suggestion> = scored
             .into_iter()
             .map(|(n, s, r, fs)| Suggestion {
@@ -226,7 +218,7 @@ pub fn run(
             target_uuid: node.uuid.clone(),
             suggestions,
         };
-        println!("{}", serde_json::to_string_pretty(&output)?);
+        ctx.print_json(&output)?;
     } else {
         println!("Suggestions for \"{}\":", node.title);
         println!();

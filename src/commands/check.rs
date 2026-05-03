@@ -1,5 +1,6 @@
 use crate::config::Config;
 use crate::graph::{DuplicateInfo, Graph, GraphStats};
+use crate::output::OutputContext;
 use crate::parser::Link;
 use anyhow::Result;
 use serde::Serialize;
@@ -57,7 +58,7 @@ fn link_target_exists(target: &str, db_root: &Path) -> bool {
 #[allow(clippy::too_many_lines)]
 pub fn run(
     config: &Config,
-    json: bool,
+    ctx: &OutputContext,
     verbose: bool,
     db_cli: Option<&std::path::Path>,
     file_links: bool,
@@ -111,7 +112,7 @@ pub fn run(
         && broken_file_links_count == 0
         && broken_attachment_links_count == 0;
 
-    if json {
+    if ctx.is_json() {
         let broken = graph
             .broken_links
             .iter()
@@ -145,7 +146,7 @@ pub fn run(
             failed_files: failed,
             healthy,
         };
-        println!("{}", serde_json::to_string_pretty(&output)?);
+        ctx.print_json(&output)?;
     } else {
         println!("Database: {}", db_root.display());
         println!("  Notes:          {}", stats.total_notes);

@@ -1,5 +1,6 @@
 use crate::config::Config;
 use crate::graph::Graph;
+use crate::output::OutputContext;
 use anyhow::Result;
 use serde::Serialize;
 
@@ -16,22 +17,19 @@ pub struct FixOutput {
 #[allow(clippy::too_many_lines)]
 pub fn run(
     config: &Config,
-    json: bool,
+    ctx: &OutputContext,
     verbose: bool,
     broken_uuid: &str,
     target: &str,
     apply: bool,
     db_cli: Option<&std::path::Path>,
 ) -> Result<()> {
-    // Load graph to find the replacement note
     let graph = Graph::load(config, db_cli, false)?;
     let db_root = config.resolve_db_root(db_cli)?;
 
-    // Validate broken UUID format
     let broken = if broken_uuid.contains('-') {
         broken_uuid.to_string()
     } else if broken_uuid.len() == 8 {
-        // Check existing nodes first
         let matches: Vec<&String> = graph
             .nodes
             .keys()
@@ -43,7 +41,6 @@ pub fn run(
                 anyhow::bail!("Multiple existing UUIDs match prefix '{broken_uuid}': {matches:?}")
             }
             std::cmp::Ordering::Less => {
-                // Check broken links (deduplicate by target UUID)
                 let mut seen = std::collections::HashSet::new();
                 let broken_matches: Vec<&String> = graph
                     .broken_links
@@ -73,12 +70,10 @@ pub fn run(
         anyhow::bail!("Invalid UUID format: {broken_uuid}");
     };
 
-    // Resolve replacement — support UUID, title, path, or prefix
     let replacement = graph
         .find_node(target)
         .map(|n| (n.uuid.clone(), n.title.clone()))
         .or_else(|| {
-            // Try prefix matching in existing nodes
             let prefix_matches: Vec<&String> = graph
                 .nodes
                 .keys()
@@ -98,7 +93,6 @@ pub fn run(
         anyhow::bail!("Replacement target not found: {target}")
     };
 
-    // Find all files containing the broken UUID
     let broken_str = &broken;
     let mut files_affected = Vec::new();
     let mut total_replacements = 0;
@@ -139,8 +133,8 @@ pub fn run(
         applied: apply,
     };
 
-    if json {
-        println!("{}", serde_json::to_string_pretty(&output)?);
+    if ctx.is_json() {
+        ctx.print_json(&output)?;
     } else {
         if apply {
             println!(

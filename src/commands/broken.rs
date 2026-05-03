@@ -1,6 +1,6 @@
 use crate::config::Config;
 use crate::graph::Graph;
-use crate::util;
+use crate::output::OutputContext;
 use anyhow::Result;
 use serde::Serialize;
 
@@ -17,46 +17,42 @@ pub struct BrokenEntry {
     pub target_uuid: String,
 }
 
-pub fn run(
-    config: &Config,
-    json: bool,
-    ndjson: bool,
-    no_header: bool,
-    count_only: bool,
-    db_cli: Option<&std::path::Path>,
-) -> Result<()> {
+pub fn run(config: &Config, ctx: &OutputContext, db_cli: Option<&std::path::Path>) -> Result<()> {
     let graph = Graph::load(config, db_cli, false)?;
     let links = graph.broken_links_list();
 
     let count = links.len();
-    if count_only {
-        util::print_count(count, json);
+    if ctx.count_only {
+        ctx.print_count(count);
         return Ok(());
     }
 
-    if json {
-        let entries: Vec<BrokenEntry> = links
-            .into_iter()
-            .map(|(src, title, tgt)| BrokenEntry {
-                source_uuid: src,
-                source_title: title,
-                target_uuid: tgt,
-            })
-            .collect();
-        if ndjson {
-            return util::print_ndjson(&entries);
+    let entries: Vec<BrokenEntry> = links
+        .iter()
+        .map(|(src, title, tgt)| BrokenEntry {
+            source_uuid: src.clone(),
+            source_title: title.clone(),
+            target_uuid: tgt.clone(),
+        })
+        .collect();
+
+    match ctx.format {
+        crate::cli::OutputFormat::Text => {
+            if !ctx.no_header {
+                println!("Broken links ({count}):");
+            }
+            for (_src, title, tgt) in &links {
+                println!("  {title} -> {tgt}");
+            }
         }
-        let output = BrokenOutput {
-            count: entries.len(),
-            links: entries,
-        };
-        println!("{}", serde_json::to_string_pretty(&output)?);
-    } else {
-        if !no_header {
-            println!("Broken links ({count}):");
+        crate::cli::OutputFormat::Json => {
+            ctx.print_json(&BrokenOutput {
+                count: entries.len(),
+                links: entries,
+            })?;
         }
-        for (_src, title, tgt) in &links {
-            println!("  {title} -> {tgt}");
+        crate::cli::OutputFormat::Ndjson => {
+            ctx.print_ndjson(&entries)?;
         }
     }
 

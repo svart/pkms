@@ -11,23 +11,26 @@ mod commands;
 mod config;
 mod discovery;
 mod graph;
+mod output;
 mod parser;
 mod util;
 
 use anyhow::Result;
 use clap::Parser;
 use cli::{Cli, Command, OutputFormat};
+use output::OutputContext;
 use std::process::ExitCode;
 
 #[allow(clippy::too_many_lines)]
 fn main() -> ExitCode {
     let cli = Cli::parse();
-    let ndjson = matches!(cli.output_format, Some(OutputFormat::Ndjson));
-    let use_json = cli.output_format.is_some();
-    let machine = use_json;
-    let quiet = cli.quiet || use_json;
-    let no_header = cli.no_header;
-    let count_only = cli.count_only;
+    let ctx = OutputContext {
+        format: cli.output_format.unwrap_or(OutputFormat::Text),
+        no_header: cli.no_header,
+        count_only: cli.count_only,
+    };
+    let machine = ctx.is_json();
+    let quiet = cli.quiet || machine;
 
     let cfg = match config::Config::load() {
         Ok(c) => c,
@@ -47,7 +50,7 @@ fn main() -> ExitCode {
             attachment_links,
         } => commands::check::run(
             &cfg,
-            use_json,
+            &ctx,
             cli.verbose,
             cli.db.as_deref(),
             *file_links,
@@ -55,44 +58,25 @@ fn main() -> ExitCode {
         ),
         Command::Validate { target } => commands::validate::run(
             &cfg,
-            use_json,
+            &ctx,
             cli.verbose,
             target.as_deref(),
             cli.db.as_deref(),
         )
         .map(|()| ExitCode::SUCCESS),
         Command::Stats { days } => {
-            commands::stats::run(&cfg, use_json, cli.verbose, *days, cli.db.as_deref())
+            commands::stats::run(&cfg, &ctx, cli.verbose, *days, cli.db.as_deref())
                 .map(|()| ExitCode::SUCCESS)
         }
-        Command::Orphans => commands::orphans::run(
-            &cfg,
-            use_json,
-            ndjson,
-            no_header,
-            count_only,
-            cli.db.as_deref(),
-        )
-        .map(|()| ExitCode::SUCCESS),
-        Command::Broken => commands::broken::run(
-            &cfg,
-            use_json,
-            ndjson,
-            no_header,
-            count_only,
-            cli.db.as_deref(),
-        )
-        .map(|()| ExitCode::SUCCESS),
-        Command::Hubs { limit } => commands::hubs::run(
-            &cfg,
-            use_json,
-            ndjson,
-            no_header,
-            count_only,
-            *limit,
-            cli.db.as_deref(),
-        )
-        .map(|()| ExitCode::SUCCESS),
+        Command::Orphans => {
+            commands::orphans::run(&cfg, &ctx, cli.db.as_deref()).map(|()| ExitCode::SUCCESS)
+        }
+        Command::Broken => {
+            commands::broken::run(&cfg, &ctx, cli.db.as_deref()).map(|()| ExitCode::SUCCESS)
+        }
+        Command::Hubs { limit } => {
+            commands::hubs::run(&cfg, &ctx, *limit, cli.db.as_deref()).map(|()| ExitCode::SUCCESS)
+        }
         Command::Context {
             target,
             depth,
@@ -102,7 +86,7 @@ fn main() -> ExitCode {
             template,
         } => commands::context::run(
             &cfg,
-            use_json,
+            &ctx,
             quiet,
             target.as_deref(),
             *depth,
@@ -121,10 +105,7 @@ fn main() -> ExitCode {
             fields,
         } => commands::resolve::run(
             &cfg,
-            use_json,
-            ndjson,
-            no_header,
-            count_only,
+            &ctx,
             target.as_deref(),
             tags.as_deref(),
             search.as_deref(),
@@ -139,7 +120,7 @@ fn main() -> ExitCode {
             apply,
         } => commands::fix::run(
             &cfg,
-            use_json,
+            &ctx,
             cli.verbose,
             broken_uuid,
             target,
@@ -149,7 +130,7 @@ fn main() -> ExitCode {
         .map(|()| ExitCode::SUCCESS),
         Command::Suggest { target, limit } => commands::suggest::run(
             &cfg,
-            use_json,
+            &ctx,
             cli.verbose,
             target.as_deref(),
             *limit,
@@ -163,7 +144,7 @@ fn main() -> ExitCode {
             aliases,
         } => commands::new::run(
             &cfg,
-            use_json,
+            &ctx,
             title,
             *create,
             tags.as_deref(),
@@ -178,7 +159,7 @@ fn main() -> ExitCode {
             graph: show_graph,
         } => commands::get::run(
             &cfg,
-            use_json,
+            &ctx,
             cli.verbose,
             target.as_deref(),
             *depth,
@@ -189,10 +170,7 @@ fn main() -> ExitCode {
         .map(|()| ExitCode::SUCCESS),
         Command::Query { terms, tag, limit } => commands::query::run(
             &cfg,
-            use_json,
-            ndjson,
-            no_header,
-            count_only,
+            &ctx,
             cli.verbose,
             terms.as_deref(),
             tag.as_deref(),
@@ -201,16 +179,16 @@ fn main() -> ExitCode {
         )
         .map(|()| ExitCode::SUCCESS),
         Command::Info => {
-            commands::info::run(&cfg, use_json, cli.db.as_deref()).map(|()| ExitCode::SUCCESS)
+            commands::info::run(&cfg, &ctx, cli.db.as_deref()).map(|()| ExitCode::SUCCESS)
         }
-        Command::InitConfig { db } => init_config(db.as_deref(), use_json),
+        Command::InitConfig { db } => init_config(db.as_deref(), &ctx),
         Command::Path {
             from,
             to,
             max_depth,
         } => commands::path::run(
             &cfg,
-            use_json,
+            &ctx,
             cli.verbose,
             from.as_deref(),
             to.as_deref(),
@@ -220,24 +198,17 @@ fn main() -> ExitCode {
         .map(|()| ExitCode::SUCCESS),
         Command::Subgraph { target, depth } => commands::subgraph::run(
             &cfg,
-            use_json,
+            &ctx,
             cli.verbose,
             target.as_deref(),
             *depth,
             cli.db.as_deref(),
         )
         .map(|()| ExitCode::SUCCESS),
-        Command::Tags { tag } => commands::tags::run(
-            &cfg,
-            use_json,
-            ndjson,
-            no_header,
-            count_only,
-            cli.verbose,
-            tag.as_deref(),
-            cli.db.as_deref(),
-        )
-        .map(|()| ExitCode::SUCCESS),
+        Command::Tags { tag } => {
+            commands::tags::run(&cfg, &ctx, cli.verbose, tag.as_deref(), cli.db.as_deref())
+                .map(|()| ExitCode::SUCCESS)
+        }
     };
 
     match result {
@@ -253,7 +224,7 @@ fn main() -> ExitCode {
     }
 }
 
-fn init_config(db: Option<&std::path::Path>, json: bool) -> Result<ExitCode> {
+fn init_config(db: Option<&std::path::Path>, ctx: &OutputContext) -> Result<ExitCode> {
     let config_path = dirs::config_dir()
         .ok_or_else(|| anyhow::anyhow!("Could not find XDG config directory"))?
         .join("pkms.toml");
@@ -263,7 +234,7 @@ fn init_config(db: Option<&std::path::Path>, json: bool) -> Result<ExitCode> {
     let content = config::generate_default_config(db);
     std::fs::create_dir_all(config_path.parent().unwrap())?;
     std::fs::write(&config_path, &content)?;
-    if json {
+    if ctx.is_json() {
         println!(
             "{}",
             serde_json::json!({"created": config_path.to_string_lossy()})

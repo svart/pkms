@@ -1,4 +1,5 @@
 use crate::config::{Config, ConfigInfo};
+use crate::output::OutputContext;
 use anyhow::Result;
 use serde::Serialize;
 
@@ -14,12 +15,12 @@ pub struct CliOverrides {
     pub db_override: bool,
 }
 
-pub fn run(config: &Config, json: bool, db_cli: Option<&std::path::Path>) -> Result<()> {
+pub fn run(config: &Config, ctx: &OutputContext, db_cli: Option<&std::path::Path>) -> Result<()> {
     let db_root = config.resolve_db_root(db_cli)?;
     let new_notes_dir = config.resolve_new_notes_dir(&db_root);
     let info = config.resolved_info(&db_root, &new_notes_dir);
 
-    if json {
+    if ctx.is_json() {
         let output = InfoOutput {
             config: info,
             config_path: dirs::config_dir()
@@ -31,7 +32,7 @@ pub fn run(config: &Config, json: bool, db_cli: Option<&std::path::Path>) -> Res
                 db_override: db_cli.is_some(),
             },
         };
-        println!("{}", serde_json::to_string_pretty(&output)?);
+        ctx.print_json(&output)?;
     } else {
         println!("pkms configuration");
         println!(

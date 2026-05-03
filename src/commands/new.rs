@@ -1,4 +1,5 @@
 use crate::config::Config;
+use crate::output::OutputContext;
 use anyhow::Result;
 use serde::Serialize;
 use std::fmt::Write;
@@ -15,7 +16,7 @@ pub struct NewOutput {
 
 pub fn run(
     config: &Config,
-    json: bool,
+    ctx: &OutputContext,
     title: &str,
     create: bool,
     tags: Option<&str>,
@@ -32,7 +33,6 @@ pub fn run(
     let filename = format!("{timestamp}-{slug}.org");
     let path = new_notes_dir.join(&filename);
 
-    // Ensure target directory exists
     if create {
         std::fs::create_dir_all(&new_notes_dir)?;
     }
@@ -73,8 +73,8 @@ pub fn run(
         created,
     };
 
-    if json {
-        println!("{}", serde_json::to_string_pretty(&output)?);
+    if ctx.is_json() {
+        ctx.print_json(&output)?;
     } else {
         println!("New note:");
         println!("  Title:    {}", output.title);

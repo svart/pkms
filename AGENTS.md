@@ -32,7 +32,8 @@ src/
   config.rs         # ~/.config/pkms.toml loading, merging with CLI --db flag
   discovery.rs      # Recursive .org file discovery with ignore patterns
   parser.rs         # org-mode parser: IDs, titles, filetags, aliases, refs, links, headings
-  util.rs           # Shared helpers: print_count, print_ndjson, short_uuid, path_string
+  util.rs           # Shared helpers: short_uuid, path_string
+  output.rs         # OutputContext: format dispatch (Text/Json/Ndjson), print helpers
   graph/            # In-memory graph module (split into submodules)
     mod.rs          # Struct defs: Node, Graph, FileScanResult; load/scan/find_node/resolve_target
     builder.rs      # Graph::build constructor
@@ -67,7 +68,7 @@ tests/
 ## How to add a new command
 
 1. **`src/cli.rs`** — Add variant to `Command` enum with clap attributes
-2. **`src/commands/<name>.rs`** — Create file with `pub fn run(...)` that accepts `&Config, json: bool, verbose: bool, ...` and returns `anyhow::Result<()>`
+2. **`src/commands/<name>.rs`** — Create file with `pub fn run(...)` that accepts `&Config, &OutputContext, verbose: bool, ...` and returns `anyhow::Result<()>`
 3. **`src/commands/mod.rs`** — Add `pub mod <name>;`
 4. **`src/main.rs`** — Add `Command::<Name> => commands::<name>::run(...)` arm
 5. **`tests/integration.rs`** — Add test calling the binary
@@ -92,7 +93,7 @@ If performance optimization is needed, compute from scratch on every run — do 
 - **`Graph::load(config, db_cli, verbose)`** to load the full database (discovers + parses 750+ files, ~3s). Expensive — cache results when possible.
 - **`resolve`** command is fast (~0.5s) because it scans only file headers. Use for quick lookups.
 - **`#[allow(dead_code)]`** on struct fields kept for future use. Remove if never needed after implementation.
-- **Use `util::print_count`** and **`util::print_ndjson`** for count/ndjson output patterns.
+- **Use `ctx.print_count`**, **`ctx.print_json`**, and **`ctx.print_ndjson`** from `OutputContext` for output dispatch. Every command receives `&OutputContext`.
 
 ## Graph data model
 
@@ -107,11 +108,11 @@ Graph { nodes: HashMap<uuid, Node>, path_to_uuid, title_to_uuid, backlinks, brok
 ## Command pattern
 
 Every command's `run()` follows the same pattern:
-1. Accept `&Config, json: bool, verbose: bool, ...specific_args..., db_cli: Option<&Path>`
+1. Accept `&Config, &OutputContext, verbose: bool, ...specific_args..., db_cli: Option<&Path>`
 2. Call `Graph::load(config, db_cli, verbose)` if the full graph is needed
 3. Perform the command logic
-4. If `json`, print `serde_json::to_string_pretty(&output_struct)?`
-5. Otherwise, print human-readable output with `println!`
+4. Dispatch output using `ctx.print_json()`, `ctx.print_ndjson()`, or the `OutputFormat` match
+5. For text output, format with `println!`
 
 ## JSON output schemas
 
@@ -150,7 +151,7 @@ These schemas define the exact structure and types for reliable programmatic con
 
 | Flag              | Description                                      |
 |-------------------|--------------------------------------------------|
-| `--output-format FMT` | Output format: `json` or `ndjson`           |
+| `--output-format FMT` | Output format: `text`, `json`, or `ndjson`   |
 | `--no-header`     | Suppress column headers in human output          |
 | `--count`         | Show only the result count                       |
 
