@@ -4,12 +4,6 @@ assertion_line: 1337
 expression: "normalize_snapshot(&stdout, &root)"
 ---
 Total: 10
-  Note C
-         UUID: cccccccc-cccc-4ccc-cccc-cccccccccccc
-  Note B
-         UUID: bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb
-  Note A
-         UUID: aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa
   Headings Note
          UUID: 77777777-7777-4777-7777-777777777777
   Orphan Note
@@ -25,3 +19,9 @@ Total: 10
          Tags: learning, emacs
   Broken Note
          UUID: eeeeeeee-eeee-4eee-eeee-eeeeeeeeeeee
+  Note C
+         UUID: cccccccc-cccc-4ccc-cccc-cccccccccccc
+  Note B
+         UUID: bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb
+  Note A
+         UUID: aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa

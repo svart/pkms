@@ -87,7 +87,7 @@ pub enum Command {
         uuid: Option<String>,
         #[arg(
             long,
-            help = "Search by title (substring match)",
+            help = "Search by title or alias (substring match)",
             required_unless_present_any = ["uuid", "tags"]
         )]
         title: Option<String>,

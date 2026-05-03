@@ -51,7 +51,7 @@ The `--db` flag overrides `db_root` from the config. If neither is provided, the
 
 ```
 pkms resolve --uuid <uuid>              # Search by UUID (substring)
-pkms resolve --title <title>            # Search by title (substring)
+pkms resolve --title <title>            # Search by title or alias (substring)
 pkms resolve --tags "tag1,tag2"         # Filter by filetags (substring)
 pkms resolve --uuid <uuid> --fields uuid,title,path  # Select output fields
 pkms resolve --title <term> --limit 20  # Cap results

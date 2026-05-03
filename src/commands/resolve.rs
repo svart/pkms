@@ -135,7 +135,7 @@ pub fn run(
     let uuid_query = opts.uuid.map(str::to_lowercase);
     let title_query = opts.title.map(str::to_lowercase);
 
-    let mut results: Vec<ResolvedNote> = notes
+    let all: Vec<ResolvedNote> = notes
         .into_iter()
         .filter(|n| {
             if let Some(ref uq) = uuid_query
@@ -143,10 +143,16 @@ pub fn run(
             {
                 return false;
             }
-            if let Some(ref tq) = title_query
-                && !n.title.to_lowercase().contains(tq)
-            {
-                return false;
+            if let Some(ref tq) = title_query {
+                let words: Vec<&str> = tq.split_whitespace().collect();
+                let title_match = words.iter().all(|w| n.title.to_lowercase().contains(w));
+                let alias_match = n
+                    .aliases
+                    .iter()
+                    .any(|a| words.iter().all(|w| a.to_lowercase().contains(w)));
+                if !title_match && !alias_match {
+                    return false;
+                }
             }
             if let Some(t) = opts.tags {
                 let wanted: Vec<&str> = t.split(',').map(str::trim).collect();
@@ -161,32 +167,32 @@ pub fn run(
         })
         .collect();
 
-    results.sort_by(|a, b| {
-        let a_score = score_note(a, &uuid_query, &title_query);
-        let b_score = score_note(b, &uuid_query, &title_query);
-        b_score.cmp(&a_score)
-    });
-
-    results.truncate(limit);
+    let total = all.len();
+    let shown = all.into_iter().take(limit).collect::<Vec<_>>();
 
     let field_set: Option<HashSet<String>> = opts
         .fields
         .map(|f| f.split(',').map(|s| s.trim().to_string()).collect());
 
-    print_resolve_output(ctx, results, field_set.as_ref())?;
+    print_resolve_output(ctx, &shown, total, field_set.as_ref())?;
 
     Ok(())
 }
 
 fn print_resolve_output(
     ctx: &OutputContext,
-    results: Vec<ResolvedNote>,
+    results: &[ResolvedNote],
+    total: usize,
     field_set: Option<&HashSet<String>>,
 ) -> Result<()> {
     match ctx.format {
         OutputFormat::Text => {
-            println!("Total: {}", results.len());
-            for note in &results {
+            if total == results.len() {
+                println!("Total: {}", results.len());
+            } else {
+                println!("Total: {}, showed: {}", total, results.len());
+            }
+            for note in results {
                 if let Some(fs) = field_set {
                     if fs.contains("title") {
                         println!("  {}", note.title);
@@ -216,12 +222,12 @@ fn print_resolve_output(
             let output = ResolveOutput {
                 query: String::new(),
                 total: results.len(),
-                results,
+                results: results.to_vec(),
             };
             ctx.print_json(&output)?;
         }
         OutputFormat::Ndjson => {
-            for note in &results {
+            for note in results {
                 let v = filter_fields(&serde_json::to_value(note)?, field_set);
                 println!("{}", serde_json::to_string(&v)?);
             }
@@ -289,137 +295,4 @@ mod tests {
         let result = filter_fields(&v, fields.as_ref());
         assert_eq!(result, v);
     }
-
-    #[test]
-    fn test_score_note_exact_uuid() {
-        let note = ResolvedNote {
-            uuid: "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa".to_string(),
-            title: "Note A".to_string(),
-            path: "a.org".to_string(),
-            filetags: vec![],
-            aliases: vec![],
-        };
-        let uuid_q = Some("aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa".to_string());
-        assert_eq!(score_note(&note, &uuid_q, &None), 100);
-    }
-
-    #[test]
-    fn test_score_note_uuid_prefix() {
-        let note = ResolvedNote {
-            uuid: "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa".to_string(),
-            title: "Note A".to_string(),
-            path: "a.org".to_string(),
-            filetags: vec![],
-            aliases: vec![],
-        };
-        let uuid_q = Some("aaaaaaaa".to_string());
-        assert_eq!(score_note(&note, &uuid_q, &None), 60);
-    }
-
-    #[test]
-    fn test_score_note_uuid_contains() {
-        let note = ResolvedNote {
-            uuid: "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa".to_string(),
-            title: "Note A".to_string(),
-            path: "a.org".to_string(),
-            filetags: vec![],
-            aliases: vec![],
-        };
-        let uuid_q = Some("aaaa".to_string());
-        assert_eq!(score_note(&note, &uuid_q, &None), 60); // starts_with matches
-    }
-
-    #[test]
-    fn test_score_note_exact_title() {
-        let note = ResolvedNote {
-            uuid: "x".to_string(),
-            title: "Exact Title".to_string(),
-            path: "x.org".to_string(),
-            filetags: vec![],
-            aliases: vec![],
-        };
-        let title_q = Some("exact title".to_string());
-        assert_eq!(score_note(&note, &None, &title_q), 80);
-    }
-
-    #[test]
-    fn test_score_note_title_contains() {
-        let note = ResolvedNote {
-            uuid: "x".to_string(),
-            title: "Exact Title".to_string(),
-            path: "x.org".to_string(),
-            filetags: vec![],
-            aliases: vec![],
-        };
-        let title_q = Some("title".to_string());
-        assert_eq!(score_note(&note, &None, &title_q), 25); // contains
-    }
-
-    #[test]
-    fn test_score_note_title_starts_with() {
-        let note = ResolvedNote {
-            uuid: "x".to_string(),
-            title: "Exact Title".to_string(),
-            path: "x.org".to_string(),
-            filetags: vec![],
-            aliases: vec![],
-        };
-        let title_q = Some("exact".to_string());
-        assert_eq!(score_note(&note, &None, &title_q), 50);
-    }
-
-    #[test]
-    fn test_score_note_both_queries() {
-        let note = ResolvedNote {
-            uuid: "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa".to_string(),
-            title: "Note A".to_string(),
-            path: "a.org".to_string(),
-            filetags: vec![],
-            aliases: vec![],
-        };
-        let uuid_q = Some("aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa".to_string());
-        let title_q = Some("note".to_string());
-        assert_eq!(score_note(&note, &uuid_q, &title_q), 100 + 50);
-    }
-
-    #[test]
-    fn test_score_note_no_queries() {
-        let note = ResolvedNote {
-            uuid: "x".to_string(),
-            title: "Note".to_string(),
-            path: "x.org".to_string(),
-            filetags: vec![],
-            aliases: vec![],
-        };
-        assert_eq!(score_note(&note, &None, &None), 0);
-    }
-}
-
-fn score_note(
-    note: &ResolvedNote,
-    uuid_query: &Option<String>,
-    title_query: &Option<String>,
-) -> usize {
-    let mut score = 0;
-    if let Some(uq) = uuid_query {
-        let uuid_lower = note.uuid.to_lowercase();
-        if uuid_lower == *uq {
-            score += 100;
-        } else if uuid_lower.starts_with(uq) {
-            score += 60;
-        } else if uuid_lower.contains(uq.as_str()) {
-            score += 30;
-        }
-    }
-    if let Some(tq) = title_query {
-        let title_lower = note.title.to_lowercase();
-        if title_lower == *tq {
-            score += 80;
-        } else if title_lower.starts_with(tq) {
-            score += 50;
-        } else if title_lower.contains(tq.as_str()) {
-            score += 25;
-        }
-    }
-    score
 }
