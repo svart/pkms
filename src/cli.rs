@@ -170,7 +170,5 @@ pub enum Command {
         from: Option<String>,
         #[arg(help = "Target note (UUID, path, or title)")]
         to: Option<String>,
-        #[arg(short, long, help = "Maximum traversal depth")]
-        max_depth: Option<u32>,
     },
 }

@@ -24,7 +24,6 @@ pub fn run(
     ctx: &OutputContext,
     from: Option<&str>,
     to: Option<&str>,
-    max_depth: Option<u32>,
     db_cli: Option<&std::path::Path>,
 ) -> Result<()> {
     let from = from.ok_or_else(|| anyhow::anyhow!("No source specified. Provide --from"))?;
@@ -39,7 +38,7 @@ pub fn run(
 
     match (from_node, to_node) {
         (Some(f), Some(t)) => {
-            let path_uuids = graph.find_shortest_path(&f.uuid, &t.uuid, max_depth);
+            let path_uuids = graph.find_shortest_path(&f.uuid, &t.uuid, None);
 
             if ctx.is_json() {
                 let (found, hops, path_nodes) = match &path_uuids {
@@ -76,9 +75,6 @@ pub fn run(
                 }
             } else {
                 println!("No path found between \"{}\" and \"{}\"", f.title, t.title);
-                if max_depth.is_some() {
-                    println!("  (try increasing --max-depth)");
-                }
             }
         }
         (None, _) => anyhow::bail!("Source note not found: {from_str}"),

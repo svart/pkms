@@ -197,19 +197,10 @@ fn dispatch_query(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Resul
             cli.db.as_deref(),
         )
         .map(|()| ExitCode::SUCCESS)?,
-        Command::Path {
-            from,
-            to,
-            max_depth,
-        } => commands::path::run(
-            cfg,
-            ctx,
-            from.as_deref(),
-            to.as_deref(),
-            *max_depth,
-            cli.db.as_deref(),
-        )
-        .map(|()| ExitCode::SUCCESS)?,
+        Command::Path { from, to } => {
+            commands::path::run(cfg, ctx, from.as_deref(), to.as_deref(), cli.db.as_deref())
+                .map(|()| ExitCode::SUCCESS)?
+        }
         _ => unreachable!(),
     })
 }

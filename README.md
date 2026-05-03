@@ -83,7 +83,7 @@ outgoing links (internal + file existence), and lists backlinks.
 pkms get <target> --depth 2                # Retrieve note with neighbors (content shown by default)
 pkms get <target> --depth 1 --no-content   # Suppress note content
 pkms path <from> <to>                      # Shortest path between notes
-pkms path "A" "B" --max-depth 10           # Limit traversal depth
+pkms path <from> <to>                      # Shortest path between notes
 ```
 
 `get` traverses the link graph up to N hops, showing forward links

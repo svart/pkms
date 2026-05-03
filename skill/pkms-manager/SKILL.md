@@ -56,7 +56,7 @@ pkms --db ~/Documents/org get <uuid-or-title> --depth 1 --no-content   # Suppres
 ### Graph Navigation
 ```
 pkms --db ~/Documents/org --output-format json path "note A" "note B"               # Shortest path
-pkms --db ~/Documents/org --output-format json path "A" "B" --max-depth 10         # Limit traversal depth
+pkms --db ~/Documents/org --output-format json path "A" "B"                         # Shortest path
 ```
 ### Health & Validation
 
