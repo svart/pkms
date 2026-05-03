@@ -4,8 +4,38 @@ use crate::parser::Link;
 
 use super::{DuplicateEntry, DuplicateInfo, FileScanResult, Graph, Node};
 
+type Backlinks = HashMap<String, Vec<String>>;
+type BrokenLinks = Vec<(String, String)>;
+
+fn build_links(
+    uuid_to_outgoing: &HashMap<String, Vec<Link>>,
+    nodes: &HashMap<String, Node>,
+) -> (Backlinks, BrokenLinks) {
+    let mut backlinks: Backlinks = HashMap::new();
+    let mut broken_links = BrokenLinks::new();
+
+    for (source_uuid, links) in uuid_to_outgoing {
+        for link in links {
+            if let Link::Internal(target_uuid) = link {
+                if nodes.contains_key(target_uuid) {
+                    backlinks
+                        .entry(target_uuid.clone())
+                        .or_default()
+                        .push(source_uuid.clone());
+                } else {
+                    broken_links.push((source_uuid.clone(), target_uuid.clone()));
+                }
+            }
+        }
+    }
+
+    broken_links.sort();
+    broken_links.dedup();
+
+    (backlinks, broken_links)
+}
+
 impl Graph {
-    #[allow(clippy::too_many_lines)]
     pub fn build(results: Vec<FileScanResult>) -> Self {
         let mut nodes = HashMap::new();
         let mut path_to_uuid = HashMap::new();
@@ -83,26 +113,7 @@ impl Graph {
             uuid_to_outgoing.insert(uuid.clone(), parsed.outgoing);
         }
 
-        let mut backlinks: HashMap<String, Vec<String>> = HashMap::new();
-        let mut broken_links = Vec::new();
-
-        for (source_uuid, links) in &uuid_to_outgoing {
-            for link in links {
-                if let Link::Internal(target_uuid) = link {
-                    if nodes.contains_key(target_uuid) {
-                        backlinks
-                            .entry(target_uuid.clone())
-                            .or_default()
-                            .push(source_uuid.clone());
-                    } else {
-                        broken_links.push((source_uuid.clone(), target_uuid.clone()));
-                    }
-                }
-            }
-        }
-
-        broken_links.sort();
-        broken_links.dedup();
+        let (backlinks, broken_links) = build_links(&uuid_to_outgoing, &nodes);
 
         Graph {
             nodes,

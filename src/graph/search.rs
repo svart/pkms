@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use super::Graph;
 
 impl Graph {
+    #[allow(clippy::cast_precision_loss)]
     pub fn search(&self, terms: &str) -> Vec<(&super::Node, f64, Vec<String>)> {
         let query = terms.to_lowercase();
         let words: Vec<&str> = query.split_whitespace().collect();

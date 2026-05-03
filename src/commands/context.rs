@@ -15,27 +15,33 @@ pub struct ContextOutput {
     pub depth: u32,
 }
 
+pub struct ContextOptions<'a> {
+    pub target: Option<&'a str>,
+    pub depth: u32,
+    pub max_tokens: Option<usize>,
+    pub include_outgoing: Option<bool>,
+    pub include_incoming: Option<bool>,
+    pub template: Option<&'a str>,
+}
+
 pub fn run(
     config: &Config,
     ctx: &OutputContext,
     quiet: bool,
-    target: Option<&str>,
-    depth: u32,
-    max_tokens: Option<usize>,
-    include_outgoing: Option<bool>,
-    include_incoming: Option<bool>,
-    template: Option<&str>,
+    opts: &ContextOptions,
     db_cli: Option<&std::path::Path>,
 ) -> Result<()> {
-    let target = target.ok_or_else(|| anyhow::anyhow!("No target specified. Provide a target"))?;
+    let target = opts
+        .target
+        .ok_or_else(|| anyhow::anyhow!("No target specified. Provide a target"))?;
+    let depth = opts.depth;
+    let show_outgoing = opts.include_outgoing.unwrap_or(true);
+    let show_incoming = opts.include_incoming.unwrap_or(true);
 
     let graph = Graph::load(config, db_cli, false)?;
     let node = graph.resolve_target(target)?.clone();
     let content = std::fs::read_to_string(&node.path).unwrap_or_default();
     let neighbors = graph.get_neighbors(&node.uuid, depth);
-
-    let show_outgoing = include_outgoing.unwrap_or(true);
-    let show_incoming = include_incoming.unwrap_or(true);
 
     let mut neighbors_text = String::new();
     let mut backlinks_text = String::new();
@@ -71,7 +77,7 @@ pub fn run(
     let tags_str = node.filetags.join(", ");
     let aliases_str = node.aliases.join(", ");
 
-    let tmpl = template.unwrap_or(DEFAULT_TEMPLATE);
+    let tmpl = opts.template.unwrap_or(DEFAULT_TEMPLATE);
     let rendered = render_template(
         tmpl,
         &ContextVars {
@@ -86,7 +92,7 @@ pub fn run(
         },
     );
 
-    let rendered = if let Some(max) = max_tokens {
+    let rendered = if let Some(max) = opts.max_tokens {
         truncate_by_tokens(&rendered, max)
     } else {
         rendered
@@ -109,7 +115,8 @@ pub fn run(
                 "[context: ~{} tokens, depth: {}, max_tokens: {}]",
                 final_tokens,
                 depth,
-                max_tokens.map_or("unlimited".to_string(), |m| m.to_string())
+                opts.max_tokens
+                    .map_or("unlimited".to_string(), |m| m.to_string())
             );
         }
     }

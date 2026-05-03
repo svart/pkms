@@ -1,4 +1,4 @@
-use clap::{Parser, Subcommand, ValueEnum};
+use clap::{Args, Parser, Subcommand, ValueEnum};
 use std::path::PathBuf;
 
 #[derive(Clone, PartialEq, ValueEnum)]
@@ -8,22 +8,8 @@ pub enum OutputFormat {
     Ndjson,
 }
 
-#[derive(Parser)]
-#[command(
-    name = "pkms",
-    version,
-    about = "org-roam PKMS navigation and validation tool"
-)]
-#[allow(clippy::struct_excessive_bools)]
-pub struct Cli {
-    #[arg(
-        global = true,
-        long,
-        value_name = "PATH",
-        help = "Path to org-roam database root (overrides config)"
-    )]
-    pub db: Option<PathBuf>,
-
+#[derive(Args)]
+pub struct Verbosity {
     #[arg(global = true, short, long, help = "Verbose output")]
     pub verbose: bool,
 
@@ -34,6 +20,37 @@ pub struct Cli {
         help = "Suppress non-essential stderr output"
     )]
     pub quiet: bool,
+}
+
+#[derive(Args)]
+pub struct Display {
+    #[arg(global = true, long, help = "Suppress column headers in human output")]
+    pub no_header: bool,
+
+    #[arg(global = true, long = "count", help = "Show only the count of results")]
+    pub count_only: bool,
+}
+
+#[derive(Parser)]
+#[command(
+    name = "pkms",
+    version,
+    about = "org-roam PKMS navigation and validation tool"
+)]
+pub struct Cli {
+    #[arg(
+        global = true,
+        long,
+        value_name = "PATH",
+        help = "Path to org-roam database root (overrides config)"
+    )]
+    pub db: Option<PathBuf>,
+
+    #[command(flatten)]
+    pub verbosity: Verbosity,
+
+    #[command(flatten)]
+    pub display: Display,
 
     #[arg(
         global = true,
@@ -43,12 +60,6 @@ pub struct Cli {
         help = "Output format: text, json, ndjson"
     )]
     pub output_format: Option<OutputFormat>,
-
-    #[arg(global = true, long, help = "Suppress column headers in human output")]
-    pub no_header: bool,
-
-    #[arg(global = true, long = "count", help = "Show only the count of results")]
-    pub count_only: bool,
 
     #[command(subcommand)]
     pub command: Command,

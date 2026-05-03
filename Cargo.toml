@@ -1,6 +1,6 @@
 [package]
 name = "pkms"
-version = "0.4.0"
+version = "0.4.1"
 edition = "2024"
 
 [dependencies]
@@ -18,14 +18,7 @@ dirs = "6"
 rayon = "1"
 
 [lints.clippy]
-# Pedantic group at lower priority so individual lints can override
 pedantic = { level = "warn", priority = -1 }
-missing_errors_doc = "allow"
-missing_panics_doc = "allow"
-default_trait_access = "allow"
-cast_possible_truncation = "allow"
-cast_sign_loss = "allow"
-implicit_clone = "allow"
 
 [dev-dependencies]
 tempfile = "3"

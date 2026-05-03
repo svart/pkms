@@ -14,7 +14,107 @@ pub struct FixOutput {
     pub applied: bool,
 }
 
-#[allow(clippy::too_many_lines)]
+fn find_replacement(graph: &Graph, target: &str) -> Result<(String, String)> {
+    let replacement = graph
+        .find_node(target)
+        .map(|n| (n.uuid.clone(), n.title.clone()))
+        .or_else(|| {
+            let prefix_matches: Vec<&String> = graph
+                .nodes
+                .keys()
+                .filter(|u| u.starts_with(target))
+                .collect();
+            if prefix_matches.len() == 1 {
+                let uuid = prefix_matches[0].clone();
+                graph
+                    .nodes
+                    .get(&uuid)
+                    .map(|n| (n.uuid.clone(), n.title.clone()))
+            } else {
+                None
+            }
+        });
+    replacement.ok_or_else(|| anyhow::anyhow!("Replacement target not found: {target}"))
+}
+
+fn print_fix_output(
+    ctx: &OutputContext,
+    output: &FixOutput,
+    apply: bool,
+    verbose: bool,
+) -> Result<()> {
+    if ctx.is_json() {
+        ctx.print_json(output)?;
+    } else {
+        if apply {
+            println!(
+                "Fixed {} broken link(s) in {} file(s):",
+                output.total_replacements,
+                output.files_affected.len()
+            );
+        } else {
+            println!(
+                "Would fix {} broken link(s) in {} file(s):",
+                output.total_replacements,
+                output.files_affected.len()
+            );
+            println!("  Broken UUID: {}", output.broken_uuid);
+            println!(
+                "  Replace with: {} ({})",
+                output.replacement_title, output.replacement_uuid
+            );
+            println!("  (use --apply to apply)");
+        }
+        for f in &output.files_affected {
+            println!("  {f}");
+        }
+        if verbose {
+            println!("  ({} replacement(s) total)", output.total_replacements);
+        }
+    }
+
+    Ok(())
+}
+
+fn find_and_replace_links(
+    db_root: &std::path::Path,
+    broken_str: &str,
+    replacement_uuid: &str,
+    apply: bool,
+) -> Result<(Vec<String>, usize)> {
+    let mut files_affected = Vec::new();
+    let mut total_replacements = 0;
+
+    for entry in walkdir::WalkDir::new(db_root)
+        .follow_links(false)
+        .into_iter()
+        .filter_entry(|e| !e.file_name().to_string_lossy().starts_with('.'))
+    {
+        let Ok(entry) = entry else { continue };
+        if !entry.file_type().is_file() || entry.path().extension().is_none_or(|e| e != "org") {
+            continue;
+        }
+
+        let path = entry.path();
+        let Ok(content) = std::fs::read_to_string(path) else {
+            continue;
+        };
+
+        let count = content.matches(broken_str).count();
+        if count > 0 {
+            files_affected.push(path.to_string_lossy().to_string());
+            total_replacements += count;
+
+            if apply {
+                let new_content = content.replace(broken_str, replacement_uuid);
+                std::fs::write(path, &new_content)?;
+            }
+        }
+    }
+
+    Ok((files_affected, total_replacements))
+}
+
 pub fn run(
     config: &Config,
     ctx: &OutputContext,
@@ -70,59 +170,10 @@ pub fn run(
         anyhow::bail!("Invalid UUID format: {broken_uuid}");
     };
 
-    let replacement = graph
-        .find_node(target)
-        .map(|n| (n.uuid.clone(), n.title.clone()))
-        .or_else(|| {
-            let prefix_matches: Vec<&String> = graph
-                .nodes
-                .keys()
-                .filter(|u| u.starts_with(target))
-                .collect();
-            if prefix_matches.len() == 1 {
-                let uuid = prefix_matches[0].clone();
-                graph
-                    .nodes
-                    .get(&uuid)
-                    .map(|n| (n.uuid.clone(), n.title.clone()))
-            } else {
-                None
-            }
-        });
-    let Some((replacement_uuid, replacement_title)) = replacement else {
-        anyhow::bail!("Replacement target not found: {target}")
-    };
+    let (replacement_uuid, replacement_title) = find_replacement(&graph, target)?;
 
-    let broken_str = &broken;
-    let mut files_affected = Vec::new();
-    let mut total_replacements = 0;
-
-    for entry in walkdir::WalkDir::new(&db_root)
-        .follow_links(false)
-        .into_iter()
-        .filter_entry(|e| !e.file_name().to_string_lossy().starts_with('.'))
-    {
-        let Ok(entry) = entry else { continue };
-        if !entry.file_type().is_file() || entry.path().extension().is_none_or(|e| e != "org") {
-            continue;
-        }
-
-        let path = entry.path();
-        let Ok(content) = std::fs::read_to_string(path) else {
-            continue;
-        };
-
-        let count = content.matches(broken_str).count();
-        if count > 0 {
-            files_affected.push(path.to_string_lossy().to_string());
-            total_replacements += count;
-
-            if apply {
-                let new_content = content.replace(broken_str, &replacement_uuid);
-                std::fs::write(path, &new_content)?;
-            }
-        }
-    }
+    let (files_affected, total_replacements) =
+        find_and_replace_links(&db_root, &broken, &replacement_uuid, apply)?;
 
     let output = FixOutput {
         broken_uuid: broken.clone(),
@@ -133,35 +184,5 @@ pub fn run(
         applied: apply,
     };
 
-    if ctx.is_json() {
-        ctx.print_json(&output)?;
-    } else {
-        if apply {
-            println!(
-                "Fixed {} broken link(s) in {} file(s):",
-                total_replacements,
-                files_affected.len()
-            );
-        } else {
-            println!(
-                "Would fix {} broken link(s) in {} file(s):",
-                total_replacements,
-                files_affected.len()
-            );
-            println!("  Broken UUID: {broken}");
-            println!(
-                "  Replace with: {} ({})",
-                output.replacement_title, replacement_uuid
-            );
-            println!("  (use --apply to apply)");
-        }
-        for f in &files_affected {
-            println!("  {f}");
-        }
-        if verbose {
-            println!("  ({total_replacements} replacement(s) total)");
-        }
-    }
-
-    Ok(())
+    print_fix_output(ctx, &output, apply, verbose)
 }

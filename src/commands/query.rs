@@ -29,7 +29,6 @@ pub struct ContextLine {
     pub text: String,
 }
 
-#[allow(clippy::too_many_lines)]
 pub fn run(
     config: &Config,
     ctx: &OutputContext,
@@ -126,14 +125,24 @@ pub fn run(
         return Ok(());
     }
 
+    print_query_output(ctx, terms, combined)?;
+
+    Ok(())
+}
+
+fn print_query_output(
+    ctx: &OutputContext,
+    terms: &str,
+    results: Vec<QueryResultEntry>,
+) -> Result<()> {
     match ctx.format {
         OutputFormat::Text => {
             if !ctx.no_header {
                 println!("Query: {terms}");
-                println!("Results: {}", combined.len());
+                println!("Results: {}", results.len());
                 println!();
             }
-            for (i, r) in combined.iter().enumerate() {
+            for (i, r) in results.iter().enumerate() {
                 println!("{:3}. {}  (score: {:.1})", i + 1, r.title, r.score);
                 println!("       UUID: {}", r.uuid);
                 if !r.matches.is_empty() {
@@ -152,12 +161,12 @@ pub fn run(
         OutputFormat::Json => {
             ctx.print_json(&QueryOutput {
                 query: terms.to_string(),
-                total_results: combined.len(),
-                results: combined,
+                total_results: results.len(),
+                results,
             })?;
         }
         OutputFormat::Ndjson => {
-            ctx.print_ndjson(&combined)?;
+            ctx.print_ndjson(&results)?;
         }
     }
 

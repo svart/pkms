@@ -113,30 +113,33 @@ fn scan_files(root: &Path, ignore_patterns: &[String]) -> Vec<ResolvedNote> {
     notes
 }
 
-#[allow(clippy::too_many_lines)]
+pub struct ResolveOptions<'a> {
+    pub target: Option<&'a str>,
+    pub tags: Option<&'a str>,
+    pub search: Option<&'a str>,
+    pub limit: Option<usize>,
+    pub fields: Option<&'a str>,
+}
+
 pub fn run(
     config: &Config,
     ctx: &OutputContext,
-    target: Option<&str>,
-    tags: Option<&str>,
-    search: Option<&str>,
-    limit: Option<usize>,
-    fields: Option<&str>,
+    opts: &ResolveOptions,
     db_cli: Option<&std::path::Path>,
 ) -> Result<()> {
     let db_root = config.resolve_db_root(db_cli)?;
     let ignore = config.resolve_ignore_patterns();
     let notes = scan_files(&db_root, &ignore);
 
-    let limit = limit.unwrap_or(30);
-    let query = target.unwrap_or("");
+    let limit = opts.limit.unwrap_or(30);
+    let query = opts.target.unwrap_or("");
     let query_lower = query.to_lowercase();
-    let search_lower = search.map(str::to_lowercase);
+    let search_lower = opts.search.map(str::to_lowercase);
 
     let mut results: Vec<ResolvedNote> = notes
         .into_iter()
         .filter(|n| {
-            if query.is_empty() && search.is_none() && tags.is_none() {
+            if query.is_empty() && opts.search.is_none() && opts.tags.is_none() {
                 return true;
             }
             if !query.is_empty() {
@@ -159,7 +162,7 @@ pub fn run(
             {
                 return true;
             }
-            if let Some(t) = tags {
+            if let Some(t) = opts.tags {
                 let wanted: Vec<&str> = t.split(',').map(str::trim).collect();
                 if wanted.iter().any(|w| n.filetags.contains(&w.to_string())) {
                     return true;
@@ -182,9 +185,21 @@ pub fn run(
         return Ok(());
     }
 
-    let field_set: Option<HashSet<String>> =
-        fields.map(|f| f.split(',').map(|s| s.trim().to_string()).collect());
+    let field_set: Option<HashSet<String>> = opts
+        .fields
+        .map(|f| f.split(',').map(|s| s.trim().to_string()).collect());
 
+    print_resolve_output(ctx, results, query, field_set.as_ref())?;
+
+    Ok(())
+}
+
+fn print_resolve_output(
+    ctx: &OutputContext,
+    results: Vec<ResolvedNote>,
+    query: &str,
+    field_set: Option<&HashSet<String>>,
+) -> Result<()> {
     match ctx.format {
         OutputFormat::Text => {
             if !ctx.no_header {
@@ -199,7 +214,7 @@ pub fn run(
                 } else {
                     &note.uuid
                 };
-                if let Some(ref fs) = field_set {
+                if let Some(fs) = field_set {
                     if fs.contains("title") {
                         println!("  {} ({})", note.title, short);
                     }
@@ -234,7 +249,7 @@ pub fn run(
         }
         OutputFormat::Ndjson => {
             for note in &results {
-                let v = filter_fields(&serde_json::to_value(note)?, &field_set);
+                let v = filter_fields(&serde_json::to_value(note)?, field_set);
                 println!("{}", serde_json::to_string(&v)?);
             }
         }
@@ -243,7 +258,7 @@ pub fn run(
     Ok(())
 }
 
-fn filter_fields(value: &serde_json::Value, fields: &Option<HashSet<String>>) -> serde_json::Value {
+fn filter_fields(value: &serde_json::Value, fields: Option<&HashSet<String>>) -> serde_json::Value {
     let Some(fs) = fields else {
         return value.clone();
     };
@@ -268,7 +283,7 @@ mod tests {
     #[test]
     fn test_filter_fields_none() {
         let v = serde_json::json!({"uuid": "abc", "title": "Test", "path": "/a.org", "filetags": ["tag1"]});
-        let result = filter_fields(&v, &None);
+        let result = filter_fields(&v, None::<&HashSet<String>>);
         assert_eq!(result, v);
     }
 
@@ -276,7 +291,7 @@ mod tests {
     fn test_filter_fields_subset() {
         let v = serde_json::json!({"uuid": "abc", "title": "Test", "path": "/a.org", "filetags": ["tag1"]});
         let fields = Some(HashSet::from(["uuid".to_string(), "title".to_string()]));
-        let result = filter_fields(&v, &fields);
+        let result = filter_fields(&v, fields.as_ref());
         let obj = result.as_object().unwrap();
         assert!(obj.contains_key("uuid"));
         assert!(obj.contains_key("title"));
@@ -288,7 +303,7 @@ mod tests {
     fn test_filter_fields_preserves_score() {
         let v = serde_json::json!({"uuid": "abc", "title": "Test", "score": 42.0, "filetags": []});
         let fields = Some(HashSet::from(["uuid".to_string()]));
-        let result = filter_fields(&v, &fields);
+        let result = filter_fields(&v, fields.as_ref());
         let obj = result.as_object().unwrap();
         assert!(obj.contains_key("uuid"));
         assert!(obj.contains_key("score"), "score should be preserved");
@@ -298,7 +313,7 @@ mod tests {
     fn test_filter_fields_non_object() {
         let v = serde_json::json!("just a string");
         let fields = Some(HashSet::from(["key".to_string()]));
-        let result = filter_fields(&v, &fields);
+        let result = filter_fields(&v, fields.as_ref());
         assert_eq!(result, v);
     }
 

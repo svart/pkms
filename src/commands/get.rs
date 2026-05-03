@@ -40,18 +40,26 @@ pub struct NeighborOutput {
     pub incoming: Vec<NodeJson>,
 }
 
-#[allow(clippy::too_many_lines)]
+pub struct GetOptions<'a> {
+    pub target: Option<&'a str>,
+    pub depth: u32,
+    pub show_content: bool,
+    pub show_graph: bool,
+}
+
 pub fn run(
     config: &Config,
     ctx: &OutputContext,
     verbose: bool,
-    target: Option<&str>,
-    depth: u32,
-    show_content: bool,
-    show_graph: bool,
+    opts: &GetOptions,
     db_cli: Option<&std::path::Path>,
 ) -> Result<()> {
-    let target = target.ok_or_else(|| anyhow::anyhow!("No target specified"))?;
+    let target = opts
+        .target
+        .ok_or_else(|| anyhow::anyhow!("No target specified"))?;
+    let depth = opts.depth;
+    let show_content = opts.show_content;
+    let show_graph = opts.show_graph;
 
     let graph = Graph::load(config, db_cli, verbose)?;
 

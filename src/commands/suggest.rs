@@ -1,5 +1,3 @@
-#![allow(clippy::too_many_lines, clippy::type_complexity)]
-
 use crate::config::Config;
 use crate::graph::Graph;
 use crate::output::OutputContext;
@@ -7,6 +5,13 @@ use crate::parser::Link;
 use anyhow::Result;
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
+
+type ScoredItem<'a> = (
+    &'a crate::graph::Node,
+    f64,
+    Vec<String>,
+    HashMap<String, f64>,
+);
 
 #[derive(Serialize)]
 pub struct SuggestOutput {
@@ -26,78 +31,17 @@ pub struct Suggestion {
     pub scores: HashMap<String, f64>,
 }
 
-pub fn run(
-    config: &Config,
-    ctx: &OutputContext,
-    verbose: bool,
-    target: Option<&str>,
-    limit: Option<usize>,
-    db_cli: Option<&std::path::Path>,
-) -> Result<()> {
-    let target = target.ok_or_else(|| anyhow::anyhow!("No target specified. Provide a target"))?;
-
-    let graph = Graph::load(config, db_cli, false)?;
-    let limit = limit.unwrap_or(10);
-
-    let node = graph
-        .nodes
-        .get(target)
-        .cloned()
-        .ok_or_else(|| anyhow::anyhow!("Note not found: {target}"))?;
-
-    let target_lower = node.title.to_lowercase();
-
-    let target_keywords: HashSet<String> = target_lower
-        .split_whitespace()
-        .filter(|w| w.len() > 2)
-        .map(std::string::ToString::to_string)
-        .collect();
-
-    let mut content_keywords: HashSet<String> = HashSet::new();
-    if let Ok(content) = std::fs::read_to_string(&node.path) {
-        let content_lower = content.to_lowercase();
-        for word in content_lower.split_whitespace() {
-            let clean: String = word
-                .trim_matches(|c: char| !c.is_alphanumeric())
-                .chars()
-                .filter(|c| c.is_alphanumeric())
-                .collect();
-            if clean.len() > 3
-                && !clean.starts_with("http")
-                && !clean.starts_with("id")
-                && !clean.starts_with("file")
-            {
-                content_keywords.insert(clean);
-                if content_keywords.len() >= 50 {
-                    break;
-                }
-            }
-        }
-    }
-
-    let target_tags: HashSet<&str> = node
-        .filetags
-        .iter()
-        .map(std::string::String::as_str)
-        .collect();
-    let target_backlinks: HashSet<&str> = graph
-        .backlinks
-        .get(&node.uuid)
-        .map(|v| v.iter().map(std::string::String::as_str).collect())
-        .unwrap_or_default();
-    let target_outgoing: HashSet<&str> = node
-        .outgoing
-        .iter()
-        .filter_map(|l| {
-            if let Link::Internal(u) = l {
-                Some(u.as_str())
-            } else {
-                None
-            }
-        })
-        .collect();
-
-    let mut scored: Vec<(&crate::graph::Node, f64, Vec<String>, HashMap<String, f64>)> = Vec::new();
+#[allow(clippy::cast_precision_loss)]
+fn compute_scores<'a>(
+    node: &'a crate::graph::Node,
+    graph: &'a crate::graph::Graph,
+    target_keywords: &HashSet<String>,
+    content_keywords: &HashSet<String>,
+    target_tags: &HashSet<&str>,
+    target_backlinks: &HashSet<&str>,
+    target_outgoing: &HashSet<&str>,
+) -> Vec<ScoredItem<'a>> {
+    let mut scored: Vec<ScoredItem<'a>> = Vec::new();
 
     for other in graph.nodes.values() {
         if other.uuid == node.uuid {
@@ -197,20 +141,112 @@ pub fn run(
         }
     }
 
+    scored
+}
+
+pub fn run(
+    config: &Config,
+    ctx: &OutputContext,
+    verbose: bool,
+    target: Option<&str>,
+    limit: Option<usize>,
+    db_cli: Option<&std::path::Path>,
+) -> Result<()> {
+    let target = target.ok_or_else(|| anyhow::anyhow!("No target specified. Provide a target"))?;
+
+    let graph = Graph::load(config, db_cli, false)?;
+    let limit = limit.unwrap_or(10);
+
+    let node = graph
+        .nodes
+        .get(target)
+        .cloned()
+        .ok_or_else(|| anyhow::anyhow!("Note not found: {target}"))?;
+
+    let target_lower = node.title.to_lowercase();
+
+    let target_keywords: HashSet<String> = target_lower
+        .split_whitespace()
+        .filter(|w| w.len() > 2)
+        .map(std::string::ToString::to_string)
+        .collect();
+
+    let mut content_keywords: HashSet<String> = HashSet::new();
+    if let Ok(content) = std::fs::read_to_string(&node.path) {
+        let content_lower = content.to_lowercase();
+        for word in content_lower.split_whitespace() {
+            let clean: String = word
+                .trim_matches(|c: char| !c.is_alphanumeric())
+                .chars()
+                .filter(|c| c.is_alphanumeric())
+                .collect();
+            if clean.len() > 3
+                && !clean.starts_with("http")
+                && !clean.starts_with("id")
+                && !clean.starts_with("file")
+            {
+                content_keywords.insert(clean);
+                if content_keywords.len() >= 50 {
+                    break;
+                }
+            }
+        }
+    }
+
+    let target_tags: HashSet<&str> = node
+        .filetags
+        .iter()
+        .map(std::string::String::as_str)
+        .collect();
+    let target_backlinks: HashSet<&str> = graph
+        .backlinks
+        .get(&node.uuid)
+        .map(|v| v.iter().map(std::string::String::as_str).collect())
+        .unwrap_or_default();
+    let target_outgoing: HashSet<&str> = node
+        .outgoing
+        .iter()
+        .filter_map(|l| {
+            if let Link::Internal(u) = l {
+                Some(u.as_str())
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    let mut scored = compute_scores(
+        &node,
+        &graph,
+        &target_keywords,
+        &content_keywords,
+        &target_tags,
+        &target_backlinks,
+        &target_outgoing,
+    );
     scored.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
     scored.truncate(limit);
 
+    print_suggest_output(ctx, &node, &scored, verbose)
+}
+
+fn print_suggest_output(
+    ctx: &OutputContext,
+    node: &crate::graph::Node,
+    scored: &[ScoredItem<'_>],
+    verbose: bool,
+) -> Result<()> {
     if ctx.is_json() {
         let suggestions: Vec<Suggestion> = scored
-            .into_iter()
+            .iter()
             .map(|(n, s, r, fs)| Suggestion {
                 uuid: n.uuid.clone(),
                 title: n.title.clone(),
                 path: n.path.to_string_lossy().to_string(),
-                score: s,
-                reasons: r,
+                score: *s,
+                reasons: r.clone(),
                 filetags: n.filetags.clone(),
-                scores: fs,
+                scores: fs.clone(),
             })
             .collect();
         let output = SuggestOutput {

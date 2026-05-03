@@ -41,6 +41,7 @@ pub struct RecentNote {
     pub path: String,
 }
 
+#[allow(clippy::cast_precision_loss)]
 pub fn run(
     config: &Config,
     ctx: &OutputContext,
@@ -144,11 +145,19 @@ pub fn run(
 
 fn format_size(bytes: u64) -> String {
     const UNITS: &[&str] = &["B", "KB", "MB", "GB"];
-    let mut size = bytes as f64;
     let mut unit = 0;
-    while size > 1024.0 && unit < UNITS.len() - 1 {
-        size /= 1024.0;
+    let mut scaled = bytes;
+    while scaled > 1024 && unit < UNITS.len() - 1 {
+        scaled /= 1024;
         unit += 1;
     }
-    format!("{:.1} {}", size, UNITS[unit])
+    let divisor: u64 = match unit {
+        0 => 1,
+        1 => 1024,
+        2 => 1_048_576,
+        _ => 1_073_741_824,
+    };
+    let whole = bytes / divisor;
+    let frac = (bytes % divisor) * 10 / divisor;
+    format!("{}.{} {}", whole, frac, UNITS[unit])
 }

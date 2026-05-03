@@ -77,7 +77,7 @@ impl Graph {
         queue.push_back((from_uuid.clone(), vec![from_uuid]));
 
         while let Some((current, path)) = queue.pop_front() {
-            if max_depth.is_some_and(|md| path.len() as u32 > md) {
+            if max_depth.is_some_and(|md| path.len() > md as usize) {
                 continue;
             }
 
@@ -117,6 +117,7 @@ impl Graph {
         None
     }
 
+    #[allow(clippy::cast_precision_loss)]
     pub fn collect_subgraph(&self, root: &str, max_depth: u32) -> Subgraph {
         let mut nodes_map: HashMap<String, super::Node> = HashMap::new();
         let mut edges = Vec::new();

@@ -31,7 +31,128 @@ pub struct BacklinkEntry {
     pub title: String,
 }
 
-#[allow(clippy::too_many_lines)]
+fn print_validate_json(
+    ctx: &OutputContext,
+    node: crate::graph::Node,
+    incoming: &[String],
+    broken_internal: Vec<String>,
+    broken_files: Vec<String>,
+    backlink_entries: Vec<BacklinkEntry>,
+    issues: Vec<String>,
+) -> Result<()> {
+    let incoming_len = incoming.len();
+    let healthy = issues.is_empty();
+    let output = ValidateOutput {
+        uuid: node.uuid,
+        title: node.title,
+        path: node.path.to_string_lossy().to_string(),
+        filetags: node.filetags,
+        aliases: node.aliases,
+        refs: node.refs,
+        headings: node.headings_count,
+        outgoing: node.outgoing.len(),
+        incoming: incoming_len,
+        outgoing_internal: node
+            .outgoing
+            .iter()
+            .filter(|l| matches!(l, crate::parser::Link::Internal(_)))
+            .count(),
+        broken_internal,
+        broken_files,
+        backlinks: backlink_entries,
+        issues,
+        healthy,
+    };
+    ctx.print_json(&output)
+}
+
+fn print_validate_text(
+    node: &crate::graph::Node,
+    broken_internal: &[String],
+    broken_files: &[String],
+    incoming: &[String],
+    backlink_entries: &[BacklinkEntry],
+    issues: &[String],
+    verbose: bool,
+) {
+    let outgoing_internal_len = node
+        .outgoing
+        .iter()
+        .filter(|l| matches!(l, crate::parser::Link::Internal(_)))
+        .count();
+    let healthy = issues.is_empty();
+    println!("Note: {}", node.title);
+    println!("  UUID:   {}", node.uuid);
+    println!("  Path:   {}", node.path.display());
+    if !node.filetags.is_empty() {
+        println!("  Tags:   {}", node.filetags.join(", "));
+    }
+    if !node.aliases.is_empty() {
+        println!("  Aliases: {}", node.aliases.join(", "));
+    }
+    if !node.refs.is_empty() {
+        println!("  Refs:   {}", node.refs.join(", "));
+    }
+    println!("  Headings: {}", node.headings_count);
+    println!();
+    println!("Links:");
+    println!(
+        "  Outgoing: {} ({} internal)",
+        node.outgoing.len(),
+        outgoing_internal_len,
+    );
+    println!("  Incoming: {}", incoming.len());
+    println!(
+        "  Broken:   {} internal, {} file",
+        broken_internal.len(),
+        broken_files.len()
+    );
+
+    if !broken_internal.is_empty() {
+        println!();
+        println!("Broken internal links:");
+        for uuid in broken_internal {
+            println!("  -> {uuid}");
+        }
+    }
+
+    if !broken_files.is_empty() {
+        println!();
+        println!("Broken file links:");
+        for path in broken_files {
+            println!("  -> {path}");
+        }
+    }
+
+    if !issues.is_empty()
+        && issues
+            .iter()
+            .any(|i| i.starts_with("Invalid") || i.starts_with("Missing"))
+    {
+        println!();
+        for i in issues {
+            if i.starts_with("Invalid") || i.starts_with("Missing") {
+                println!("Issue: {i}");
+            }
+        }
+    }
+
+    if verbose && !incoming.is_empty() {
+        println!();
+        println!("Backlinks:");
+        for entry in backlink_entries {
+            println!("  {} ({})", entry.title, entry.uuid);
+        }
+    }
+
+    println!();
+    if healthy {
+        println!("Status: healthy");
+    } else {
+        println!("Status: {} issue(s)", issues.len());
+    }
+}
+
 pub fn run(
     config: &Config,
     ctx: &OutputContext,
@@ -56,11 +177,6 @@ pub fn run(
         issues.push("Missing #+title: property".to_string());
     }
 
-    let outgoing_internal: Vec<&Link> = node
-        .outgoing
-        .iter()
-        .filter(|l| matches!(l, Link::Internal(_)))
-        .collect();
     let mut broken_internal = Vec::new();
     let mut broken_files = Vec::new();
 
@@ -106,98 +222,26 @@ pub fn run(
         issues.push(format!("{} broken file link(s)", broken_files.len()));
     }
 
-    let healthy = issues.is_empty();
-
     if ctx.is_json() {
-        let output = ValidateOutput {
-            uuid: node.uuid,
-            title: node.title,
-            path: node.path.to_string_lossy().to_string(),
-            filetags: node.filetags,
-            aliases: node.aliases,
-            refs: node.refs,
-            headings: node.headings_count,
-            outgoing: node.outgoing.len(),
-            incoming: incoming.len(),
-            outgoing_internal: outgoing_internal.len(),
+        print_validate_json(
+            ctx,
+            node,
+            &incoming,
             broken_internal,
             broken_files,
-            backlinks: backlink_entries,
+            backlink_entries,
             issues,
-            healthy,
-        };
-        ctx.print_json(&output)?;
+        )?;
     } else {
-        println!("Note: {}", node.title);
-        println!("  UUID:   {}", node.uuid);
-        println!("  Path:   {}", node.path.display());
-        if !node.filetags.is_empty() {
-            println!("  Tags:   {}", node.filetags.join(", "));
-        }
-        if !node.aliases.is_empty() {
-            println!("  Aliases: {}", node.aliases.join(", "));
-        }
-        if !node.refs.is_empty() {
-            println!("  Refs:   {}", node.refs.join(", "));
-        }
-        println!("  Headings: {}", node.headings_count);
-        println!();
-        println!("Links:");
-        println!(
-            "  Outgoing: {} ({} internal)",
-            node.outgoing.len(),
-            outgoing_internal.len()
+        print_validate_text(
+            &node,
+            &broken_internal,
+            &broken_files,
+            &incoming,
+            &backlink_entries,
+            &issues,
+            verbose,
         );
-        println!("  Incoming: {}", incoming.len());
-        println!(
-            "  Broken:   {} internal, {} file",
-            broken_internal.len(),
-            broken_files.len()
-        );
-
-        if !broken_internal.is_empty() {
-            println!();
-            println!("Broken internal links:");
-            for uuid in &broken_internal {
-                println!("  -> {uuid}");
-            }
-        }
-
-        if !broken_files.is_empty() {
-            println!();
-            println!("Broken file links:");
-            for path in &broken_files {
-                println!("  -> {path}");
-            }
-        }
-
-        if !issues.is_empty()
-            && issues
-                .iter()
-                .any(|i| i.starts_with("Invalid") || i.starts_with("Missing"))
-        {
-            println!();
-            for i in &issues {
-                if i.starts_with("Invalid") || i.starts_with("Missing") {
-                    println!("Issue: {i}");
-                }
-            }
-        }
-
-        if verbose && !incoming.is_empty() {
-            println!();
-            println!("Backlinks:");
-            for entry in &backlink_entries {
-                println!("  {} ({})", entry.title, entry.uuid);
-            }
-        }
-
-        println!();
-        if healthy {
-            println!("Status: healthy");
-        } else {
-            println!("Status: {} issue(s)", issues.len());
-        }
     }
 
     Ok(())

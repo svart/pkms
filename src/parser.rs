@@ -36,11 +36,14 @@ pub enum Link {
 }
 
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub struct Heading {
+    #[cfg_attr(not(test), allow(dead_code))]
     pub level: usize,
+    #[cfg_attr(not(test), allow(dead_code))]
     pub title: String,
+    #[cfg_attr(not(test), allow(dead_code))]
     pub todo_state: Option<String>,
+    #[cfg_attr(not(test), allow(dead_code))]
     pub tags: Vec<String>,
 }
 
@@ -252,6 +255,9 @@ Some text
         assert_eq!(note.headings[0].title, "Section 1");
         assert_eq!(note.headings[0].level, 1);
         assert_eq!(note.headings[0].todo_state.as_deref(), Some("TODO"));
+        assert_eq!(note.headings[0].tags, vec!["tag1"]);
+        assert_eq!(note.headings[1].tags, vec!["tag2", "tag3"]);
+        assert!(note.headings[2].tags.is_empty());
     }
 
     proptest! {
