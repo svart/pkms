@@ -211,10 +211,6 @@ fn dispatch_query(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Resul
             cli.db.as_deref(),
         )
         .map(|()| ExitCode::SUCCESS)?,
-        Command::Subgraph { target, depth } => {
-            commands::subgraph::run(cfg, ctx, target.as_deref(), *depth, cli.db.as_deref())
-                .map(|()| ExitCode::SUCCESS)?
-        }
         _ => unreachable!(),
     })
 }

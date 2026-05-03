@@ -11,7 +11,6 @@ pub mod path;
 pub mod query;
 pub mod resolve;
 pub mod stats;
-pub mod subgraph;
 pub mod suggest;
 pub mod tags;
 pub mod validate;

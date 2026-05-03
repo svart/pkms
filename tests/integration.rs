@@ -1133,51 +1133,6 @@ fn test_path_not_found() {
 }
 
 // ----------------------------------------------------------------
-// SUBGRAPH
-// ----------------------------------------------------------------
-#[test]
-fn test_subgraph_human() {
-    let (_dir, root) = setup_db();
-    let (stdout, _stderr, status) = run(&[
-        "--db",
-        root.to_str().unwrap(),
-        "subgraph",
-        "Note A",
-        "--depth",
-        "1",
-    ]);
-    assert!(status.success());
-    assert!(stdout.contains("Note A") || stdout.contains("Vertices:"));
-}
-
-#[test]
-fn test_subgraph_json() {
-    let (_dir, root) = setup_db();
-    let (v, status) = run_json(&[
-        "--db",
-        root.to_str().unwrap(),
-        "--output-format",
-        "json",
-        "subgraph",
-        "Note A",
-        "--depth",
-        "1",
-    ]);
-    assert!(status.success());
-    assert!(v.get("root_uuid").is_some());
-    assert!(v.get("vertex_count").is_some());
-    assert!(v.get("nodes").is_some());
-}
-
-#[test]
-fn test_subgraph_note_not_found() {
-    let (_dir, root) = setup_db();
-    let (_stdout, _stderr, status) =
-        run(&["--db", root.to_str().unwrap(), "subgraph", "Nonexistent"]);
-    assert!(!status.success());
-}
-
-// ----------------------------------------------------------------
 // TAGS
 // ----------------------------------------------------------------
 #[test]
@@ -1366,14 +1321,6 @@ fn test_error_note_not_found_json() {
             "--output-format".into(),
             "json".into(),
             "suggest".into(),
-            "Nonexistent".into(),
-        ],
-        vec![
-            "--db".into(),
-            db.clone(),
-            "--output-format".into(),
-            "json".into(),
-            "subgraph".into(),
             "Nonexistent".into(),
         ],
         vec![
@@ -1662,19 +1609,6 @@ fn test_all_commands_json() {
                 db.clone(),
                 "--output-format".into(),
                 "json".into(),
-                "subgraph".into(),
-                "Note A".into(),
-                "--depth".into(),
-                "1".into(),
-            ],
-            true,
-        ),
-        (
-            vec![
-                "--db".into(),
-                db.clone(),
-                "--output-format".into(),
-                "json".into(),
                 "fix".into(),
                 "ffffffff-ffff-4fff-ffff-ffffffffffff".into(),
                 "Note A".into(),
@@ -1751,14 +1685,6 @@ fn test_json_error_exit_code() {
             "--output-format".into(),
             "json".into(),
             "context".into(),
-            "DoesNotExist".into(),
-        ],
-        vec![
-            "--db".into(),
-            db.clone(),
-            "--output-format".into(),
-            "json".into(),
-            "subgraph".into(),
             "DoesNotExist".into(),
         ],
     ];

@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 
 use crate::parser::Link;
 
-use super::{Graph, NeighborSet, Subgraph};
+use super::{Graph, NeighborSet};
 
 impl Graph {
     pub fn get_neighbors(&self, uuid: &str, max_depth: u32) -> HashMap<u32, NeighborSet> {
@@ -115,83 +115,5 @@ impl Graph {
         }
 
         None
-    }
-
-    #[allow(clippy::cast_precision_loss)]
-    pub fn collect_subgraph(&self, root: &str, max_depth: u32) -> Subgraph {
-        let mut nodes_map: HashMap<String, super::Node> = HashMap::new();
-        let mut edges = Vec::new();
-        let mut visited = HashSet::new();
-        let root_uuid = match self.find_node(root) {
-            Some(n) => n.uuid.clone(),
-            None => return Subgraph::empty(),
-        };
-
-        let mut current = vec![root_uuid.clone()];
-        visited.insert(root_uuid.clone());
-
-        if let Some(root_node) = self.nodes.get(&root_uuid) {
-            nodes_map.insert(root_uuid.clone(), root_node.clone());
-        }
-
-        for _depth in 1..=max_depth {
-            let mut next = Vec::new();
-
-            for uid in &current {
-                if let Some(node) = self.nodes.get(uid) {
-                    for link in &node.outgoing {
-                        if let Link::Internal(target) = link {
-                            edges.push((uid.clone(), target.clone()));
-                            if visited.insert(target.clone()) {
-                                next.push(target.clone());
-                                if let Some(target_node) = self.nodes.get(target) {
-                                    nodes_map.insert(target.clone(), target_node.clone());
-                                }
-                            }
-                        }
-                    }
-                }
-
-                if let Some(back) = self.backlinks.get(uid) {
-                    for buid in back {
-                        edges.push((buid.clone(), uid.clone()));
-                        if visited.insert(buid.clone()) {
-                            next.push(buid.clone());
-                            if let Some(back_node) = self.nodes.get(buid) {
-                                nodes_map.insert(buid.clone(), back_node.clone());
-                            }
-                        }
-                    }
-                }
-            }
-
-            current = next;
-            if current.is_empty() {
-                break;
-            }
-        }
-
-        edges.sort();
-        edges.dedup();
-
-        let vertex_count = nodes_map.len();
-        let edge_count = edges.len();
-        let avg_order = if vertex_count > 0 {
-            edge_count as f64 / vertex_count as f64
-        } else {
-            0.0
-        };
-
-        let mut sorted_nodes: Vec<&super::Node> = nodes_map.values().collect();
-        sorted_nodes.sort_by(|a, b| a.uuid.cmp(&b.uuid));
-
-        Subgraph {
-            root_uuid,
-            nodes: sorted_nodes.into_iter().cloned().collect(),
-            edges,
-            vertex_count,
-            edge_count,
-            avg_vertex_order: avg_order,
-        }
     }
 }

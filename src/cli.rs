@@ -171,13 +171,6 @@ pub enum Command {
         #[arg(short, long, help = "Maximum traversal depth")]
         max_depth: Option<u32>,
     },
-    #[command(about = "Export subgraph around a note")]
-    Subgraph {
-        #[arg(help = "Root note (UUID, path, or title)")]
-        target: Option<String>,
-        #[arg(short, long, default_value = "1", help = "Traversal depth")]
-        depth: u32,
-    },
     #[command(about = "List all filetags with note counts")]
     Tags {
         #[arg(short, long, help = "List all notes with this tag")]

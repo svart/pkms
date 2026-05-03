@@ -155,28 +155,5 @@ pub struct GraphStats {
     pub missing_title_count: usize,
 }
 
-#[derive(Debug, Clone, Serialize)]
-pub struct Subgraph {
-    pub root_uuid: String,
-    pub nodes: Vec<Node>,
-    pub edges: Vec<(String, String)>,
-    pub vertex_count: usize,
-    pub edge_count: usize,
-    pub avg_vertex_order: f64,
-}
-
-impl Subgraph {
-    pub fn empty() -> Self {
-        Subgraph {
-            root_uuid: String::new(),
-            nodes: vec![],
-            edges: vec![],
-            vertex_count: 0,
-            edge_count: 0,
-            avg_vertex_order: 0.0,
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests;
