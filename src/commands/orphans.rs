@@ -37,7 +37,7 @@ pub fn run(config: &Config, ctx: &OutputContext, db_cli: Option<&std::path::Path
         crate::cli::OutputFormat::Text => {
             println!("Orphan notes ({}):", orphans.len());
             for n in &orphans {
-                println!("  {} ({})", n.title, util::short_uuid(&n.uuid));
+                println!("  {} ({})", n.title, n.uuid);
             }
         }
         crate::cli::OutputFormat::Json => {

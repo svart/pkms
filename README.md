@@ -133,7 +133,10 @@ files would be modified and how many replacements would be made.
 
 `suggest` takes a note UUID, loads the full graph, and scores every other
 note against the target using multi-factor scoring (shared tags, backlinks,
-content keyword overlap, directory proximity, title keyword overlap).
+content keyword overlap, directory proximity, title keyword overlap,
+neighborhood relevance). The neighborhood factor analyzes each candidate's
+neighbors (outgoing + incoming) to boost notes with relevant connections
+and penalize those with unrelated graph neighborhoods.
 Outputs the top N most relevant notes with per-factor breakdowns.
 
 ### AI Integration

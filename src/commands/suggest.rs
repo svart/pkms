@@ -1,5 +1,5 @@
 use crate::config::Config;
-use crate::graph::Graph;
+use crate::graph::{Graph, Node};
 use crate::output::OutputContext;
 use crate::parser::Link;
 use anyhow::Result;
@@ -31,7 +31,95 @@ pub struct Suggestion {
     pub scores: HashMap<String, f64>,
 }
 
-#[allow(clippy::cast_precision_loss)]
+#[allow(clippy::too_many_arguments)]
+fn neighbor_relevance(
+    neighbor_uuid: &str,
+    graph: &Graph,
+    target_node: &Node,
+    target_keywords: &HashSet<String>,
+    content_keywords: &HashSet<String>,
+    target_tags: &HashSet<&str>,
+    target_backlinks: &HashSet<&str>,
+    target_outgoing: &HashSet<&str>,
+) -> f64 {
+    if neighbor_uuid == target_node.uuid {
+        return 0.0;
+    }
+    let neighbor = match graph.nodes.get(neighbor_uuid) {
+        Some(n) => n,
+        None => return 0.0,
+    };
+
+    let mut score = 0.0;
+
+    let neighbor_lower = neighbor.title.to_lowercase();
+    let neighbor_words: Vec<&str> = neighbor_lower
+        .split_whitespace()
+        .filter(|w| w.len() > 2)
+        .collect();
+    let title_overlap = neighbor_words
+        .iter()
+        .filter(|w| target_keywords.iter().any(|kw| kw.as_str() == **w))
+        .count();
+    if title_overlap > 0 {
+        score += title_overlap as f64 * 20.0;
+    }
+
+    if !content_keywords.is_empty()
+        && let Ok(nc) = std::fs::read_to_string(&neighbor.path)
+    {
+        let ncl = nc.to_lowercase();
+        let cm = content_keywords
+            .iter()
+            .filter(|kw| ncl.contains(kw.as_str()))
+            .count();
+        if cm > 0 {
+            score += cm as f64 * 5.0;
+        }
+    }
+
+    let tag_overlap = neighbor
+        .filetags
+        .iter()
+        .filter(|t| target_tags.contains(t.as_str()))
+        .count();
+    if tag_overlap > 0 {
+        score += tag_overlap as f64 * 25.0;
+    }
+
+    let shared_backlinks = graph
+        .backlinks
+        .get(neighbor_uuid)
+        .map(|v| {
+            v.iter()
+                .filter(|bl| target_backlinks.contains(bl.as_str()))
+                .count()
+        })
+        .unwrap_or(0);
+    if shared_backlinks > 0 {
+        score += shared_backlinks as f64 * 15.0;
+    }
+
+    let shared_outgoing = neighbor
+        .outgoing
+        .iter()
+        .filter_map(|l| {
+            if let Link::Internal(u) = l {
+                Some(u.as_str())
+            } else {
+                None
+            }
+        })
+        .filter(|u| target_outgoing.contains(u))
+        .count();
+    if shared_outgoing > 0 {
+        score += shared_outgoing as f64 * 12.0;
+    }
+
+    score
+}
+
+#[allow(clippy::cast_precision_loss, clippy::too_many_arguments)]
 fn compute_scores<'a>(
     node: &'a crate::graph::Node,
     graph: &'a crate::graph::Graph,
@@ -134,6 +222,56 @@ fn compute_scores<'a>(
             let s = 5.0;
             score += s;
             *factor_scores.entry("directory".to_string()).or_insert(0.0) += s;
+        }
+
+        // Neighborhood relevance boost
+        let mut total_neighbor_score = 0.0;
+        let mut neighbor_count = 0;
+
+        for link in &other.outgoing {
+            if let Link::Internal(uuid) = link {
+                total_neighbor_score += neighbor_relevance(
+                    uuid,
+                    graph,
+                    node,
+                    target_keywords,
+                    content_keywords,
+                    target_tags,
+                    target_backlinks,
+                    target_outgoing,
+                );
+                neighbor_count += 1;
+            }
+        }
+
+        if let Some(incoming) = graph.backlinks.get(&other.uuid) {
+            for uuid in incoming {
+                total_neighbor_score += neighbor_relevance(
+                    uuid,
+                    graph,
+                    node,
+                    target_keywords,
+                    content_keywords,
+                    target_tags,
+                    target_backlinks,
+                    target_outgoing,
+                );
+                neighbor_count += 1;
+            }
+        }
+
+        if neighbor_count > 0 {
+            let avg = total_neighbor_score / neighbor_count as f64;
+            let boost = ((avg / 100.0) - 0.3).clamp(-0.5, 1.0);
+            if boost.abs() > 0.01 {
+                factor_scores.insert("neighborhood".to_string(), boost);
+                if boost > 0.0 {
+                    reasons.push("relevant neighborhood".to_string());
+                } else {
+                    reasons.push("unrelated neighborhood".to_string());
+                }
+            }
+            score *= 1.0 + boost;
         }
 
         if score > 0.0 {
@@ -256,10 +394,13 @@ fn print_suggest_output(
     } else {
         println!("Suggestions for \"{}\":", node.title);
         println!();
-        for (i, (n, score, reasons, _fs)) in scored.iter().enumerate() {
-            println!("{:3}. {:45} score: {:5.0}", i + 1, n.title, score);
-            if !reasons.is_empty() {
-                println!("       {}", reasons.join(", "));
+        for (i, (n, score, _reasons, fs)) in scored.iter().enumerate() {
+            println!("{:3}. {}  (score: {:.1})", i + 1, n.title, score);
+            println!("       UUID: {}", n.uuid);
+            if !fs.is_empty() {
+                let mut factors: Vec<&str> = fs.keys().map(String::as_str).collect();
+                factors.sort();
+                println!("       Matches: {}", factors.join(", "));
             }
         }
     }
