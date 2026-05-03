@@ -19,8 +19,6 @@ pub struct ContextOptions<'a> {
     pub target: Option<&'a str>,
     pub depth: u32,
     pub max_tokens: Option<usize>,
-    pub include_outgoing: Option<bool>,
-    pub include_incoming: Option<bool>,
     pub template: Option<&'a str>,
 }
 
@@ -34,8 +32,6 @@ pub fn run(
         .target
         .ok_or_else(|| anyhow::anyhow!("No target specified. Provide a target"))?;
     let depth = opts.depth;
-    let show_outgoing = opts.include_outgoing.unwrap_or(true);
-    let show_incoming = opts.include_incoming.unwrap_or(true);
 
     let graph = Graph::load(config, db_cli)?;
     let node = graph.resolve_target(target)?.clone();
@@ -47,7 +43,7 @@ pub fn run(
 
     for d in 1..=depth {
         if let Some(ns) = neighbors.get(&d) {
-            if show_outgoing && !ns.outgoing.is_empty() {
+            if !ns.outgoing.is_empty() {
                 let _ = writeln!(neighbors_text, "=== Depth {d} ===");
                 neighbors_text.push_str("Forward links:\n");
                 for n in &ns.outgoing {
@@ -61,7 +57,7 @@ pub fn run(
                 neighbors_text.push('\n');
             }
 
-            if show_incoming && !ns.incoming.is_empty() {
+            if !ns.incoming.is_empty() {
                 let _ = writeln!(backlinks_text, "=== Depth {d} ===");
                 backlinks_text.push_str("Backlinks:\n");
                 for n in &ns.incoming {

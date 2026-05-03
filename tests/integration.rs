@@ -491,61 +491,6 @@ fn test_context_note_not_found() {
 }
 
 #[test]
-fn test_context_include_outgoing_false() {
-    let (_dir, root) = setup_db();
-    let (v, status) = run_json(&[
-        "--db",
-        root.to_str().unwrap(),
-        "--output-format",
-        "json",
-        "context",
-        "Note A",
-        "--depth",
-        "1",
-        "--include-outgoing",
-        "false",
-    ]);
-    assert!(status.success());
-    let ctx = v["context"].as_str().unwrap_or("");
-    // Should still have the note content but NOT forward links
-    assert!(ctx.contains("Note A"), "should contain target title");
-    assert!(
-        !ctx.contains("→"),
-        "should not contain forward link arrows: {}",
-        ctx
-    );
-    // "Note B" appears in the raw file content as [[id:...][Note B]], so check for arrow prefix
-    assert!(
-        !ctx.contains("\n  → Note B"),
-        "should not contain neighbor as forward link"
-    );
-}
-
-#[test]
-fn test_context_include_incoming_false() {
-    // Note B has an incoming link from Note A; with --include-incoming=false
-    // the backlinks section should still appear since we use depth
-    let (_dir, root) = setup_db();
-    let (v, status) = run_json(&[
-        "--db",
-        root.to_str().unwrap(),
-        "--output-format",
-        "json",
-        "context",
-        "Note B",
-        "--depth",
-        "1",
-        "--include-incoming",
-        "false",
-    ]);
-    assert!(status.success());
-    let ctx = v["context"].as_str().unwrap_or("");
-    // Should still show forward links (Note C) but NOT backlinks (Note A)
-    assert!(ctx.contains("Note C"), "should contain forward linked note");
-    assert!(!ctx.contains("←"), "should not contain backlink arrows");
-}
-
-#[test]
 fn test_context_template_custom() {
     let (_dir, root) = setup_db();
     let (v, status) = run_json(&[

@@ -143,8 +143,6 @@ Outputs the top N most relevant notes with per-factor breakdowns.
 ```
 pkms context <target> --depth 2                     # Build AI context window
 pkms context <target> --depth 1 --max-tokens 2000   # With token budget
-pkms context <target> --include-outgoing false       # Skip forward links
-pkms context <target> --include-incoming false       # Skip backlinks
 pkms context <target> --template "{{title}}: {{content}}"  # Custom template
 ```
 

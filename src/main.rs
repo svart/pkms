@@ -106,8 +106,6 @@ fn dispatch_mutating(
             target,
             depth,
             max_tokens,
-            include_outgoing,
-            include_incoming,
             template,
         } => commands::context::run(
             cfg,
@@ -116,8 +114,6 @@ fn dispatch_mutating(
                 target: target.as_deref(),
                 depth: *depth,
                 max_tokens: *max_tokens,
-                include_outgoing: *include_outgoing,
-                include_incoming: *include_incoming,
                 template: template.as_deref(),
             },
             cli.db.as_deref(),
