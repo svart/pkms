@@ -146,14 +146,20 @@ pub enum Command {
         #[arg(long, help = "Suppress note content output")]
         no_content: bool,
     },
-    #[command(about = "Fuzzy search across note titles and content")]
+    #[command(
+        about = "Fuzzy search across note titles and content. Match sources: title, alias, ref, tag, content"
+    )]
     Query {
         #[arg(help = "Search terms")]
         terms: Option<String>,
-        #[arg(short, long, help = "Filter by filetag")]
-        tag: Option<String>,
-        #[arg(short, long, help = "Maximum results")]
+        #[arg(long, help = "Maximum results (default: unlimited)")]
         limit: Option<usize>,
+        #[arg(long, help = "Search only in filetags")]
+        tags: bool,
+        #[arg(long, help = "Search only in titles, aliases, and refs")]
+        title: bool,
+        #[arg(long, help = "Search only in file content")]
+        content: bool,
     },
     #[command(about = "Show current pkms configuration")]
     Info,

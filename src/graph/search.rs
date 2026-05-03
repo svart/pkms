@@ -1,51 +1,84 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use super::Graph;
 
+pub struct SearchFields {
+    pub title: bool,
+    pub alias: bool,
+    pub ref_: bool,
+    pub tag: bool,
+}
+
+impl Default for SearchFields {
+    fn default() -> Self {
+        Self {
+            title: true,
+            alias: true,
+            ref_: true,
+            tag: true,
+        }
+    }
+}
+
 impl Graph {
     #[allow(clippy::cast_precision_loss)]
-    pub fn search(&self, terms: &str) -> Vec<(&super::Node, f64, Vec<String>)> {
+    pub fn search(
+        &self,
+        terms: &str,
+        fields: &SearchFields,
+    ) -> Vec<(&super::Node, f64, Vec<String>)> {
         let query = terms.to_lowercase();
         let words: Vec<&str> = query.split_whitespace().collect();
         let mut results: Vec<(&super::Node, f64, Vec<String>)> = Vec::new();
 
         for node in self.nodes.values() {
             let mut score = 0.0;
-            let mut matches = Vec::new();
+            let mut sources = HashSet::new();
 
-            let title_lower = node.title.to_lowercase();
-            let words_in_title: usize = words.iter().filter(|w| title_lower.contains(*w)).count();
-            if words_in_title > 0 {
-                score += words_in_title as f64 * 10.0;
-                matches.push(format!("title: {}", node.title));
-            }
-
-            for alias in &node.aliases {
-                let alias_lower = alias.to_lowercase();
-                let words_in_alias: usize =
-                    words.iter().filter(|w| alias_lower.contains(*w)).count();
-                if words_in_alias > 0 {
-                    score += words_in_alias as f64 * 8.0;
-                    matches.push(format!("alias: {alias}"));
+            if fields.title {
+                let title_lower = node.title.to_lowercase();
+                let words_in_title: usize =
+                    words.iter().filter(|w| title_lower.contains(*w)).count();
+                if words_in_title > 0 {
+                    score += words_in_title as f64 * 10.0;
+                    sources.insert("title");
                 }
             }
 
-            for ref_ in &node.refs {
-                let ref_lower = ref_.to_lowercase();
-                if words.iter().any(|w| ref_lower.contains(*w)) {
-                    score += 6.0;
-                    matches.push(format!("ref: {ref_}"));
+            if fields.alias {
+                for alias in &node.aliases {
+                    let alias_lower = alias.to_lowercase();
+                    let words_in_alias: usize =
+                        words.iter().filter(|w| alias_lower.contains(*w)).count();
+                    if words_in_alias > 0 {
+                        score += words_in_alias as f64 * 10.0;
+                        sources.insert("alias");
+                    }
                 }
             }
 
-            for tag in &node.filetags {
-                if words.iter().any(|w| tag.contains(*w)) {
-                    score += 5.0;
-                    matches.push(format!("tag: {tag}"));
+            if fields.ref_ {
+                for ref_ in &node.refs {
+                    let ref_lower = ref_.to_lowercase();
+                    if words.iter().any(|w| ref_lower.contains(*w)) {
+                        score += 6.0;
+                        sources.insert("ref");
+                    }
+                }
+            }
+
+            if fields.tag {
+                for tag in &node.filetags {
+                    if words.iter().any(|w| tag.contains(*w)) {
+                        score += 5.0;
+                        sources.insert("tag");
+                    }
                 }
             }
 
             if score > 0.0 {
+                let mut matches: Vec<String> = sources.into_iter().map(String::from).collect();
+                matches.sort();
                 results.push((node, score, matches));
             }
         }

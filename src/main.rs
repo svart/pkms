@@ -182,12 +182,20 @@ fn dispatch_mutating(
 
 fn dispatch_query(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<ExitCode> {
     Ok(match &cli.command {
-        Command::Query { terms, tag, limit } => commands::query::run(
+        Command::Query {
+            terms,
+            limit,
+            tags,
+            title,
+            content,
+        } => commands::query::run(
             cfg,
             ctx,
             terms.as_deref(),
-            tag.as_deref(),
             *limit,
+            *tags,
+            *title,
+            *content,
             cli.db.as_deref(),
         )
         .map(|()| ExitCode::SUCCESS)?,

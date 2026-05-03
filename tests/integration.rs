@@ -866,17 +866,18 @@ fn test_query_ndjson() {
 }
 
 #[test]
-fn test_query_tag_filter() {
+fn test_query_scope_tags() {
     let (_dir, root) = setup_db();
-    let (_stdout, _stderr, status) = run(&[
+    let (stdout, _stderr, status) = run(&[
         "--db",
         root.to_str().unwrap(),
         "query",
-        "Note",
-        "--tag",
         "learning",
+        "--tags",
     ]);
     assert!(status.success());
+    assert!(stdout.contains("Tagged Note"));
+    assert!(stdout.contains("Matches: tag"));
 }
 
 #[test]

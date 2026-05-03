@@ -320,6 +320,113 @@ fn test_all_tags() {
     assert_eq!(alpha_count, 2);
 }
 
+#[test]
+fn test_search_title_alias_equal_score() {
+    let results = vec![
+        make_note_full("a", "Quantum Physics", vec![], vec![], vec![]),
+        make_note_full(
+            "b",
+            "Unrelated",
+            vec![],
+            vec![],
+            vec!["Quantum Physics".to_string()],
+        ),
+    ];
+    let graph = Graph::build(results);
+    let title_results = graph.search("Quantum Physics", &Default::default());
+    assert_eq!(title_results.len(), 2, "both notes should match");
+    let note_a = title_results
+        .iter()
+        .find(|(n, _, _)| n.uuid == "a")
+        .unwrap();
+    let note_b = title_results
+        .iter()
+        .find(|(n, _, _)| n.uuid == "b")
+        .unwrap();
+    assert_eq!(
+        note_a.1, note_b.1,
+        "title match and alias match should score identically"
+    );
+}
+
+#[test]
+fn test_search_title_outranks_ref() {
+    let results = vec![
+        make_note_full("a", "Quantum Theory", vec![], vec![], vec![]),
+        make_note("b", "Other", vec![]),
+    ];
+    let mut graph = Graph::build(results);
+    if let Some(node) = graph.nodes.get_mut("b") {
+        node.refs.push("quantum".to_string());
+    }
+    let title_results = graph.search("Quantum", &Default::default());
+    let note_a = title_results
+        .iter()
+        .find(|(n, _, _)| n.uuid == "a")
+        .unwrap();
+    let note_b = title_results
+        .iter()
+        .find(|(n, _, _)| n.uuid == "b")
+        .unwrap();
+    assert!(
+        note_a.1 > note_b.1,
+        "title score should be higher than ref score"
+    );
+}
+
+#[test]
+fn test_search_title_outranks_tag() {
+    let results = vec![
+        make_note_full("a", "Quantum Theory", vec![], vec![], vec![]),
+        make_note_full("b", "Other", vec![], vec!["quantum".to_string()], vec![]),
+    ];
+    let graph = Graph::build(results);
+    let title_results = graph.search("Quantum", &Default::default());
+    let note_a = title_results
+        .iter()
+        .find(|(n, _, _)| n.uuid == "a")
+        .unwrap();
+    let note_b = title_results
+        .iter()
+        .find(|(n, _, _)| n.uuid == "b")
+        .unwrap();
+    assert!(
+        note_a.1 > note_b.1,
+        "title score should be higher than tag score"
+    );
+}
+
+#[test]
+fn test_search_ref_outranks_tag() {
+    let results = vec![
+        make_note("a", "Other", vec![]),
+        make_note_full(
+            "b",
+            "Unrelated",
+            vec![],
+            vec!["quantum".to_string()],
+            vec![],
+        ),
+    ];
+    let mut graph = Graph::build(results);
+    if let Some(node) = graph.nodes.get_mut("a") {
+        node.refs.push("quantum".to_string());
+    }
+    let title_results = graph.search("quantum", &Default::default());
+    let note_a = title_results
+        .iter()
+        .find(|(n, _, _)| n.uuid == "a")
+        .unwrap();
+    let note_b = title_results
+        .iter()
+        .find(|(n, _, _)| n.uuid == "b")
+        .unwrap();
+    assert!(
+        note_a.1 > note_b.1,
+        "ref score (6) should be higher than tag score (5)"
+    );
+}
+
 proptest::proptest! {
     #[test]
     fn test_graph_build_never_panics(
