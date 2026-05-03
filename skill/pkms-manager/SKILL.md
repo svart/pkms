@@ -195,7 +195,5 @@ data = json.loads(result.stdout)
 ```
 
 ### Performance Notes
-- `resolve` (~0.5s) — fast UUID lookup, header-only scan. Use for quick lookups.
-- `query`, `get`, `check`, `fix`, `suggest` (~3s) — full graph parse (750+ files). Acceptable for single calls.
-- Batch work efficiently: do all `resolve` lookups first, then run heavier commands.
-- The `fix` command loads the graph once AND walks all files — this is by design (double-checks replacements).
+
+All subcommands are very fast even on huge notes databases.
