@@ -50,7 +50,7 @@ src/
     stats.rs        # Comprehensive statistics (+ --hubs, --tags flags)
     orphans.rs      # List orphan notes
     broken.rs       # List broken links
-    resolve.rs      # Fast UUID resolution (header-only scan, ~0.5s)
+    resolve.rs      # UUID resolution
     fix.rs          # Replace broken UUIDs across all files
     suggest.rs      # Find related notes by multi-factor scoring (takes UUID only)
     get.rs          # Retrieve note with neighbors at depth N
@@ -77,7 +77,7 @@ tests/
 There is **no state persisted between invocations**:
 - No cache files, databases, or daemon processes
 - No server mode, watch mode, or background workers
-- `Graph::load()` re-scans and re-parses every `.org` file on each invocation (~3s for 750 files)
+- `Graph::load()` re-scans and re-parses every `.org` file on each invocation
 - Every command's `run()` is a self-contained function with no side effects beyond reading/writing org files
 
 **Do not introduce** statefulness (caches, databases, daemon mode) in future development.
@@ -88,8 +88,8 @@ If performance optimization is needed, compute from scratch on every run — do 
 - **No comments** unless the logic is non-obvious. Code should be self-documenting.
 - **`anyhow::Result`** for all fallible functions. No custom error types.
 - **`serde::Serialize`** for all output structs. Every command supports `--output-format json`.
-- **`Graph::load(config, db_cli)`** to load the full database (discovers + parses 750+ files, ~3s). Expensive — cache results when possible.
-- **`resolve`** command is fast (~0.5s) because it scans only file headers. Use for quick lookups.
+- **`Graph::load(config, db_cli)`** to load the full database.
+- **`resolve`** command scans only file headers.
 - **`#[allow(dead_code)]`** on struct fields kept for future use. Remove if never needed after implementation.
 - **Use `ctx.print_count`**, **`ctx.print_json`**, and **`ctx.print_ndjson`** from `OutputContext` for output dispatch. Every command receives `&OutputContext`.
 

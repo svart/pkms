@@ -57,9 +57,7 @@ pkms resolve --limit 20                 # Cap results
 pkms resolve "uuid" --fields uuid,title,path  # Select output fields
 ```
 
-`resolve` scans only file headers (~0.5s for 760 files). Returns UUID,
-title, path, filetags, and aliases. Use for quick lookups before heavy
-operations.
+`resolve`returns UUID, title, path, filetags, and aliases.
 
 ### Health & Validation
 

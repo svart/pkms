@@ -120,7 +120,7 @@ Tests move to `tests/graph_tests.rs` or stay within each submodule as `#[cfg(tes
 
 **Problem:** `query.rs` calls its own `discover_files()` then parses all files with `rayon`
 and calls `Graph::build()` manually — duplicating `Graph::load()`. The comment says this is
-intentional (both commands take ~3s), but the duplicated pipeline is ~30 lines of code
+intentional, but the duplicated pipeline is ~30 lines of code
 that will need maintenance whenever discovery or parsing changes.
 
 **Fix:** Refactor `Graph::load()` into two phases:

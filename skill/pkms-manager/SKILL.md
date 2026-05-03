@@ -33,7 +33,7 @@ These flags work with every command:
 
 ## Commands reference
 
-### Fast UUID Resolution (no full parse — ~0.5s)
+### UUID Resolution
 ```
 pkms --db ~/Documents/org --output-format json resolve <search-term>
 pkms --db ~/Documents/org --output-format json resolve --search <substring>
@@ -43,7 +43,7 @@ pkms --db ~/Documents/org --output-format json resolve "uuid" --fields uuid,titl
 ```
 Use `resolve` for quick lookups (only reads file headers). Returns UUID, title, path, tags, aliases. `--fields` selects which columns to include, `--limit` caps results.
 
-### Search & Query (full parse — ~3s)
+### Search & Query
 ```
 pkms --db ~/Documents/org --output-format json query "search terms" --limit 10
 pkms --db ~/Documents/org --output-format json query "terms" --tag book
