@@ -37,12 +37,7 @@ fn find_replacement(graph: &Graph, target: &str) -> Result<(String, String)> {
     replacement.ok_or_else(|| anyhow::anyhow!("Replacement target not found: {target}"))
 }
 
-fn print_fix_output(
-    ctx: &OutputContext,
-    output: &FixOutput,
-    apply: bool,
-    verbose: bool,
-) -> Result<()> {
+fn print_fix_output(ctx: &OutputContext, output: &FixOutput, apply: bool) -> Result<()> {
     if ctx.is_json() {
         ctx.print_json(output)?;
     } else {
@@ -67,9 +62,6 @@ fn print_fix_output(
         }
         for f in &output.files_affected {
             println!("  {f}");
-        }
-        if verbose {
-            println!("  ({} replacement(s) total)", output.total_replacements);
         }
     }
 
@@ -118,13 +110,12 @@ fn find_and_replace_links(
 pub fn run(
     config: &Config,
     ctx: &OutputContext,
-    verbose: bool,
     broken_uuid: &str,
     target: &str,
     apply: bool,
     db_cli: Option<&std::path::Path>,
 ) -> Result<()> {
-    let graph = Graph::load(config, db_cli, false)?;
+    let graph = Graph::load(config, db_cli)?;
     let db_root = config.resolve_db_root(db_cli)?;
 
     let broken = if broken_uuid.contains('-') {
@@ -184,5 +175,5 @@ pub fn run(
         applied: apply,
     };
 
-    print_fix_output(ctx, &output, apply, verbose)
+    print_fix_output(ctx, &output, apply)
 }

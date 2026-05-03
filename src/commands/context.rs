@@ -27,7 +27,6 @@ pub struct ContextOptions<'a> {
 pub fn run(
     config: &Config,
     ctx: &OutputContext,
-    quiet: bool,
     opts: &ContextOptions,
     db_cli: Option<&std::path::Path>,
 ) -> Result<()> {
@@ -38,7 +37,7 @@ pub fn run(
     let show_outgoing = opts.include_outgoing.unwrap_or(true);
     let show_incoming = opts.include_incoming.unwrap_or(true);
 
-    let graph = Graph::load(config, db_cli, false)?;
+    let graph = Graph::load(config, db_cli)?;
     let node = graph.resolve_target(target)?.clone();
     let content = std::fs::read_to_string(&node.path).unwrap_or_default();
     let neighbors = graph.get_neighbors(&node.uuid, depth);
@@ -110,15 +109,13 @@ pub fn run(
         ctx.print_json(&output)?;
     } else {
         println!("{rendered}");
-        if !quiet {
-            eprintln!(
-                "[context: ~{} tokens, depth: {}, max_tokens: {}]",
-                final_tokens,
-                depth,
-                opts.max_tokens
-                    .map_or("unlimited".to_string(), |m| m.to_string())
-            );
-        }
+        eprintln!(
+            "[context: ~{} tokens, depth: {}, max_tokens: {}]",
+            final_tokens,
+            depth,
+            opts.max_tokens
+                .map_or("unlimited".to_string(), |m| m.to_string())
+        );
     }
 
     Ok(())

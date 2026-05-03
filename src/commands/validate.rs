@@ -71,9 +71,8 @@ fn print_validate_text(
     broken_internal: &[String],
     broken_files: &[String],
     incoming: &[String],
-    backlink_entries: &[BacklinkEntry],
+    _backlink_entries: &[BacklinkEntry],
     issues: &[String],
-    verbose: bool,
 ) {
     let outgoing_internal_len = node
         .outgoing
@@ -137,14 +136,6 @@ fn print_validate_text(
         }
     }
 
-    if verbose && !incoming.is_empty() {
-        println!();
-        println!("Backlinks:");
-        for entry in backlink_entries {
-            println!("  {} ({})", entry.title, entry.uuid);
-        }
-    }
-
     println!();
     if healthy {
         println!("Status: healthy");
@@ -156,13 +147,12 @@ fn print_validate_text(
 pub fn run(
     config: &Config,
     ctx: &OutputContext,
-    verbose: bool,
     target: Option<&str>,
     db_cli: Option<&std::path::Path>,
 ) -> Result<()> {
     let target = target.ok_or_else(|| anyhow::anyhow!("No target specified. Provide a target"))?;
 
-    let graph = Graph::load(config, db_cli, verbose)?;
+    let graph = Graph::load(config, db_cli)?;
 
     let node = graph.resolve_target(target)?.clone();
     let mut issues = Vec::new();
@@ -240,7 +230,6 @@ pub fn run(
             &incoming,
             &backlink_entries,
             &issues,
-            verbose,
         );
     }
 

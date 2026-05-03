@@ -1487,32 +1487,6 @@ fn test_missing_db_json_error() {
 }
 
 // ----------------------------------------------------------------
-// --output-format ndjson with --quiet
-// ----------------------------------------------------------------
-#[test]
-fn test_ndjson_quiet() {
-    let (_dir, root) = setup_db();
-    let (stdout, stderr, status) = run(&[
-        "--db",
-        root.to_str().unwrap(),
-        "--output-format",
-        "ndjson",
-        "--quiet",
-        "resolve",
-    ]);
-    assert!(status.success());
-    assert!(
-        stderr.is_empty(),
-        "Expected empty stderr with --quiet, got: {}",
-        stderr
-    );
-    for line in stdout.lines() {
-        let v: serde_json::Value = serde_json::from_str(line).unwrap();
-        assert!(v.get("uuid").is_some());
-    }
-}
-
-// ----------------------------------------------------------------
 // PARAMETERIZED: every command with --output-format json produces valid JSON
 // ----------------------------------------------------------------
 #[test]
@@ -1737,93 +1711,6 @@ fn test_all_commands_json() {
             .unwrap_or_else(|_| panic!("Invalid JSON for {:?}: {}", args_refs, stdout));
         assert!(v.is_object(), "Expected object for {:?}", args_refs);
     }
-}
-
-// ----------------------------------------------------------------
-// CLI AUTOMATION: --no-header
-// ----------------------------------------------------------------
-#[test]
-fn test_no_header_orphans() {
-    let (_dir, root) = setup_db();
-    let (stdout, _stderr, status) =
-        run(&["--db", root.to_str().unwrap(), "orphans", "--no-header"]);
-    assert!(status.success());
-    // Should NOT contain "Orphan notes (N):" header
-    assert!(
-        !stdout.contains("Orphan notes"),
-        "no-header should suppress header: {}",
-        stdout
-    );
-    assert!(
-        stdout.contains("Orphan Note"),
-        "should still show items: {}",
-        stdout
-    );
-}
-
-#[test]
-fn test_no_header_broken() {
-    let (_dir, root) = setup_db();
-    let (stdout, _stderr, status) = run(&["--db", root.to_str().unwrap(), "broken", "--no-header"]);
-    assert!(status.success());
-    assert!(
-        !stdout.contains("Broken links"),
-        "no-header should suppress header: {}",
-        stdout
-    );
-    assert!(
-        stdout.contains("Broken Note"),
-        "should still show items: {}",
-        stdout
-    );
-}
-
-#[test]
-fn test_no_header_resolve() {
-    let (_dir, root) = setup_db();
-    let (stdout, _stderr, status) =
-        run(&["--db", root.to_str().unwrap(), "resolve", "--no-header"]);
-    assert!(status.success());
-    assert!(
-        !stdout.contains("Total:"),
-        "no-header should suppress Total: {}",
-        stdout
-    );
-    assert!(
-        stdout.contains("Note A"),
-        "should still show items: {}",
-        stdout
-    );
-}
-
-#[test]
-fn test_count_only_broken() {
-    let (_dir, root) = setup_db();
-    let (stdout, _stderr, status) = run(&["--db", root.to_str().unwrap(), "broken", "--count"]);
-    assert!(status.success());
-    let count: usize = stdout
-        .trim()
-        .parse()
-        .expect("--count should print just a number");
-    assert!(count >= 1, "expected at least 1 broken link");
-}
-
-#[test]
-fn test_count_only_orphans() {
-    let (_dir, root) = setup_db();
-    let (v, status) = run_json(&[
-        "--db",
-        root.to_str().unwrap(),
-        "--output-format",
-        "json",
-        "orphans",
-        "--count",
-    ]);
-    assert!(status.success());
-    assert!(v.get("count").is_some());
-    assert!(v["count"].as_u64().unwrap_or(0) >= 1);
-    // Should NOT have the full list
-    assert!(v.get("orphans").is_none());
 }
 
 // ----------------------------------------------------------------

@@ -50,7 +50,6 @@ pub struct GetOptions<'a> {
 pub fn run(
     config: &Config,
     ctx: &OutputContext,
-    verbose: bool,
     opts: &GetOptions,
     db_cli: Option<&std::path::Path>,
 ) -> Result<()> {
@@ -61,7 +60,7 @@ pub fn run(
     let show_content = opts.show_content;
     let show_graph = opts.show_graph;
 
-    let graph = Graph::load(config, db_cli, verbose)?;
+    let graph = Graph::load(config, db_cli)?;
 
     let node = graph.resolve_target(target)?.clone();
     let neighbors = graph.get_neighbors(&node.uuid, depth);

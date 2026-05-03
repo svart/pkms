@@ -180,11 +180,6 @@ pub fn run(
 
     results.truncate(limit);
 
-    if ctx.count_only && ctx.format != OutputFormat::Ndjson {
-        ctx.print_count(results.len());
-        return Ok(());
-    }
-
     let field_set: Option<HashSet<String>> = opts
         .fields
         .map(|f| f.split(',').map(|s| s.trim().to_string()).collect());
@@ -202,12 +197,10 @@ fn print_resolve_output(
 ) -> Result<()> {
     match ctx.format {
         OutputFormat::Text => {
-            if !ctx.no_header {
-                if !query.is_empty() {
-                    println!("Resolved: \"{query}\"");
-                }
-                println!("Total: {}", results.len());
+            if !query.is_empty() {
+                println!("Resolved: \"{query}\"");
             }
+            println!("Total: {}", results.len());
             for note in &results {
                 let short = if note.uuid.len() > 8 {
                     &note.uuid[..8]

@@ -1,4 +1,4 @@
-use clap::{Args, Parser, Subcommand, ValueEnum};
+use clap::{Parser, Subcommand, ValueEnum};
 use std::path::PathBuf;
 
 #[derive(Clone, PartialEq, ValueEnum)]
@@ -6,29 +6,6 @@ pub enum OutputFormat {
     Text,
     Json,
     Ndjson,
-}
-
-#[derive(Args)]
-pub struct Verbosity {
-    #[arg(global = true, short, long, help = "Verbose output")]
-    pub verbose: bool,
-
-    #[arg(
-        global = true,
-        short = 'q',
-        long,
-        help = "Suppress non-essential stderr output"
-    )]
-    pub quiet: bool,
-}
-
-#[derive(Args)]
-pub struct Display {
-    #[arg(global = true, long, help = "Suppress column headers in human output")]
-    pub no_header: bool,
-
-    #[arg(global = true, long = "count", help = "Show only the count of results")]
-    pub count_only: bool,
 }
 
 #[derive(Parser)]
@@ -45,12 +22,6 @@ pub struct Cli {
         help = "Path to org-roam database root (overrides config)"
     )]
     pub db: Option<PathBuf>,
-
-    #[command(flatten)]
-    pub verbosity: Verbosity,
-
-    #[command(flatten)]
-    pub display: Display,
 
     #[arg(
         global = true,

@@ -153,8 +153,6 @@ These schemas define the exact structure and types for reliable programmatic con
 | Flag              | Description                                      |
 |-------------------|--------------------------------------------------|
 | `--output-format FMT` | Output format: `text`, `json`, or `ndjson`   |
-| `--no-header`     | Suppress column headers in human output          |
-| `--count`         | Show only the result count                       |
 
 ## Related
 

@@ -28,19 +28,13 @@ pub struct TagNote {
 pub fn run(
     config: &Config,
     ctx: &OutputContext,
-    verbose: bool,
     tag_filter: Option<&str>,
     db_cli: Option<&std::path::Path>,
 ) -> Result<()> {
-    let graph = Graph::load(config, db_cli, verbose)?;
+    let graph = Graph::load(config, db_cli)?;
 
     if let Some(tag) = tag_filter {
         let notes = graph.notes_by_tag(tag);
-        if ctx.count_only {
-            ctx.print_count(notes.len());
-            return Ok(());
-        }
-
         let notes_json: Vec<TagNote> = notes
             .iter()
             .map(|n| TagNote {
@@ -52,10 +46,8 @@ pub fn run(
 
         match ctx.format {
             OutputFormat::Text => {
-                if !ctx.no_header {
-                    println!("Tag: {tag}");
-                    println!("Notes: {}", notes.len());
-                }
+                println!("Tag: {tag}");
+                println!("Notes: {}", notes.len());
                 for n in &notes {
                     println!("  {} ({})", n.title, n.uuid);
                 }
@@ -75,11 +67,6 @@ pub fn run(
         }
     } else {
         let tags = graph.all_tags();
-        if ctx.count_only {
-            ctx.print_count(tags.len());
-            return Ok(());
-        }
-
         let entries: Vec<TagEntry> = tags
             .iter()
             .map(|(tag, count)| TagEntry {
@@ -91,16 +78,12 @@ pub fn run(
 
         match ctx.format {
             OutputFormat::Text => {
-                if !ctx.no_header {
-                    println!("Filetags (count):");
-                }
+                println!("Filetags (count):");
                 for (tag, count) in &tags {
                     println!("  {tag:30} {count}");
                 }
-                if !ctx.no_header {
-                    println!();
-                    println!("Total unique tags: {}", tags.len());
-                }
+                println!();
+                println!("Total unique tags: {}", tags.len());
             }
             OutputFormat::Json => {
                 ctx.print_json(&TagsOutput { tags: entries })?;

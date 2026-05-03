@@ -32,7 +32,6 @@ pub struct ContextLine {
 pub fn run(
     config: &Config,
     ctx: &OutputContext,
-    verbose: bool,
     terms: Option<&str>,
     tag_filter: Option<&str>,
     limit: Option<usize>,
@@ -42,7 +41,7 @@ pub fn run(
 
     let db_root = config.resolve_db_root(db_cli)?;
     let ignore = config.resolve_ignore_patterns();
-    let results = Graph::scan(&db_root, &ignore, verbose)?;
+    let results = Graph::scan(&db_root, &ignore)?;
     let graph = Graph::build(results);
 
     let title_results = graph.search(terms);
@@ -120,11 +119,6 @@ pub fn run(
         combined.truncate(limit);
     }
 
-    if ctx.count_only {
-        ctx.print_count(combined.len());
-        return Ok(());
-    }
-
     print_query_output(ctx, terms, combined)?;
 
     Ok(())
@@ -137,11 +131,9 @@ fn print_query_output(
 ) -> Result<()> {
     match ctx.format {
         OutputFormat::Text => {
-            if !ctx.no_header {
-                println!("Query: {terms}");
-                println!("Results: {}", results.len());
-                println!();
-            }
+            println!("Query: {terms}");
+            println!("Results: {}", results.len());
+            println!();
             for (i, r) in results.iter().enumerate() {
                 println!("{:3}. {}  (score: {:.1})", i + 1, r.title, r.score);
                 println!("       UUID: {}", r.uuid);

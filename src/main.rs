@@ -17,11 +17,8 @@ fn main() -> ExitCode {
     let cli = Cli::parse();
     let ctx = OutputContext {
         format: cli.output_format.clone().unwrap_or(OutputFormat::Text),
-        no_header: cli.display.no_header,
-        count_only: cli.display.count_only,
     };
     let machine = ctx.is_json();
-    let quiet = cli.verbosity.quiet || machine;
 
     let cfg = match config::Config::load() {
         Ok(c) => c,
@@ -35,7 +32,7 @@ fn main() -> ExitCode {
         }
     };
 
-    match dispatch(&cli, &cfg, &ctx, quiet) {
+    match dispatch(&cli, &cfg, &ctx) {
         Ok(code) => code,
         Err(e) => {
             if machine {
@@ -48,42 +45,29 @@ fn main() -> ExitCode {
     }
 }
 
-fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext, quiet: bool) -> Result<ExitCode> {
-    if let Some(result) = dispatch_simple(cli, cfg, ctx, quiet)? {
+fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<ExitCode> {
+    if let Some(result) = dispatch_simple(cli, cfg, ctx)? {
         return Ok(result);
     }
-    dispatch_complex(cli, cfg, ctx, quiet)
+    dispatch_complex(cli, cfg, ctx)
 }
 
 fn dispatch_simple(
     cli: &Cli,
     cfg: &config::Config,
     ctx: &OutputContext,
-    _quiet: bool,
 ) -> Result<Option<ExitCode>> {
     Ok(Some(match &cli.command {
         Command::Check {
             file_links,
             attachment_links,
-        } => commands::check::run(
-            cfg,
-            ctx,
-            cli.verbosity.verbose,
-            cli.db.as_deref(),
-            *file_links,
-            *attachment_links,
-        )?,
-        Command::Validate { target } => commands::validate::run(
-            cfg,
-            ctx,
-            cli.verbosity.verbose,
-            target.as_deref(),
-            cli.db.as_deref(),
-        )
-        .map(|()| ExitCode::SUCCESS)?,
-        Command::Stats { days } => {
-            commands::stats::run(cfg, ctx, cli.verbosity.verbose, *days, cli.db.as_deref())
+        } => commands::check::run(cfg, ctx, cli.db.as_deref(), *file_links, *attachment_links)?,
+        Command::Validate { target } => {
+            commands::validate::run(cfg, ctx, target.as_deref(), cli.db.as_deref())
                 .map(|()| ExitCode::SUCCESS)?
+        }
+        Command::Stats { days } => {
+            commands::stats::run(cfg, ctx, *days, cli.db.as_deref()).map(|()| ExitCode::SUCCESS)?
         }
         Command::Orphans => {
             commands::orphans::run(cfg, ctx, cli.db.as_deref()).map(|()| ExitCode::SUCCESS)?
@@ -98,25 +82,14 @@ fn dispatch_simple(
             commands::info::run(cfg, ctx, cli.db.as_deref()).map(|()| ExitCode::SUCCESS)?
         }
         Command::InitConfig { db } => init_config(db.as_deref(), ctx)?,
-        Command::Tags { tag } => commands::tags::run(
-            cfg,
-            ctx,
-            cli.verbosity.verbose,
-            tag.as_deref(),
-            cli.db.as_deref(),
-        )
-        .map(|()| ExitCode::SUCCESS)?,
+        Command::Tags { tag } => commands::tags::run(cfg, ctx, tag.as_deref(), cli.db.as_deref())
+            .map(|()| ExitCode::SUCCESS)?,
         _ => return Ok(None),
     }))
 }
 
-fn dispatch_complex(
-    cli: &Cli,
-    cfg: &config::Config,
-    ctx: &OutputContext,
-    quiet: bool,
-) -> Result<ExitCode> {
-    if let Some(result) = dispatch_mutating(cli, cfg, ctx, quiet)? {
+fn dispatch_complex(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<ExitCode> {
+    if let Some(result) = dispatch_mutating(cli, cfg, ctx)? {
         return Ok(result);
     }
     dispatch_query(cli, cfg, ctx)
@@ -126,7 +99,6 @@ fn dispatch_mutating(
     cli: &Cli,
     cfg: &config::Config,
     ctx: &OutputContext,
-    quiet: bool,
 ) -> Result<Option<ExitCode>> {
     Ok(Some(match &cli.command {
         Command::Context {
@@ -139,7 +111,6 @@ fn dispatch_mutating(
         } => commands::context::run(
             cfg,
             ctx,
-            quiet,
             &commands::context::ContextOptions {
                 target: target.as_deref(),
                 depth: *depth,
@@ -174,25 +145,12 @@ fn dispatch_mutating(
             broken_uuid,
             target,
             apply,
-        } => commands::fix::run(
-            cfg,
-            ctx,
-            cli.verbosity.verbose,
-            broken_uuid,
-            target,
-            *apply,
-            cli.db.as_deref(),
-        )
-        .map(|()| ExitCode::SUCCESS)?,
-        Command::Suggest { target, limit } => commands::suggest::run(
-            cfg,
-            ctx,
-            cli.verbosity.verbose,
-            target.as_deref(),
-            *limit,
-            cli.db.as_deref(),
-        )
-        .map(|()| ExitCode::SUCCESS)?,
+        } => commands::fix::run(cfg, ctx, broken_uuid, target, *apply, cli.db.as_deref())
+            .map(|()| ExitCode::SUCCESS)?,
+        Command::Suggest { target, limit } => {
+            commands::suggest::run(cfg, ctx, target.as_deref(), *limit, cli.db.as_deref())
+                .map(|()| ExitCode::SUCCESS)?
+        }
         Command::New {
             title,
             create,
@@ -216,7 +174,6 @@ fn dispatch_mutating(
         } => commands::get::run(
             cfg,
             ctx,
-            cli.verbosity.verbose,
             &commands::get::GetOptions {
                 target: target.as_deref(),
                 depth: *depth,
@@ -235,7 +192,6 @@ fn dispatch_query(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Resul
         Command::Query { terms, tag, limit } => commands::query::run(
             cfg,
             ctx,
-            cli.verbosity.verbose,
             terms.as_deref(),
             tag.as_deref(),
             *limit,
@@ -249,22 +205,16 @@ fn dispatch_query(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Resul
         } => commands::path::run(
             cfg,
             ctx,
-            cli.verbosity.verbose,
             from.as_deref(),
             to.as_deref(),
             *max_depth,
             cli.db.as_deref(),
         )
         .map(|()| ExitCode::SUCCESS)?,
-        Command::Subgraph { target, depth } => commands::subgraph::run(
-            cfg,
-            ctx,
-            cli.verbosity.verbose,
-            target.as_deref(),
-            *depth,
-            cli.db.as_deref(),
-        )
-        .map(|()| ExitCode::SUCCESS)?,
+        Command::Subgraph { target, depth } => {
+            commands::subgraph::run(cfg, ctx, target.as_deref(), *depth, cli.db.as_deref())
+                .map(|()| ExitCode::SUCCESS)?
+        }
         _ => unreachable!(),
     })
 }

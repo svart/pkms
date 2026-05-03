@@ -18,14 +18,8 @@ pub struct BrokenEntry {
 }
 
 pub fn run(config: &Config, ctx: &OutputContext, db_cli: Option<&std::path::Path>) -> Result<()> {
-    let graph = Graph::load(config, db_cli, false)?;
+    let graph = Graph::load(config, db_cli)?;
     let links = graph.broken_links_list();
-
-    let count = links.len();
-    if ctx.count_only {
-        ctx.print_count(count);
-        return Ok(());
-    }
 
     let entries: Vec<BrokenEntry> = links
         .iter()
@@ -38,9 +32,7 @@ pub fn run(config: &Config, ctx: &OutputContext, db_cli: Option<&std::path::Path
 
     match ctx.format {
         crate::cli::OutputFormat::Text => {
-            if !ctx.no_header {
-                println!("Broken links ({count}):");
-            }
+            println!("Broken links ({}):", links.len());
             for (_src, title, tgt) in &links {
                 println!("  {title} -> {tgt}");
             }

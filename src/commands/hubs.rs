@@ -29,13 +29,8 @@ pub fn run(
     limit: usize,
     db_cli: Option<&std::path::Path>,
 ) -> Result<()> {
-    let graph = Graph::load(config, db_cli, false)?;
+    let graph = Graph::load(config, db_cli)?;
     let hubs = graph.hubs(limit);
-
-    if ctx.count_only {
-        ctx.print_count(hubs.len());
-        return Ok(());
-    }
 
     let entries: Vec<HubEntry> = hubs
         .iter()
@@ -60,9 +55,7 @@ pub fn run(
 
     match ctx.format {
         OutputFormat::Text => {
-            if !ctx.no_header {
-                println!("Top {limit} hubs:");
-            }
+            println!("Top {limit} hubs:");
             for (i, (node, deg)) in hubs.iter().enumerate() {
                 let outgoing = node
                     .outgoing

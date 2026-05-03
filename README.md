@@ -44,10 +44,6 @@ The `--db` flag overrides `db_root` from the config. If neither is provided, the
 | `--db PATH`             | Path to org-roam database root (overrides config) |
 | `--output-format`       | Output format: `json` or `ndjson`                 |
 | `--output-format FMT`   | Output format: `json` or `ndjson`                 |
-| `-v`                    | Verbose output during processing                  |
-| `-q` / `--quiet`        | Suppress non-essential stderr output              |
-| `--no-header`           | Suppress column headers in human output           |
-| `--count`               | Show only the count of results                    |
 
 ## Commands
 

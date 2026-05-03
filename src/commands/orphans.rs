@@ -20,14 +20,8 @@ pub struct OrphanEntry {
 }
 
 pub fn run(config: &Config, ctx: &OutputContext, db_cli: Option<&std::path::Path>) -> Result<()> {
-    let graph = Graph::load(config, db_cli, false)?;
+    let graph = Graph::load(config, db_cli)?;
     let orphans = graph.orphan_nodes();
-
-    let count = orphans.len();
-    if ctx.count_only {
-        ctx.print_count(count);
-        return Ok(());
-    }
 
     let entries: Vec<OrphanEntry> = orphans
         .iter()
@@ -41,9 +35,7 @@ pub fn run(config: &Config, ctx: &OutputContext, db_cli: Option<&std::path::Path
 
     match ctx.format {
         crate::cli::OutputFormat::Text => {
-            if !ctx.no_header {
-                println!("Orphan notes ({count}):");
-            }
+            println!("Orphan notes ({}):", orphans.len());
             for n in &orphans {
                 println!("  {} ({})", n.title, util::short_uuid(&n.uuid));
             }

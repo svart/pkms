@@ -4,8 +4,6 @@ use serde::Serialize;
 
 pub struct OutputContext {
     pub format: OutputFormat,
-    pub no_header: bool,
-    pub count_only: bool,
 }
 
 impl OutputContext {
@@ -25,13 +23,5 @@ impl OutputContext {
             println!("{}", serde_json::to_string(item)?);
         }
         Ok(())
-    }
-
-    pub fn print_count(&self, count: usize) {
-        if self.is_json() {
-            println!("{}", serde_json::json!({"count": count}));
-        } else {
-            println!("{count}");
-        }
     }
 }

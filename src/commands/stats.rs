@@ -45,11 +45,10 @@ pub struct RecentNote {
 pub fn run(
     config: &Config,
     ctx: &OutputContext,
-    verbose: bool,
     days: Option<u32>,
     db_cli: Option<&std::path::Path>,
 ) -> Result<()> {
-    let graph = Graph::load(config, db_cli, false)?;
+    let graph = Graph::load(config, db_cli)?;
     let db_root = config.resolve_db_root(db_cli)?;
     let stats = graph.stats();
 
@@ -120,18 +119,6 @@ pub fn run(
         if let Some(d) = days {
             let recent = graph.notes_since(d);
             println!("  Recent ({} days):   {}", d, recent.len());
-        }
-        if verbose {
-            println!();
-            println!("Directories:");
-            for (dir, count) in &dirs {
-                let display = if dir.is_empty() {
-                    "(root)"
-                } else {
-                    dir.as_str()
-                };
-                println!("  {display:40} {count}");
-            }
         }
         println!();
         println!("Top hubs:");

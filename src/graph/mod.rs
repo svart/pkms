@@ -72,21 +72,8 @@ pub struct Graph {
 }
 
 impl Graph {
-    pub fn scan(
-        db_root: &Path,
-        ignore: &[String],
-        verbose: bool,
-    ) -> anyhow::Result<Vec<FileScanResult>> {
-        if verbose {
-            eprintln!("Scanning: {}", db_root.display());
-        }
-
+    pub fn scan(db_root: &Path, ignore: &[String]) -> anyhow::Result<Vec<FileScanResult>> {
         let files = discover_files(db_root, ignore)?;
-
-        if verbose {
-            eprintln!("Found {} .org files, parsing...", files.len());
-        }
-
         let results: Vec<FileScanResult> = files
             .into_par_iter()
             .map(|entry| {
@@ -112,10 +99,10 @@ impl Graph {
         Ok(results)
     }
 
-    pub fn load(config: &Config, db_cli: Option<&Path>, verbose: bool) -> anyhow::Result<Self> {
+    pub fn load(config: &Config, db_cli: Option<&Path>) -> anyhow::Result<Self> {
         let db_root = config.resolve_db_root(db_cli)?;
         let ignore = config.resolve_ignore_patterns();
-        let results = Self::scan(&db_root, &ignore, verbose)?;
+        let results = Self::scan(&db_root, &ignore)?;
         Ok(Graph::build(results))
     }
 

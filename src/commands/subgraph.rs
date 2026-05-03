@@ -45,14 +45,13 @@ pub struct EdgeEntry {
 pub fn run(
     config: &Config,
     ctx: &OutputContext,
-    verbose: bool,
     target: Option<&str>,
     depth: u32,
     db_cli: Option<&std::path::Path>,
 ) -> Result<()> {
     let target = target.ok_or_else(|| anyhow::anyhow!("No target specified. Provide a target"))?;
 
-    let graph = Graph::load(config, db_cli, verbose)?;
+    let graph = Graph::load(config, db_cli)?;
 
     let root = graph.resolve_target(target)?.clone();
     let sub = graph.collect_subgraph(&root.uuid, depth);

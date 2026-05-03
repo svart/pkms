@@ -22,7 +22,6 @@ pub struct PathNode {
 pub fn run(
     config: &Config,
     ctx: &OutputContext,
-    verbose: bool,
     from: Option<&str>,
     to: Option<&str>,
     max_depth: Option<u32>,
@@ -31,7 +30,7 @@ pub fn run(
     let from = from.ok_or_else(|| anyhow::anyhow!("No source specified. Provide --from"))?;
     let to = to.ok_or_else(|| anyhow::anyhow!("No target specified. Provide --to"))?;
 
-    let graph = Graph::load(config, db_cli, verbose)?;
+    let graph = Graph::load(config, db_cli)?;
 
     let from_node = graph.find_node(from);
     let to_node = graph.find_node(to);

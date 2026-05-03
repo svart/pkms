@@ -107,7 +107,6 @@ fn print_check_text(
     attachment_links: bool,
     broken_file: &[BrokenFileLinkEntry],
     broken_attachment: &[BrokenAttachmentLinkEntry],
-    verbose: bool,
 ) {
     let stats = graph.stats();
     let healthy = stats.broken_link_count == 0
@@ -193,22 +192,6 @@ fn print_check_text(
         }
     }
 
-    if verbose && !graph.parse_errors.is_empty() {
-        println!();
-        println!("Parse errors:");
-        for (path, err) in &graph.parse_errors {
-            println!("  {}: {}", path.display(), err);
-        }
-    }
-
-    if verbose && !graph.skipped_files.is_empty() {
-        println!();
-        println!("Skipped files (no :ID:):");
-        for path in &graph.skipped_files {
-            println!("  {}", path.display());
-        }
-    }
-
     println!();
     if healthy {
         println!("Status: healthy");
@@ -220,12 +203,11 @@ fn print_check_text(
 pub fn run(
     config: &Config,
     ctx: &OutputContext,
-    verbose: bool,
     db_cli: Option<&std::path::Path>,
     file_links: bool,
     attachment_links: bool,
 ) -> Result<ExitCode> {
-    let graph = Graph::load(config, db_cli, verbose)?;
+    let graph = Graph::load(config, db_cli)?;
     let stats = graph.stats();
     let db_root = config.resolve_db_root(db_cli)?;
 
@@ -290,7 +272,6 @@ pub fn run(
             attachment_links,
             &broken_file,
             &broken_attachment,
-            verbose,
         );
     }
 

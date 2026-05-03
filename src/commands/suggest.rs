@@ -147,14 +147,13 @@ fn compute_scores<'a>(
 pub fn run(
     config: &Config,
     ctx: &OutputContext,
-    verbose: bool,
     target: Option<&str>,
     limit: Option<usize>,
     db_cli: Option<&std::path::Path>,
 ) -> Result<()> {
     let target = target.ok_or_else(|| anyhow::anyhow!("No target specified. Provide a target"))?;
 
-    let graph = Graph::load(config, db_cli, false)?;
+    let graph = Graph::load(config, db_cli)?;
     let limit = limit.unwrap_or(10);
 
     let node = graph
@@ -227,14 +226,13 @@ pub fn run(
     scored.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
     scored.truncate(limit);
 
-    print_suggest_output(ctx, &node, &scored, verbose)
+    print_suggest_output(ctx, &node, &scored)
 }
 
 fn print_suggest_output(
     ctx: &OutputContext,
     node: &crate::graph::Node,
     scored: &[ScoredItem<'_>],
-    verbose: bool,
 ) -> Result<()> {
     if ctx.is_json() {
         let suggestions: Vec<Suggestion> = scored
@@ -258,19 +256,10 @@ fn print_suggest_output(
     } else {
         println!("Suggestions for \"{}\":", node.title);
         println!();
-        for (i, (n, score, reasons, fs)) in scored.iter().enumerate() {
+        for (i, (n, score, reasons, _fs)) in scored.iter().enumerate() {
             println!("{:3}. {:45} score: {:5.0}", i + 1, n.title, score);
             if !reasons.is_empty() {
                 println!("       {}", reasons.join(", "));
-            }
-            if verbose && !fs.is_empty() {
-                let mut factors: Vec<(&String, &f64)> = fs.iter().collect();
-                factors.sort_by(|a, b| b.1.partial_cmp(a.1).unwrap_or(std::cmp::Ordering::Equal));
-                let parts: Vec<String> = factors
-                    .iter()
-                    .map(|(k, v)| format!("  {k}: {v:.0}"))
-                    .collect();
-                println!("       Factors:{}", parts.join(""));
             }
         }
     }
