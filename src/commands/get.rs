@@ -42,7 +42,7 @@ pub struct NeighborOutput {
 
 pub struct GetOptions<'a> {
     pub target: Option<&'a str>,
-    pub depth: u32,
+    pub show_links: bool,
     pub no_content: bool,
 }
 
@@ -55,13 +55,17 @@ pub fn run(
     let target = opts
         .target
         .ok_or_else(|| anyhow::anyhow!("No target specified"))?;
-    let depth = opts.depth;
+    let show_links = opts.show_links;
     let no_content = opts.no_content;
 
     let graph = Graph::load(config, db_cli)?;
 
     let node = graph.resolve_target(target)?.clone();
-    let neighbors = graph.get_neighbors(&node.uuid, depth);
+    let neighbors = if show_links {
+        Some(graph.get_neighbors(&node.uuid, 1))
+    } else {
+        None
+    };
 
     let node_content = if no_content {
         None
@@ -71,20 +75,25 @@ pub fn run(
 
     if ctx.is_json() {
         let node_json = NodeJson::from_node(&node, node_content.as_deref());
-        let mut neigh_json = HashMap::new();
-        for (d, ns) in &neighbors {
-            let outgoing: Vec<NodeJson> = ns
-                .outgoing
-                .iter()
-                .map(|n| NodeJson::from_node(n, None))
-                .collect();
-            let incoming: Vec<NodeJson> = ns
-                .incoming
-                .iter()
-                .map(|n| NodeJson::from_node(n, None))
-                .collect();
-            neigh_json.insert(*d, NeighborOutput { outgoing, incoming });
-        }
+        let neigh_json = if let Some(ref ns) = neighbors {
+            let mut map = HashMap::new();
+            if let Some(ns) = ns.get(&1) {
+                let outgoing: Vec<NodeJson> = ns
+                    .outgoing
+                    .iter()
+                    .map(|n| NodeJson::from_node(n, None))
+                    .collect();
+                let incoming: Vec<NodeJson> = ns
+                    .incoming
+                    .iter()
+                    .map(|n| NodeJson::from_node(n, None))
+                    .collect();
+                map.insert(1, NeighborOutput { outgoing, incoming });
+            }
+            map
+        } else {
+            HashMap::new()
+        };
         let output = GetOutput {
             node: node_json,
             neighbors: neigh_json,
@@ -101,28 +110,27 @@ pub fn run(
             println!();
             println!("--- Content ---");
             println!("{content}");
-            println!("--- End ---");
+            println!("--- End Content ---");
         }
 
-        for d in 1..=depth {
-            if let Some(ns) = neighbors.get(&d) {
-                println!();
-                println!("Depth {d}:");
-                if !ns.outgoing.is_empty() {
-                    println!("  Forward links:");
-                    for n in &ns.outgoing {
-                        print_node_short(n, "    ");
-                    }
+        if let Some(ns) = neighbors
+            && let Some(ns) = ns.get(&1)
+        {
+            println!();
+            if !ns.outgoing.is_empty() {
+                println!("Forward links:");
+                for n in &ns.outgoing {
+                    print_node_short(n, "  ");
                 }
-                if !ns.incoming.is_empty() {
-                    println!("  Backlinks:");
-                    for n in &ns.incoming {
-                        print_node_short(n, "    ");
-                    }
+            }
+            if !ns.incoming.is_empty() {
+                println!("Backlinks:");
+                for n in &ns.incoming {
+                    print_node_short(n, "  ");
                 }
-                if ns.outgoing.is_empty() && ns.incoming.is_empty() {
-                    println!("  (no connections at this depth)");
-                }
+            }
+            if ns.outgoing.is_empty() && ns.incoming.is_empty() {
+                println!("(no connections)");
             }
         }
     }

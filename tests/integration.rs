@@ -869,14 +869,8 @@ fn test_new_with_tags() {
 #[test]
 fn test_get_human() {
     let (_dir, root) = setup_db();
-    let (stdout, _stderr, status) = run(&[
-        "--db",
-        root.to_str().unwrap(),
-        "get",
-        "Note A",
-        "--depth",
-        "1",
-    ]);
+    let (stdout, _stderr, status) =
+        run(&["--db", root.to_str().unwrap(), "get", "Note A", "--links"]);
     assert!(status.success());
     assert!(stdout.contains("Note A"));
     assert!(stdout.contains("Note B"));
@@ -892,8 +886,7 @@ fn test_get_json() {
         "json",
         "get",
         "Note A",
-        "--depth",
-        "1",
+        "--links",
     ]);
     assert!(status.success());
     assert_eq!(v["node"]["title"], "Note A");
@@ -1502,8 +1495,7 @@ fn test_all_commands_json() {
                 "json".into(),
                 "get".into(),
                 "Note A".into(),
-                "--depth".into(),
-                "1".into(),
+                "--links".into(),
             ],
             true,
         ),

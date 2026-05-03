@@ -169,14 +169,14 @@ fn dispatch_mutating(
         .map(|()| ExitCode::SUCCESS)?,
         Command::Get {
             target,
-            depth,
+            links,
             no_content,
         } => commands::get::run(
             cfg,
             ctx,
             &commands::get::GetOptions {
                 target: target.as_deref(),
-                depth: *depth,
+                show_links: *links,
                 no_content: *no_content,
             },
             cli.db.as_deref(),

@@ -80,8 +80,9 @@ outgoing links (internal + file existence), and lists backlinks.
 ### Graph Navigation
 
 ```
-pkms get <target> --depth 2                # Retrieve note with neighbors (content shown by default)
-pkms get <target> --depth 1 --no-content   # Suppress note content
+pkms get <target>                          # Retrieve note (content shown by default)
+pkms get <target> --links                  # Show note with forward/backward links
+pkms get <target> --links --no-content     # Links only, no content
 pkms path <from> <to>                      # Shortest path between notes
 pkms path <from> <to>                      # Shortest path between notes
 ```

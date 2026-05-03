@@ -143,8 +143,8 @@ pub enum Command {
     Get {
         #[arg(help = "UUID, file path, or note title")]
         target: Option<String>,
-        #[arg(short, long, default_value = "1", help = "Traversal depth")]
-        depth: u32,
+        #[arg(long, help = "Show forward and backward links (depth 1)")]
+        links: bool,
         #[arg(long, help = "Suppress note content output")]
         no_content: bool,
     },

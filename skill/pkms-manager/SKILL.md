@@ -50,8 +50,8 @@ pkms --db ~/Documents/org --output-format json query "terms" --tag book
 ```
 ### Retrieve Notes
 ```
-pkms --db ~/Documents/org --output-format json get <uuid-or-title> --depth 1
-pkms --db ~/Documents/org get <uuid-or-title> --depth 1 --no-content   # Suppress content
+pkms --db ~/Documents/org --output-format json get <uuid-or-title> --links
+pkms --db ~/Documents/org get <uuid-or-title> --links --no-content   # Links only, no content
 ```
 ### Graph Navigation
 ```
