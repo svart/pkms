@@ -42,7 +42,7 @@ The `--db` flag overrides `db_root` from the config. If neither is provided, the
 | Flag                    | Description                                       |
 |-------------------------|---------------------------------------------------|
 | `--db PATH`             | Path to org-roam database root (overrides config) |
-| `--json`                | Structured JSON output for AI/script consumption  |
+| `--output-format`       | Output format: `json` or `ndjson`                 |
 | `--output-format FMT`   | Output format: `json` or `ndjson`                 |
 | `-v`                    | Verbose output during processing                  |
 | `-q` / `--quiet`        | Suppress non-essential stderr output              |
@@ -209,17 +209,17 @@ pkms init-config --db ~/Documents/org  # With db_root pre-filled
 
 ## JSON Output
 
-Every command supports `--json` for structured, machine-parseable
-output. This is designed for AI agent consumption:
+Every command supports `--output-format json` (or `ndjson`) for structured,
+machine-parseable output. This is designed for AI agent consumption:
 
 ```bash
-pkms --db ~/Documents/org --json check
-pkms --db ~/Documents/org --json query "rust"
-pkms --db ~/Documents/org --json stats
-pkms --db ~/Documents/org --json context "note title" --depth 2
+pkms --db ~/Documents/org --output-format json check
+pkms --db ~/Documents/org --output-format json query "rust"
+pkms --db ~/Documents/org --output-format json stats
+pkms --db ~/Documents/org --output-format json context "note title" --depth 2
 ```
 
-JSON Schema files for every command's `--json` output are in
+JSON Schema files for every command's JSON output are in
 [`schemas/`](./schemas/) — one schema per command (`check.json`,
 `stats.json`, `resolve.json`, `query.json`, `suggest.json`,
 `context.json`). These define the exact structure and types for

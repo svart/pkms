@@ -23,9 +23,6 @@ pub struct Cli {
     )]
     pub db: Option<PathBuf>,
 
-    #[arg(global = true, long, help = "Structured JSON output")]
-    pub json: bool,
-
     #[arg(global = true, short, long, help = "Verbose output")]
     pub verbose: bool,
 

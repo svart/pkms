@@ -23,7 +23,7 @@ use std::process::ExitCode;
 fn main() -> ExitCode {
     let cli = Cli::parse();
     let ndjson = matches!(cli.output_format, Some(OutputFormat::Ndjson));
-    let use_json = cli.json || ndjson;
+    let use_json = cli.output_format.is_some();
     let machine = use_json;
     let quiet = cli.quiet || use_json;
     let no_header = cli.no_header;
@@ -203,7 +203,7 @@ fn main() -> ExitCode {
         Command::Info => {
             commands::info::run(&cfg, use_json, cli.db.as_deref()).map(|()| ExitCode::SUCCESS)
         }
-        Command::InitConfig { db } => init_config(db.as_deref(), cli.json),
+        Command::InitConfig { db } => init_config(db.as_deref(), use_json),
         Command::Path {
             from,
             to,

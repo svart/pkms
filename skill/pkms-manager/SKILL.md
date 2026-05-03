@@ -29,8 +29,7 @@ These flags work with every command:
 | Flag | Description |
 |------|-------------|
 | `--db PATH` | Path to org-roam database root (overrides config) |
-| `--json` | Structured JSON output |
-| `--output-format ndjson` | Newline-delimited JSON output |
+| `--output-format FMT` | Output format: `json` or `ndjson` |
 | `-v` / `--verbose` | Verbose output |
 | `-q` / `--quiet` | Suppress non-essential stderr output |
 | `--no-header` | Suppress column headers in human output |
@@ -40,30 +39,30 @@ These flags work with every command:
 
 ### Fast UUID Resolution (no full parse — ~0.5s)
 ```
-pkms --db ~/Documents/org --json resolve <search-term>
-pkms --db ~/Documents/org --json resolve --search <substring>
-pkms --db ~/Documents/org --json resolve --tags "tag1,tag2"
-pkms --db ~/Documents/org --json resolve --limit 20
-pkms --db ~/Documents/org --json resolve "uuid" --fields uuid,title,path
+pkms --db ~/Documents/org --output-format json resolve <search-term>
+pkms --db ~/Documents/org --output-format json resolve --search <substring>
+pkms --db ~/Documents/org --output-format json resolve --tags "tag1,tag2"
+pkms --db ~/Documents/org --output-format json resolve --limit 20
+pkms --db ~/Documents/org --output-format json resolve "uuid" --fields uuid,title,path
 ```
 Use `resolve` for quick lookups (only reads file headers). Returns UUID, title, path, tags, aliases. `--fields` selects which columns to include, `--limit` caps results.
 
 ### Search & Query (full parse — ~3s)
 ```
-pkms --db ~/Documents/org --json query "search terms" --limit 10
-pkms --db ~/Documents/org --json query "terms" --tag book
+pkms --db ~/Documents/org --output-format json query "search terms" --limit 10
+pkms --db ~/Documents/org --output-format json query "terms" --tag book
 ```
 ### Retrieve Notes
 ```
-pkms --db ~/Documents/org --json get <uuid-or-title> --depth 1
+pkms --db ~/Documents/org --output-format json get <uuid-or-title> --depth 1
 pkms --db ~/Documents/org get <uuid-or-title> --depth 1 --graph   # ASCII tree
 pkms --db ~/Documents/org get <uuid-or-title> --out                # Full content
 ```
 ### Graph Navigation
 ```
-pkms --db ~/Documents/org --json path "note A" "note B"               # Shortest path
-pkms --db ~/Documents/org --json path "A" "B" --max-depth 10         # Limit traversal depth
-pkms --db ~/Documents/org --json subgraph <uuid> --depth 2            # Subgraph export
+pkms --db ~/Documents/org --output-format json path "note A" "note B"               # Shortest path
+pkms --db ~/Documents/org --output-format json path "A" "B" --max-depth 10         # Limit traversal depth
+pkms --db ~/Documents/org --output-format json subgraph <uuid> --depth 2            # Subgraph export
 ```
 ### Health & Validation
 
@@ -75,12 +74,12 @@ If new problems appeared - fix them.
 pkms --db ~/Documents/org check                                 # Full scan, exit code 1 if issues
 pkms --db ~/Documents/org check --file-links                     # Also check file: links exist on disk
 pkms --db ~/Documents/org check --attachment-links               # Also check attachment: links exist
-pkms --db ~/Documents/org --json validate <target>                # Single note health
-pkms --db ~/Documents/org --json orphans                         # Orphan notes
-pkms --db ~/Documents/org --json broken                          # Broken links
-pkms --db ~/Documents/org --json stats                           # DB statistics
-pkms --db ~/Documents/org --json stats --days 30                 # Recent changes
-pkms --db ~/Documents/org --json hubs                            # Most-connected notes
+pkms --db ~/Documents/org --output-format json validate <target>                # Single note health
+pkms --db ~/Documents/org --output-format json orphans                         # Orphan notes
+pkms --db ~/Documents/org --output-format json broken                          # Broken links
+pkms --db ~/Documents/org --output-format json stats                           # DB statistics
+pkms --db ~/Documents/org --output-format json stats --days 30                 # Recent changes
+pkms --db ~/Documents/org --output-format json hubs                            # Most-connected notes
 pkms --db ~/Documents/org hubs --limit 5                         # Top 5 hubs
 pkms --db ~/Documents/org tags                                   # Filetags with counts
 pkms --db ~/Documents/org tags --tag <tag>                       # Notes with a tag
@@ -89,7 +88,7 @@ pkms --db ~/Documents/org tags --tag <tag>                       # Notes with a 
 ```
 pkms --db ~/Documents/org fix <broken-uuid> <replacement>         # Dry-run
 pkms --db ~/Documents/org fix <broken-uuid> <replacement> --apply # Apply
-pkms --db ~/Documents/org --json suggest <uuid>                  # Related notes (takes UUID only)
+pkms --db ~/Documents/org --output-format json suggest <uuid>                  # Related notes (takes UUID only)
 pkms --db ~/Documents/org suggest <uuid> --limit 5
 ```
 ### Create Notes
@@ -110,14 +109,14 @@ pkms --db ~/Documents/org context <target> --template "{{title}}: {{content}}"
 ### Configuration
 ```
 pkms --db ~/Documents/org info
-pkms --db ~/Documents/org --json info
+pkms --db ~/Documents/org --output-format json info
 pkms init-config                                          # Generate ~/.config/pkms.toml
 pkms init-config --db ~/Documents/org                     # With database root preset
 ```
 
 ## JSON Schemas
 
-Every command that supports `--json` has a corresponding JSON Schema in `schemas/<command>.json` (relative to this skill directory). These schemas define the exact output structure and types for reliable programmatic consumption:
+Every command that supports `--output-format json` has a corresponding JSON Schema in `schemas/<command>.json` (relative to this skill directory). These schemas define the exact output structure and types for reliable programmatic consumption:
 
 | Command     | Schema file              | Top-level keys |
 |-------------|-------------------------|----------------|
@@ -149,14 +148,14 @@ When the user mentions fixing their database:
 
 ### Note Discovery
 When the user wants to find something in their notes:
-1. `query "terms" --json --limit 20` for broad search
+1. `query "terms" --output-format json --limit 20` for broad search
 2. `resolve <term>` for fast targeted lookup
 3. `tags` to browse by filetag
 4. `hubs` to find highly-connected "hub" notes
 
 ### JSON Output Shapes
 
-Always use `--json` for AI consumption. Each command has its own output shape — refer to the JSON schemas for precise field definitions. Common patterns:
+Always use `--output-format json` for AI consumption. Each command has its own output shape — refer to the JSON schemas for precise field definitions. Common patterns:
 
 - **Single-item commands** (`check`, `stats`, `validate`, `get`, `context`, `fix`, `new`, `path`, `subgraph`, `info`): each returns a top-level object with command-specific keys.
 - **List commands** use varying key names for their result arrays:
@@ -182,11 +181,11 @@ for broader discovery.
 
 ### JSON Parsing for AI Agents
 
-All commands support `--json`. Use Python for structured extraction:
+All commands support `--output-format json`. Use Python for structured extraction:
 ```python
 import json, sys, subprocess
 result = subprocess.run(
-    ["target/debug/pkms", "--db", "~/Documents/org", "--json", "<command>", ...],
+    ["target/debug/pkms", "--db", "~/Documents/org", "--output-format", "json", "<command>", ...],
     capture_output=True, text=True
 )
 data = json.loads(result.stdout)

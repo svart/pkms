@@ -59,7 +59,7 @@ src/
     tags.rs         # List filetags with counts
     new.rs          # Generate UUID + filename for new note
     context.rs      # Build AI context window with token budget
-schemas/            # JSON Schema files for every command's --json output
+schemas/            # JSON Schema files for every command's JSON output
 tests/
   integration.rs    # 79 integration tests with temp mock DB
 ```
@@ -88,7 +88,7 @@ If performance optimization is needed, compute from scratch on every run — do 
 
 - **No comments** unless the logic is non-obvious. Code should be self-documenting.
 - **`anyhow::Result`** for all fallible functions. No custom error types.
-- **`serde::Serialize`** for all output structs. Every command supports `--json`.
+- **`serde::Serialize`** for all output structs. Every command supports `--output-format json`.
 - **`Graph::load(config, db_cli, verbose)`** to load the full database (discovers + parses 750+ files, ~3s). Expensive — cache results when possible.
 - **`resolve`** command is fast (~0.5s) because it scans only file headers. Use for quick lookups.
 - **`#[allow(dead_code)]`** on struct fields kept for future use. Remove if never needed after implementation.
@@ -115,7 +115,7 @@ Every command's `run()` follows the same pattern:
 
 ## JSON output schemas
 
-Every command's `--json` output has a corresponding JSON Schema in `schemas/<command>.json`.
+Every command's JSON (`--output-format json|ndjson`) output has a corresponding JSON Schema in `schemas/<command>.json`.
 These schemas define the exact structure and types for reliable programmatic consumption.
 
 | Command     | Schema file             | Top-level keys |
@@ -143,13 +143,14 @@ These schemas define the exact structure and types for reliable programmatic con
 - **Unit tests** live in each module under `#[cfg(test)] mod tests { ... }`
 - **Integration tests** in `tests/integration.rs` spawn the actual binary with a temp mock DB
 - **Property-based tests** in `graph.rs` and `parser.rs` use `proptest` (random Graph::Build fuzzing, slug roundtrip, UUID format, panic fuzzing)
-- **JSON schema validation**: All commands are tested with `--json` via `test_all_commands_json`, verifying valid JSON output for every command
+- **JSON schema validation**: All commands are tested with `--output-format json` via `test_all_commands_json`, verifying valid JSON output for every command
 - Mock DB helper in `tests/integration.rs::setup_db()` creates a 10+ note graph with duplicate UUIDs, broken links, filetags, aliases, and headings
 
 ## CLI flags
 
 | Flag              | Description                                      |
 |-------------------|--------------------------------------------------|
+| `--output-format FMT` | Output format: `json` or `ndjson`           |
 | `--no-header`     | Suppress column headers in human output          |
 | `--count`         | Show only the result count                       |
 

@@ -229,7 +229,13 @@ fn test_check_human() {
 #[test]
 fn test_check_json() {
     let (_dir, root) = setup_db();
-    let (v, status) = run_json(&["--db", root.to_str().unwrap(), "--json", "check"]);
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "check",
+    ]);
     assert!(!status.success());
     assert!(v.get("stats").is_some());
     assert_eq!(v["healthy"], false);
@@ -260,7 +266,8 @@ fn test_validate_json() {
     let (v, status) = run_json(&[
         "--db",
         root.to_str().unwrap(),
-        "--json",
+        "--output-format",
+        "json",
         "validate",
         "Note A",
     ]);
@@ -278,7 +285,8 @@ fn test_validate_broken_note() {
     let (v, status) = run_json(&[
         "--db",
         root.to_str().unwrap(),
-        "--json",
+        "--output-format",
+        "json",
         "validate",
         "Broken Note",
     ]);
@@ -320,7 +328,13 @@ fn test_stats_human() {
 #[test]
 fn test_stats_json() {
     let (_dir, root) = setup_db();
-    let (v, status) = run_json(&["--db", root.to_str().unwrap(), "--json", "stats"]);
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "stats",
+    ]);
     assert!(status.success());
     assert!(v.get("total_notes").is_some());
     assert!(v.get("hubs").is_some());
@@ -341,7 +355,13 @@ fn test_orphans_human() {
 #[test]
 fn test_orphans_json() {
     let (_dir, root) = setup_db();
-    let (v, status) = run_json(&["--db", root.to_str().unwrap(), "--json", "orphans"]);
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "orphans",
+    ]);
     assert!(status.success());
     assert!(
         v["count"].as_u64().unwrap_or(0) >= 1,
@@ -392,7 +412,13 @@ fn test_broken_human() {
 #[test]
 fn test_broken_json() {
     let (_dir, root) = setup_db();
-    let (v, status) = run_json(&["--db", root.to_str().unwrap(), "--json", "broken"]);
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "broken",
+    ]);
     assert!(status.success());
     assert!(v["count"].as_u64().unwrap_or(0) >= 1);
     assert!(v["links"][0]["source_uuid"].is_string());
@@ -430,7 +456,13 @@ fn test_hubs_human() {
 #[test]
 fn test_hubs_json() {
     let (_dir, root) = setup_db();
-    let (v, status) = run_json(&["--db", root.to_str().unwrap(), "--json", "hubs"]);
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "hubs",
+    ]);
     assert!(status.success());
     assert!(v["hubs"].as_array().map_or(false, |h| !h.is_empty()));
     assert!(v["hubs"][0]["uuid"].is_string());
@@ -477,7 +509,8 @@ fn test_context_json() {
     let (v, status) = run_json(&[
         "--db",
         root.to_str().unwrap(),
-        "--json",
+        "--output-format",
+        "json",
         "context",
         "Note A",
         "--depth",
@@ -496,7 +529,8 @@ fn test_context_depth_2() {
     let (v, status) = run_json(&[
         "--db",
         root.to_str().unwrap(),
-        "--json",
+        "--output-format",
+        "json",
         "context",
         "Note A",
         "--depth",
@@ -520,7 +554,8 @@ fn test_context_include_outgoing_false() {
     let (v, status) = run_json(&[
         "--db",
         root.to_str().unwrap(),
-        "--json",
+        "--output-format",
+        "json",
         "context",
         "Note A",
         "--depth",
@@ -552,7 +587,8 @@ fn test_context_include_incoming_false() {
     let (v, status) = run_json(&[
         "--db",
         root.to_str().unwrap(),
-        "--json",
+        "--output-format",
+        "json",
         "context",
         "Note B",
         "--depth",
@@ -573,7 +609,8 @@ fn test_context_template_custom() {
     let (v, status) = run_json(&[
         "--db",
         root.to_str().unwrap(),
-        "--json",
+        "--output-format",
+        "json",
         "context",
         "Note A",
         "--depth",
@@ -597,7 +634,8 @@ fn test_context_template_conditional() {
     let (v, status) = run_json(&[
         "--db",
         root.to_str().unwrap(),
-        "--json",
+        "--output-format",
+        "json",
         "context",
         "Note A",
         "--depth",
@@ -629,7 +667,13 @@ fn test_resolve_human() {
 #[test]
 fn test_resolve_json() {
     let (_dir, root) = setup_db();
-    let (v, status) = run_json(&["--db", root.to_str().unwrap(), "--json", "resolve"]);
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "resolve",
+    ]);
     assert!(status.success());
     assert!(v.get("query").is_some());
     assert!(v.get("total").is_some());
@@ -658,7 +702,14 @@ fn test_resolve_ndjson() {
 #[test]
 fn test_resolve_query() {
     let (_dir, root) = setup_db();
-    let (v, status) = run_json(&["--db", root.to_str().unwrap(), "--json", "resolve", "Note"]);
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "resolve",
+        "Note",
+    ]);
     assert!(status.success());
     assert!(
         v["total"].as_u64().unwrap_or(0) >= 1,
@@ -725,7 +776,8 @@ fn test_fix_json() {
     let (v, status) = run_json(&[
         "--db",
         root.to_str().unwrap(),
-        "--json",
+        "--output-format",
+        "json",
         "fix",
         "ffffffff-ffff-4fff-ffff-ffffffffffff",
         "Note A",
@@ -772,7 +824,8 @@ fn test_suggest_json() {
     let (v, status) = run_json(&[
         "--db",
         root.to_str().unwrap(),
-        "--json",
+        "--output-format",
+        "json",
         "suggest",
         "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa",
     ]);
@@ -836,7 +889,14 @@ fn test_new_create() {
 #[test]
 fn test_new_json() {
     let (_dir, root) = setup_db();
-    let (v, status) = run_json(&["--db", root.to_str().unwrap(), "--json", "new", "Test Note"]);
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "new",
+        "Test Note",
+    ]);
     assert!(status.success());
     assert_eq!(v["title"], "Test Note");
     assert_eq!(v["created"], false);
@@ -849,7 +909,8 @@ fn test_new_with_tags() {
     let (v, status) = run_json(&[
         "--db",
         root.to_str().unwrap(),
-        "--json",
+        "--output-format",
+        "json",
         "new",
         "Tagged New",
         "--create",
@@ -885,7 +946,8 @@ fn test_get_json() {
     let (v, status) = run_json(&[
         "--db",
         root.to_str().unwrap(),
-        "--json",
+        "--output-format",
+        "json",
         "get",
         "Note A",
         "--depth",
@@ -937,7 +999,14 @@ fn test_query_human() {
 #[test]
 fn test_query_json() {
     let (_dir, root) = setup_db();
-    let (v, status) = run_json(&["--db", root.to_str().unwrap(), "--json", "query", "Note"]);
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "query",
+        "Note",
+    ]);
     assert!(status.success());
     assert_eq!(v["query"], "Note");
     assert!(v["total_results"].as_u64().unwrap_or(0) >= 2);
@@ -982,7 +1051,8 @@ fn test_query_limit() {
     let (v, status) = run_json(&[
         "--db",
         root.to_str().unwrap(),
-        "--json",
+        "--output-format",
+        "json",
         "query",
         "Note",
         "--limit",
@@ -1006,7 +1076,13 @@ fn test_info_human() {
 #[test]
 fn test_info_json() {
     let (_dir, root) = setup_db();
-    let (v, status) = run_json(&["--db", root.to_str().unwrap(), "--json", "info"]);
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "info",
+    ]);
     assert!(status.success());
     assert!(v.get("config").is_some());
     assert!(v.get("config_path").is_some());
@@ -1030,7 +1106,8 @@ fn test_path_json() {
     let (v, status) = run_json(&[
         "--db",
         root.to_str().unwrap(),
-        "--json",
+        "--output-format",
+        "json",
         "path",
         "Note A",
         "Note C",
@@ -1079,7 +1156,8 @@ fn test_subgraph_json() {
     let (v, status) = run_json(&[
         "--db",
         root.to_str().unwrap(),
-        "--json",
+        "--output-format",
+        "json",
         "subgraph",
         "Note A",
         "--depth",
@@ -1113,7 +1191,13 @@ fn test_tags_human() {
 #[test]
 fn test_tags_json() {
     let (_dir, root) = setup_db();
-    let (v, status) = run_json(&["--db", root.to_str().unwrap(), "--json", "tags"]);
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "tags",
+    ]);
     assert!(status.success());
     assert!(v["tags"].as_array().map_or(false, |t| !t.is_empty()));
     assert!(v["tags"][0]["tag"].is_string());
@@ -1151,7 +1235,8 @@ fn test_tags_tag_filter_json() {
     let (v, status) = run_json(&[
         "--db",
         root.to_str().unwrap(),
-        "--json",
+        "--output-format",
+        "json",
         "tags",
         "--tag",
         "learning",
@@ -1183,7 +1268,8 @@ fn test_check_file_links_json() {
     let (v, status) = run_json(&[
         "--db",
         root.to_str().unwrap(),
-        "--json",
+        "--output-format",
+        "json",
         "check",
         "--file-links",
     ]);
@@ -1218,7 +1304,8 @@ fn test_check_attachment_links_json() {
     let (v, status) = run_json(&[
         "--db",
         root.to_str().unwrap(),
-        "--json",
+        "--output-format",
+        "json",
         "check",
         "--attachment-links",
     ]);
@@ -1236,7 +1323,8 @@ fn test_check_file_and_attachment_links_json() {
     let (v, status) = run_json(&[
         "--db",
         root.to_str().unwrap(),
-        "--json",
+        "--output-format",
+        "json",
         "check",
         "--file-links",
         "--attachment-links",
@@ -1249,7 +1337,7 @@ fn test_check_file_and_attachment_links_json() {
 }
 
 // ----------------------------------------------------------------
-// ERROR PATH: note not found (with --json, expect structured error)
+// ERROR PATH: note not found (with --output-format json, expect structured error)
 // ----------------------------------------------------------------
 #[test]
 fn test_error_note_not_found_json() {
@@ -1259,35 +1347,40 @@ fn test_error_note_not_found_json() {
         vec![
             "--db".into(),
             db.clone(),
-            "--json".into(),
+            "--output-format".into(),
+            "json".into(),
             "validate".into(),
             "Nonexistent".into(),
         ],
         vec![
             "--db".into(),
             db.clone(),
-            "--json".into(),
+            "--output-format".into(),
+            "json".into(),
             "get".into(),
             "Nonexistent".into(),
         ],
         vec![
             "--db".into(),
             db.clone(),
-            "--json".into(),
+            "--output-format".into(),
+            "json".into(),
             "suggest".into(),
             "Nonexistent".into(),
         ],
         vec![
             "--db".into(),
             db.clone(),
-            "--json".into(),
+            "--output-format".into(),
+            "json".into(),
             "subgraph".into(),
             "Nonexistent".into(),
         ],
         vec![
             "--db".into(),
             db.clone(),
-            "--json".into(),
+            "--output-format".into(),
+            "json".into(),
             "context".into(),
             "Nonexistent".into(),
         ],
@@ -1319,7 +1412,8 @@ fn test_error_path_not_found_json() {
     let (stdout, _stderr, status) = run(&[
         "--db",
         root.to_str().unwrap(),
-        "--json",
+        "--output-format",
+        "json",
         "path",
         "Nonexistent",
         "Note A",
@@ -1335,7 +1429,13 @@ fn test_error_path_not_found_json() {
 #[test]
 fn test_empty_db_stats() {
     let (_dir, root) = setup_empty_db();
-    let (v, status) = run_json(&["--db", root.to_str().unwrap(), "--json", "stats"]);
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "stats",
+    ]);
     assert!(status.success());
     assert_eq!(v["total_notes"], 0);
 }
@@ -1343,7 +1443,13 @@ fn test_empty_db_stats() {
 #[test]
 fn test_empty_db_check() {
     let (_dir, root) = setup_empty_db();
-    let (v, status) = run_json(&["--db", root.to_str().unwrap(), "--json", "check"]);
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "check",
+    ]);
     assert!(status.success());
     assert_eq!(v["healthy"], true);
 }
@@ -1351,7 +1457,13 @@ fn test_empty_db_check() {
 #[test]
 fn test_empty_db_resolve() {
     let (_dir, root) = setup_empty_db();
-    let (v, status) = run_json(&["--db", root.to_str().unwrap(), "--json", "resolve"]);
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "resolve",
+    ]);
     assert!(status.success());
     assert_eq!(v["total"], 0);
 }
@@ -1363,7 +1475,7 @@ fn test_empty_db_resolve() {
 fn test_missing_db_json_error() {
     let dir = tempfile::tempdir().unwrap();
     let output = std::process::Command::new(pkms_binary())
-        .args(["--json", "stats"])
+        .args(["--output-format", "json", "stats"])
         .env("XDG_CONFIG_HOME", dir.path())
         .output()
         .unwrap();
@@ -1401,7 +1513,7 @@ fn test_ndjson_quiet() {
 }
 
 // ----------------------------------------------------------------
-// PARAMETERIZED: every command with --json produces valid JSON
+// PARAMETERIZED: every command with --output-format json produces valid JSON
 // ----------------------------------------------------------------
 #[test]
 fn test_all_commands_json() {
@@ -1409,42 +1521,91 @@ fn test_all_commands_json() {
     let db = root.to_str().unwrap().to_string();
     let cases: Vec<(Vec<String>, bool)> = vec![
         (
-            vec!["--db".into(), db.clone(), "--json".into(), "check".into()],
+            vec![
+                "--db".into(),
+                db.clone(),
+                "--output-format".into(),
+                "json".into(),
+                "check".into(),
+            ],
             false,
         ),
         (
-            vec!["--db".into(), db.clone(), "--json".into(), "stats".into()],
-            true,
-        ),
-        (
-            vec!["--db".into(), db.clone(), "--json".into(), "orphans".into()],
-            true,
-        ),
-        (
-            vec!["--db".into(), db.clone(), "--json".into(), "broken".into()],
-            true,
-        ),
-        (
-            vec!["--db".into(), db.clone(), "--json".into(), "hubs".into()],
-            true,
-        ),
-        (
-            vec!["--db".into(), db.clone(), "--json".into(), "tags".into()],
-            true,
-        ),
-        (
-            vec!["--db".into(), db.clone(), "--json".into(), "info".into()],
-            true,
-        ),
-        (
-            vec!["--db".into(), db.clone(), "--json".into(), "resolve".into()],
+            vec![
+                "--db".into(),
+                db.clone(),
+                "--output-format".into(),
+                "json".into(),
+                "stats".into(),
+            ],
             true,
         ),
         (
             vec![
                 "--db".into(),
                 db.clone(),
-                "--json".into(),
+                "--output-format".into(),
+                "json".into(),
+                "orphans".into(),
+            ],
+            true,
+        ),
+        (
+            vec![
+                "--db".into(),
+                db.clone(),
+                "--output-format".into(),
+                "json".into(),
+                "broken".into(),
+            ],
+            true,
+        ),
+        (
+            vec![
+                "--db".into(),
+                db.clone(),
+                "--output-format".into(),
+                "json".into(),
+                "hubs".into(),
+            ],
+            true,
+        ),
+        (
+            vec![
+                "--db".into(),
+                db.clone(),
+                "--output-format".into(),
+                "json".into(),
+                "tags".into(),
+            ],
+            true,
+        ),
+        (
+            vec![
+                "--db".into(),
+                db.clone(),
+                "--output-format".into(),
+                "json".into(),
+                "info".into(),
+            ],
+            true,
+        ),
+        (
+            vec![
+                "--db".into(),
+                db.clone(),
+                "--output-format".into(),
+                "json".into(),
+                "resolve".into(),
+            ],
+            true,
+        ),
+        (
+            vec![
+                "--db".into(),
+                db.clone(),
+                "--output-format".into(),
+                "json".into(),
                 "query".into(),
                 "Note".into(),
             ],
@@ -1454,7 +1615,8 @@ fn test_all_commands_json() {
             vec![
                 "--db".into(),
                 db.clone(),
-                "--json".into(),
+                "--output-format".into(),
+                "json".into(),
                 "path".into(),
                 "Note A".into(),
                 "Note C".into(),
@@ -1465,7 +1627,8 @@ fn test_all_commands_json() {
             vec![
                 "--db".into(),
                 db.clone(),
-                "--json".into(),
+                "--output-format".into(),
+                "json".into(),
                 "context".into(),
                 "Note A".into(),
                 "--depth".into(),
@@ -1477,7 +1640,8 @@ fn test_all_commands_json() {
             vec![
                 "--db".into(),
                 db.clone(),
-                "--json".into(),
+                "--output-format".into(),
+                "json".into(),
                 "validate".into(),
                 "Note A".into(),
             ],
@@ -1487,7 +1651,8 @@ fn test_all_commands_json() {
             vec![
                 "--db".into(),
                 db.clone(),
-                "--json".into(),
+                "--output-format".into(),
+                "json".into(),
                 "get".into(),
                 "Note A".into(),
                 "--depth".into(),
@@ -1499,7 +1664,8 @@ fn test_all_commands_json() {
             vec![
                 "--db".into(),
                 db.clone(),
-                "--json".into(),
+                "--output-format".into(),
+                "json".into(),
                 "suggest".into(),
                 "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa".into(),
             ],
@@ -1509,7 +1675,8 @@ fn test_all_commands_json() {
             vec![
                 "--db".into(),
                 db.clone(),
-                "--json".into(),
+                "--output-format".into(),
+                "json".into(),
                 "new".into(),
                 "Parametric Test".into(),
             ],
@@ -1519,7 +1686,8 @@ fn test_all_commands_json() {
             vec![
                 "--db".into(),
                 db.clone(),
-                "--json".into(),
+                "--output-format".into(),
+                "json".into(),
                 "subgraph".into(),
                 "Note A".into(),
                 "--depth".into(),
@@ -1531,7 +1699,8 @@ fn test_all_commands_json() {
             vec![
                 "--db".into(),
                 db.clone(),
-                "--json".into(),
+                "--output-format".into(),
+                "json".into(),
                 "fix".into(),
                 "ffffffff-ffff-4fff-ffff-ffffffffffff".into(),
                 "Note A".into(),
@@ -1645,7 +1814,8 @@ fn test_count_only_orphans() {
     let (v, status) = run_json(&[
         "--db",
         root.to_str().unwrap(),
-        "--json",
+        "--output-format",
+        "json",
         "orphans",
         "--count",
     ]);
@@ -1657,7 +1827,7 @@ fn test_count_only_orphans() {
 }
 
 // ----------------------------------------------------------------
-// --json exit code 1 for business-logic failure
+// --output-format json exit code 1 for business-logic failure
 // ----------------------------------------------------------------
 #[test]
 fn test_json_error_exit_code() {
@@ -1667,35 +1837,40 @@ fn test_json_error_exit_code() {
         vec![
             "--db".into(),
             db.clone(),
-            "--json".into(),
+            "--output-format".into(),
+            "json".into(),
             "validate".into(),
             "DoesNotExist".into(),
         ],
         vec![
             "--db".into(),
             db.clone(),
-            "--json".into(),
+            "--output-format".into(),
+            "json".into(),
             "get".into(),
             "DoesNotExist".into(),
         ],
         vec![
             "--db".into(),
             db.clone(),
-            "--json".into(),
+            "--output-format".into(),
+            "json".into(),
             "suggest".into(),
             "DoesNotExist".into(),
         ],
         vec![
             "--db".into(),
             db.clone(),
-            "--json".into(),
+            "--output-format".into(),
+            "json".into(),
             "context".into(),
             "DoesNotExist".into(),
         ],
         vec![
             "--db".into(),
             db.clone(),
-            "--json".into(),
+            "--output-format".into(),
+            "json".into(),
             "subgraph".into(),
             "DoesNotExist".into(),
         ],
