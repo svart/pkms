@@ -51,7 +51,7 @@ src/
     hubs.rs         # List most-connected notes
     resolve.rs      # Fast UUID resolution (header-only scan, ~0.5s)
     fix.rs          # Replace broken UUIDs across all files
-    suggest.rs      # Find related notes by multi-factor scoring
+    suggest.rs      # Find related notes by multi-factor scoring (takes UUID only)
     get.rs          # Retrieve note with neighbors at depth N
     path.rs         # Shortest path (BFS) between two notes
     subgraph.rs     # Export subgraph with stats

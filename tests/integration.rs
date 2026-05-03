@@ -756,7 +756,12 @@ fn test_fix_broken_not_found() {
 #[test]
 fn test_suggest_human() {
     let (_dir, root) = setup_db();
-    let (stdout, _stderr, status) = run(&["--db", root.to_str().unwrap(), "suggest", "Note A"]);
+    let (stdout, _stderr, status) = run(&[
+        "--db",
+        root.to_str().unwrap(),
+        "suggest",
+        "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa",
+    ]);
     assert!(status.success());
     assert!(stdout.contains("Suggestions") || stdout.contains("Note B"));
 }
@@ -769,7 +774,7 @@ fn test_suggest_json() {
         root.to_str().unwrap(),
         "--json",
         "suggest",
-        "Note A",
+        "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa",
     ]);
     assert!(status.success());
     assert_eq!(v["target"], "Note A");
@@ -1496,7 +1501,7 @@ fn test_all_commands_json() {
                 db.clone(),
                 "--json".into(),
                 "suggest".into(),
-                "Note A".into(),
+                "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa".into(),
             ],
             true,
         ),

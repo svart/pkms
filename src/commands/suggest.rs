@@ -38,7 +38,11 @@ pub fn run(
     let graph = Graph::load(config, db_cli, false)?;
     let limit = limit.unwrap_or(10);
 
-    let node = graph.resolve_target(target)?.clone();
+    let node = graph
+        .nodes
+        .get(target)
+        .cloned()
+        .ok_or_else(|| anyhow::anyhow!("Note not found: {target}"))?;
 
     let target_lower = node.title.to_lowercase();
 

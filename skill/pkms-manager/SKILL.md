@@ -89,8 +89,8 @@ pkms --db ~/Documents/org tags --tag <tag>                       # Notes with a 
 ```
 pkms --db ~/Documents/org fix <broken-uuid> <replacement>         # Dry-run
 pkms --db ~/Documents/org fix <broken-uuid> <replacement> --apply # Apply
-pkms --db ~/Documents/org --json suggest <target>                  # Related notes
-pkms --db ~/Documents/org suggest <target> --limit 5
+pkms --db ~/Documents/org --json suggest <uuid>                  # Related notes (takes UUID only)
+pkms --db ~/Documents/org suggest <uuid> --limit 5
 ```
 ### Create Notes
 ```
@@ -145,7 +145,7 @@ When the user mentions fixing their database:
 3. `resolve <concept>` to find the correct replacement note UUID
 4. `fix <broken-uuid> <replacement> --apply` for each broken UUID batch
 5. `orphans` to find notes needing connections
-6. `suggest <orphan-title>` to find related notes for linking
+6. `resolve <orphan-title>` to find the orphan's UUID, then `suggest <uuid>` to find related notes for linking
 
 ### Note Discovery
 When the user wants to find something in their notes:

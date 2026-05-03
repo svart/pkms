@@ -134,17 +134,18 @@ disk size, directory breakdown, and top hub nodes.
 ```
 pkms fix <broken-uuid> <replacement>           # Dry-run (shows what would change)
 pkms fix <broken-uuid> <replacement> --apply   # Actually apply replacements
-pkms suggest <target>                          # Find related notes
-pkms suggest <target> --limit 5                # Limit suggestions
+pkms suggest <uuid>                            # Find related notes (takes UUID only)
+pkms suggest <uuid> --limit 5                  # Limit suggestions
 ```
 
 `fix` replaces all occurrences of a broken UUID across the database with
 a resolved UUID. Without `--apply` it runs as a dry-run, showing which
 files would be modified and how many replacements would be made.
 
-`suggest` scores and ranks notes by relevance to the target using
-multi-factor scoring (shared tags, backlinks, content keyword overlap,
-path similarity, alias matching).
+`suggest` takes a note UUID, loads the full graph, and scores every other
+note against the target using multi-factor scoring (shared tags, backlinks,
+content keyword overlap, directory proximity, title keyword overlap).
+Outputs the top N most relevant notes with per-factor breakdowns.
 
 ### AI Integration
 

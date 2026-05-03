@@ -137,9 +137,9 @@ pub enum Command {
         )]
         apply: bool,
     },
-    #[command(about = "Suggest related notes for a target note")]
+    #[command(about = "Suggest related notes by multi-factor scoring (takes UUID only)")]
     Suggest {
-        #[arg(help = "UUID, file path, or note title")]
+        #[arg(help = "UUID of the target note")]
         target: Option<String>,
         #[arg(short, long, default_value = "10", help = "Number of suggestions")]
         limit: Option<usize>,
