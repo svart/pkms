@@ -5,7 +5,7 @@ fn make_note(uuid: &str, title: &str, outgoing: Vec<Link>) -> FileScanResult {
     FileScanResult {
         path: PathBuf::from(format!("{}.org", uuid)),
         parsed: ParsedNote {
-            uuid: Some(uuid.to_string()),
+            uuids: vec![uuid.to_string()],
             title: Some(title.to_string()),
             filetags: vec![],
             roam_aliases: vec![],
@@ -27,7 +27,7 @@ fn make_note_full(
     FileScanResult {
         path: PathBuf::from(format!("{}.org", uuid)),
         parsed: ParsedNote {
-            uuid: Some(uuid.to_string()),
+            uuids: vec![uuid.to_string()],
             title: Some(title.to_string()),
             filetags,
             roam_aliases: aliases,
@@ -98,8 +98,32 @@ fn test_shortest_path() {
 #[test]
 fn test_duplicate_uuid_detection() {
     let results = vec![
-        make_note("dup-uuid", "First", vec![]),
-        make_note("dup-uuid", "Second", vec![]),
+        FileScanResult {
+            path: PathBuf::from("first.org"),
+            parsed: ParsedNote {
+                uuids: vec!["dup-uuid".to_string()],
+                title: Some("First".to_string()),
+                filetags: vec![],
+                roam_aliases: vec![],
+                roam_refs: vec![],
+                outgoing: vec![],
+                headings: vec![],
+            },
+            parse_error: None,
+        },
+        FileScanResult {
+            path: PathBuf::from("second.org"),
+            parsed: ParsedNote {
+                uuids: vec!["dup-uuid".to_string()],
+                title: Some("Second".to_string()),
+                filetags: vec![],
+                roam_aliases: vec![],
+                roam_refs: vec![],
+                outgoing: vec![],
+                headings: vec![],
+            },
+            parse_error: None,
+        },
     ];
     let graph = Graph::build(results);
     assert_eq!(
@@ -141,7 +165,7 @@ fn test_missing_title() {
     let results = vec![FileScanResult {
         path: PathBuf::from("no-title.org"),
         parsed: ParsedNote {
-            uuid: Some("uuid-no-title".to_string()),
+            uuids: vec!["uuid-no-title".to_string()],
             title: None,
             filetags: vec![],
             roam_aliases: vec![],
@@ -434,7 +458,7 @@ proptest::proptest! {
     ) {
         let results: Vec<FileScanResult> = uuids.iter().map(|uuid| {
             let parsed = ParsedNote {
-                uuid: if uuid.is_empty() { None } else { Some(uuid.clone()) },
+                uuids: if uuid.is_empty() { vec![] } else { vec![uuid.clone()] },
                 title: Some("test".to_string()),
                 filetags: vec![],
                 roam_aliases: vec![],

@@ -31,7 +31,11 @@ impl Graph {
                     }
                 }
 
-                if let Some(backlinks) = self.backlinks.get(uid) {
+                let primary = self
+                    .nodes
+                    .get(uid)
+                    .map_or(uid.as_str(), |n| n.uuid.as_str());
+                if let Some(backlinks) = self.backlinks.get(primary) {
                     for buid in backlinks {
                         if visited.insert(buid.clone()) {
                             next.push(buid.clone());
@@ -98,7 +102,11 @@ impl Graph {
                 }
             }
 
-            if let Some(backlinks) = self.backlinks.get(&current) {
+            let primary = self
+                .nodes
+                .get(&current)
+                .map_or(current.as_str(), |n| n.uuid.as_str());
+            if let Some(backlinks) = self.backlinks.get(primary) {
                 for prev in backlinks {
                     if prev == &to_uuid {
                         let mut full = path.clone();

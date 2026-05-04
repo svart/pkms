@@ -47,12 +47,35 @@ pub struct FailedFileEntry {
 }
 
 fn link_target_exists(target: &str, db_root: &Path) -> bool {
-    let path = Path::new(target);
-    if path.is_absolute() {
-        path.exists()
+    let expanded = if target.starts_with('~') {
+        if let Some(home) = dirs::home_dir() {
+            target.replacen('~', &home.to_string_lossy(), 1)
+        } else {
+            target.to_string()
+        }
     } else {
-        db_root.join(path).exists()
+        target.to_string()
+    };
+    let path_str = expanded.split("::").next().unwrap_or(&expanded);
+    let path = Path::new(path_str);
+    let full_path = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        db_root.join(path)
+    };
+    if !full_path.exists() {
+        return false;
     }
+    if let Some(line_spec) = expanded.split_once("::").map(|x| x.1) {
+        if line_spec.is_empty() {
+            return true;
+        }
+        if let Ok(content) = std::fs::read_to_string(&full_path) {
+            return content.lines().any(|l| l.contains(line_spec));
+        }
+        return false;
+    }
+    true
 }
 
 pub fn run(

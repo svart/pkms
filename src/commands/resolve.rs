@@ -66,7 +66,7 @@ fn scan_files(root: &Path, ignore_patterns: &[String]) -> Vec<ResolvedNote> {
 
         let uuid = UUID_RE
             .captures_iter(&header_str)
-            .last()
+            .next()
             .and_then(|c| c.get(1))
             .map(|m| m.as_str().to_string());
         let Some(uuid) = uuid else { continue };

@@ -4,7 +4,7 @@ use std::sync::LazyLock;
 
 #[derive(Debug, Clone)]
 pub struct ParsedNote {
-    pub uuid: Option<String>,
+    pub uuids: Vec<String>,
     pub title: Option<String>,
     pub filetags: Vec<String>,
     pub roam_aliases: Vec<String>,
@@ -16,7 +16,7 @@ pub struct ParsedNote {
 impl ParsedNote {
     pub fn empty() -> Self {
         ParsedNote {
-            uuid: None,
+            uuids: vec![],
             title: None,
             filetags: vec![],
             roam_aliases: vec![],
@@ -65,7 +65,7 @@ pub(crate) static FILETAGS_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"(?m)^#\+filetags:\s*(.+)$").unwrap());
 
 pub fn parse_note(content: &str) -> ParsedNote {
-    let mut uuid = None;
+    let mut uuids = Vec::new();
     let mut title = None;
     let mut filetags = Vec::new();
     let mut roam_aliases = Vec::new();
@@ -89,7 +89,7 @@ pub fn parse_note(content: &str) -> ParsedNote {
         if in_properties {
             if let Some((key, value)) = parse_property(trimmed) {
                 match key {
-                    PROP_ID => uuid = Some(value.to_string()),
+                    PROP_ID => uuids.push(value.to_string()),
                     PROP_ROAM_ALIASES => {
                         roam_aliases = value
                             .split_whitespace()
@@ -156,7 +156,7 @@ pub fn parse_note(content: &str) -> ParsedNote {
     }
 
     ParsedNote {
-        uuid,
+        uuids,
         title,
         filetags,
         roam_aliases,
@@ -210,7 +210,10 @@ mod tests {
 
 Some content here."#;
         let note = parse_note(content);
-        assert_eq!(note.uuid.unwrap(), "a1b2c3d4-e5f6-7890-abcd-ef1234567890");
+        assert_eq!(
+            note.uuids.first().unwrap(),
+            "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+        );
         assert_eq!(note.title.unwrap(), "test note");
         assert!(note.filetags.is_empty());
         assert!(note.outgoing.is_empty());
@@ -260,6 +263,23 @@ Some text
         assert!(note.headings[2].tags.is_empty());
     }
 
+    #[test]
+    fn test_parse_multiple_uuids() {
+        let content = r#":PROPERTIES:
+:ID:       a1b2c3d4-e5f6-7890-abcd-ef1234567890
+:END:
+#+title: multi uuid note
+
+* Heading
+:PROPERTIES:
+:ID:       deadbeef-dead-beef-dead-beef00000001
+:END:"#;
+        let note = parse_note(content);
+        assert_eq!(note.uuids.len(), 2);
+        assert_eq!(note.uuids[0], "a1b2c3d4-e5f6-7890-abcd-ef1234567890");
+        assert_eq!(note.uuids[1], "deadbeef-dead-beef-dead-beef00000001");
+    }
+
     proptest! {
         #[test]
         fn test_title_to_slug_roundtrip(title in "[a-zA-Z0-9 _-]{1,50}") {
@@ -272,7 +292,7 @@ Some text
         fn test_uuid_format(uuid_str in "[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}") {
             let content = format!(":PROPERTIES:\n:ID:       {}\n:END:\n#+title: test", uuid_str);
             let note = parse_note(&content);
-            prop_assert_eq!(note.uuid.unwrap(), uuid_str);
+            prop_assert_eq!(note.uuids.first().unwrap(), &uuid_str);
         }
 
         #[test]

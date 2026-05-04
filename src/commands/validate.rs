@@ -176,17 +176,40 @@ pub fn run(
                 broken_internal.push(uuid.clone());
             }
             Link::File(path_str) => {
-                let file_path = Path::new(path_str);
-                let db_root = config.resolve_db_root(db_cli).ok();
-                let exists = if file_path.is_absolute() {
-                    file_path.exists()
-                } else if let Some(ref root) = db_root {
-                    root.join(file_path).exists()
+                let expanded = if path_str.starts_with('~') {
+                    if let Some(home) = dirs::home_dir() {
+                        path_str.replacen('~', &home.to_string_lossy(), 1)
+                    } else {
+                        path_str.clone()
+                    }
                 } else {
-                    false
+                    path_str.clone()
                 };
-                if !exists {
+                let clean_path = expanded.split("::").next().unwrap_or(&expanded);
+                let file_path = Path::new(clean_path);
+                let db_root = config.resolve_db_root(db_cli).ok();
+                let full_path = if file_path.is_absolute() {
+                    file_path.to_path_buf()
+                } else if let Some(ref root) = db_root {
+                    root.join(file_path)
+                } else {
                     broken_files.push(path_str.clone());
+                    continue;
+                };
+                if !full_path.exists() {
+                    broken_files.push(path_str.clone());
+                    continue;
+                }
+                if let Some(line_spec) = expanded.split_once("::").map(|x| x.1)
+                    && !line_spec.is_empty()
+                {
+                    if let Ok(content) = std::fs::read_to_string(&full_path) {
+                        if !content.lines().any(|l| l.contains(line_spec)) {
+                            broken_files.push(path_str.clone());
+                        }
+                    } else {
+                        broken_files.push(path_str.clone());
+                    }
                 }
             }
             _ => {}

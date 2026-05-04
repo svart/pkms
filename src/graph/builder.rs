@@ -60,22 +60,40 @@ impl Graph {
             let parsed = result.parsed;
             let path = result.path;
 
-            let Some(uuid) = parsed.uuid.as_ref() else {
+            if parsed.uuids.is_empty() {
                 skipped_files.push(path);
                 continue;
-            };
+            }
 
-            if let Some(existing) = seen_uuids.get(uuid) {
-                duplicate_uuids.push(DuplicateEntry {
-                    value: uuid.clone(),
-                    paths: vec![
-                        existing.to_string_lossy().to_string(),
-                        path.to_string_lossy().to_string(),
-                    ],
-                });
+            let is_duplicate = parsed.uuids.iter().any(|uuid| {
+                seen_uuids
+                    .get(uuid.as_str())
+                    .is_some_and(|existing| existing != &path)
+            });
+            if is_duplicate {
+                for uuid in &parsed.uuids {
+                    if let Some(existing) = seen_uuids.get(uuid.as_str())
+                        && existing != &path
+                    {
+                        duplicate_uuids.push(DuplicateEntry {
+                            value: uuid.clone(),
+                            paths: vec![
+                                existing.to_string_lossy().to_string(),
+                                path.to_string_lossy().to_string(),
+                            ],
+                        });
+                    }
+                }
                 continue;
             }
-            seen_uuids.insert(uuid.clone(), path.clone());
+
+            for uuid in &parsed.uuids {
+                seen_uuids
+                    .entry(uuid.clone())
+                    .or_insert_with(|| path.clone());
+            }
+
+            let primary_uuid = &parsed.uuids[0];
 
             let title = if let Some(t) = parsed.title.clone() {
                 t
@@ -102,15 +120,21 @@ impl Graph {
                 alias_to_uuid
                     .entry(alias.clone())
                     .or_default()
-                    .push(uuid.clone());
+                    .push(primary_uuid.clone());
             }
 
-            let node = Node::from_parsed(uuid.clone(), title.clone(), path.clone(), &parsed);
+            let node =
+                Node::from_parsed(primary_uuid.clone(), title.clone(), path.clone(), &parsed);
 
-            nodes.insert(uuid.clone(), node);
-            path_to_uuid.insert(path, uuid.clone());
-            title_to_uuid.entry(title).or_default().push(uuid.clone());
-            uuid_to_outgoing.insert(uuid.clone(), parsed.outgoing);
+            for uuid in &parsed.uuids {
+                nodes.insert(uuid.clone(), node.clone());
+            }
+            path_to_uuid.insert(path, primary_uuid.clone());
+            title_to_uuid
+                .entry(title)
+                .or_default()
+                .push(primary_uuid.clone());
+            uuid_to_outgoing.insert(primary_uuid.clone(), parsed.outgoing);
         }
 
         let (backlinks, broken_links) = build_links(&uuid_to_outgoing, &nodes);
