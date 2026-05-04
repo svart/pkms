@@ -56,6 +56,24 @@ Fast UUID/title/tag lookup by reading only file headers (first 100 lines). Does 
 ### `fix` — [Full reference](references/fix.md)
 Replace all occurrences of a broken UUID across the entire database. Dry-run by default; use `--apply` to write changes. The broken UUID and replacement target can be full UUIDs, 8-char prefixes, or note titles.
 
+### `suggest` — [Full reference](references/suggest.md)
+Find thematically related notes by multi-factor scoring (title overlap, shared tags, shared backlinks/outgoing, content keywords, directory proximity, neighborhood relevance). Accepts exact UUID only — use `resolve` first to find it.
+
+### `new` — [Full reference](references/new.md)
+Generate a UUID v4 and timestamped filename (`YYYYMMDDHHMMSS-slug.org`) in the configured new notes directory. Dry-run by default; use `--create` to write the boilerplate file with optional `--tags` and `--aliases`.
+
+### `get` — [Full reference](references/get.md)
+Retrieve a note's full content with optional neighbor display (`--links`). Use `--no-content` to show links only. Good for deep exploration of a topic's graph neighborhood.
+
+### `query` — [Full reference](references/query.md)
+Fuzzy search across all note content (titles, aliases, refs, tags, file content). Supports scope flags (`--tags`, `--title`, `--content`) and `--limit`. Results are scored and sorted by relevance.
+
+### `path` — [Full reference](references/path.md)
+Find the shortest path between two notes through the directed graph using bidirectional BFS. Accepts titles, UUIDs, or file paths. Reports the hop count and ordered path.
+
+### `info` — [Full reference](references/info.md)
+Show the resolved configuration: loaded config file, effective db_root, new notes directory, and whether `--db` overrides are active.
+
 ## Common workflows
 
 ### Note Discovery
