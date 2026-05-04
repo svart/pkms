@@ -8,7 +8,7 @@ After changes, run these commands **in this strict order**:
 cargo fmt --check              # 1. Check formatting (fail if unformatted)
 cargo clippy -- -D warnings    # 2. Lint with clippy (deny all warnings)
 cargo build                    # 3. Build the binary
-cargo test                     # 4. Run all unit + integration tests (138+ tests, ~1s)
+cargo test                     # 4. Run all unit + integration tests (112+ tests, ~1s)
 cargo test --test integration  # 5. Integration tests only (mock DB)
 target/debug/pkms --help       # 6. Verify CLI works
 ```
@@ -18,9 +18,9 @@ IMPORTANT: Never disable clippy lints by yourself. Always fix issues, mentioned 
 
 ## Committing changes
 
-When you are done when changes, before committing the work into git do next:
+When you are done with changes, before committing the work into git do next:
 - check that AGENTS.md, README.md and SKILL.md has necessary information, if not update them accordingly;
-- update the the version of the package in Cargo.toml.
+- update the version of the package in Cargo.toml.
 
 Then commit changes.
 
@@ -49,7 +49,6 @@ src/
     validate.rs     # Single note health check
     stats.rs        # Comprehensive statistics (+ --hubs, --tags flags)
     orphans.rs      # List orphan notes
-    broken.rs       # List broken links
     resolve.rs      # UUID resolution
     fix.rs          # Replace broken UUIDs across all files
     suggest.rs      # Find related notes by multi-factor scoring (takes UUID only)
@@ -58,9 +57,8 @@ src/
     query.rs        # Fuzzy search titles + content
     new.rs          # Generate UUID + filename for new note
     context.rs      # Build AI context window with token budget
-schemas/            # JSON Schema files for every command's JSON output
 tests/
-  integration.rs    # 79 integration tests with temp mock DB
+  integration.rs    # 65 integration tests with temp mock DB
 ```
 
 ## How to add a new command
@@ -96,7 +94,7 @@ If performance optimization is needed, compute from scratch on every run — do 
 ## Graph data model
 
 ```
-Node { uuid, title, path, filetags, aliases, refs, content_hash, outgoing: Vec<Link>, headings_count }
+Node { uuid, title, path, filetags, aliases, refs, outgoing: Vec<Link>, headings_count }
 Link::Internal(String) | File(String) | Url(String) | Attachment(String)
 Graph { nodes: HashMap<uuid, Node>, path_to_uuid, title_to_uuid, backlinks, broken_links, ... }
 ```
@@ -112,34 +110,32 @@ Every command's `run()` follows the same pattern:
 4. Dispatch output using `ctx.print_json()`, `ctx.print_ndjson()`, or the `OutputFormat` match
 5. For text output, format with `println!`
 
-## JSON output schemas
+## JSON output shapes
 
-Every command's JSON (`--output-format json|ndjson`) output has a corresponding JSON Schema in `schemas/<command>.json`.
-These schemas define the exact structure and types for reliable programmatic consumption.
+Every command's JSON (`--output-format json|ndjson`) output has a specific structure:
 
-| Command     | Schema file             | Top-level keys |
-|-------------|------------------------|----------------|
-| `check`     | `schemas/check.json`   | `db_root`, `stats`, `duplicates`, `broken_links`, `failed_files`, `healthy` |
-| `stats`     | `schemas/stats.json`   | `db_root`, `total_notes`, `total_links`, `directories`, `recent_notes` |
-| `resolve`   | `schemas/resolve.json` | `query`, `total`, `results[]` (uuid, title, path, filetags, aliases) |
-| `suggest`   | `schemas/suggest.json` | `target`, `target_uuid`, `suggestions[]` (uuid, title, score, scores{}, reasons[]) |
-| `query`     | `schemas/query.json`   | `query`, `total_results`, `results[]` (uuid, title, score, matches[], content_matches[]) |
-| `context`   | `schemas/context.json` | `target`, `context`, `estimated_tokens`, `depth` |
-| `validate`  | —                      | `uuid`, `title`, `path`, `healthy`, `issues[]`, `broken_internal[]` |
-| `orphans`   | —                      | `count`, `orphans[]` (uuid, title, path, filetags) |
-| `broken`    | —                      | `count`, `links[]` (source_uuid, source_title, target_uuid) |
-| `get`       | —                      | `node` (uuid, title, path, filetags), `neighbors` |
-| `path`      | —                      | `from`, `to`, `found`, `hops`, `path[]` (uuid, title) |
-| `fix`       | —                      | `broken_uuid`, `replacement_uuid`, `replacement_title`, `files_affected[]`, `total_replacements`, `applied` |
-| `new`       | —                      | `uuid`, `filename`, `path`, `title`, `created` |
-| `info`      | —                      | `config`, `config_path`, `cli_overrides` |
+| Command     | Top-level keys |
+|-------------|----------------|
+| `check`     | `db_root`, `stats`, `duplicates`, `broken_links`, `broken_file_links`, `broken_attachment_links`, `failed_files`, `healthy` |
+| `stats`     | `db_root`, `total_notes`, `total_links`, `internal_links`, `file_links`, `url_links`, `avg_links_per_note`, `orphans`, `broken_links`, `disk_size_bytes`, `directories[]`, `recent_notes[]` |
+| `resolve`   | `query`, `total`, `results[]` (uuid, title, path, filetags, aliases) |
+| `suggest`   | `target`, `target_uuid`, `suggestions[]` (uuid, title, score, scores{}, reasons[]) |
+| `query`     | `query`, `total_results`, `results[]` (uuid, title, score, matches[], content_matches[]) |
+| `context`   | `target`, `context`, `estimated_tokens`, `depth` |
+| `validate`  | `uuid`, `title`, `path`, `filetags`, `aliases`, `headings`, `outgoing`, `incoming`, `outgoing_internal`, `broken_internal[]`, `broken_files[]`, `backlinks[]` (uuid, title), `issues[]`, `healthy` |
+| `orphans`   | `count`, `orphans[]` (uuid, title, path, filetags) |
+| `get`       | `node` (uuid, title, path, filetags), `neighbors` |
+| `path`      | `from`, `to`, `found`, `hops`, `path[]` (uuid, title) |
+| `fix`       | `broken_uuid`, `replacement_uuid`, `replacement_title`, `files_affected[]`, `total_replacements`, `applied` |
+| `new`       | `uuid`, `filename`, `path`, `title`, `created` |
+| `info`      | `config`, `config_path`, `cli_overrides` |
 
 ## Testing patterns
 
 - **Unit tests** live in each module under `#[cfg(test)] mod tests { ... }`
 - **Integration tests** in `tests/integration.rs` spawn the actual binary with a temp mock DB
 - **Property-based tests** in `graph.rs` and `parser.rs` use `proptest` (random Graph::Build fuzzing, slug roundtrip, UUID format, panic fuzzing)
-- **JSON schema validation**: All commands are tested with `--output-format json` via `test_all_commands_json`, verifying valid JSON output for every command
+- **JSON output testing**: All commands are tested with `--output-format json` via `test_all_commands_json`, verifying valid JSON output for every command
 - Mock DB helper in `tests/integration.rs::setup_db()` creates a 10+ note graph with duplicate UUIDs, broken links, filetags, aliases, and headings
 
 ## CLI flags

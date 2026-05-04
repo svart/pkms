@@ -29,7 +29,7 @@ These flags work with every command:
 | Flag | Description |
 |------|-------------|
 | `--db PATH` | Path to org-roam database root (overrides config) |
-| `--output-format FMT` | Output format: `json` or `ndjson` |
+| `--output-format FMT` | Output format: `text`, `json` or `ndjson` |
 
 ## Commands reference
 
@@ -46,7 +46,7 @@ Use `resolve` for quick lookups (only reads file headers). Returns UUID, title, 
 ### Search & Query
 ```
 pkms --db ~/Documents/org --output-format json query "search terms" --limit 10
-pkms --db ~/Documents/org --output-format json query "terms" --tag book
+pkms --db ~/Documents/org --output-format json query "terms" --tags         # Search only in filetags
 ```
 ### Retrieve Notes
 ```
@@ -68,9 +68,9 @@ If new problems appeared - fix them.
 pkms --db ~/Documents/org check                                 # Full scan, exit code 1 if issues
 pkms --db ~/Documents/org check --file-links                     # Also check file: links exist on disk
 pkms --db ~/Documents/org check --attachment-links               # Also check attachment: links exist
+pkms --db ~/Documents/org check --id-links                       # Also check id: links resolve
 pkms --db ~/Documents/org --output-format json validate <target>                # Single note health
 pkms --db ~/Documents/org --output-format json orphans                         # Orphan notes
-pkms --db ~/Documents/org --output-format json broken                          # Broken links
 pkms --db ~/Documents/org --output-format json stats                           # DB statistics
 pkms --db ~/Documents/org --output-format json stats --days 30                 # Recent changes
 pkms --db ~/Documents/org --output-format json stats --hubs                    # Most-connected notes
@@ -105,18 +105,19 @@ pkms init-config                                          # Generate ~/.config/p
 pkms init-config --db ~/Documents/org                     # With database root preset
 ```
 
-## JSON Schemas
+## JSON Output
 
-Every command that supports `--output-format json` has a corresponding JSON Schema in `schemas/<command>.json` (relative to this skill directory). These schemas define the exact output structure and types for reliable programmatic consumption:
+Every command that supports `--output-format json` produces structured output designed for programmatic consumption.
+The output shapes for each command are defined below:
 
-| Command     | Schema file              | Top-level keys |
-|-------------|-------------------------|----------------|
-| `check`     | `schemas/check.json`    | `db_root`, `stats`, `duplicates`, `broken_links`, `broken_file_links`, `broken_attachment_links`, `failed_files`, `healthy` |
-| `stats`     | `schemas/stats.json`    | `db_root`, `total_notes`, `total_links`, `directories`, `recent_notes` |
-| `resolve`   | `schemas/resolve.json`  | `query`, `total`, `results[]` (uuid, title, path, filetags, aliases) |
-| `suggest`   | `schemas/suggest.json`  | `target`, `target_uuid`, `suggestions[]` (uuid, title, score, scores{}, reasons[]) |
-| `query`     | `schemas/query.json`    | `query`, `total_results`, `results[]` (uuid, title, score, matches[], content_matches[]) |
-| `context`   | `schemas/context.json`  | `target`, `context`, `estimated_tokens`, `depth` |
+| Command     | Top-level keys |
+|-------------|----------------|
+| `check`     | `db_root`, `stats`, `duplicates`, `broken_links`, `broken_file_links`, `broken_attachment_links`, `failed_files`, `healthy` |
+| `stats`     | `db_root`, `total_notes`, `total_links`, `directories`, `recent_notes` |
+| `resolve`   | `query`, `total`, `results[]` (uuid, title, path, filetags, aliases) |
+| `suggest`   | `target`, `target_uuid`, `suggestions[]` (uuid, title, score, scores{}, reasons[]) |
+| `query`     | `query`, `total_results`, `results[]` (uuid, title, score, matches[], content_matches[]) |
+| `context`   | `target`, `context`, `estimated_tokens`, `depth` |
 
 ## Common workflows
 
@@ -132,7 +133,7 @@ When the user asks about a topic, use this sequence:
 ### Database Health Maintenance
 When the user mentions fixing their database:
 1. `check` to see the health status and exit code
-2. `broken` to list all broken links grouped by target UUID
+2. `check` to list all broken links grouped by target UUID (or `check --id-links` to focus)
 3. `resolve --title <concept>` to find the correct replacement note UUID
 4. `fix <broken-uuid> <replacement> --apply` for each broken UUID batch
 5. `orphans` to find notes needing connections
@@ -147,14 +148,13 @@ When the user wants to find something in their notes:
 
 ### JSON Output Shapes
 
-Always use `--output-format json` for AI consumption. Each command has its own output shape — refer to the JSON schemas for precise field definitions. Common patterns:
+Always use `--output-format json` for AI consumption. Each command has its own output shape. Common patterns:
 
 - **Single-item commands** (`check`, `validate`, `get`, `context`, `fix`, `new`, `path`, `info`): each returns a top-level object with command-specific keys. `stats` is also single-item unless `--hubs` or `--tags` is passed.
 - **List commands** use varying key names for their result arrays:
   - `resolve` returns `{"query", "total", "results": [...]}`
   - `query` returns `{"query", "total_results", "results": [...]}`
   - `orphans` returns `{"count", "orphans": [...]}`
-  - `broken` returns `{"count", "links": [...]}`
   - `stats --hubs` returns `{"limit", "hubs": [...]}`
   - `stats --tags` returns `{"tags": [...]}`
   - `suggest` returns `{"target", "target_uuid", "suggestions": [...]}`

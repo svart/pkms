@@ -42,8 +42,7 @@ The `--db` flag overrides `db_root` from the config. If neither is provided, the
 | Flag                    | Description                                       |
 |-------------------------|---------------------------------------------------|
 | `--db PATH`             | Path to org-roam database root (overrides config) |
-| `--output-format`       | Output format: `json` or `ndjson`                 |
-| `--output-format FMT`   | Output format: `json` or `ndjson`                 |
+| `--output-format FMT`   | Output format: `text`, `json`, or `ndjson`        |
 
 ## Commands
 
@@ -65,6 +64,7 @@ pkms resolve --title <term> --limit 20  # Cap results
 pkms check                              # Full database health scan
 pkms check --file-links                 # Check file: links exist on disk
 pkms check --attachment-links           # Check attachment: links on disk
+pkms check --id-links                   # Check id: links resolve (default)
 pkms validate <target>                  # Validate a specific note
 ```
 
@@ -96,7 +96,7 @@ BFS, traversing both outgoing and incoming links.
 
 ```
 pkms query "search terms"                 # Fuzzy search titles + content
-pkms query "search terms" --tag book      # Filter by filetag
+pkms query "search terms" --tags          # Search only in filetags
 pkms query "search terms" --limit 5       # Limit results
 ```
 
@@ -112,7 +112,6 @@ pkms stats --hubs              # Show most-connected notes
 pkms stats --hubs 20           # Show top 20 hubs
 pkms stats --tags              # List all filetags with counts
 pkms orphans                   # List notes with no links
-pkms broken                    # List all dangling/broken links
 ```
 
 `stats` shows total notes, links breakdown, orphans, broken links,
@@ -179,7 +178,6 @@ pkms init-config --db ~/Documents/org  # With db_root pre-filled
 | `validate`    | Validate a specific note                         |
 | `stats`       | Comprehensive database statistics (+ --hubs, --tags) |
 | `orphans`     | List orphan notes (no links)                     |
-| `broken`      | List broken/dangling links                       |
 | `resolve`     | Fast UUID/title resolution (header-only scan)    |
 | `fix`         | Replace broken UUIDs across all files            |
 | `suggest`     | Find related notes by multi-factor scoring       |
@@ -203,11 +201,8 @@ pkms --db ~/Documents/org --output-format json stats
 pkms --db ~/Documents/org --output-format json context "note title" --depth 2
 ```
 
-JSON Schema files for every command's JSON output are in
-[`schemas/`](./schemas/) — one schema per command (`check.json`,
-`stats.json`, `resolve.json`, `query.json`, `suggest.json`,
-`context.json`). These define the exact structure and types for
-reliable programmatic consumption.
+JSON or NDJSON output is designed for reliable programmatic consumption
+by AI agents and scripting pipelines.
 
 ## Database Format
 
