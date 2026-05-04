@@ -87,6 +87,15 @@ fn neighbor_relevance(
         score += tag_overlap as f64 * 25.0;
     }
 
+    let cat_overlap = neighbor
+        .categories
+        .iter()
+        .filter(|c| target_tags.contains(c.as_str()))
+        .count();
+    if cat_overlap > 0 {
+        score += cat_overlap as f64 * 25.0;
+    }
+
     let shared_backlinks = graph
         .backlinks
         .get(neighbor_uuid)
@@ -195,6 +204,18 @@ fn compute_scores<'a>(
             score += s;
             factor_scores.insert("tags".to_string(), s);
             reasons.push("shared tags".to_string());
+        }
+
+        let cat_overlap: usize = other
+            .categories
+            .iter()
+            .filter(|c| target_tags.contains(c.as_str()))
+            .count();
+        if cat_overlap > 0 {
+            let s = cat_overlap as f64 * 25.0;
+            score += s;
+            factor_scores.insert("categories".to_string(), s);
+            reasons.push("shared categories".to_string());
         }
 
         let other_backlinks: HashSet<&str> = graph
@@ -348,6 +369,7 @@ pub fn run(
     let target_tags: HashSet<&str> = node
         .filetags
         .iter()
+        .chain(node.categories.iter())
         .map(std::string::String::as_str)
         .collect();
     let target_backlinks: HashSet<&str> = graph

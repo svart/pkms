@@ -59,6 +59,7 @@ pub fn run(
             alias: search_title,
             ref_: search_title,
             tag: search_tags,
+            category: search_tags,
         };
         let title_results = graph.search(terms, &fields);
         for (node, score, matches) in title_results {

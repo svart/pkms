@@ -12,6 +12,7 @@ pub struct NodeJson {
     pub title: String,
     pub path: String,
     pub filetags: Vec<String>,
+    pub categories: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub content: Option<String>,
 }
@@ -23,6 +24,7 @@ impl NodeJson {
             title: node.title.clone(),
             path: util::path_string(&node.path),
             filetags: node.filetags.clone(),
+            categories: node.categories.clone(),
             content: content.map(std::string::ToString::to_string),
         }
     }
@@ -105,6 +107,9 @@ pub fn run(
         println!("  Path:   {}", node.path.display());
         if !node.filetags.is_empty() {
             println!("  Tags:   {}", node.filetags.join(", "));
+        }
+        if !node.categories.is_empty() {
+            println!("  Cats:   {}", node.categories.join(", "));
         }
         if let Some(content) = node_content {
             println!();

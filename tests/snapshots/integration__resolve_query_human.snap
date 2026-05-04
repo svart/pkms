@@ -1,13 +1,16 @@
 ---
 source: tests/integration.rs
-assertion_line: 1337
+assertion_line: 1603
 expression: "normalize_snapshot(&stdout, &root)"
 ---
-Total: 10
+Total: 11
   Headings Note
          UUID: 77777777-7777-4777-7777-777777777777
   Orphan Note
          UUID: dddddddd-dddd-4ddd-dddd-dddddddddddd
+  Categorized Note
+         UUID: 99999999-9999-4999-9999-999999999999
+         Cats: example
   Attachment Link Note
          UUID: aaaaaaaa-aaaa-4aaa-aaaa-bbbbbbbbbbbb
   File Link Note

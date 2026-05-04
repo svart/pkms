@@ -5,7 +5,7 @@ use anyhow::Result;
 use serde::Serialize;
 use std::fmt::Write;
 
-const DEFAULT_TEMPLATE: &str = "# {{title}}\nUUID: {{uuid}}\nPath: {{path}}\n{{#tags}}Tags: {{tags}}\n{{/tags}}{{#aliases}}Aliases: {{aliases}}\n{{/aliases}}\n--- Content ---\n{{content}}--- End Content ---\n\n{{neighbors}}{{backlinks}}";
+const DEFAULT_TEMPLATE: &str = "# {{title}}\nUUID: {{uuid}}\nPath: {{path}}\n{{#tags}}Tags: {{tags}}\n{{/tags}}{{#categories}}Categories: {{categories}}\n{{/categories}}{{#aliases}}Aliases: {{aliases}}\n{{/aliases}}\n--- Content ---\n{{content}}--- End Content ---\n\n{{neighbors}}{{backlinks}}";
 
 #[derive(Serialize)]
 pub struct ContextOutput {
@@ -69,6 +69,7 @@ pub fn run(
     }
 
     let tags_str = node.filetags.join(", ");
+    let cats_str = node.categories.join(", ");
     let aliases_str = node.aliases.join(", ");
 
     let rendered = render_template(
@@ -78,6 +79,7 @@ pub fn run(
             uuid: &node.uuid,
             path: &node.path.to_string_lossy(),
             tags: &tags_str,
+            categories: &cats_str,
             aliases: &aliases_str,
             content: &content,
             neighbors: &neighbors_text,
@@ -120,6 +122,7 @@ struct ContextVars<'a> {
     uuid: &'a str,
     path: &'a str,
     tags: &'a str,
+    categories: &'a str,
     aliases: &'a str,
     content: &'a str,
     neighbors: &'a str,
@@ -131,6 +134,7 @@ fn render_template(template: &str, vars: &ContextVars) -> String {
 
     let conditionals = [
         ("tags", vars.tags),
+        ("categories", vars.categories),
         ("aliases", vars.aliases),
         ("neighbors", vars.neighbors),
         ("backlinks", vars.backlinks),
@@ -158,6 +162,7 @@ fn render_template(template: &str, vars: &ContextVars) -> String {
         ("uuid", vars.uuid),
         ("path", vars.path),
         ("tags", vars.tags),
+        ("categories", vars.categories),
         ("aliases", vars.aliases),
         ("content", vars.content),
         ("neighbors", vars.neighbors),
@@ -271,6 +276,7 @@ mod tests {
             uuid: "abcd",
             path: "/a.org",
             tags: "tag1, tag2",
+            categories: "",
             aliases: "",
             content: "some content",
             neighbors: "",
@@ -287,6 +293,7 @@ mod tests {
             uuid: "x",
             path: "/x.org",
             tags: "mytag",
+            categories: "",
             aliases: "",
             content: "body",
             neighbors: "",
@@ -303,6 +310,7 @@ mod tests {
             uuid: "x",
             path: "/x.org",
             tags: "",
+            categories: "",
             aliases: "",
             content: "body",
             neighbors: "",
@@ -319,6 +327,7 @@ mod tests {
             uuid: "uu-id-1234",
             path: "/path/to/note.org",
             tags: "tag1",
+            categories: "",
             aliases: "",
             content: "file content\nsecond line",
             neighbors: "\n  → Linked Note\n",

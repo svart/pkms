@@ -12,6 +12,7 @@ pub struct ValidateOutput {
     pub title: String,
     pub path: String,
     pub filetags: Vec<String>,
+    pub categories: Vec<String>,
     pub aliases: Vec<String>,
     pub refs: Vec<String>,
     pub headings: usize,
@@ -47,6 +48,7 @@ fn print_validate_json(
         title: node.title,
         path: node.path.to_string_lossy().to_string(),
         filetags: node.filetags,
+        categories: node.categories,
         aliases: node.aliases,
         refs: node.refs,
         headings: node.headings_count,
@@ -85,6 +87,9 @@ fn print_validate_text(
     println!("  Path:   {}", node.path.display());
     if !node.filetags.is_empty() {
         println!("  Tags:   {}", node.filetags.join(", "));
+    }
+    if !node.categories.is_empty() {
+        println!("  Cats:   {}", node.categories.join(", "));
     }
     if !node.aliases.is_empty() {
         println!("  Aliases: {}", node.aliases.join(", "));

@@ -17,6 +17,7 @@ pub struct OrphanEntry {
     pub title: String,
     pub path: String,
     pub filetags: Vec<String>,
+    pub categories: Vec<String>,
 }
 
 pub fn run(config: &Config, ctx: &OutputContext, db_cli: Option<&std::path::Path>) -> Result<()> {
@@ -30,6 +31,7 @@ pub fn run(config: &Config, ctx: &OutputContext, db_cli: Option<&std::path::Path
             title: n.title.clone(),
             path: util::path_string(&n.path),
             filetags: n.filetags.clone(),
+            categories: n.categories.clone(),
         })
         .collect();
 

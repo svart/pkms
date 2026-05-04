@@ -7,6 +7,7 @@ pub struct ParsedNote {
     pub uuids: Vec<String>,
     pub title: Option<String>,
     pub filetags: Vec<String>,
+    pub categories: Vec<String>,
     pub roam_aliases: Vec<String>,
     pub roam_refs: Vec<String>,
     pub outgoing: Vec<Link>,
@@ -19,6 +20,7 @@ impl ParsedNote {
             uuids: vec![],
             title: None,
             filetags: vec![],
+            categories: vec![],
             roam_aliases: vec![],
             roam_refs: vec![],
             outgoing: vec![],
@@ -48,6 +50,7 @@ pub struct Heading {
 }
 
 const PROP_ID: &str = "ID";
+const PROP_CATEGORY: &str = "CATEGORY";
 const PROP_ROAM_ALIASES: &str = "ROAM_ALIASES";
 const PROP_ROAM_REFS: &str = "ROAM_REFS";
 
@@ -68,6 +71,7 @@ pub fn parse_note(content: &str) -> ParsedNote {
     let mut uuids = Vec::new();
     let mut title = None;
     let mut filetags = Vec::new();
+    let mut categories = Vec::new();
     let mut roam_aliases = Vec::new();
     let mut roam_refs = Vec::new();
     let mut outgoing = Vec::new();
@@ -90,6 +94,7 @@ pub fn parse_note(content: &str) -> ParsedNote {
             if let Some((key, value)) = parse_property(trimmed) {
                 match key {
                     PROP_ID => uuids.push(value.to_string()),
+                    PROP_CATEGORY => categories.push(value.to_string()),
                     PROP_ROAM_ALIASES => {
                         roam_aliases = value
                             .split_whitespace()
@@ -159,6 +164,7 @@ pub fn parse_note(content: &str) -> ParsedNote {
         uuids,
         title,
         filetags,
+        categories,
         roam_aliases,
         roam_refs,
         outgoing,
@@ -261,6 +267,19 @@ Some text
         assert_eq!(note.headings[0].tags, vec!["tag1"]);
         assert_eq!(note.headings[1].tags, vec!["tag2", "tag3"]);
         assert!(note.headings[2].tags.is_empty());
+    }
+
+    #[test]
+    fn test_parse_category() {
+        let content = r#":PROPERTIES:
+:ID:       a1b2c3d4-e5f6-7890-abcd-ef1234567890
+:CATEGORY: example
+:END:
+#+title: categorized note
+
+Some content."#;
+        let note = parse_note(content);
+        assert_eq!(note.categories, vec!["example"]);
     }
 
     #[test]

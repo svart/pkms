@@ -17,6 +17,7 @@ pub struct ResolvedNote {
     pub title: String,
     pub path: String,
     pub filetags: Vec<String>,
+    pub categories: Vec<String>,
     pub aliases: Vec<String>,
 }
 
@@ -30,6 +31,8 @@ pub struct ResolveOutput {
 static UUID_RE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r":ID:\s+([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})").unwrap()
 });
+
+static CATEGORY_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r":CATEGORY:\s+(.+)").unwrap());
 
 static ALIASES_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r":ROAM_ALIASES:\s+(.*)").unwrap());
@@ -101,11 +104,17 @@ fn scan_files(root: &Path, ignore_patterns: &[String]) -> Vec<ResolvedNote> {
             })
             .unwrap_or_default();
 
+        let categories: Vec<String> = CATEGORY_RE
+            .captures_iter(&header_str)
+            .filter_map(|c| c.get(1).map(|m| m.as_str().trim().to_string()))
+            .collect();
+
         notes.push(ResolvedNote {
             uuid,
             title,
             path: entry.path().to_string_lossy().to_string(),
             filetags,
+            categories,
             aliases,
         });
     }
@@ -156,10 +165,13 @@ pub fn run(
             }
             if let Some(t) = opts.tags {
                 let wanted: Vec<&str> = t.split(',').map(str::trim).collect();
-                if !wanted
+                let matches_tag = wanted
                     .iter()
-                    .any(|w| n.filetags.iter().any(|ft| ft.contains(w)))
-                {
+                    .any(|w| n.filetags.iter().any(|ft| ft.contains(w)));
+                let matches_category = wanted
+                    .iter()
+                    .any(|w| n.categories.iter().any(|c| c.contains(w)));
+                if !matches_tag && !matches_category {
                     return false;
                 }
             }
@@ -206,6 +218,9 @@ fn print_resolve_output(
                     if fs.contains("tags") && !note.filetags.is_empty() {
                         println!("         Tags: {}", note.filetags.join(", "));
                     }
+                    if fs.contains("categories") && !note.categories.is_empty() {
+                        println!("         Cats: {}", note.categories.join(", "));
+                    }
                     if fs.contains("aliases") && !note.aliases.is_empty() {
                         println!("         Aliases: {}", note.aliases.join(", "));
                     }
@@ -214,6 +229,9 @@ fn print_resolve_output(
                     println!("         UUID: {}", note.uuid);
                     if !note.filetags.is_empty() {
                         println!("         Tags: {}", note.filetags.join(", "));
+                    }
+                    if !note.categories.is_empty() {
+                        println!("         Cats: {}", note.categories.join(", "));
                     }
                 }
             }

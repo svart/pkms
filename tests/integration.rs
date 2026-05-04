@@ -201,6 +201,20 @@ This has same UUID as Note A.
     )
     .unwrap();
 
+    // Categorized Note -- has CATEGORY property
+    fs::write(
+        common.join("20220101000011-categorized.org"),
+        r#":PROPERTIES:
+:ID:       99999999-9999-4999-9999-999999999999
+:CATEGORY: example
+:END:
+#+title: Categorized Note
+
+Content with a category.
+"#,
+    )
+    .unwrap();
+
     // Malformed file -- no UUID
     fs::write(root.join("no_id.org"), "#+title: No ID\n").unwrap();
 
@@ -965,6 +979,35 @@ fn test_path_not_found() {
         "Note A",
     ]);
     assert!(!status.success());
+}
+
+// ----------------------------------------------------------------
+// CATEGORY
+// ----------------------------------------------------------------
+#[test]
+fn test_resolve_tags_matches_category() {
+    let (_dir, root) = setup_db();
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "resolve",
+        "--tags",
+        "example",
+    ]);
+    assert!(status.success());
+    let titles: Vec<&str> = v["results"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|r| r["title"].as_str())
+        .collect();
+    assert!(
+        titles.contains(&"Categorized Note"),
+        "expected 'Categorized Note' to match via --tags 'example', got: {:?}",
+        titles
+    );
 }
 
 // ----------------------------------------------------------------
