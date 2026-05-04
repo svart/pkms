@@ -24,20 +24,8 @@
         "required": ["directory", "count"]
       }
     },
-    "hubs": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "properties": {
-          "uuid": { "type": "string" },
-          "title": { "type": "string" },
-          "degree": { "type": "integer" }
-        },
-        "required": ["uuid", "title", "degree"]
-      }
-    },
     "recent_notes": {
-      "type": "array",
+      "type": ["array", "null"],
       "items": {
         "type": "object",
         "properties": {
@@ -49,5 +37,5 @@
       }
     }
   },
-  "required": ["total_notes", "total_links", "hubs", "directories"]
+  "required": ["total_notes", "total_links", "directories"]
 }

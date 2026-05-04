@@ -33,136 +33,57 @@ These flags work with every command:
 
 ## Commands reference
 
-### UUID Resolution
-```
-pkms --db ~/Documents/org --output-format json resolve --uuid <uuid>
-pkms --db ~/Documents/org --output-format json resolve --title "search term"
-pkms --db ~/Documents/org --output-format json resolve --tags "tag1,tag2"
-pkms --db ~/Documents/org --output-format json resolve --title "term" --limit 20
-pkms --db ~/Documents/org --output-format json resolve --uuid <uuid> --fields uuid,title,path
-```
-Use `resolve` for quick lookups (only reads file headers). Returns UUID, title, path, tags, aliases. `--fields` selects which columns to include, `--limit` caps results.
+Each command has a detailed reference file in [`references/`](references/).
 
-### Search & Query
-```
-pkms --db ~/Documents/org --output-format json query "search terms" --limit 10
-pkms --db ~/Documents/org --output-format json query "terms" --tags         # Search only in filetags
-```
-### Retrieve Notes
-```
-pkms --db ~/Documents/org --output-format json get <uuid-or-title> --links
-pkms --db ~/Documents/org get <uuid-or-title> --links --no-content   # Links only, no content
-```
-### Graph Navigation
-```
-pkms --db ~/Documents/org --output-format json path "note A" "note B"               # Shortest path
-pkms --db ~/Documents/org --output-format json path "A" "B"                         # Shortest path
-```
-### Health & Validation
+### `check` — [Full reference](references/check.md)
+Full database health scan. Validates all notes, detects broken internal/file/attachment links, duplicate UUIDs/titles, missing titles, and parse errors. Returns exit code 0 if healthy, 1 if issues found. Run after any edits to verify database integrity. Flags: `--file-links`, `--attachment-links`, `--id-links`.
 
-Always run `pkms validate` on each note you created or changed after finishing edititing.
-Always run `pkms check` to verify that database is in valid state after your changes.
-If new problems appeared - fix them.
+### `validate` — [Full reference](references/validate.md)
+Health check for a single note. Verifies UUID format, title presence, outgoing links (internal + file), and lists backlinks. Use after creating or editing a specific note before running a full `check`.
 
-```
-pkms --db ~/Documents/org check                                 # Full scan, exit code 1 if issues
-pkms --db ~/Documents/org check --file-links                     # Also check file: links exist on disk
-pkms --db ~/Documents/org check --attachment-links               # Also check attachment: links exist
-pkms --db ~/Documents/org check --id-links                       # Also check id: links resolve
-pkms --db ~/Documents/org --output-format json validate <target>                # Single note health
-pkms --db ~/Documents/org --output-format json orphans                         # Orphan notes
-pkms --db ~/Documents/org --output-format json stats                           # DB statistics
-pkms --db ~/Documents/org --output-format json stats --days 30                 # Recent changes
-pkms --db ~/Documents/org --output-format json stats --hubs                    # Most-connected notes
-pkms --db ~/Documents/org stats --hubs 5                        # Top 5 hubs
-pkms --db ~/Documents/org stats --tags                          # Filetags with counts
-```
-### Fix Issues
-```
-pkms --db ~/Documents/org fix <broken-uuid> <replacement>         # Dry-run
-pkms --db ~/Documents/org fix <broken-uuid> <replacement> --apply # Apply
-pkms --db ~/Documents/org --output-format json suggest <uuid>                  # Related notes (takes UUID only)
-pkms --db ~/Documents/org suggest <uuid> --limit 5
-```
-### Create Notes
-```
-pkms --db ~/Documents/org new "Title"                    # Dry-run (shows UUID)
-pkms --db ~/Documents/org new "Title" --create           # Write file
-pkms --db ~/Documents/org new "Title" --create --tags "tag1,tag2"
-pkms --db ~/Documents/org new "Title" --create --aliases "alt1,alt2"
-```
-### AI Context
-```
-pkms --db ~/Documents/org context <target> --depth 1
+### `stats` — [Full reference](references/stats.md)
+Comprehensive database statistics: total notes, link breakdown, orphans, broken links, disk size, and directory distribution. Use `--hubs` for most-connected notes (exploration starting points), `--tags` for filetag browsing, `--days N` for recent activity.
 
-pkms --db ~/Documents/org context <target> --depth 2 --max-tokens 2000
-```
-### Configuration
-```
-pkms --db ~/Documents/org info
-pkms --db ~/Documents/org --output-format json info
-pkms init-config                                          # Generate ~/.config/pkms.toml
-pkms init-config --db ~/Documents/org                     # With database root preset
-```
+### `orphans` — [Full reference](references/orphans.md)
+List notes with no connections — no outgoing internal links and no backlinks. Use to find notes that need linking into the graph.
 
-## JSON Output
+### `context` — [Full reference](references/context.md)
+Build an AI-friendly context window for a note. Includes the note's full content plus linked neighbors at each depth level (configurable via `--depth`). Supports token budget via `--max-tokens` for LLM consumption.
 
-Every command that supports `--output-format json` produces structured output designed for programmatic consumption.
-The output shapes for each command are defined below:
+### `resolve` — [Full reference](references/resolve.md)
+Fast UUID/title/tag lookup by reading only file headers (first 100 lines). Does NOT load the full graph, making it the fastest search command. Supports substring matching on UUID, title/alias, and filetags with `--fields` and `--limit`.
 
-| Command     | Top-level keys |
-|-------------|----------------|
-| `check`     | `db_root`, `stats`, `duplicates`, `broken_links`, `broken_file_links`, `broken_attachment_links`, `failed_files`, `healthy` |
-| `stats`     | `db_root`, `total_notes`, `total_links`, `directories`, `recent_notes` |
-| `resolve`   | `query`, `total`, `results[]` (uuid, title, path, filetags, aliases) |
-| `suggest`   | `target`, `target_uuid`, `suggestions[]` (uuid, title, score, scores{}, reasons[]) |
-| `query`     | `query`, `total_results`, `results[]` (uuid, title, score, matches[], content_matches[]) |
-| `context`   | `target`, `context`, `estimated_tokens`, `depth` |
+### `fix` — [Full reference](references/fix.md)
+Replace all occurrences of a broken UUID across the entire database. Dry-run by default; use `--apply` to write changes. The broken UUID and replacement target can be full UUIDs, 8-char prefixes, or note titles.
 
 ## Common workflows
 
+### Note Discovery
+1. `resolve --title <term>` for fast targeted lookup.
+2. `query "terms"` for broad search.
+3. Analyze content of 3-5 relevant notes and their neighbors if necessary (use `get` command with `--links` flag).
+4. `stats --tags` to browse by filetag
+5. `stats --hubs` to find hub notes
+6. `suggest` command for related notes suggestions if query did not bring.
+
 ### Research / Context Building
-When the user asks about a topic, use this sequence:
-1. Find hubs `pkms stats --hubs`.
-2. Go through the graph from related hub(s) note by note via forward and backward links exploring the area and collecting necessary information from notes content.
-3. Use `suggest` subcommand to find more-or-less relevant notes.
-4. Use `query` and `resolve` for searching.
-5. `context <uuid> --depth 2` to build a rich context window with linked neighbors.
-6. For deeper exploration, `get <uuid>` for full content.
+1. Find hubs: `pkms stats --hubs`. Identify related hubs for the research topic.
+2. Explore from hub(s) via `get` with `--links`.
+3. Use `get` command to analyze the content of the note.
+4. Discover connections: `suggest <uuid>`
+5. Search: `query` and `resolve`
+6. Build context: `context <uuid>` with necessary depth (depends on amount of links for note).
 
 ### Database Health Maintenance
-When the user mentions fixing their database:
-1. `check` to see the health status and exit code
-2. `check` to list all broken links grouped by target UUID (or `check --id-links` to focus)
-3. `resolve --title <concept>` to find the correct replacement note UUID
-4. `fix <broken-uuid> <replacement> --apply` for each broken UUID batch
-5. `orphans` to find notes needing connections
-6. `resolve --title <orphan-title>` to find the orphan's UUID, then `suggest <uuid>` to find related notes for linking
-
-### Note Discovery
-When the user wants to find something in their notes:
-1. `query "terms" --output-format json --limit 20` for broad search
-2. `resolve --title <term>` for fast targeted lookup
-3. `stats --tags` to browse by filetag
-4. `stats --hubs` to find highly-connected "hub" notes
-
-### JSON Output Shapes
-
-Always use `--output-format json` for AI consumption. Each command has its own output shape. Common patterns:
-
-- **Single-item commands** (`check`, `validate`, `get`, `context`, `fix`, `new`, `path`, `info`): each returns a top-level object with command-specific keys. `stats` is also single-item unless `--hubs` or `--tags` is passed.
-- **List commands** use varying key names for their result arrays:
-  - `resolve` returns `{"query", "total", "results": [...]}`
-  - `query` returns `{"query", "total_results", "results": [...]}`
-  - `orphans` returns `{"count", "orphans": [...]}`
-  - `stats --hubs` returns `{"limit", "hubs": [...]}`
-  - `stats --tags` returns `{"tags": [...]}`
-  - `suggest` returns `{"target", "target_uuid", "suggestions": [...]}`
+1. `check` to see health status and broken links.
+2. Apply procedure from "Note Discovery" to find relevant notes for broken links.
+3. `fix <broken-uuid> <replacement> --apply` for each broken UUID.
+4. Apply procedure from "Linking Orphans to the Graph" for finding and fixing orphans.
+5. `check` to verify final state
 
 ### Linking Orphans to the Graph
-
 1. `orphans` to list all orphans. Pick ones with clear thematic connections.
-2. `suggest <uuid> --limit 10` to find related notes. For short-content notes where `suggest` is noisy, use `query` and `resolve` instead.
+2. Apply procedure from "Note Discovery" to find relevant note.
 3. **Analyze suggestions** — read the orphan's content and at least 5-8 top suggestions to confirm connections are real.
 4. If suggestions still not so relevant you may create "adoption" note to smoothly connect current orphan to the graph. Fill new note with short portion of relevant information.
 4. Always **inline links** when content exists: embed `[[id:<full-uuid>][description]]` into existing sentences. E.g. "A systematic framework for technical [[id:63649b3f-5168-4fdc-96ec-1911a91b54a5][documentation]] authoring." If content does not exist, create highly relevant content for the note.
@@ -170,20 +91,8 @@ Always use `--output-format json` for AI consumption. Each command has its own o
 6. **Backlinks sparingly** — only add a link *from* an existing note *to* the orphan when there is genuine contextual reason (shared topic, direct dependency, natural cross-reference). Do not mechanically pair every forward link with a backlink.
 7. If mentioning orphan in already existing note is natural just create this link without adding direct forward link from orphan.
 8. `validate <uuid>` each changed note to confirm no broken links.
-9. `check` to verify overall database health.
-
-### JSON Parsing for AI Agents
-
-All commands support `--output-format json`. Use Python for structured extraction:
-```python
-import json, sys, subprocess
-result = subprocess.run(
-    ["target/debug/pkms", "--db", "~/Documents/org", "--output-format", "json", "<command>", ...],
-    capture_output=True, text=True
-)
-data = json.loads(result.stdout)
-```
+9. `check` to verify overall database health.. `check` to verify overall health.
 
 ### Performance Notes
 
-All subcommands are very fast even on huge notes databases.
+All subcommands are very fast even on large databases.

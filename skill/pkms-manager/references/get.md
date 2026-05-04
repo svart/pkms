@@ -1,0 +1,92 @@
+# pkms get — Retrieve Note with Neighbors
+
+## When to Use
+
+Use `get` when you need to see a note's full content together with its immediate neighbors (forward links and backlinks). This is useful for deep exploration of a specific topic's graph neighborhood.
+
+## How It Works
+
+1. Resolves the target note (UUID, file path, or title)
+2. Loads the note's full file content
+3. With `--links`, fetches depth-1 neighbors (outgoing notes and backlinks)
+4. Without `--links`, shows only the note and its content
+
+Content is shown by default; use `--no-content` to suppress it.
+
+## Arguments & Flags
+
+| Arg/Flag | Description |
+|----------|-------------|
+| `target` | UUID, file path, or note title |
+| `--links` | Show forward links (outgoing) and backlinks at depth 1 |
+| `--no-content` | Suppress note content output |
+
+## Output
+
+### Text — with content but no links
+
+```
+Note: Note A
+  UUID:   aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa
+  Path:   /org/roam/common/note_a.org
+
+--- Content ---
+Full file content...
+--- End Content ---
+```
+
+### Text — with links and no content
+
+```
+Note: Note A
+  UUID:   aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa
+  Path:   /org/roam/common/note_a.org
+
+Forward links:
+  Note B (bbbbbbbb)
+
+Backlinks:
+  Source Note (cccccccc)
+```
+
+### JSON
+
+```json
+{
+  "node": {
+    "uuid": "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa",
+    "title": "Note A",
+    "path": "/org/roam/common/note_a.org",
+    "filetags": [],
+    "content": "Full file content..."
+  },
+  "neighbors": {
+    "1": {
+      "outgoing": [{"uuid": "bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb", "title": "Note B", "path": "...", "filetags": []}],
+      "incoming": [{"uuid": "cccccccc-cccc-4ccc-cccc-cccccccccccc", "title": "Source Note", "path": "...", "filetags": []}]
+    }
+  }
+}
+```
+
+## Typical Scenarios
+
+### Quick content check
+```bash
+pkms get "Note A"
+```
+
+### Explore connections
+```bash
+pkms get "Note A" --links
+```
+
+### Links only
+```bash
+pkms get "Note A" --links --no-content
+```
+
+### Machine-readable
+```bash
+pkms --output-format json get "Note A" --links
+```
