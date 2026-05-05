@@ -37,61 +37,152 @@ These flags work with every command:
 Each command has a detailed reference file in [`references/`](references/).
 
 ### `check` — [Full reference](references/check.md)
-Full database health scan. Validates all notes, detects broken internal/file/attachment links, duplicate UUIDs/titles, missing titles, and parse errors. Returns exit code 0 if healthy, 1 if issues found. Run after any edits to verify database integrity. Flags: `--file-links`, `--attachment-links`, `--id-links`.
+Full database health scan. 
+Validates all notes, detects broken internal/file/attachment links, duplicate UUIDs/titles, missing titles, and parse errors. 
+Returns exit code 0 if healthy, 1 if issues found. 
+Run after edits to verify database integrity.
+
+| Command | Usecase |
+|---------|---------|
+| `pkms check` | Full health scan: validates all notes, detects broken links, duplicates, missing titles. |
+| `pkms check --id-links` | Verify only that links resolve to valid UUIDs in the database. |
 
 ### `validate` — [Full reference](references/validate.md)
-Health check for a single note. Verifies UUID format, title presence, outgoing links (internal + file), and lists backlinks. Use after creating or editing a specific note before running a full `check`.
+Health check for a single note. 
+Verifies UUID format, title presence, outgoing links. 
+Use after creating or editing a specific note.
+
+| Command | Usecase |
+|---------|---------|
+| `pkms validate <UUID>` | Check a single note UUID |
 
 ### `stats` — [Full reference](references/stats.md)
-Comprehensive database statistics: total notes, link breakdown, orphans, broken links, disk size, and directory distribution. Use `--hubs` for most-connected notes (exploration starting points), `--tags` for filetag browsing, `--days N` for recent activity.
+Comprehensive database statistics: total notes, link breakdown, orphans, broken links, disk size. 
+
+| Command | Usecase |
+|---------|---------|
+| `pkms stats` | Show full statistics: notes, links, orphans, broken links, disk size. |
+| `pkms stats --hubs` | List top 10 most-connected hub notes (exploration starting points). |
+| `pkms stats --hubs 20` | List top 20 most-connected hub notes. |
+| `pkms stats --tags` | Browse all filetags with note counts. |
 
 ### `orphans` — [Full reference](references/orphans.md)
-List notes with no connections — no outgoing internal links and no backlinks. Use to find notes that need linking into the graph.
+List notes with no connections — no outgoing internal links and no backlinks.
 
-### `context` — [Full reference](references/context.md)
-Build an AI-friendly context window for a note. Includes the note's full content plus linked neighbors at each depth level (configurable via `--depth`). Supports token budget via `--max-tokens` for LLM consumption.
+| Command | Usecase |
+|---------|---------|
+| `pkms orphans` | List notes with no incoming or outgoing internal links. |
 
 ### `resolve` — [Full reference](references/resolve.md)
-Fast UUID/title/tag lookup by reading only file headers (first 100 lines). Does NOT load the full graph, making it the fastest search command. Supports substring matching on UUID, title/alias, and filetags with `--fields` and `--limit`.
+Fast notes lookup by metadata. 
 
-### `fix` — [Full reference](references/fix.md)
-Replace all occurrences of a broken UUID across the entire database. Dry-run by default; use `--apply` to write changes. The broken UUID and replacement target can be full UUIDs, 8-char prefixes, or note titles.
-
-### `suggest` — [Full reference](references/suggest.md)
-Find thematically related notes by multi-factor scoring (title overlap, shared tags, shared backlinks/outgoing, content keywords, directory proximity, neighborhood relevance). Accepts exact UUID only — use `resolve` first to find it.
-
-### `new` — [Full reference](references/new.md)
-Generate a UUID v4 and timestamped filename (`YYYYMMDDHHMMSS-slug.org`) in the configured new notes directory. Dry-run by default; use `--create` to write the boilerplate file with optional `--tags` and `--aliases`.
+| Command | Usecase |
+|---------|---------|
+| `pkms resolve --title <title>` | Look up notes by title or alias substring |
+| `pkms resolve --title "graph"` | Look up notes with "graph" substring in title (e.g "subgraph", "graphs", etc.) |
+| `pkms resolve --title "gr alg"` | Look up notes with "gr" and "alg" substrings in title (e.g "graph algorithms", "algorithms on graphs", etc.) |
+| `pkms resolve --tags "tagname"` | Filter notes by tag. Substring matching. |
+| `pkms resolve --tags "tag1,tag2"` | Filter notes by multiple tags (comma-separated). Substring matching. At least one tag should match to get result. |
 
 ### `get` — [Full reference](references/get.md)
-Retrieve a note's full content with optional neighbor display (`--links`). Use `--no-content` to show links only. Good for deep exploration of a topic's graph neighborhood.
+Retrieve a note's full content with optional neighbor display. 
 
-### `query` — [Full reference](references/query.md)
-Fuzzy search across all note content (titles, aliases, refs, tags, file content). Supports scope flags (`--tags`, `--title`, `--content`) and `--limit`. Results are scored and sorted by relevance.
+| Command | Usecase |
+|---------|---------|
+| `pkms get <target>` | Retrieve note content |
+| `pkms get <target> --links` | Show note content with forward and backward neighbors |
+| `pkms get <target> --links --no-content` | Show only list of links |
+| `pkms get <target> --headings --no-content` | Show only heading structure |
+| `pkms get <target> --links --headings --no-content` | Show links and heading structure without content |
+
+`<target>` may be UUID, title or absolute file path.
 
 ### `path` — [Full reference](references/path.md)
-Find the shortest path between two notes through the directed graph using bidirectional BFS. Accepts titles, UUIDs, or file paths. Reports the hop count and ordered path.
+Find the shortest path between two notes through the notes graph. 
+Accepts titles, UUIDs, or absolute file paths.
+Good for checking if notes are connected via well-defined logic.
+
+
+| Command | Usecase |
+|---------|---------|
+| `pkms path <from> <to>` | Find shortest path between two notes via BFS |
+
+### `query` — [Full reference](references/query.md)
+Fuzzy search across all note content (titles, aliases, refs, tags, file content). 
+Results are scored and sorted by relevance.
+
+| Command | Usecase |
+|---------|---------|
+| `pkms query "term"` | Fuzzy search titles, aliases, refs, tags, and file content |
+| `pkms query "term" --tags` | Search only within filetags. |
+| `pkms query "term" --limit N` | Show not more than N matching notes. |
+| `pkms query "term" --title` | Search only in titles, aliases, and refs. |
+
+### `fix` — [Full reference](references/fix.md)
+Replace all occurrences of a broken UUID across the entire database. Both arguments must be full UUIDs (with dashes). Dry-run by default; use `--apply` to write changes.
+
+| Command | Usecase |
+|---------|---------|
+| `pkms fix <broken_uuid> <replacement_uuid>` | Dry-run: preview which files and how many replacements would be made |
+| `pkms fix <broken_uuid> <replacement_uuid> --apply` | Apply broken UUID replacement in all files |
+
+### `suggest` — [Full reference](references/suggest.md)
+Find thematically related notes by multi-factor scoring
+- title overlap;
+- shared tags;
+- shared backlinks/outgoing;
+- content keywords;
+- directory proximity;
+- neighborhood relevance.
+
+| Command | Usecase |
+|---------|---------|
+| `pkms suggest <uuid>` | Find related notes by multi-factor scoring. |
+
+### `context` — [Full reference](references/context.md)
+Build an AI-friendly context window for a note. 
+Includes the note's full content plus linked neighbors at each depth level. 
+
+| Command | Usecase |
+|---------|---------|
+| `pkms context <target> --depth N` | Build context window with linked neighbors up to depth N |
+| `pkms context <target> --depth N --max-tokens M` | Build context with token budget for LLM consumption |
+
+`<target>` may be UUID, title or absolute file path.
+
+### `new` — [Full reference](references/new.md)
+Generate a UUID v4 and timestamped filename (`YYYYMMDDHHMMSS-slug.org`) in the configured new notes directory. 
+
+| Command | Usecase |
+|---------|---------|
+| `pkms new "Title"` | Dry-run: preview generated UUID, filename, and path. |
+| `pkms new "Title" --create` | Create boilerplate note file on disk. |
+| `pkms new "Title" --create --tags "tag1,tag2"` | Create note with filetags. |
 
 ### `info` — [Full reference](references/info.md)
-Show the resolved configuration: loaded config file, effective db_root, new notes directory, and whether `--db` overrides are active.
+Show the configuration with notes database path.
+
+| Command | Usecase |
+|---------|---------|
+| `pkms info` | Show config.  |
 
 ## Common workflows
 
 ### Note Discovery
-1. `resolve --title <term>` for fast targeted lookup.
-2. `query "terms"` for broad search.
-3. Analyze content of 3-5 relevant notes and their neighbors if necessary (use `get` command with `--links` flag).
-4. `stats --tags` to browse by filetag
-5. `stats --hubs` to find hub notes
-6. `suggest` command for related notes suggestions if query did not bring.
+1. `pkms resolve --title <term>` for fast targeted lookup.
+2. `pkms query "term"` for broad search.
+3. Analyze content of 3-5 relevant notes and their neighbors if necessary (use `pkms get`).
+4. `pkms stats --tags` to browse by filetag.
+5. `pkms stats --hubs 20` to find hub notes.
+6. `pkms suggest <UUID>` command for related notes suggestions if query did not bring.
 
 ### Research / Context Building
-1. Find hubs: `pkms stats --hubs`. Identify related hubs for the research topic.
-2. Explore from hub(s) via `get` with `--links`.
-3. Use `get` command to analyze the content of the note.
-4. Discover connections: `suggest <uuid>`
-5. Search: `query` and `resolve`
-6. Build context: `context <uuid>` with necessary depth (depends on amount of links for note).
+1. Find hubs: `pkms stats --hubs 20`. Identify related hubs for the research topic.
+2. Explore relevant for the topic hub via `pkms get <UUID>`.
+3. Find relevant information in the hub, follow the links using `pkms get <UUID>`.
+4. Discover relevan notes using `pkms suggest <UUID>`.
+5. Search for specific terms across the database: `pkms query` and `pkms resolve` to find more relevant notes.
+6. Collect information about the topic create summary then propose user what to do next in your research by providing 3-4 variants.
 
 ### Database Health Maintenance
 1. `check` to see health status and broken links.
@@ -118,7 +209,6 @@ Commands can be chained via Unix pipes using NDJSON. Producers emit per-item JSO
 with a `uuid` field; consumers read them from stdin via automatic pipe detection or `--from-stdin`.
 
 **Producers** (emit with `--output-format ndjson`): `resolve`, `query`, `orphans`, `stats --hubs`, `suggest`
-
 **Consumers** (read via pipe or `--from-stdin`): `get`, `suggest`, `validate`, `context`
 
 ### Key pipelines

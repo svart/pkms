@@ -115,9 +115,9 @@ pub enum Command {
     },
     #[command(about = "Fix broken links by replacing UUIDs across the database")]
     Fix {
-        #[arg(help = "Broken UUID to replace")]
+        #[arg(help = "Broken UUID (full UUID format with dashes)")]
         broken_uuid: String,
-        #[arg(help = "Replacement UUID or note title to resolve to")]
+        #[arg(help = "Replacement UUID (full UUID format with dashes)")]
         target: String,
         #[arg(
             short,

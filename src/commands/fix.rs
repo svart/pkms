@@ -14,27 +14,10 @@ pub struct FixOutput {
     pub applied: bool,
 }
 
-fn find_replacement(graph: &Graph, target: &str) -> Result<(String, String)> {
-    let replacement = graph
-        .find_node(target)
-        .map(|n| (n.uuid.clone(), n.title.clone()))
-        .or_else(|| {
-            let prefix_matches: Vec<&String> = graph
-                .nodes
-                .keys()
-                .filter(|u| u.starts_with(target))
-                .collect();
-            if prefix_matches.len() == 1 {
-                let uuid = prefix_matches[0].clone();
-                graph
-                    .nodes
-                    .get(&uuid)
-                    .map(|n| (n.uuid.clone(), n.title.clone()))
-            } else {
-                None
-            }
-        });
-    replacement.ok_or_else(|| anyhow::anyhow!("Replacement target not found: {target}"))
+fn validate_uuid(s: &str) -> Result<String> {
+    Ok(uuid::Uuid::parse_str(s)
+        .map_err(|_| anyhow::anyhow!("Invalid UUID format: {s}"))?
+        .to_string())
 }
 
 fn print_fix_output(ctx: &OutputContext, output: &FixOutput, apply: bool) -> Result<()> {
@@ -118,50 +101,14 @@ pub fn run(
     let graph = Graph::load(config, db_cli)?;
     let db_root = config.resolve_db_root(db_cli)?;
 
-    let broken = if broken_uuid.contains('-') {
-        broken_uuid.to_string()
-    } else if broken_uuid.len() == 8 {
-        let matches: Vec<&String> = graph
-            .nodes
-            .keys()
-            .filter(|u| u.starts_with(broken_uuid))
-            .collect();
-        match matches.len().cmp(&1) {
-            std::cmp::Ordering::Equal => matches[0].clone(),
-            std::cmp::Ordering::Greater => {
-                anyhow::bail!("Multiple existing UUIDs match prefix '{broken_uuid}': {matches:?}")
-            }
-            std::cmp::Ordering::Less => {
-                let mut seen = std::collections::HashSet::new();
-                let broken_matches: Vec<&String> = graph
-                    .broken_links
-                    .iter()
-                    .filter_map(|(_, tgt)| {
-                        if tgt.starts_with(broken_uuid) && seen.insert(tgt.as_str()) {
-                            Some(tgt)
-                        } else {
-                            None
-                        }
-                    })
-                    .collect();
-                if broken_matches.len() == 1 {
-                    broken_matches[0].clone()
-                } else if broken_matches.is_empty() {
-                    anyhow::bail!(
-                        "No UUID matches prefix '{broken_uuid}' in nodes or broken links"
-                    );
-                } else {
-                    anyhow::bail!(
-                        "Multiple broken UUIDs match prefix '{broken_uuid}': {broken_matches:?}"
-                    );
-                }
-            }
-        }
-    } else {
-        anyhow::bail!("Invalid UUID format: {broken_uuid}");
-    };
+    let broken = validate_uuid(broken_uuid)?;
+    let target_uuid = validate_uuid(target)?;
 
-    let (replacement_uuid, replacement_title) = find_replacement(&graph, target)?;
+    let (replacement_uuid, replacement_title) = graph
+        .nodes
+        .get(&target_uuid)
+        .map(|n| (n.uuid.clone(), n.title.clone()))
+        .ok_or_else(|| anyhow::anyhow!("Replacement UUID not found in database: {target}"))?;
 
     let (files_affected, total_replacements) =
         find_and_replace_links(&db_root, &broken, &replacement_uuid, apply)?;

@@ -121,14 +121,15 @@ and disk size. Pass `--hubs` or `--tags` for additional detail.
 ### Fix Issues
 
 ```
-pkms fix <broken-uuid> <replacement>           # Dry-run (shows what would change)
-pkms fix <broken-uuid> <replacement> --apply   # Actually apply replacements
+pkms fix <broken-uuid> <replacement-uuid>           # Dry-run (shows what would change)
+pkms fix <broken-uuid> <replacement-uuid> --apply   # Actually apply replacements
 pkms suggest <uuid>                            # Find related notes (takes UUID only)
 pkms suggest <uuid> --limit 5                  # Limit suggestions
 ```
 
 `fix` replaces all occurrences of a broken UUID across the database with
-a resolved UUID. Without `--apply` it runs as a dry-run, showing which
+a replacement UUID. Both arguments must be full UUIDs (with dashes).
+Without `--apply` it runs as a dry-run, showing which
 files would be modified and how many replacements would be made.
 
 `suggest` takes a note UUID, loads the full graph, and scores every other

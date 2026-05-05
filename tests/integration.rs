@@ -660,7 +660,7 @@ fn test_fix_dry_run() {
         root.to_str().unwrap(),
         "fix",
         "ffffffff-ffff-4fff-ffff-ffffffffffff",
-        "Note A",
+        "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa",
     ]);
     assert!(status.success());
     assert!(stdout.contains("Would fix") || stdout.contains("use --apply"));
@@ -676,7 +676,7 @@ fn test_fix_json() {
         "json",
         "fix",
         "ffffffff-ffff-4fff-ffff-ffffffffffff",
-        "Note A",
+        "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa",
     ]);
     assert!(status.success());
     assert_eq!(v["broken_uuid"], "ffffffff-ffff-4fff-ffff-ffffffffffff");
@@ -691,7 +691,7 @@ fn test_fix_broken_not_found() {
         root.to_str().unwrap(),
         "fix",
         "00000000-0000-0000-0000-000000000000",
-        "Note A",
+        "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa",
     ]);
     // fix succeeds (0 replacements found); check output mentions 0
     assert!(status.success());
@@ -1521,7 +1521,7 @@ fn test_all_commands_json() {
                 "json".into(),
                 "fix".into(),
                 "ffffffff-ffff-4fff-ffff-ffffffffffff".into(),
-                "Note A".into(),
+                "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa".into(),
             ],
             true,
         ),
