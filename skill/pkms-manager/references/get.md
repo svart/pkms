@@ -19,6 +19,7 @@ Content is shown by default; use `--no-content` to suppress it.
 |----------|-------------|
 | `target` | UUID, file path, or note title |
 | `--links` | Show forward links (outgoing) and backlinks at depth 1 |
+| `--headings` | Show heading structure extracted from note content |
 | `--no-content` | Suppress note content output |
 
 ## Output
@@ -33,6 +34,21 @@ Note: Note A
 --- Content ---
 Full file content...
 --- End Content ---
+```
+
+### Text — with headings
+
+```
+Note: Note A
+  UUID:   aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa
+  Path:   /org/roam/common/note_a.org
+
+--- Headings ---
+1. Introduction  :tag1:
+  1.1 Background [DONE]
+2. Main Section
+  2.1 Subsection  :tag2:tag3:
+--- End Headings ---
 ```
 
 ### Text — with links and no content
@@ -58,7 +74,13 @@ Backlinks:
     "title": "Note A",
     "path": "/org/roam/common/note_a.org",
     "filetags": [],
-    "content": "Full file content..."
+    "categories": [],
+    "content": "Full file content...",
+    "headings": [
+      {"level": 1, "title": "Introduction", "todo_state": null, "tags": ["tag1"]},
+      {"level": 2, "title": "Background", "todo_state": "DONE", "tags": []}
+    ],
+    "headings_count": 2
   },
   "neighbors": {
     "1": {
@@ -79,6 +101,11 @@ pkms get "Note A"
 ### Explore connections
 ```bash
 pkms get "Note A" --links
+```
+
+### Show heading structure
+```bash
+pkms get "Note A" --headings
 ```
 
 ### Links only

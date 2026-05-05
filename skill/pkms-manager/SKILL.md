@@ -9,18 +9,19 @@ This skill helps you work with the `pkms` CLI tool to manage an org-roam databas
 
 ## Tool location
 
-The `pkms` binary should be available. The org-roam database is at `~/Documents/org`.
+The `pkms` binary should be available. The database location is configured via `~/.config/pkms.toml` or the `--db` flag.
 
 ## Database
 
-The org-roam database org-mode notes organized as:
-- `roam/common/` — technical reference notes (681 files, heavily interlinked)
-- `roam/personal/` — personal/life notes (73 files)
-- `roam/biblio/` — book annotations
-- `roam/` — top-level roam notes
-- Root `.org` files — standalone notes, todo, inbox, etc.
+The org-roam database contains org-mode notes organized in subdirectories (varies by database — run `pkms info` to see configuration). Each note has UUID v4 `:ID:` in a property drawer, `#+title:`, and internal links via `[[id:<uuid>][description]]`. Run `pkms info` as your first command to understand the active configuration.
 
-Each note has UUID v4 `:ID:` in a property drawer, `#+title:`, and internal links via `[[id:<uuid>][description]]`.
+### Before any workflow
+
+Always start by verifying the configuration:
+```bash
+pkms info
+```
+This shows the active db_root, new_notes_dir, and whether a config file is loaded. If the database root is wrong, pass `--db /actual/path` to any command.
 
 ## Global flags
 

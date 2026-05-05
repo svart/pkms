@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "title": "ValidateOutput",
+  "type": "object",
+  "properties": {
+    "uuid": { "type": "string" },
+    "title": { "type": "string" },
+    "path": { "type": "string" },
+    "filetags": { "type": "array", "items": { "type": "string" } },
+    "categories": { "type": "array", "items": { "type": "string" } },
+    "aliases": { "type": "array", "items": { "type": "string" } },
+    "refs": { "type": "array", "items": { "type": "string" } },
+    "headings": { "type": "integer" },
+    "outgoing": { "type": "integer" },
+    "incoming": { "type": "integer" },
+    "outgoing_internal": { "type": "integer" },
+    "broken_internal": { "type": "array", "items": { "type": "string" } },
+    "broken_files": { "type": "array", "items": { "type": "string" } },
+    "backlinks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "uuid": { "type": "string" },
+          "title": { "type": "string" }
+        },
+        "required": ["uuid", "title"]
+      }
+    },
+    "issues": { "type": "array", "items": { "type": "string" } },
+    "healthy": { "type": "boolean" }
+  },
+  "required": ["uuid", "title", "path", "healthy", "issues", "backlinks", "broken_internal", "broken_files"]
+}

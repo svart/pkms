@@ -176,6 +176,7 @@ fn dispatch_mutating(
         Command::Get {
             target,
             links,
+            headings,
             no_content,
             from_stdin,
         } => commands::get::run(
@@ -184,6 +185,7 @@ fn dispatch_mutating(
             &commands::get::GetOptions {
                 target: target.as_deref(),
                 show_links: *links,
+                show_headings: *headings,
                 no_content: *no_content,
                 from_stdin: *from_stdin,
             },

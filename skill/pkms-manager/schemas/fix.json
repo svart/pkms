@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "title": "FixOutput",
+  "type": "object",
+  "properties": {
+    "broken_uuid": { "type": "string" },
+    "replacement_uuid": { "type": "string" },
+    "replacement_title": { "type": "string" },
+    "files_affected": { "type": "array", "items": { "type": "string" } },
+    "total_replacements": { "type": "integer" },
+    "applied": { "type": "boolean" }
+  },
+  "required": ["broken_uuid", "replacement_uuid", "replacement_title", "files_affected", "total_replacements", "applied"]
+}

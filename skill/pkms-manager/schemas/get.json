@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "title": "GetOutput",
+  "type": "object",
+  "properties": {
+    "node": {
+      "type": "object",
+      "properties": {
+        "uuid": { "type": "string" },
+        "title": { "type": "string" },
+        "path": { "type": "string" },
+        "filetags": { "type": "array", "items": { "type": "string" } },
+        "categories": { "type": "array", "items": { "type": "string" } },
+        "content": { "type": "string" },
+        "headings": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "level": { "type": "integer" },
+              "title": { "type": "string" },
+              "todo_state": { "type": "string" },
+              "tags": { "type": "array", "items": { "type": "string" } }
+            },
+            "required": ["level", "title", "tags"]
+          }
+        },
+        "headings_count": { "type": "integer" }
+      },
+      "required": ["uuid", "title", "path", "filetags", "categories"]
+    },
+    "neighbors": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "outgoing": {
+            "type": "array",
+            "items": { "$ref": "#/definitions/NeighborNode" }
+          },
+          "incoming": {
+            "type": "array",
+            "items": { "$ref": "#/definitions/NeighborNode" }
+          }
+        },
+        "required": ["outgoing", "incoming"]
+      }
+    }
+  },
+  "required": ["node", "neighbors"],
+  "definitions": {
+    "NeighborNode": {
+      "type": "object",
+      "properties": {
+        "uuid": { "type": "string" },
+        "title": { "type": "string" },
+        "path": { "type": "string" },
+        "filetags": { "type": "array", "items": { "type": "string" } }
+      },
+      "required": ["uuid", "title", "path", "filetags"]
+    }
+  }
+}

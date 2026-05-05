@@ -124,7 +124,7 @@ Every command's JSON (`--output-format json|ndjson`) output has a specific struc
 | `context`   | `target`, `context`, `estimated_tokens`, `depth` |
 | `validate`  | `uuid`, `title`, `path`, `filetags`, `aliases`, `headings`, `outgoing`, `incoming`, `outgoing_internal`, `broken_internal[]`, `broken_files[]`, `backlinks[]` (uuid, title), `issues[]`, `healthy` |
 | `orphans`   | `count`, `showed?`, `orphans[]` (uuid, title, path, filetags) |
-| `get`       | `node` (uuid, title, path, filetags), `neighbors` |
+| `get`       | `node` (uuid, title, path, filetags, categories, content?, headings?, headings_count?), `neighbors` |
 | `path`      | `from`, `to`, `found`, `hops`, `path[]` (uuid, title) |
 | `fix`       | `broken_uuid`, `replacement_uuid`, `replacement_title`, `files_affected[]`, `total_replacements`, `applied` |
 | `new`       | `uuid`, `filename`, `path`, `title`, `created` |
@@ -144,6 +144,7 @@ Every command's JSON (`--output-format json|ndjson`) output has a specific struc
 |-------------------|--------------------------------------------------|
 | `--output-format FMT` | Output format: `text`, `json`, or `ndjson`   |
 | `--from-stdin`    | Read UUIDs from NDJSON stdin (Get, Suggest, Validate, Context) |
+| `--headings`      | Show heading structure (Get only)                            |
 
 ## Command pipelining
 

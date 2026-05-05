@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "title": "NewOutput",
+  "type": "object",
+  "properties": {
+    "uuid": { "type": "string" },
+    "filename": { "type": "string" },
+    "path": { "type": "string" },
+    "title": { "type": "string" },
+    "created": { "type": "boolean" }
+  },
+  "required": ["uuid", "filename", "path", "title", "created"]
+}

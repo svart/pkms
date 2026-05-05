@@ -80,14 +80,15 @@ outgoing links (internal + file existence), and lists backlinks.
 ```
 pkms get <target>                          # Retrieve note (content shown by default)
 pkms get <target> --links                  # Show note with forward/backward links
+pkms get <target> --headings               # Show heading structure only
 pkms get <target> --links --no-content     # Links only, no content
-pkms path <from> <to>                      # Shortest path between notes
 pkms path <from> <to>                      # Shortest path between notes
 ```
 
-`get` traverses the link graph up to N hops, showing forward links
-and backlinks at each depth. Content is shown by default; use
-`--no-content` to suppress it.
+`get` retrieves a note's full content. Use `--links` to show forward
+and backward links at depth 1. Use `--headings` to show the heading
+structure (level, title, todo state, tags). Content is shown by default;
+use `--no-content` to suppress it.
 
 `path` finds the shortest connection through the directed graph using
 BFS, traversing both outgoing and incoming links.

@@ -154,6 +154,8 @@ pub enum Command {
         target: Option<String>,
         #[arg(long, help = "Show forward and backward links (depth 1)")]
         links: bool,
+        #[arg(long, help = "Show heading structure")]
+        headings: bool,
         #[arg(long, help = "Suppress note content output")]
         no_content: bool,
         #[arg(long, help = "Read UUIDs from NDJSON stdin")]
