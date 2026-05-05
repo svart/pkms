@@ -33,7 +33,7 @@ src/
   config.rs         # ~/.config/pkms.toml loading, merging with CLI --db flag
   discovery.rs      # Recursive .org file discovery with ignore patterns
   parser.rs         # org-mode parser: IDs, titles, filetags, aliases, refs, links, headings
-  util.rs           # Shared helpers: short_uuid, path_string
+  util.rs           # Shared helpers: path_string
   output.rs         # OutputContext: format dispatch (Text/Json/Ndjson), print helpers
   graph/            # In-memory graph module (split into submodules)
     mod.rs          # Struct defs: Node, Graph, FileScanResult; load/scan/find_node/resolve_target

@@ -3,7 +3,6 @@ use crate::config::Config;
 use crate::graph::Graph;
 use crate::output::OutputContext;
 use crate::parser::Link;
-use crate::util;
 use anyhow::Result;
 use serde::Serialize;
 
@@ -137,7 +136,7 @@ fn print_hubs(ctx: &OutputContext, graph: &Graph, limit: usize) -> Result<()> {
                     deg,
                     outgoing,
                     incoming,
-                    util::short_uuid(&node.uuid)
+                    node.uuid
                 );
             }
         }

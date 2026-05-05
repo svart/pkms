@@ -144,5 +144,5 @@ pub fn run(
 }
 
 fn print_node_short(n: &crate::graph::Node, indent: &str) {
-    println!("{}{} ({})", indent, n.title, util::short_uuid(&n.uuid));
+    println!("{}{} ({})", indent, n.title, n.uuid);
 }
