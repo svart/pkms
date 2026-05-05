@@ -1,6 +1,8 @@
+use crate::cli::OutputFormat;
 use crate::config::Config;
 use crate::graph::Graph;
 use crate::output::OutputContext;
+use crate::util;
 use anyhow::Result;
 use serde::Serialize;
 use std::fmt::Write;
@@ -19,20 +21,15 @@ pub struct ContextOptions<'a> {
     pub target: Option<&'a str>,
     pub depth: u32,
     pub max_tokens: Option<usize>,
+    pub from_stdin: bool,
 }
 
-pub fn run(
-    config: &Config,
-    ctx: &OutputContext,
-    opts: &ContextOptions,
-    db_cli: Option<&std::path::Path>,
-) -> Result<()> {
-    let target = opts
-        .target
-        .ok_or_else(|| anyhow::anyhow!("No target specified. Provide a target"))?;
-    let depth = opts.depth;
-
-    let graph = Graph::load(config, db_cli)?;
+fn build_context_output(
+    graph: &Graph,
+    target: &str,
+    depth: u32,
+    max_tokens: Option<usize>,
+) -> Result<ContextOutput> {
     let node = graph.resolve_target(target)?.clone();
     let content = std::fs::read_to_string(&node.path).unwrap_or_default();
     let neighbors = graph.get_neighbors(&node.uuid, depth);
@@ -87,7 +84,7 @@ pub fn run(
         },
     );
 
-    let rendered = if let Some(max) = opts.max_tokens {
+    let rendered = if let Some(max) = max_tokens {
         truncate_by_tokens(&rendered, max)
     } else {
         rendered
@@ -95,23 +92,69 @@ pub fn run(
 
     let final_tokens = estimate_tokens(&rendered);
 
-    if ctx.is_json() {
-        let output = ContextOutput {
-            target: node.title,
-            context: rendered,
-            estimated_tokens: final_tokens,
-            depth,
-        };
-        ctx.print_json(&output)?;
+    Ok(ContextOutput {
+        target: node.title,
+        context: rendered,
+        estimated_tokens: final_tokens,
+        depth,
+    })
+}
+
+pub fn run(
+    config: &Config,
+    ctx: &OutputContext,
+    opts: &ContextOptions,
+    db_cli: Option<&std::path::Path>,
+) -> Result<()> {
+    let targets: Vec<String> = if opts.from_stdin
+        || (opts.target.is_none() && util::is_stdin_piped())
+    {
+        util::read_stdin_ndjson()?
+    } else if let Some(t) = opts.target {
+        vec![t.to_string()]
     } else {
-        println!("{rendered}");
-        eprintln!(
-            "[context: ~{} tokens, depth: {}, max_tokens: {}]",
-            final_tokens,
-            depth,
-            opts.max_tokens
-                .map_or("unlimited".to_string(), |m| m.to_string())
+        anyhow::bail!(
+            "No target specified and no stdin pipe detected. Provide a target or use --from-stdin."
         );
+    };
+
+    let depth = opts.depth;
+    let graph = Graph::load(config, db_cli)?;
+
+    match ctx.format {
+        OutputFormat::Text => {
+            for t in &targets {
+                let output = build_context_output(&graph, t, depth, opts.max_tokens)?;
+                println!("{}", output.context);
+                eprintln!(
+                    "[context: ~{} tokens, depth: {}, max_tokens: {}]",
+                    output.estimated_tokens,
+                    depth,
+                    opts.max_tokens
+                        .map_or("unlimited".to_string(), |m| m.to_string())
+                );
+                if targets.len() > 1 {
+                    println!();
+                }
+            }
+        }
+        OutputFormat::Json => {
+            let mut all_outputs = Vec::new();
+            for t in &targets {
+                all_outputs.push(build_context_output(&graph, t, depth, opts.max_tokens)?);
+            }
+            if all_outputs.len() == 1 {
+                ctx.print_json(&all_outputs[0])?;
+            } else {
+                ctx.print_json(&all_outputs)?;
+            }
+        }
+        OutputFormat::Ndjson => {
+            for t in &targets {
+                let output = build_context_output(&graph, t, depth, opts.max_tokens)?;
+                println!("{}", serde_json::to_string(&output)?);
+            }
+        }
     }
 
     Ok(())

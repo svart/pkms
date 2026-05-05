@@ -1,7 +1,9 @@
+use crate::cli::OutputFormat;
 use crate::config::Config;
 use crate::graph::Graph;
 use crate::output::OutputContext;
 use crate::parser::Link;
+use crate::util;
 use anyhow::Result;
 use serde::Serialize;
 use std::path::Path;
@@ -32,28 +34,26 @@ pub struct BacklinkEntry {
     pub title: String,
 }
 
-fn print_validate_json(
-    ctx: &OutputContext,
-    node: crate::graph::Node,
+fn build_validate_output(
+    node: &crate::graph::Node,
     incoming: &[String],
     broken_internal: Vec<String>,
     broken_files: Vec<String>,
     backlink_entries: Vec<BacklinkEntry>,
     issues: Vec<String>,
-) -> Result<()> {
-    let incoming_len = incoming.len();
+) -> ValidateOutput {
     let healthy = issues.is_empty();
-    let output = ValidateOutput {
-        uuid: node.uuid,
-        title: node.title,
+    ValidateOutput {
+        uuid: node.uuid.clone(),
+        title: node.title.clone(),
         path: node.path.to_string_lossy().to_string(),
-        filetags: node.filetags,
-        categories: node.categories,
-        aliases: node.aliases,
-        refs: node.refs,
+        filetags: node.filetags.clone(),
+        categories: node.categories.clone(),
+        aliases: node.aliases.clone(),
+        refs: node.refs.clone(),
         headings: node.headings_count,
         outgoing: node.outgoing.len(),
-        incoming: incoming_len,
+        incoming: incoming.len(),
         outgoing_internal: node
             .outgoing
             .iter()
@@ -64,8 +64,7 @@ fn print_validate_json(
         backlinks: backlink_entries,
         issues,
         healthy,
-    };
-    ctx.print_json(&output)
+    }
 }
 
 fn print_validate_text(
@@ -149,16 +148,12 @@ fn print_validate_text(
     }
 }
 
-pub fn run(
+fn validate_one(
     config: &Config,
-    ctx: &OutputContext,
-    target: Option<&str>,
+    graph: &Graph,
+    target: &str,
     db_cli: Option<&std::path::Path>,
-) -> Result<()> {
-    let target = target.ok_or_else(|| anyhow::anyhow!("No target specified. Provide a target"))?;
-
-    let graph = Graph::load(config, db_cli)?;
-
+) -> Result<ValidateOutput> {
     let node = graph.resolve_target(target)?.clone();
     let mut issues = Vec::new();
 
@@ -240,25 +235,71 @@ pub fn run(
         issues.push(format!("{} broken file link(s)", broken_files.len()));
     }
 
-    if ctx.is_json() {
-        print_validate_json(
-            ctx,
-            node,
-            &incoming,
-            broken_internal,
-            broken_files,
-            backlink_entries,
-            issues,
-        )?;
+    Ok(build_validate_output(
+        &node,
+        &incoming,
+        broken_internal,
+        broken_files,
+        backlink_entries,
+        issues,
+    ))
+}
+
+pub fn run(
+    config: &Config,
+    ctx: &OutputContext,
+    target: Option<&str>,
+    from_stdin: bool,
+    db_cli: Option<&std::path::Path>,
+) -> Result<()> {
+    let targets: Vec<String> = if from_stdin || (target.is_none() && util::is_stdin_piped()) {
+        util::read_stdin_ndjson()?
+    } else if let Some(t) = target {
+        vec![t.to_string()]
     } else {
-        print_validate_text(
-            &node,
-            &broken_internal,
-            &broken_files,
-            &incoming,
-            &backlink_entries,
-            &issues,
+        anyhow::bail!(
+            "No target specified and no stdin pipe detected. Provide a target or use --from-stdin."
         );
+    };
+
+    let graph = Graph::load(config, db_cli)?;
+
+    match ctx.format {
+        OutputFormat::Text => {
+            for t in &targets {
+                let node = graph.resolve_target(t)?.clone();
+                let incoming = graph.backlinks.get(&node.uuid).cloned().unwrap_or_default();
+                let output = validate_one(config, &graph, t, db_cli)?;
+                print_validate_text(
+                    &node,
+                    &output.broken_internal,
+                    &output.broken_files,
+                    &incoming,
+                    &output.backlinks,
+                    &output.issues,
+                );
+                if targets.len() > 1 {
+                    println!();
+                }
+            }
+        }
+        OutputFormat::Json => {
+            let mut all_outputs = Vec::new();
+            for t in &targets {
+                all_outputs.push(validate_one(config, &graph, t, db_cli)?);
+            }
+            if all_outputs.len() == 1 {
+                ctx.print_json(&all_outputs[0])?;
+            } else {
+                ctx.print_json(&all_outputs)?;
+            }
+        }
+        OutputFormat::Ndjson => {
+            for t in &targets {
+                let output = validate_one(config, &graph, t, db_cli)?;
+                println!("{}", serde_json::to_string(&output)?);
+            }
+        }
     }
 
     Ok(())

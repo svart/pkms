@@ -51,6 +51,8 @@ pub enum Command {
     Validate {
         #[arg(help = "UUID, file path, or note title")]
         target: Option<String>,
+        #[arg(long, help = "Read UUIDs from NDJSON stdin")]
+        from_stdin: bool,
     },
     #[command(about = "Comprehensive database statistics")]
     Stats {
@@ -79,6 +81,8 @@ pub enum Command {
         depth: u32,
         #[arg(short, long, help = "Maximum tokens in output")]
         max_tokens: Option<usize>,
+        #[arg(long, help = "Read UUIDs from NDJSON stdin")]
+        from_stdin: bool,
     },
     #[command(about = "Fast UUID/title resolution without full graph load")]
     Resolve {
@@ -130,6 +134,8 @@ pub enum Command {
         limit: Option<usize>,
         #[arg(long, help = "Exclude orphan notes from suggestions")]
         exclude_orphans: bool,
+        #[arg(long, help = "Read UUIDs from NDJSON stdin")]
+        from_stdin: bool,
     },
     #[command(about = "Generate a filename and UUID for a new note")]
     New {
@@ -150,6 +156,8 @@ pub enum Command {
         links: bool,
         #[arg(long, help = "Suppress note content output")]
         no_content: bool,
+        #[arg(long, help = "Read UUIDs from NDJSON stdin")]
+        from_stdin: bool,
     },
     #[command(
         about = "Fuzzy search across note titles and content. Match sources: title, alias, ref, tag, content"

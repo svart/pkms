@@ -3,6 +3,7 @@ use crate::config::Config;
 use crate::graph::{Graph, Node};
 use crate::output::OutputContext;
 use crate::parser::Link;
+use crate::util;
 use anyhow::Result;
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
@@ -33,6 +34,8 @@ pub struct Suggestion {
     pub reasons: Vec<String>,
     pub filetags: Vec<String>,
     pub scores: HashMap<String, f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub target_uuid: Option<String>,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -321,17 +324,13 @@ fn compute_scores<'a>(
     scored
 }
 
-pub fn run(
-    config: &Config,
-    ctx: &OutputContext,
-    target: Option<&str>,
-    limit: Option<usize>,
+fn compute_suggestions_for_node(
+    graph: &Graph,
+    target: &str,
     exclude_orphans: bool,
-    db_cli: Option<&std::path::Path>,
-) -> Result<()> {
-    let target = target.ok_or_else(|| anyhow::anyhow!("No target specified. Provide a target"))?;
-
-    let graph = Graph::load(config, db_cli)?;
+    limit: Option<usize>,
+    target_uuid: Option<String>,
+) -> Result<(Node, Vec<Suggestion>, usize, Option<usize>)> {
     let node = graph
         .nodes
         .get(target)
@@ -393,7 +392,7 @@ pub fn run(
 
     let mut scored = compute_scores(
         &node,
-        &graph,
+        graph,
         &target_keywords,
         &content_keywords,
         &target_tags,
@@ -409,16 +408,6 @@ pub fn run(
         shown
     });
 
-    print_suggest_output(ctx, &node, &scored, total, showed)
-}
-
-fn print_suggest_output(
-    ctx: &OutputContext,
-    node: &crate::graph::Node,
-    scored: &[ScoredItem<'_>],
-    total: usize,
-    showed: Option<usize>,
-) -> Result<()> {
     let suggestions: Vec<Suggestion> = scored
         .iter()
         .map(|(n, s, r, fs)| Suggestion {
@@ -429,35 +418,87 @@ fn print_suggest_output(
             reasons: r.clone(),
             filetags: n.filetags.clone(),
             scores: fs.clone(),
+            target_uuid: target_uuid.clone(),
         })
         .collect();
 
+    Ok((node, suggestions, total, showed))
+}
+
+pub fn run(
+    config: &Config,
+    ctx: &OutputContext,
+    target: Option<&str>,
+    limit: Option<usize>,
+    exclude_orphans: bool,
+    from_stdin: bool,
+    db_cli: Option<&std::path::Path>,
+) -> Result<()> {
+    let targets: Vec<String> = if from_stdin || (target.is_none() && util::is_stdin_piped()) {
+        util::read_stdin_ndjson()?
+    } else if let Some(t) = target {
+        vec![t.to_string()]
+    } else {
+        anyhow::bail!(
+            "No target specified and no stdin pipe detected. Provide a target or use --from-stdin."
+        );
+    };
+
+    let graph = Graph::load(config, db_cli)?;
+
     match ctx.format {
         OutputFormat::Text => {
-            println!("Suggestions for \"{}\":", node.title);
-            println!();
-            for (i, (n, score, _reasons, fs)) in scored.iter().enumerate() {
-                println!("{:3}. {}  (score: {:.1})", i + 1, n.title, score);
-                println!("       UUID: {}", n.uuid);
-                if !fs.is_empty() {
-                    let mut factors: Vec<&str> = fs.keys().map(String::as_str).collect();
-                    factors.sort();
-                    println!("       Matches: {}", factors.join(", "));
+            for t in &targets {
+                let (node, suggestions, _total, _showed) =
+                    compute_suggestions_for_node(&graph, t, exclude_orphans, limit, None)?;
+                println!("Suggestions for \"{}\":", node.title);
+                println!();
+                for (i, s) in suggestions.iter().enumerate() {
+                    println!("{:3}. {}  (score: {:.1})", i + 1, s.title, s.score);
+                    println!("       UUID: {}", s.uuid);
+                    if !s.scores.is_empty() {
+                        let mut factors: Vec<&str> = s.scores.keys().map(String::as_str).collect();
+                        factors.sort();
+                        println!("       Matches: {}", factors.join(", "));
+                    }
+                }
+                if targets.len() > 1 {
+                    println!();
                 }
             }
         }
         OutputFormat::Json => {
-            let output = SuggestOutput {
-                target: node.title.clone(),
-                target_uuid: node.uuid.clone(),
-                total,
-                showed,
-                suggestions,
-            };
-            ctx.print_json(&output)?;
+            let mut all_outputs = Vec::new();
+            for t in &targets {
+                let (node, suggestions, total, showed) =
+                    compute_suggestions_for_node(&graph, t, exclude_orphans, limit, None)?;
+                all_outputs.push(SuggestOutput {
+                    target: node.title.clone(),
+                    target_uuid: node.uuid.clone(),
+                    total,
+                    showed,
+                    suggestions,
+                });
+            }
+            if all_outputs.len() == 1 {
+                ctx.print_json(&all_outputs[0])?;
+            } else {
+                ctx.print_json(&all_outputs)?;
+            }
         }
         OutputFormat::Ndjson => {
-            ctx.print_ndjson(&suggestions)?;
+            for t in &targets {
+                let (_node, suggestions, _total, _showed) = compute_suggestions_for_node(
+                    &graph,
+                    t,
+                    exclude_orphans,
+                    limit,
+                    Some(t.clone()),
+                )?;
+                for s in &suggestions {
+                    println!("{}", serde_json::to_string(s)?);
+                }
+            }
         }
     }
 

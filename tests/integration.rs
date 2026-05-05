@@ -29,6 +29,41 @@ fn run_json(args: &[&str]) -> (serde_json::Value, ExitStatus) {
     (v, status)
 }
 
+fn run_pipe(producer_args: &[&str], consumer_args: &[&str]) -> (String, String, ExitStatus) {
+    let producer_output = Command::new(pkms_binary())
+        .args(producer_args)
+        .output()
+        .expect("Failed to run producer");
+    assert!(
+        producer_output.status.success(),
+        "Producer failed:\nargs: {:?}\nstdout: {}\nstderr: {}",
+        producer_args,
+        String::from_utf8_lossy(&producer_output.stdout),
+        String::from_utf8_lossy(&producer_output.stderr),
+    );
+    let mut consumer = Command::new(pkms_binary());
+    consumer.args(consumer_args);
+    consumer
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped());
+    let mut child = consumer.spawn().expect("Failed to spawn consumer");
+    let mut stdin = child.stdin.take().expect("Failed to get consumer stdin");
+    use std::io::Write;
+    stdin
+        .write_all(&producer_output.stdout)
+        .expect("Failed to write to consumer stdin");
+    drop(stdin);
+    let output = child
+        .wait_with_output()
+        .expect("Failed to wait for consumer");
+    (
+        String::from_utf8_lossy(&output.stdout).to_string(),
+        String::from_utf8_lossy(&output.stderr).to_string(),
+        output.status,
+    )
+}
+
 fn _assert_success(status: ExitStatus, args: &[&str], stdout: &str, stderr: &str) {
     assert!(
         status.success(),
@@ -1605,4 +1640,249 @@ fn test_snapshot_resolve() {
     let (stdout, _stderr, _status) =
         run(&["--db", root.to_str().unwrap(), "resolve", "--title", "Note"]);
     insta::assert_snapshot!("resolve_query_human", normalize_snapshot(&stdout, &root));
+}
+
+// ----------------------------------------------------------------
+// PIPE TESTS
+// ----------------------------------------------------------------
+fn run_pipe_ndjson(producer_args: &[&str], consumer_args: &[&str]) -> (String, ExitStatus) {
+    let (stdout, _stderr, status) = run_pipe(producer_args, consumer_args);
+    (stdout, status)
+}
+
+#[test]
+fn test_pipe_query_to_get() {
+    let (_dir, root) = setup_db();
+    let db = root.to_str().unwrap();
+    let (stdout, status) = run_pipe_ndjson(
+        &["--db", db, "--output-format", "ndjson", "query", "Note"],
+        &[
+            "--db",
+            db,
+            "--output-format",
+            "ndjson",
+            "get",
+            "--links",
+            "--from-stdin",
+        ],
+    );
+    assert!(
+        status.success(),
+        "pipe query|get failed:\nstdout: {}\n",
+        stdout
+    );
+    assert!(!stdout.is_empty(), "expected output from pipe");
+    for line in stdout.lines() {
+        let v: serde_json::Value = serde_json::from_str(line)
+            .unwrap_or_else(|e| panic!("Bad JSON line '{}': {}", line, e));
+        assert!(
+            v.get("node").is_some(),
+            "expected get output, got: {}",
+            line
+        );
+    }
+}
+
+#[test]
+fn test_pipe_resolve_to_get() {
+    let (_dir, root) = setup_db();
+    let db = root.to_str().unwrap();
+    let (stdout, status) = run_pipe_ndjson(
+        &[
+            "--db",
+            db,
+            "--output-format",
+            "ndjson",
+            "resolve",
+            "--title",
+            "Note",
+        ],
+        &[
+            "--db",
+            db,
+            "--output-format",
+            "ndjson",
+            "get",
+            "--links",
+            "--from-stdin",
+        ],
+    );
+    assert!(
+        status.success(),
+        "pipe resolve|get failed:\nstdout: {}\n",
+        stdout
+    );
+    assert!(!stdout.is_empty(), "expected output from pipe");
+    for line in stdout.lines() {
+        let v: serde_json::Value = serde_json::from_str(line)
+            .unwrap_or_else(|e| panic!("Bad JSON line '{}': {}", line, e));
+        assert!(
+            v.get("node").is_some(),
+            "expected get output, got: {}",
+            line
+        );
+    }
+}
+
+#[test]
+fn test_pipe_orphans_to_get() {
+    let (_dir, root) = setup_db();
+    let db = root.to_str().unwrap();
+    let (stdout, status) = run_pipe_ndjson(
+        &["--db", db, "--output-format", "ndjson", "orphans"],
+        &[
+            "--db",
+            db,
+            "--output-format",
+            "ndjson",
+            "get",
+            "--no-content",
+            "--from-stdin",
+        ],
+    );
+    assert!(
+        status.success(),
+        "pipe orphans|get failed:\nstdout: {}\n",
+        stdout
+    );
+    assert!(!stdout.is_empty(), "expected output from pipe");
+    for line in stdout.lines() {
+        let v: serde_json::Value = serde_json::from_str(line)
+            .unwrap_or_else(|e| panic!("Bad JSON line '{}': {}", line, e));
+        assert!(
+            v.get("node").is_some(),
+            "expected get output, got: {}",
+            line
+        );
+    }
+}
+
+#[test]
+fn test_pipe_resolve_to_suggest() {
+    let (_dir, root) = setup_db();
+    let db = root.to_str().unwrap();
+    let (stdout, status) = run_pipe_ndjson(
+        &[
+            "--db",
+            db,
+            "--output-format",
+            "ndjson",
+            "resolve",
+            "--title",
+            "Note",
+        ],
+        &[
+            "--db",
+            db,
+            "--output-format",
+            "ndjson",
+            "suggest",
+            "--from-stdin",
+            "--limit",
+            "1",
+        ],
+    );
+    assert!(
+        status.success(),
+        "pipe resolve|suggest failed:\nstdout: {}\n",
+        stdout
+    );
+    assert!(!stdout.is_empty(), "expected output from pipe");
+    for line in stdout.lines() {
+        let v: serde_json::Value = serde_json::from_str(line)
+            .unwrap_or_else(|e| panic!("Bad JSON line '{}': {}", line, e));
+        assert!(
+            v.get("uuid").is_some(),
+            "expected suggestion, got: {}",
+            line
+        );
+        assert!(v.get("score").is_some(), "expected score, got: {}", line);
+    }
+}
+
+#[test]
+fn test_pipe_resolve_to_validate() {
+    let (_dir, root) = setup_db();
+    let db = root.to_str().unwrap();
+    let (stdout, status) = run_pipe_ndjson(
+        &[
+            "--db",
+            db,
+            "--output-format",
+            "ndjson",
+            "resolve",
+            "--title",
+            "Note",
+        ],
+        &[
+            "--db",
+            db,
+            "--output-format",
+            "ndjson",
+            "validate",
+            "--from-stdin",
+        ],
+    );
+    assert!(
+        status.success(),
+        "pipe resolve|validate failed:\nstdout: {}\n",
+        stdout
+    );
+    assert!(!stdout.is_empty(), "expected output from pipe");
+    for line in stdout.lines() {
+        let v: serde_json::Value = serde_json::from_str(line)
+            .unwrap_or_else(|e| panic!("Bad JSON line '{}': {}", line, e));
+        assert!(
+            v.get("uuid").is_some(),
+            "expected validate output, got: {}",
+            line
+        );
+        assert!(
+            v.get("healthy").is_some(),
+            "expected healthy field, got: {}",
+            line
+        );
+    }
+}
+
+#[test]
+fn test_pipe_suggest_to_get() {
+    let (_dir, root) = setup_db();
+    let db = root.to_str().unwrap();
+    let (stdout, status) = run_pipe_ndjson(
+        &[
+            "--db",
+            db,
+            "--output-format",
+            "ndjson",
+            "suggest",
+            "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa",
+            "--limit",
+            "1",
+        ],
+        &[
+            "--db",
+            db,
+            "--output-format",
+            "ndjson",
+            "get",
+            "--no-content",
+            "--from-stdin",
+        ],
+    );
+    assert!(
+        status.success(),
+        "pipe suggest|get failed:\nstdout: {}\n",
+        stdout
+    );
+    assert!(!stdout.is_empty(), "expected output from pipe");
+    for line in stdout.lines() {
+        let v: serde_json::Value = serde_json::from_str(line)
+            .unwrap_or_else(|e| panic!("Bad JSON line '{}': {}", line, e));
+        assert!(
+            v.get("node").is_some(),
+            "expected get output, got: {}",
+            line
+        );
+    }
 }

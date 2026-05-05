@@ -8,7 +8,7 @@ After changes, run these commands **in this strict order**:
 cargo fmt --check              # 1. Check formatting (fail if unformatted)
 cargo clippy -- -D warnings    # 2. Lint with clippy (deny all warnings)
 cargo build                    # 3. Build the binary
-cargo test                     # 4. Run all unit + integration tests (112+ tests, ~1s)
+cargo test                     # 4. Run all unit + integration tests (121+ tests, ~1s)
 cargo test --test integration  # 5. Integration tests only (mock DB)
 target/debug/pkms --help       # 6. Verify CLI works
 ```
@@ -33,7 +33,7 @@ src/
   config.rs         # ~/.config/pkms.toml loading, merging with CLI --db flag
   discovery.rs      # Recursive .org file discovery with ignore patterns
   parser.rs         # org-mode parser: IDs, titles, filetags, aliases, refs, links, headings
-  util.rs           # Shared helpers: path_string
+  util.rs           # Shared helpers: path_string, is_stdin_piped, read_stdin_ndjson
   output.rs         # OutputContext: format dispatch (Text/Json/Ndjson), print helpers
   graph/            # In-memory graph module (split into submodules)
     mod.rs          # Struct defs: Node, Graph, FileScanResult; load/scan/find_node/resolve_target
@@ -58,7 +58,7 @@ src/
     new.rs          # Generate UUID + filename for new note
     context.rs      # Build AI context window with token budget
 tests/
-  integration.rs    # 65 integration tests with temp mock DB
+  integration.rs    # 72 integration tests with temp mock DB
 ```
 
 ## How to add a new command
@@ -119,7 +119,7 @@ Every command's JSON (`--output-format json|ndjson`) output has a specific struc
 | `check`     | `db_root`, `stats`, `duplicates`, `broken_links`, `broken_file_links`, `broken_attachment_links`, `failed_files`, `healthy` |
 | `stats`     | `db_root`, `total_notes`, `total_links`, `internal_links`, `file_links`, `url_links`, `avg_links_per_note`, `orphans`, `broken_links`, `disk_size_bytes`, `directories[]`, `recent_notes[]` |
 | `resolve`   | `query`, `total`, `showed?`, `results[]` (uuid, title, path, filetags, aliases) |
-| `suggest`   | `target`, `target_uuid`, `total`, `showed?`, `suggestions[]` (uuid, title, score, scores{}, reasons[]) |
+| `suggest`   | `target`, `target_uuid`, `total`, `showed?`, `suggestions[]` (uuid, title, score, scores{}, reasons[], target_uuid) |
 | `query`     | `query`, `total_results`, `showed?`, `results[]` (uuid, title, score, matches[], content_matches[]) |
 | `context`   | `target`, `context`, `estimated_tokens`, `depth` |
 | `validate`  | `uuid`, `title`, `path`, `filetags`, `aliases`, `headings`, `outgoing`, `incoming`, `outgoing_internal`, `broken_internal[]`, `broken_files[]`, `backlinks[]` (uuid, title), `issues[]`, `healthy` |
@@ -143,6 +143,25 @@ Every command's JSON (`--output-format json|ndjson`) output has a specific struc
 | Flag              | Description                                      |
 |-------------------|--------------------------------------------------|
 | `--output-format FMT` | Output format: `text`, `json`, or `ndjson`   |
+| `--from-stdin`    | Read UUIDs from NDJSON stdin (Get, Suggest, Validate, Context) |
+
+## Command pipelining
+
+Commands can be chained via Unix pipes using NDJSON:
+
+```
+pkms query "topic" --output-format ndjson | pkms get --links
+pkms resolve --tags "ai" --output-format ndjson | pkms get --links
+pkms stats --hubs --output-format ndjson | pkms get --links --no-content
+```
+
+Consumer commands (`get`, `suggest`, `validate`, `context`) accept `--from-stdin`
+to read UUIDs from stdin. They auto-detect piped stdin when no target is given.
+
+NDJSON output emits one JSON object per line (each with a `uuid` field).
+
+- Producers: `resolve`, `query`, `orphans`, `stats --hubs`, `suggest`
+- Consumers: `get`, `suggest`, `validate`, `context`
 
 ## Related
 

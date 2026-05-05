@@ -70,8 +70,8 @@ fn dispatch_simple(
             *attachment_links,
             *id_links,
         )?,
-        Command::Validate { target } => {
-            commands::validate::run(cfg, ctx, target.as_deref(), cli.db.as_deref())
+        Command::Validate { target, from_stdin } => {
+            commands::validate::run(cfg, ctx, target.as_deref(), *from_stdin, cli.db.as_deref())
                 .map(|()| ExitCode::SUCCESS)?
         }
         Command::Stats { days, hubs, tags } => {
@@ -105,6 +105,7 @@ fn dispatch_mutating(
             target,
             depth,
             max_tokens,
+            from_stdin,
         } => commands::context::run(
             cfg,
             ctx,
@@ -112,6 +113,7 @@ fn dispatch_mutating(
                 target: target.as_deref(),
                 depth: *depth,
                 max_tokens: *max_tokens,
+                from_stdin: *from_stdin,
             },
             cli.db.as_deref(),
         )
@@ -145,12 +147,14 @@ fn dispatch_mutating(
             target,
             limit,
             exclude_orphans,
+            from_stdin,
         } => commands::suggest::run(
             cfg,
             ctx,
             target.as_deref(),
             *limit,
             *exclude_orphans,
+            *from_stdin,
             cli.db.as_deref(),
         )
         .map(|()| ExitCode::SUCCESS)?,
@@ -173,6 +177,7 @@ fn dispatch_mutating(
             target,
             links,
             no_content,
+            from_stdin,
         } => commands::get::run(
             cfg,
             ctx,
@@ -180,6 +185,7 @@ fn dispatch_mutating(
                 target: target.as_deref(),
                 show_links: *links,
                 no_content: *no_content,
+                from_stdin: *from_stdin,
             },
             cli.db.as_deref(),
         )
