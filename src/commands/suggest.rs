@@ -1,3 +1,4 @@
+use crate::cli::OutputFormat;
 use crate::config::Config;
 use crate::graph::{Graph, Node};
 use crate::output::OutputContext;
@@ -418,38 +419,45 @@ fn print_suggest_output(
     total: usize,
     showed: Option<usize>,
 ) -> Result<()> {
-    if ctx.is_json() {
-        let suggestions: Vec<Suggestion> = scored
-            .iter()
-            .map(|(n, s, r, fs)| Suggestion {
-                uuid: n.uuid.clone(),
-                title: n.title.clone(),
-                path: n.path.to_string_lossy().to_string(),
-                score: *s,
-                reasons: r.clone(),
-                filetags: n.filetags.clone(),
-                scores: fs.clone(),
-            })
-            .collect();
-        let output = SuggestOutput {
-            target: node.title.clone(),
-            target_uuid: node.uuid.clone(),
-            total,
-            showed,
-            suggestions,
-        };
-        ctx.print_json(&output)?;
-    } else {
-        println!("Suggestions for \"{}\":", node.title);
-        println!();
-        for (i, (n, score, _reasons, fs)) in scored.iter().enumerate() {
-            println!("{:3}. {}  (score: {:.1})", i + 1, n.title, score);
-            println!("       UUID: {}", n.uuid);
-            if !fs.is_empty() {
-                let mut factors: Vec<&str> = fs.keys().map(String::as_str).collect();
-                factors.sort();
-                println!("       Matches: {}", factors.join(", "));
+    let suggestions: Vec<Suggestion> = scored
+        .iter()
+        .map(|(n, s, r, fs)| Suggestion {
+            uuid: n.uuid.clone(),
+            title: n.title.clone(),
+            path: n.path.to_string_lossy().to_string(),
+            score: *s,
+            reasons: r.clone(),
+            filetags: n.filetags.clone(),
+            scores: fs.clone(),
+        })
+        .collect();
+
+    match ctx.format {
+        OutputFormat::Text => {
+            println!("Suggestions for \"{}\":", node.title);
+            println!();
+            for (i, (n, score, _reasons, fs)) in scored.iter().enumerate() {
+                println!("{:3}. {}  (score: {:.1})", i + 1, n.title, score);
+                println!("       UUID: {}", n.uuid);
+                if !fs.is_empty() {
+                    let mut factors: Vec<&str> = fs.keys().map(String::as_str).collect();
+                    factors.sort();
+                    println!("       Matches: {}", factors.join(", "));
+                }
             }
+        }
+        OutputFormat::Json => {
+            let output = SuggestOutput {
+                target: node.title.clone(),
+                target_uuid: node.uuid.clone(),
+                total,
+                showed,
+                suggestions,
+            };
+            ctx.print_json(&output)?;
+        }
+        OutputFormat::Ndjson => {
+            ctx.print_ndjson(&suggestions)?;
         }
     }
 
