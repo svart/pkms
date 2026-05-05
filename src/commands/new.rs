@@ -28,7 +28,7 @@ pub fn run(
 
     let uuid = uuid::Uuid::new_v4().to_string();
     let slug = title_to_slug(title);
-    let now = chrono::Utc::now();
+    let now = chrono::Local::now();
     let timestamp = now.format("%Y%m%d%H%M%S").to_string();
     let filename = format!("{timestamp}-{slug}.org");
     let path = new_notes_dir.join(&filename);
