@@ -14,6 +14,7 @@ pub struct HeadingJson {
     pub title: String,
     pub todo_state: Option<String>,
     pub tags: Vec<String>,
+    pub raw: String,
 }
 
 fn parse_headings_from_content(content: &str) -> Vec<HeadingJson> {
@@ -40,6 +41,7 @@ fn parse_headings_from_content(content: &str) -> Vec<HeadingJson> {
                     title: heading_title,
                     todo_state,
                     tags,
+                    raw: line.to_string(),
                 })
             } else {
                 None
@@ -130,17 +132,19 @@ fn process_one_get(
         HashMap::new()
     };
 
+    let head_content = if show_headings {
+        std::fs::read_to_string(&node.path).ok()
+    } else {
+        None
+    };
+
     let node_content = if no_content {
         None
     } else {
-        std::fs::read_to_string(&node.path).ok()
+        head_content.clone()
     };
 
-    let headings = if show_headings {
-        node_content.as_deref().map(parse_headings_from_content)
-    } else {
-        None
-    };
+    let headings = head_content.as_deref().map(parse_headings_from_content);
 
     let node_json = NodeJson::from_node(&node, node_content.as_deref(), headings);
 
@@ -164,10 +168,12 @@ fn print_one_get_text(
         None
     };
 
+    let full_content = std::fs::read_to_string(&node.path).ok();
+
     let node_content = if no_content {
         None
     } else {
-        std::fs::read_to_string(&node.path).ok()
+        full_content.clone()
     };
 
     println!("Note: {}", node.title);
@@ -180,23 +186,13 @@ fn print_one_get_text(
         println!("  Cats:   {}", node.categories.join(", "));
     }
 
-    if show_headings && let Some(ref content) = node_content {
+    if show_headings && let Some(ref content) = full_content {
         let headings = parse_headings_from_content(content);
         if !headings.is_empty() {
             println!();
             println!("--- Headings ---");
             for h in &headings {
-                let indent = "  ".repeat(h.level.saturating_sub(1));
-                let todo = h
-                    .todo_state
-                    .as_ref()
-                    .map_or(String::new(), |s| format!(" [{s}]"));
-                let tags = if h.tags.is_empty() {
-                    String::new()
-                } else {
-                    format!("  :{}:", h.tags.join(":"))
-                };
-                println!("{indent}{}.{todo}{tags}", h.title);
+                println!("{}", h.raw);
             }
             println!("--- End Headings ---");
         }

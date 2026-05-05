@@ -77,8 +77,8 @@ Backlinks:
     "categories": [],
     "content": "Full file content...",
     "headings": [
-      {"level": 1, "title": "Introduction", "todo_state": null, "tags": ["tag1"]},
-      {"level": 2, "title": "Background", "todo_state": "DONE", "tags": []}
+      {"level": 1, "title": "Introduction", "todo_state": null, "tags": ["tag1"], "raw": "* Introduction     :tag1:"},
+      {"level": 2, "title": "Background", "todo_state": "DONE", "tags": [], "raw": "** DONE Background"}
     ],
     "headings_count": 2
   },
