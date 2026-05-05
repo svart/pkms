@@ -8,6 +8,8 @@ use serde::Serialize;
 #[derive(Serialize)]
 pub struct OrphansOutput {
     pub count: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub showed: Option<usize>,
     pub orphans: Vec<OrphanEntry>,
 }
 
@@ -20,9 +22,21 @@ pub struct OrphanEntry {
     pub categories: Vec<String>,
 }
 
-pub fn run(config: &Config, ctx: &OutputContext, db_cli: Option<&std::path::Path>) -> Result<()> {
+pub fn run(
+    config: &Config,
+    ctx: &OutputContext,
+    limit: Option<usize>,
+    db_cli: Option<&std::path::Path>,
+) -> Result<()> {
     let graph = Graph::load(config, db_cli)?;
-    let orphans = graph.orphan_nodes();
+    let mut orphans = graph.orphan_nodes();
+
+    let count = orphans.len();
+    let showed = limit.map(|l| {
+        let shown = orphans.len().min(l);
+        orphans.truncate(l);
+        shown
+    });
 
     let entries: Vec<OrphanEntry> = orphans
         .iter()
@@ -37,14 +51,19 @@ pub fn run(config: &Config, ctx: &OutputContext, db_cli: Option<&std::path::Path
 
     match ctx.format {
         crate::cli::OutputFormat::Text => {
-            println!("Orphan notes ({}):", orphans.len());
+            if count == entries.len() {
+                println!("Orphan notes ({}):", count);
+            } else {
+                println!("Orphan notes ({}), showed: {}:", count, entries.len());
+            }
             for n in &orphans {
                 println!("  {} ({})", n.title, n.uuid);
             }
         }
         crate::cli::OutputFormat::Json => {
             ctx.print_json(&OrphansOutput {
-                count: orphans.len(),
+                count,
+                showed,
                 orphans: entries,
             })?;
         }

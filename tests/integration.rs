@@ -908,7 +908,11 @@ fn test_query_limit() {
         "1",
     ]);
     assert!(status.success());
-    assert_eq!(v["total_results"], 1);
+    assert!(
+        v["total_results"].as_u64().unwrap() > 1,
+        "total should reflect all matches"
+    );
+    assert_eq!(v["showed"], 1);
 }
 
 // ----------------------------------------------------------------

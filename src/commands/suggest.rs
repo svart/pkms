@@ -17,6 +17,9 @@ type ScoredItem<'a> = (
 pub struct SuggestOutput {
     pub target: String,
     pub target_uuid: String,
+    pub total: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub showed: Option<usize>,
     pub suggestions: Vec<Suggestion>,
 }
 
@@ -328,8 +331,6 @@ pub fn run(
     let target = target.ok_or_else(|| anyhow::anyhow!("No target specified. Provide a target"))?;
 
     let graph = Graph::load(config, db_cli)?;
-    let limit = limit.unwrap_or(10);
-
     let node = graph
         .nodes
         .get(target)
@@ -400,15 +401,22 @@ pub fn run(
         exclude_orphans,
     );
     scored.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
-    scored.truncate(limit);
+    let total = scored.len();
+    let showed = limit.map(|l| {
+        let shown = scored.len().min(l);
+        scored.truncate(l);
+        shown
+    });
 
-    print_suggest_output(ctx, &node, &scored)
+    print_suggest_output(ctx, &node, &scored, total, showed)
 }
 
 fn print_suggest_output(
     ctx: &OutputContext,
     node: &crate::graph::Node,
     scored: &[ScoredItem<'_>],
+    total: usize,
+    showed: Option<usize>,
 ) -> Result<()> {
     if ctx.is_json() {
         let suggestions: Vec<Suggestion> = scored
@@ -426,6 +434,8 @@ fn print_suggest_output(
         let output = SuggestOutput {
             target: node.title.clone(),
             target_uuid: node.uuid.clone(),
+            total,
+            showed,
             suggestions,
         };
         ctx.print_json(&output)?;

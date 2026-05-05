@@ -10,6 +10,8 @@ use serde::Serialize;
 pub struct QueryOutput {
     pub query: String,
     pub total_results: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub showed: Option<usize>,
     pub results: Vec<QueryResultEntry>,
 }
 
@@ -110,11 +112,14 @@ pub fn run(
             .unwrap_or(std::cmp::Ordering::Equal)
     });
 
-    if let Some(limit) = limit {
-        combined.truncate(limit);
-    }
+    let total_results = combined.len();
+    let showed = limit.map(|l| {
+        let shown = combined.len().min(l);
+        combined.truncate(l);
+        shown
+    });
 
-    print_query_output(ctx, terms, combined)?;
+    print_query_output(ctx, terms, combined, total_results, showed)?;
 
     Ok(())
 }
@@ -123,11 +128,17 @@ fn print_query_output(
     ctx: &OutputContext,
     terms: &str,
     results: Vec<QueryResultEntry>,
+    total_results: usize,
+    showed: Option<usize>,
 ) -> Result<()> {
     match ctx.format {
         OutputFormat::Text => {
             println!("Query: {terms}");
-            println!("Results: {}", results.len());
+            if total_results == results.len() {
+                println!("Results: {}", results.len());
+            } else {
+                println!("Results: {}, showed: {}", total_results, results.len());
+            }
             println!();
             for (i, r) in results.iter().enumerate() {
                 println!("{:3}. {}  (score: {:.1})", i + 1, r.title, r.score);
@@ -148,7 +159,8 @@ fn print_query_output(
         OutputFormat::Json => {
             ctx.print_json(&QueryOutput {
                 query: terms.to_string(),
-                total_results: results.len(),
+                total_results,
+                showed,
                 results,
             })?;
         }

@@ -67,7 +67,10 @@ pub enum Command {
         tags: bool,
     },
     #[command(about = "List orphan notes (no incoming or outgoing links)")]
-    Orphans,
+    Orphans {
+        #[arg(long, help = "Maximum results (default: unlimited)")]
+        limit: Option<usize>,
+    },
     #[command(about = "Build a context window for AI consumption")]
     Context {
         #[arg(help = "UUID, file path, or note title")]
@@ -97,7 +100,7 @@ pub enum Command {
             required_unless_present_any = ["uuid", "title"]
         )]
         tags: Option<String>,
-        #[arg(long, default_value = "30", help = "Maximum results")]
+        #[arg(long, help = "Maximum results")]
         limit: Option<usize>,
         #[arg(
             long,
@@ -123,7 +126,7 @@ pub enum Command {
     Suggest {
         #[arg(help = "UUID of the target note")]
         target: Option<String>,
-        #[arg(short, long, default_value = "10", help = "Number of suggestions")]
+        #[arg(short, long, help = "Number of suggestions (default: unlimited)")]
         limit: Option<usize>,
         #[arg(long, help = "Exclude orphan notes from suggestions")]
         exclude_orphans: bool,

@@ -25,6 +25,8 @@ pub struct ResolvedNote {
 pub struct ResolveOutput {
     pub query: String,
     pub total: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub showed: Option<usize>,
     pub results: Vec<ResolvedNote>,
 }
 
@@ -140,7 +142,6 @@ pub fn run(
     let ignore = config.resolve_ignore_patterns();
     let notes = scan_files(&db_root, &ignore);
 
-    let limit = opts.limit.unwrap_or(30);
     let uuid_query = opts.uuid.map(str::to_lowercase);
     let title_query = opts.title.map(str::to_lowercase);
 
@@ -180,13 +181,26 @@ pub fn run(
         .collect();
 
     let total = all.len();
-    let shown = all.into_iter().take(limit).collect::<Vec<_>>();
+    let (shown, showed) = if let Some(l) = opts.limit {
+        let shown: Vec<_> = all.into_iter().take(l).collect();
+        let showed = shown.len();
+        (shown, Some(showed))
+    } else {
+        (all, None)
+    };
 
     let field_set: Option<HashSet<String>> = opts
         .fields
         .map(|f| f.split(',').map(|s| s.trim().to_string()).collect());
 
-    print_resolve_output(ctx, &shown, total, field_set.as_ref())?;
+    let query_str = opts
+        .title
+        .or(opts.uuid)
+        .or(opts.tags)
+        .unwrap_or_default()
+        .to_string();
+
+    print_resolve_output(ctx, &shown, total, showed, field_set.as_ref(), &query_str)?;
 
     Ok(())
 }
@@ -195,7 +209,9 @@ fn print_resolve_output(
     ctx: &OutputContext,
     results: &[ResolvedNote],
     total: usize,
+    showed: Option<usize>,
     field_set: Option<&HashSet<String>>,
+    query_str: &str,
 ) -> Result<()> {
     match ctx.format {
         OutputFormat::Text => {
@@ -238,8 +254,9 @@ fn print_resolve_output(
         }
         OutputFormat::Json => {
             let output = ResolveOutput {
-                query: String::new(),
-                total: results.len(),
+                query: query_str.to_string(),
+                total,
+                showed,
                 results: results.to_vec(),
             };
             ctx.print_json(&output)?;

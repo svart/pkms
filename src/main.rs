@@ -78,9 +78,8 @@ fn dispatch_simple(
             commands::stats::run(cfg, ctx, *days, *hubs, *tags, cli.db.as_deref())
                 .map(|()| ExitCode::SUCCESS)?
         }
-        Command::Orphans => {
-            commands::orphans::run(cfg, ctx, cli.db.as_deref()).map(|()| ExitCode::SUCCESS)?
-        }
+        Command::Orphans { limit } => commands::orphans::run(cfg, ctx, *limit, cli.db.as_deref())
+            .map(|()| ExitCode::SUCCESS)?,
         Command::Info => {
             commands::info::run(cfg, ctx, cli.db.as_deref()).map(|()| ExitCode::SUCCESS)?
         }

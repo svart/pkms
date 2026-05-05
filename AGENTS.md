@@ -118,12 +118,12 @@ Every command's JSON (`--output-format json|ndjson`) output has a specific struc
 |-------------|----------------|
 | `check`     | `db_root`, `stats`, `duplicates`, `broken_links`, `broken_file_links`, `broken_attachment_links`, `failed_files`, `healthy` |
 | `stats`     | `db_root`, `total_notes`, `total_links`, `internal_links`, `file_links`, `url_links`, `avg_links_per_note`, `orphans`, `broken_links`, `disk_size_bytes`, `directories[]`, `recent_notes[]` |
-| `resolve`   | `query`, `total`, `results[]` (uuid, title, path, filetags, aliases) |
-| `suggest`   | `target`, `target_uuid`, `suggestions[]` (uuid, title, score, scores{}, reasons[]) |
-| `query`     | `query`, `total_results`, `results[]` (uuid, title, score, matches[], content_matches[]) |
+| `resolve`   | `query`, `total`, `showed?`, `results[]` (uuid, title, path, filetags, aliases) |
+| `suggest`   | `target`, `target_uuid`, `total`, `showed?`, `suggestions[]` (uuid, title, score, scores{}, reasons[]) |
+| `query`     | `query`, `total_results`, `showed?`, `results[]` (uuid, title, score, matches[], content_matches[]) |
 | `context`   | `target`, `context`, `estimated_tokens`, `depth` |
 | `validate`  | `uuid`, `title`, `path`, `filetags`, `aliases`, `headings`, `outgoing`, `incoming`, `outgoing_internal`, `broken_internal[]`, `broken_files[]`, `backlinks[]` (uuid, title), `issues[]`, `healthy` |
-| `orphans`   | `count`, `orphans[]` (uuid, title, path, filetags) |
+| `orphans`   | `count`, `showed?`, `orphans[]` (uuid, title, path, filetags) |
 | `get`       | `node` (uuid, title, path, filetags), `neighbors` |
 | `path`      | `from`, `to`, `found`, `hops`, `path[]` (uuid, title) |
 | `fix`       | `broken_uuid`, `replacement_uuid`, `replacement_title`, `files_affected[]`, `total_replacements`, `applied` |
