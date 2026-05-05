@@ -111,6 +111,41 @@ Show the resolved configuration: loaded config file, effective db_root, new note
 8. `validate <uuid>` each changed note to confirm no broken links.
 9. `check` to verify overall database health.. `check` to verify overall health.
 
-### Performance Notes
+## Command Pipelining
+
+Commands can be chained via Unix pipes using NDJSON. Producers emit per-item JSON lines
+with a `uuid` field; consumers read them from stdin via automatic pipe detection or `--from-stdin`.
+
+**Producers** (emit with `--output-format ndjson`): `resolve`, `query`, `orphans`, `stats --hubs`, `suggest`
+
+**Consumers** (read via pipe or `--from-stdin`): `get`, `suggest`, `validate`, `context`
+
+### Key pipelines
+
+```bash
+# Search → deep dive (core research)
+pkms query "distributed systems" --output-format ndjson | pkms get --links
+
+# Tag browse → examine subarea
+pkms resolve --tags "ai" --output-format ndjson | pkms get --links
+
+# Orphans → inspect for linking
+pkms orphans --output-format ndjson | pkms get --links --no-content
+
+# Search → suggest → explore (triple pipeline)
+pkms query "concurrency" --output-format ndjson |
+  pkms suggest --output-format ndjson |
+  pkms get --links
+
+# Tag group → cross-pollinate suggestions
+pkms resolve --tags "ml,rust" --output-format ndjson | pkms suggest
+
+# Batch validate search results
+pkms query "foo" --output-format ndjson | pkms validate
+```
+
+See [Pipelining reference](references/pipelining.md) for the full catalog of examples.
+
+## Performance Notes
 
 All subcommands are very fast even on large databases.
