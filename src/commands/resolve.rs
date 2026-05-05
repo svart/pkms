@@ -145,7 +145,7 @@ pub fn run(
     let uuid_query = opts.uuid.map(str::to_lowercase);
     let title_query = opts.title.map(str::to_lowercase);
 
-    let all: Vec<ResolvedNote> = notes
+    let mut all: Vec<ResolvedNote> = notes
         .into_iter()
         .filter(|n| {
             if let Some(ref uq) = uuid_query
@@ -179,6 +179,8 @@ pub fn run(
             true
         })
         .collect();
+
+    all.sort_by(|a, b| a.title.cmp(&b.title).then_with(|| a.uuid.cmp(&b.uuid)));
 
     let total = all.len();
     let (shown, showed) = if let Some(l) = opts.limit {
