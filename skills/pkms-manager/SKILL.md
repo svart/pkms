@@ -37,9 +37,9 @@ These flags work with every command:
 Each command has a detailed reference file in [`references/`](references/).
 
 ### `check` — [Full reference](references/check.md)
-Full database health scan. 
-Validates all notes, detects broken internal/file/attachment links, duplicate UUIDs/titles, missing titles, and parse errors. 
-Returns exit code 0 if healthy, 1 if issues found. 
+Full database health scan.
+Validates all notes, detects broken internal/file/attachment links, duplicate UUIDs/titles, missing titles, and parse errors.
+Returns exit code 0 if healthy, 1 if issues found.
 Run after edits to verify database integrity.
 
 | Command | Usecase |
@@ -48,8 +48,8 @@ Run after edits to verify database integrity.
 | `pkms check --id-links` | Verify only that links resolve to valid UUIDs in the database. |
 
 ### `validate` — [Full reference](references/validate.md)
-Health check for a single note. 
-Verifies UUID format, title presence, outgoing links. 
+Health check for a single note.
+Verifies UUID format, title presence, outgoing links.
 Use after creating or editing a specific note.
 
 | Command | Usecase |
@@ -57,7 +57,7 @@ Use after creating or editing a specific note.
 | `pkms validate <UUID>` | Check a single note UUID |
 
 ### `stats` — [Full reference](references/stats.md)
-Comprehensive database statistics: total notes, link breakdown, orphans, broken links, disk size. 
+Comprehensive database statistics: total notes, link breakdown, orphans, broken links, disk size.
 
 | Command | Usecase |
 |---------|---------|
@@ -74,7 +74,7 @@ List notes with no connections — no outgoing internal links and no backlinks.
 | `pkms orphans` | List notes with no incoming or outgoing internal links. |
 
 ### `resolve` — [Full reference](references/resolve.md)
-Fast notes lookup by metadata. 
+Fast notes lookup by metadata.
 
 | Command | Usecase |
 |---------|---------|
@@ -85,7 +85,7 @@ Fast notes lookup by metadata.
 | `pkms resolve --tags "tag1,tag2"` | Filter notes by multiple tags (comma-separated). Substring matching. At least one tag should match to get result. |
 
 ### `get` — [Full reference](references/get.md)
-Retrieve a note's full content with optional neighbor display. 
+Retrieve a note's full content with optional neighbor display.
 
 | Command | Usecase |
 |---------|---------|
@@ -98,7 +98,7 @@ Retrieve a note's full content with optional neighbor display.
 `<target>` may be UUID, title or absolute file path.
 
 ### `path` — [Full reference](references/path.md)
-Find the shortest path between two notes through the notes graph. 
+Find the shortest path between two notes through the notes graph.
 Accepts titles, UUIDs, or absolute file paths.
 Good for checking if notes are connected via well-defined logic.
 
@@ -108,7 +108,7 @@ Good for checking if notes are connected via well-defined logic.
 | `pkms path <from> <to>` | Find shortest path between two notes via BFS |
 
 ### `query` — [Full reference](references/query.md)
-Fuzzy search across all note content (titles, aliases, refs, tags, file content). 
+Fuzzy search across all note content (titles, aliases, refs, tags, file content).
 Results are scored and sorted by relevance.
 
 | Command | Usecase |
@@ -140,8 +140,8 @@ Find thematically related notes by multi-factor scoring
 | `pkms suggest <uuid>` | Find related notes by multi-factor scoring. |
 
 ### `context` — [Full reference](references/context.md)
-Build an AI-friendly context window for a note. 
-Includes the note's full content plus linked neighbors at each depth level. 
+Build an AI-friendly context window for a note.
+Includes the note's full content plus linked neighbors at each depth level.
 
 | Command | Usecase |
 |---------|---------|
@@ -151,7 +151,7 @@ Includes the note's full content plus linked neighbors at each depth level.
 `<target>` may be UUID, title or absolute file path.
 
 ### `new` — [Full reference](references/new.md)
-Generate a UUID v4 and timestamped filename (`YYYYMMDDHHMMSS-slug.org`) in the configured new notes directory. 
+Generate a UUID v4 and timestamped filename (`YYYYMMDDHHMMSS-slug.org`) in the configured new notes directory.
 
 | Command | Usecase |
 |---------|---------|
@@ -205,11 +205,13 @@ Show the configuration with notes database path.
 
 ## Command Pipelining
 
-Commands can be chained via Unix pipes using NDJSON. Producers emit per-item JSON lines
-with a `uuid` field; consumers read them from stdin via automatic pipe detection or `--from-stdin`.
+Commands can be chained via Unix pipes using NDJSON.
+Producers emit per-item lines with a field; consumers read them from stdin via automatic pipe detection or `--from-stdin`.
 
 **Producers** (emit with `--output-format ndjson`): `resolve`, `query`, `orphans`, `stats --hubs`, `suggest`
 **Consumers** (read via pipe or `--from-stdin`): `get`, `suggest`, `validate`, `context`
+
+Always use `--output-format ndjson` for commands that pass data to other commands in pipeline.
 
 ### Key pipelines
 

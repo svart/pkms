@@ -135,7 +135,7 @@ Shell commands and one-liners go in `#+begin_src sh` or `#+begin_src shell`. Kee
 
 ### Table Style
 
-When converting HTML tables from source material or creating the new tables, keep them as org-mode tables. Use a header row, a separator row, then data rows. Column headers are short noun phrases. 
+When converting HTML tables from source material or creating the new tables, keep them as org-mode tables. Use a header row, a separator row, then data rows. Column headers are short noun phrases.
 
 ```
 |                    | DPDK                                   | XDP/AF_XDP                               |
@@ -178,3 +178,112 @@ The voice is that of a knowledgeable practitioner explaining to a peer. Not a te
 4. **Write content** — fill each note following the patterns in the style reference. Inline links to other notes using `[[id:<uuid>][title]]`.
 5. **Connect with pkms-manager** — use `pkms resolve` and `pkms query` from the pkms-manager skill to find existing notes for cross-linking.
 6. **Verify** — run `pkms check` to confirm no broken links, duplicate UUIDs, or missing titles.
+
+## Linking Isolated Subgraphs
+
+When you discover a cluster of notes disconnected from the main graph, connect
+it through shared concepts rather than forcing direct links to an overloaded
+hub. These patterns emerge from practical experience linking three disconnected
+subgraphs (cellular signal metrics, Wi-Fi, mobile network identities) into a
+well-connected wireless networking graph.
+
+### Identify Shared Technology Bridges
+
+Isolated subgraphs are usually focused on a specific domain. Find the concepts
+it shares with the main graph — those are your bridge points. List the
+technologies, standards, or measurements the subgraph covers, then check which
+of those already exist in the main graph.
+
+> Wi-Fi subgraph covers: OFDM, MIMO, RSSI, signal-to-noise ratio, QAM modulation.
+> Main graph already has: lte ofdm, lte mimo, RSSI, SINR.
+> → Bridges: OFDM (shared PHY technique), signal quality (shared metric).
+
+Each shared concept becomes a bridge. Create one bridging note per concept. A
+bridging note defines the concept in a general, cross-technology way and links
+to the technology-specific notes on both sides.
+
+### Prefer Existing Intermediate Nodes over Direct Links
+
+Before creating a new bridging note, check whether an existing note in the main
+graph already sits on the boundary. If a note like "4g" or "CQI" already
+connects to the main hub (LTE), use it as the attachment point instead of
+linking directly to the hub. This keeps the hub from becoming overlinked.
+
+> MCC subgraph needs connection to LTE. The "4g" note already sits between 3G and LTE.
+> → Link UMTS → 4g (not UMTS → LTE). Path becomes UMTS → 4g → LTE (2 hops).
+
+When no suitable intermediate exists, create a bridging note. A bridging note
+earns its place by defining a concept that genuinely spans both sides — RSSI and
+SNR are the same physical measurements in Wi-Fi and LTE; OFDM is the same
+modulation technique.
+
+### Merge Duplicates before Connecting
+
+If the subgraph contains two notes about the same concept under different
+titles, merge them into one note before connecting outward. Duplicates create
+split attention and force readers to guess which note to read.
+
+> "wifi" (empty) and "wi-fi" (one sentence) are the same concept.
+> → Merge into one "wifi" note with content. Redirect links from the discarded UUID.
+
+Merge by: 
+1. picking the note with the most inbound links to keep; 
+2. consolidating content into it;
+3. updating all links that point to the discarded UUID;
+4. deleting the discarded file.
+
+### Prefer 2-3 Hops from the Hub
+
+A hub note with too many incoming links becomes hard to navigate (the user
+mentioned LTE with 13 backlinks). When connecting a subgraph, aim for paths of
+2-3 hops from the hub, not direct links. Each hop distributes the cognitive load
+across intermediate notes.
+Sometimes more hops are necessary for better linking logic. Tell user about it.
+
+> Instead of linking signal metrics directly to LTE:
+> SINR → CQI → LTE (2 hops).
+> RSRP → SINR → CQI → LTE (3 hops).
+
+Use `pkms path <from> <to>` to check the hop count before committing to a linking strategy.
+
+### Fill Stub Notes with Minimal Viable Content
+
+An empty note with only a title is a dead end. Before linking a subgraph
+outward, give each stub note enough content to be useful on its own. Follow a
+minimal template:
+
+- A definition sentence (what it is, in context)
+- A boundary sentence (what distinguishes it from related concepts)
+- At least one inline link to another note in the same subgraph
+
+This ensures the note rewards reading and provides a base for future expansion.
+The `pkms validate` output flags notes with 0 outgoing links — prefer each note
+to have at least one internal link.
+
+### Build Several Independent Bridge Paths
+
+A subgraph connected through a single bridge is fragile — if that bridge note is
+ever restructured, the subgraph becomes orphaned. Create 2-3 independent bridge
+paths through different shared concepts. 
+
+> Wi-Fi subgraph connects via:
+> (a) wifi → wireless signal quality → RSSI → SINR → ... → LTE
+> (b) 802.11ax → OFDM → lte ofdm → LTE
+> (c) 802.11ac → lte mimo → LTE
+
+Each path stands on its own. If one bridge is removed, the subgraph remains connected through the others.
+
+But don't overuse it. If it is completely enough to one path between notes, then leave it.
+
+### Link Direction
+
+When connecting subgraphs through a bridging note, the link direction should
+serve the reader's flow:
+
+- From specific to general: a technology-specific note links to the general bridging concept (802.11ac → OFDM), not the reverse
+- From newer to older in an backward evolutionary chain: 4g → UMTS → GSM . So user will follow backlinks if necessary.
+- The bridging note may be linked by itself or link outward to specific notes. It depends on the case.
+
+This keeps the graph navigable: a reader starting in the subgraph naturally
+discovers the bridge, follows it to the general concept, and from there reaches
+the main graph.
