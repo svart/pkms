@@ -193,15 +193,16 @@ Show the configuration with notes database path.
 
 ### Linking Orphans to the Graph
 1. `orphans` to list all orphans. Pick ones with clear thematic connections.
-2. Apply procedure from "Note Discovery" to find relevant note.
-3. **Analyze suggestions** — read the orphan's content and at least 5-8 top suggestions to confirm connections are real.
-4. If suggestions still not so relevant you may create "adoption" note to smoothly connect current orphan to the graph. Fill new note with short portion of relevant information.
-4. Always **inline links** when content exists: embed `[[id:<full-uuid>][description]]` into existing sentences. E.g. "A systematic framework for technical [[id:63649b3f-5168-4fdc-96ec-1911a91b54a5][documentation]] authoring." If content does not exist, create highly relevant content for the note.
-5. **Use full UUIDs** (dashed format), not short 8-char UUIDs. Every link must match the `:ID:` property exactly.
-6. **Backlinks sparingly** — only add a link *from* an existing note *to* the orphan when there is genuine contextual reason (shared topic, direct dependency, natural cross-reference). Do not mechanically pair every forward link with a backlink.
-7. If mentioning orphan in already existing note is natural just create this link without adding direct forward link from orphan.
-8. `validate <uuid>` each changed note to confirm no broken links.
-9. `check` to verify overall database health.. `check` to verify overall health.
+2. If orphaned note fills empty. Fill it with minimal necessary information.
+3. Apply procedure from "Note Discovery" to find relevant note.
+4. **Analyze suggestions** — read the orphan's content and at least 5-8 top suggestions to confirm connections are real.
+5. If suggestions still not so relevant you may create "adoption" note to smoothly connect current orphan to the graph. Fill new note with short portion of relevant information.
+6. Always **inline links** when content exists: embed `[[id:<full-uuid>][description]]` into existing sentences. E.g. "A systematic framework for technical [[id:63649b3f-5168-4fdc-96ec-1911a91b54a5][documentation]] authoring." If content does not exist, create highly relevant content for the note.
+7. **Use full UUIDs** (dashed format), not short 8-char UUIDs. Every link must match the `:ID:` property exactly.
+8. **Backlinks sparingly** — only add a link *from* an existing note *to* the orphan when there is genuine contextual reason (shared topic, direct dependency, natural cross-reference). Do not mechanically pair every forward link with a backlink.
+9. If mentioning orphan in already existing note is natural just create this link without adding direct forward link from orphan.
+10. `validate <uuid>` each changed note to confirm no broken links.
+11. `check` to verify overall database health.. `check` to verify overall health.
 
 ## Command Pipelining
 
