@@ -29,12 +29,6 @@ Every command supports JSON output, but agents must either hardcode the shape or
 
 **Value:** Very high for agent reliability. ~200 lines of integration.
 
-### 18. Accurate token counting via tiktoken-rs
-
-The current `estimate_tokens` uses a naive word-count heuristic that can be 30%+ off for code-heavy notes. Integrating `tiktoken-rs` with `--encoding` flag (cl100k_base, o200k_base, etc.) would give exact token counts matching the target LLM.
-
-**Value:** High for agents working within context limits. Critical for `context --max-tokens`.
-
 ### 19. Customizable `context` template
 
 The template is hardcoded in `src/commands/context.rs:10`. Different LLMs benefit from different formatting:

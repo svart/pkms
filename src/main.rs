@@ -2,6 +2,7 @@ mod cli;
 mod commands;
 mod config;
 mod discovery;
+mod embed;
 mod graph;
 mod output;
 mod parser;
@@ -126,6 +127,7 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
             limit,
             exclude_orphans,
             from_stdin,
+            embed,
         } => commands::suggest::run(
             cfg,
             ctx,
@@ -133,6 +135,7 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
             *limit,
             *exclude_orphans,
             *from_stdin,
+            *embed,
             cli.db.as_deref(),
         )
         .map(|()| ExitCode::SUCCESS)?,
@@ -176,6 +179,7 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
             tags,
             title,
             content,
+            embed,
         } => commands::query::run(
             cfg,
             ctx,
@@ -184,6 +188,7 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
             *tags,
             *title,
             *content,
+            *embed,
             cli.db.as_deref(),
         )
         .map(|()| ExitCode::SUCCESS)?,

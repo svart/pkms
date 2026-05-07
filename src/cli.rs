@@ -144,6 +144,8 @@ pub enum Command {
         exclude_orphans: bool,
         #[arg(long, help = "Read UUIDs from NDJSON stdin")]
         from_stdin: bool,
+        #[arg(long, help = "Use embedding-based similarity")]
+        embed: bool,
     },
     #[command(about = "Generate a filename and UUID for a new note")]
     New {
@@ -183,6 +185,8 @@ pub enum Command {
         title: bool,
         #[arg(long, help = "Search only in file content")]
         content: bool,
+        #[arg(long, help = "Use embedding-based similarity")]
+        embed: bool,
     },
     #[command(about = "Show current pkms configuration")]
     Info,

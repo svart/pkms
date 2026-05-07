@@ -1,5 +1,6 @@
 use crate::cli::OutputFormat;
 use crate::config::Config;
+use crate::embed;
 use crate::graph::Graph;
 use crate::graph::search::SearchFields;
 use crate::output::OutputContext;
@@ -41,14 +42,41 @@ pub fn run(
     only_tags: bool,
     only_title: bool,
     only_content: bool,
+    use_embed: bool,
     db_cli: Option<&std::path::Path>,
 ) -> Result<()> {
     let terms = terms.ok_or_else(|| anyhow::anyhow!("No search terms specified. Provide terms"))?;
+
+    let graph = Graph::load(config, db_cli)?;
+
+    let mut combined = if use_embed {
+        search_by_embedding(&graph, terms)?
+    } else {
+        search_by_text(&graph, terms, only_tags, only_title, only_content)?
+    };
+
+    let total_results = combined.len();
+    let showed = limit.map(|l| {
+        let shown = combined.len().min(l);
+        combined.truncate(l);
+        shown
+    });
+
+    print_query_output(ctx, terms, combined, total_results, showed)?;
+
+    Ok(())
+}
+
+fn search_by_text(
+    graph: &Graph,
+    terms: &str,
+    only_tags: bool,
+    only_title: bool,
+    only_content: bool,
+) -> Result<Vec<QueryResultEntry>> {
     let search_title = only_title || (!only_tags && !only_content);
     let search_tags = only_tags || (!only_title && !only_content);
     let search_content = only_content || (!only_title && !only_tags);
-
-    let graph = Graph::load(config, db_cli)?;
 
     let mut combined: Vec<QueryResultEntry> = Vec::new();
 
@@ -109,16 +137,52 @@ pub fn run(
             .unwrap_or(std::cmp::Ordering::Equal)
     });
 
-    let total_results = combined.len();
-    let showed = limit.map(|l| {
-        let shown = combined.len().min(l);
-        combined.truncate(l);
-        shown
+    Ok(combined)
+}
+
+fn search_by_embedding(graph: &Graph, query: &str) -> Result<Vec<QueryResultEntry>> {
+    let mut texts = Vec::new();
+    let mut entries = Vec::new();
+
+    for node in graph.nodes.values() {
+        let text = if node.title.is_empty() {
+            node.path.display().to_string()
+        } else {
+            node.title.to_string()
+        };
+        texts.push(text);
+        entries.push(QueryResultEntry {
+            uuid: node.uuid.clone(),
+            title: node.title.clone(),
+            path: node.path.to_string_lossy().to_string(),
+            filetags: node.filetags.clone(),
+            score: 0.0,
+            matches: vec!["semantic".to_string()],
+            content_matches: vec![],
+        });
+    }
+
+    if texts.is_empty() {
+        return Ok(entries);
+    }
+
+    let mut all_texts = texts.clone();
+    all_texts.push(query.to_string());
+
+    let embeddings = embed::compute_embeddings(&all_texts)?;
+    let query_emb = embeddings.last().unwrap();
+
+    for (i, entry) in entries.iter_mut().enumerate() {
+        entry.score = embed::cosine_similarity(&embeddings[i], query_emb);
+    }
+
+    entries.sort_by(|a, b| {
+        b.score
+            .partial_cmp(&a.score)
+            .unwrap_or(std::cmp::Ordering::Equal)
     });
 
-    print_query_output(ctx, terms, combined, total_results, showed)?;
-
-    Ok(())
+    Ok(entries)
 }
 
 fn print_query_output(

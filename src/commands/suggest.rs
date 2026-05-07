@@ -1,5 +1,6 @@
 use crate::cli::OutputFormat;
 use crate::config::Config;
+use crate::embed;
 use crate::graph::{Graph, Node};
 use crate::output::OutputContext;
 use crate::parser::Link;
@@ -425,6 +426,7 @@ fn compute_suggestions_for_node(
     Ok((node, suggestions, total, showed))
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn run(
     config: &Config,
     ctx: &OutputContext,
@@ -432,6 +434,7 @@ pub fn run(
     limit: Option<usize>,
     exclude_orphans: bool,
     from_stdin: bool,
+    use_embed: bool,
     db_cli: Option<&std::path::Path>,
 ) -> Result<()> {
     let targets: Vec<String> = if from_stdin || (target.is_none() && util::is_stdin_piped()) {
@@ -445,6 +448,10 @@ pub fn run(
     };
 
     let graph = Graph::load(config, db_cli)?;
+
+    if use_embed {
+        return suggest_by_embedding(&graph, ctx, &targets, limit);
+    }
 
     match ctx.format {
         OutputFormat::Text => {
@@ -496,6 +503,108 @@ pub fn run(
                     Some(t.clone()),
                 )?;
                 for s in &suggestions {
+                    println!("{}", serde_json::to_string(s)?);
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
+fn suggest_by_embedding(
+    graph: &Graph,
+    ctx: &OutputContext,
+    targets: &[String],
+    limit: Option<usize>,
+) -> Result<()> {
+    let mut texts = Vec::new();
+    let mut node_list: Vec<&Node> = graph.nodes.values().collect();
+    node_list.sort_by(|a, b| a.uuid.cmp(&b.uuid));
+
+    for node in &node_list {
+        texts.push(if node.title.is_empty() {
+            node.path.display().to_string()
+        } else {
+            node.title.clone()
+        });
+    }
+
+    if texts.is_empty() {
+        return Ok(());
+    }
+
+    let embeddings = embed::compute_embeddings(&texts)?;
+
+    let all_outputs: Vec<SuggestOutput> = targets
+        .iter()
+        .filter_map(|t| {
+            let target_node = graph.resolve_target(t).ok()?;
+            let target_idx = node_list.iter().position(|n| n.uuid == target_node.uuid)?;
+            let target_emb = &embeddings[target_idx];
+
+            let mut scored: Vec<(usize, f64)> = node_list
+                .iter()
+                .enumerate()
+                .map(|(i, _)| (i, embed::cosine_similarity(target_emb, &embeddings[i])))
+                .collect();
+            scored.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+
+            let suggestions: Vec<Suggestion> = scored
+                .iter()
+                .filter(|(i, _)| *i != target_idx)
+                .take(limit.unwrap_or(usize::MAX))
+                .map(|(i, score)| {
+                    let n = node_list[*i];
+                    let mut m = HashMap::new();
+                    m.insert("semantic".to_string(), *score);
+                    Suggestion {
+                        uuid: n.uuid.clone(),
+                        title: n.title.clone(),
+                        path: n.path.to_string_lossy().to_string(),
+                        score: *score,
+                        reasons: vec!["semantic similarity".to_string()],
+                        filetags: n.filetags.clone(),
+                        scores: m,
+                        target_uuid: Some(target_node.uuid.clone()),
+                    }
+                })
+                .collect();
+
+            Some(SuggestOutput {
+                target: target_node.title.clone(),
+                target_uuid: target_node.uuid.clone(),
+                total: suggestions.len(),
+                showed: limit.map(|l| suggestions.len().min(l)),
+                suggestions,
+            })
+        })
+        .collect();
+
+    match ctx.format {
+        OutputFormat::Text => {
+            for output in &all_outputs {
+                println!("Suggestions for \"{}\":", output.target);
+                println!();
+                for (i, s) in output.suggestions.iter().enumerate() {
+                    println!("{:3}. {}  (score: {:.3})", i + 1, s.title, s.score);
+                    println!("       UUID: {}", s.uuid);
+                }
+                if all_outputs.len() > 1 {
+                    println!();
+                }
+            }
+        }
+        OutputFormat::Json => {
+            if all_outputs.len() == 1 {
+                ctx.print_json(&all_outputs[0])?;
+            } else {
+                ctx.print_json(&all_outputs)?;
+            }
+        }
+        OutputFormat::Ndjson => {
+            for output in &all_outputs {
+                for s in &output.suggestions {
                     println!("{}", serde_json::to_string(s)?);
                 }
             }
