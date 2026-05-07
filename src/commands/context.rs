@@ -231,10 +231,12 @@ fn truncate_content(s: &str, max_chars: usize) -> String {
     truncated
 }
 
-fn estimate_tokens(text: &str) -> usize {
+fn count_tokens(text: &str, max: Option<usize>) -> (usize, Option<usize>) {
     let mut tokens = 0usize;
     let mut in_word = false;
-    for c in text.chars() {
+    let mut trunc_pos = None;
+
+    for (i, c) in text.char_indices() {
         if c.is_whitespace() || c == '\n' {
             in_word = false;
         } else if c.is_ascii() {
@@ -246,31 +248,26 @@ fn estimate_tokens(text: &str) -> usize {
             tokens += 2;
             in_word = false;
         }
+
+        if let Some(max_tokens) = max
+            && tokens > max_tokens
+            && trunc_pos.is_none()
+        {
+            trunc_pos = Some(i);
+        }
     }
-    tokens
+
+    (tokens, trunc_pos)
+}
+
+fn estimate_tokens(text: &str) -> usize {
+    count_tokens(text, None).0
 }
 
 fn truncate_by_tokens(text: &str, max_tokens: usize) -> String {
-    let mut tokens = 0usize;
-    let mut in_word = false;
-    let pos = text.char_indices().position(|(_, c)| {
-        if c.is_whitespace() || c == '\n' {
-            in_word = false;
-            false
-        } else if c.is_ascii() {
-            if !in_word {
-                tokens += 1;
-                in_word = true;
-            }
-            tokens > max_tokens
-        } else {
-            tokens += 2;
-            in_word = false;
-            tokens > max_tokens
-        }
-    });
-    match pos {
-        Some(p) => text[..p].to_string(),
+    let (_, trunc_at) = count_tokens(text, Some(max_tokens));
+    match trunc_at {
+        Some(pos) => text[..pos].to_string(),
         None => text.to_string(),
     }
 }
