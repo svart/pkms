@@ -21,11 +21,11 @@ fn validate_uuid(s: &str) -> Result<String> {
         .to_string())
 }
 
-fn print_fix_output(ctx: &OutputContext, output: &FixOutput, apply: bool) -> Result<()> {
+fn print_fix_output(ctx: &OutputContext, output: &FixOutput) -> Result<()> {
     if ctx.is_json() {
         ctx.print_json(output)?;
     } else {
-        if apply {
+        if output.applied {
             println!(
                 "Fixed {} broken link(s) in {} file(s):",
                 output.total_replacements,
@@ -128,5 +128,5 @@ pub fn run(
         applied: apply,
     };
 
-    print_fix_output(ctx, &output, apply)
+    print_fix_output(ctx, &output)
 }
