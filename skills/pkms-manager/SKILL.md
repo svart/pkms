@@ -46,6 +46,7 @@ Run after edits to verify database integrity.
 |---------|---------|
 | `pkms check` | Full health scan: validates all notes, detects broken links, duplicates, missing titles. |
 | `pkms check --id-links` | Verify only that links resolve to valid UUIDs in the database. |
+| `pkms check --filetags` | Verify that all `#+filetags:` lines use the canonical `:tag1:tag2:tag3:` format. |
 
 ### `validate` — [Full reference](references/validate.md)
 Health check for a single note.
