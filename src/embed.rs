@@ -1,19 +1,30 @@
 use anyhow::Result;
-use fastembed::{EmbeddingModel, TextEmbedding, TextInitOptions, get_cache_dir};
+use fastembed::{EmbeddingModel, TextEmbedding, TextInitOptions};
 use std::path::PathBuf;
 
+fn cache_dir() -> PathBuf {
+    dirs::cache_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join("pkms")
+}
+
+fn model_dir() -> PathBuf {
+    cache_dir().join("models--Xenova--bge-small-en-v1.5")
+}
+
 fn model_is_cached() -> bool {
-    let cache = PathBuf::from(get_cache_dir());
-    let model_dir = cache.join("models--Xenova--bge-small-en-v1.5");
-    model_dir.exists()
+    model_dir().exists()
 }
 
 fn create_model() -> Result<TextEmbedding> {
     if !model_is_cached() {
         eprintln!("Downloading model...");
     }
-    let options =
-        TextInitOptions::new(EmbeddingModel::BGESmallENV15).with_show_download_progress(false);
+    let cache = cache_dir();
+    std::fs::create_dir_all(&cache).ok();
+    let options = TextInitOptions::new(EmbeddingModel::BGESmallENV15)
+        .with_show_download_progress(false)
+        .with_cache_dir(cache);
     TextEmbedding::try_new(options)
         .map_err(|e| anyhow::anyhow!("Failed to create embedding model: {e}"))
 }
