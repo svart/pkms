@@ -1,7 +1,19 @@
 use anyhow::Result;
 use fastembed::{EmbeddingModel, TextEmbedding, TextInitOptions};
+use std::path::PathBuf;
+
+fn model_cache_dir() -> PathBuf {
+    PathBuf::from(fastembed::get_cache_dir()).join("models--BAAI--bge-small-en-v1.5")
+}
+
+fn model_is_cached() -> bool {
+    model_cache_dir().exists()
+}
 
 fn create_model() -> Result<TextEmbedding> {
+    if !model_is_cached() {
+        eprintln!("Downloading model...");
+    }
     let options =
         TextInitOptions::new(EmbeddingModel::BGESmallENV15).with_show_download_progress(false);
     TextEmbedding::try_new(options)
