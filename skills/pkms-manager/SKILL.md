@@ -120,6 +120,8 @@ Results are scored and sorted by relevance.
 | `pkms query "term" --title` | Search only in titles, aliases, and refs. |
 | `pkms query "term" --embed` | Semantic search via embeddings. |
 
+If you what to search multiple terms enclose them into quotes and separate by spaces: `pkms query "term1 term2"`
+
 ### `fix` — [Full reference](references/fix.md)
 Replace all occurrences of a broken UUID across the entire database. Both arguments must be full UUIDs (with dashes). Dry-run by default; use `--apply` to write changes.
 
