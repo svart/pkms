@@ -1,5 +1,6 @@
 use crate::cli::OutputFormat;
 use crate::config::Config;
+#[cfg(feature = "embed")]
 use crate::embed;
 use crate::graph::{Graph, Node};
 use crate::output::OutputContext;
@@ -450,7 +451,14 @@ pub fn run(
     let graph = Graph::load(config, db_cli)?;
 
     if use_embed {
-        return suggest_by_embedding(&graph, ctx, &targets, limit);
+        #[cfg(feature = "embed")]
+        {
+            return suggest_by_embedding(&graph, ctx, &targets, limit);
+        }
+        #[cfg(not(feature = "embed"))]
+        {
+            anyhow::bail!("--embed requires building with the 'embed' feature enabled");
+        }
     }
 
     match ctx.format {
@@ -512,6 +520,7 @@ pub fn run(
     Ok(())
 }
 
+#[cfg(feature = "embed")]
 fn suggest_by_embedding(
     graph: &Graph,
     ctx: &OutputContext,

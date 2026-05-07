@@ -144,6 +144,7 @@ pub enum Command {
         exclude_orphans: bool,
         #[arg(long, help = "Read UUIDs from NDJSON stdin")]
         from_stdin: bool,
+        #[cfg(feature = "embed")]
         #[arg(long, help = "Use embedding-based similarity")]
         embed: bool,
     },
@@ -185,6 +186,7 @@ pub enum Command {
         title: bool,
         #[arg(long, help = "Search only in file content")]
         content: bool,
+        #[cfg(feature = "embed")]
         #[arg(long, help = "Use embedding-based similarity")]
         embed: bool,
     },

@@ -1,5 +1,6 @@
 use crate::cli::OutputFormat;
 use crate::config::Config;
+#[cfg(feature = "embed")]
 use crate::embed;
 use crate::graph::Graph;
 use crate::graph::search::SearchFields;
@@ -50,7 +51,14 @@ pub fn run(
     let graph = Graph::load(config, db_cli)?;
 
     let mut combined = if use_embed {
-        search_by_embedding(&graph, terms)?
+        #[cfg(feature = "embed")]
+        {
+            search_by_embedding(&graph, terms)?
+        }
+        #[cfg(not(feature = "embed"))]
+        {
+            anyhow::bail!("--embed requires building with the 'embed' feature enabled")
+        }
     } else {
         search_by_text(&graph, terms, only_tags, only_title, only_content)?
     };
@@ -140,6 +148,7 @@ fn search_by_text(
     Ok(combined)
 }
 
+#[cfg(feature = "embed")]
 fn search_by_embedding(graph: &Graph, query: &str) -> Result<Vec<QueryResultEntry>> {
     let mut texts = Vec::new();
     let mut entries = Vec::new();

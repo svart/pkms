@@ -2,6 +2,7 @@ mod cli;
 mod commands;
 mod config;
 mod discovery;
+#[cfg(feature = "embed")]
 mod embed;
 mod graph;
 mod output;
@@ -122,6 +123,7 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
             apply,
         } => commands::fix::run(cfg, ctx, broken_uuid, target, *apply, cli.db.as_deref())
             .map(|()| ExitCode::SUCCESS)?,
+        #[cfg(feature = "embed")]
         Command::Suggest {
             target,
             limit,
@@ -136,6 +138,24 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
             *exclude_orphans,
             *from_stdin,
             *embed,
+            cli.db.as_deref(),
+        )
+        .map(|()| ExitCode::SUCCESS)?,
+        #[cfg(not(feature = "embed"))]
+        Command::Suggest {
+            target,
+            limit,
+            exclude_orphans,
+            from_stdin,
+            ..
+        } => commands::suggest::run(
+            cfg,
+            ctx,
+            target.as_deref(),
+            *limit,
+            *exclude_orphans,
+            *from_stdin,
+            false,
             cli.db.as_deref(),
         )
         .map(|()| ExitCode::SUCCESS)?,
@@ -173,6 +193,7 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
             cli.db.as_deref(),
         )
         .map(|()| ExitCode::SUCCESS)?,
+        #[cfg(feature = "embed")]
         Command::Query {
             terms,
             limit,
@@ -189,6 +210,26 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
             *title,
             *content,
             *embed,
+            cli.db.as_deref(),
+        )
+        .map(|()| ExitCode::SUCCESS)?,
+        #[cfg(not(feature = "embed"))]
+        Command::Query {
+            terms,
+            limit,
+            tags,
+            title,
+            content,
+            ..
+        } => commands::query::run(
+            cfg,
+            ctx,
+            terms.as_deref(),
+            *limit,
+            *tags,
+            *title,
+            *content,
+            false,
             cli.db.as_deref(),
         )
         .map(|()| ExitCode::SUCCESS)?,

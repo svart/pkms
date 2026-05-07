@@ -138,6 +138,12 @@ Every command's JSON (`--output-format json|ndjson`) output has a specific struc
 - **JSON output testing**: All commands are tested with `--output-format json` via `test_all_commands_json`, verifying valid JSON output for every command
 - Mock DB helper in `tests/integration.rs::setup_db()` creates a 10+ note graph with duplicate UUIDs, broken links, filetags, aliases, and headings
 
+## Feature flags
+
+| Feature | Default | Description                              |
+|---------|---------|------------------------------------------|
+| `embed` | off     | Enables `--embed` flag in `query` and `suggest` commands for embedding-based semantic similarity via `fastembed`. Build with `--features embed`. |
+
 ## CLI flags
 
 | Flag              | Description                                      |

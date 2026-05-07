@@ -12,6 +12,12 @@ it must be recomputed from the org files on every run rather than loaded from a 
 
 ```bash
 cargo install --path .
+
+Build with embedding-based semantic search support (requires the `embed` feature):
+
+```bash
+cargo install --path . --features embed
+```
 ```
 
 Or run directly:
@@ -104,7 +110,8 @@ pkms query "search terms" --embed         # Embedding-based semantic search
 
 `query` searches note titles, aliases, filetags, refs, and content.
 Results are scored and sorted by relevance. Use `--embed` for semantic
-similarity search via a local embedding model.
+similarity search via a local embedding model (`--embed` requires building
+with the `embed` feature).
 
 ### Statistics & Introspection
 
@@ -139,7 +146,8 @@ files would be modified and how many replacements would be made.
 note against the target using multi-factor scoring (shared tags, backlinks,
 content keyword overlap, directory proximity, title keyword overlap,
 neighborhood relevance). Use `--embed` for embedding-based semantic similarity
-via a local BGE-small-en-v1.5 model (downloaded on first use to ~/.cache/pkms/).
+via a local BGE-small-en-v1.5 model (`--embed` requires building with the
+`embed` feature; the model is downloaded on first use to ~/.cache/pkms/).
 
 ### AI Integration
 
