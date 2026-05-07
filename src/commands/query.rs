@@ -48,10 +48,7 @@ pub fn run(
     let search_tags = only_tags || (!only_title && !only_content);
     let search_content = only_content || (!only_title && !only_tags);
 
-    let db_root = config.resolve_db_root(db_cli)?;
-    let ignore = config.resolve_ignore_patterns();
-    let results = Graph::scan(&db_root, &ignore)?;
-    let graph = Graph::build(results);
+    let graph = Graph::load(config, db_cli)?;
 
     let mut combined: Vec<QueryResultEntry> = Vec::new();
 
