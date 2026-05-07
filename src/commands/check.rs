@@ -98,10 +98,11 @@ pub fn run(
     let graph = Graph::load(config, db_cli)?;
     let db_root = config.resolve_db_root(db_cli)?;
 
-    let show_id = id_links || !(file_links || attachment_links || filetags);
-    let show_file = file_links || !(id_links || attachment_links || filetags);
-    let show_attach = attachment_links || !(id_links || file_links || filetags);
-    let show_filetags = filetags || !(id_links || file_links || attachment_links);
+    let any_explicit = id_links || file_links || attachment_links || filetags;
+    let show_id = id_links || !any_explicit;
+    let show_file = file_links || !any_explicit;
+    let show_attach = attachment_links || !any_explicit;
+    let show_filetags = filetags || !any_explicit;
 
     let mut broken_file = Vec::new();
     let mut broken_attachment = Vec::new();
