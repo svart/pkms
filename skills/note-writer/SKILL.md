@@ -116,6 +116,17 @@ The only exception is hub notes. A hub note serves as an index for a topic area 
 
 Bidirectional linking (note A links to note B and note B links back to note A) is usually a sign of muddled structure. One direction is almost always enough — choose the direction that serves the reader's flow. Reserve bidirectional links for the rare case where each note genuinely needs the other for context on its own terms, and not merely because a mechanical symmetry feels tidy.
 
+### Link Justification
+
+A link must be justified by the immediate sentence, not by general relevance. A link belongs only when the linked concept is the *direct object* of what the sentence is literally about — the sentence would be incomplete or inaccurate without it.
+
+- Don't add links to hub notes from child notes. A child note about a specific feature should link only to its parent topic note, not to broadly related hubs.
+- Don't enumerate platforms or ecosystems on general concept notes (html, markdown, etc.). A concept note defines the concept; it does not list where it is used.
+- "Comparable to" links are appropriate in a main topic note (e.g. gitlab → github), but not in child notes or concept notes.
+- Don't create intermediate notes to rescue a broken link. Remove the broken link instead if you cannot find corresponding note in the database.
+- Prefer external URLs over internal links for reference and background context. An Arch Wiki link belongs as an external URL, not as a link to an internal Arch Linux note.
+- One link per sentence is enough. Multiple links in a single sentence dilute each link's justification.
+
 ### Inline Verbatim and Code
 
 Use ~ for short non-code technical terms, concepts, notation, or any verbatim emphasis that is not source code: ~O(n)~, ~rpm~, ~/var/log~, ~:ID:~.

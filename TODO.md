@@ -43,13 +43,3 @@ The template is hardcoded in `src/commands/context.rs:10`. Different LLMs benefi
 `get` returns the full note. An agent often wants a specific heading subtree (e.g. "Implementation Details" only). A `--heading "Section Name"` filter on `get` would save tokens and focus attention.
 
 **Pre-requisite:** The parser already extracts headings and their levels. This is display-only work in `get.rs`.
-
-### 21. Embedding-based similarity for `suggest` and `query`
-
-Current search is substring-only. For an agent looking for conceptually related notes (e.g., "exception safety" → "RAII", "error handling"), substring matching misses. A lightweight option using `fastembed` or a local embedding server to compute on-the-fly semantic similarity would dramatically improve relevance.
-
-This is NOT RAG — it's a better similarity metric for the existing `suggest` and `query` commands, respecting the stateless model (compute fresh each run).
-
-### 25. Agent self-discovery — `pkms info --capabilities`
-
-An agent's first interaction should tell it what the tool can do. A `--capabilities` flag on `info` (or dedicated `capabilities` command) that returns a JSON object listing all commands, their flags, argument types, and output schema URLs would let agents bootstrap without reading SKILL.md each time.
