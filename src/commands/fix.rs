@@ -2,6 +2,7 @@ use crate::config::Config;
 use crate::graph::Graph;
 use crate::output::OutputContext;
 use anyhow::Result;
+use regex::Regex;
 use serde::Serialize;
 
 #[derive(Serialize)]
@@ -60,6 +61,9 @@ fn find_and_replace_links(
     let mut files_affected = Vec::new();
     let mut total_replacements = 0;
 
+    let escaped = regex::escape(broken_str);
+    let re = Regex::new(&format!(r"(id:){escaped}")).unwrap();
+
     for entry in walkdir::WalkDir::new(db_root)
         .follow_links(false)
         .into_iter()
@@ -75,14 +79,16 @@ fn find_and_replace_links(
             continue;
         };
 
-        let count = content.matches(broken_str).count();
+        let count = re.find_iter(&content).count();
         if count > 0 {
             files_affected.push(path.to_string_lossy().to_string());
             total_replacements += count;
 
             if apply {
-                let new_content = content.replace(broken_str, replacement_uuid);
-                std::fs::write(path, &new_content)?;
+                let new_content = re.replace_all(&content, |caps: &regex::Captures| {
+                    format!("{}{}", &caps[1], replacement_uuid)
+                });
+                std::fs::write(path, new_content.as_ref())?;
             }
         }
     }
