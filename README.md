@@ -99,10 +99,12 @@ BFS, traversing both outgoing and incoming links.
 pkms query "search terms"                 # Fuzzy search titles + content
 pkms query "search terms" --tags          # Search only in filetags
 pkms query "search terms" --limit 5       # Limit results
+pkms query "search terms" --embed         # Embedding-based semantic search
 ```
 
 `query` searches note titles, aliases, filetags, refs, and content.
-Results are scored and sorted by relevance.
+Results are scored and sorted by relevance. Use `--embed` for semantic
+similarity search via a local embedding model.
 
 ### Statistics & Introspection
 
@@ -125,6 +127,7 @@ pkms fix <broken-uuid> <replacement-uuid>           # Dry-run (shows what would 
 pkms fix <broken-uuid> <replacement-uuid> --apply   # Actually apply replacements
 pkms suggest <uuid>                            # Find related notes (takes UUID only)
 pkms suggest <uuid> --limit 5                  # Limit suggestions
+pkms suggest <uuid> --embed                    # Embedding-based semantic suggestions
 ```
 
 `fix` replaces all occurrences of a broken UUID across the database with
@@ -135,21 +138,22 @@ files would be modified and how many replacements would be made.
 `suggest` takes a note UUID, loads the full graph, and scores every other
 note against the target using multi-factor scoring (shared tags, backlinks,
 content keyword overlap, directory proximity, title keyword overlap,
-neighborhood relevance). The neighborhood factor analyzes each candidate's
-neighbors (outgoing + incoming) to boost notes with relevant connections
-and penalize those with unrelated graph neighborhoods.
-Outputs the top N most relevant notes with per-factor breakdowns.
+neighborhood relevance). Use `--embed` for embedding-based semantic similarity
+via a local BGE-small-en-v1.5 model (downloaded on first use to ~/.cache/pkms/).
 
 ### AI Integration
 
 ```
-pkms context <target> --depth 2                     # Build AI context window
-pkms context <target> --depth 1 --max-tokens 2000   # With token budget
+pkms context <target> --depth 2                          # Build AI context window
+pkms context <target> --depth 1 --max-tokens 2000        # With token budget
+pkms context <target> --encoding o200k_base              # Use GPT-4o tokenizer
 ```
 
 `context` produces a formatted text with the note's full content and
 linked neighbors at each depth, suitable for LLM consumption.
 `--max-tokens` truncates output to fit within the token budget.
+`--encoding` selects the tokenizer (cl100k_base for GPT-4, o200k_base for GPT-4o).
+Token counts use accurate BPE encoding via tiktoken-rs.
 
 ### Note Creation
 
@@ -174,22 +178,22 @@ pkms init-config --db ~/Documents/org  # With db_root pre-filled
 
 ### All Commands
 
-| Command       | Description                                      |
-|---------------|--------------------------------------------------|
-| `check`       | Full database health scan                        |
-| `validate`    | Validate a specific note                         |
-| `stats`       | Comprehensive database statistics (+ --hubs, --tags) |
-| `orphans`     | List orphan notes (no links)                     |
-| `resolve`     | Fast UUID/title resolution (header-only scan)    |
-| `fix`         | Replace broken UUIDs across all files            |
-| `suggest`     | Find related notes by multi-factor scoring       |
-| `context`     | Build AI context window                          |
-| `get`         | Retrieve note with neighbors                     |
-| `path`        | Shortest path between two notes                  |
-| `query`       | Fuzzy search titles and content                  |
-| `new`         | Generate filename/UUID for a new note            |
-| `info`        | Show current configuration                       |
-| `init-config` | Generate default config file                     |
+| Command       | Description                                               |
+|---------------|-----------------------------------------------------------|
+| `check`       | Full database health scan                                 |
+| `validate`    | Validate a specific note                                  |
+| `stats`       | Comprehensive database statistics (+ --hubs, --tags)      |
+| `orphans`     | List orphan notes (no links)                              |
+| `resolve`     | Fast UUID/title resolution (header-only scan)             |
+| `fix`         | Replace broken UUIDs across all files                     |
+| `suggest`     | Find related notes (+ --embed for semantic similarity)    |
+| `context`     | Build AI context window (+ --encoding for tokenizer)      |
+| `get`         | Retrieve note with neighbors (shows content tokens)       |
+| `path`        | Shortest path between two notes                           |
+| `query`       | Fuzzy search titles and content (+ --embed for semantic)  |
+| `new`         | Generate filename/UUID for a new note                     |
+| `info`        | Show current configuration                                |
+| `init-config` | Generate default config file                              |
 
 ## JSON Output
 
