@@ -1,7 +1,7 @@
 use crate::config::Config;
 use crate::graph::{DuplicateInfo, Graph, GraphStats};
 use crate::output::OutputContext;
-use crate::parser::Link;
+use crate::parser::{Link, validate_filetags_format};
 use anyhow::Result;
 use serde::Serialize;
 use std::path::Path;
@@ -16,6 +16,7 @@ pub struct CheckOutput {
     pub broken_file_links: Vec<BrokenFileLinkEntry>,
     pub broken_attachment_links: Vec<BrokenAttachmentLinkEntry>,
     pub failed_files: Vec<FailedFileEntry>,
+    pub filetags_issues: Vec<FiletagsIssue>,
     pub healthy: bool,
 }
 
@@ -44,6 +45,13 @@ pub struct BrokenAttachmentLinkEntry {
 pub struct FailedFileEntry {
     pub path: String,
     pub error: String,
+}
+
+#[derive(Clone, Serialize)]
+pub struct FiletagsIssue {
+    pub path: String,
+    pub title: String,
+    pub issue: String,
 }
 
 fn link_target_exists(target: &str, db_root: &Path) -> bool {
@@ -85,13 +93,15 @@ pub fn run(
     file_links: bool,
     attachment_links: bool,
     id_links: bool,
+    filetags: bool,
 ) -> Result<ExitCode> {
     let graph = Graph::load(config, db_cli)?;
     let db_root = config.resolve_db_root(db_cli)?;
 
-    let show_id = id_links || !(file_links || attachment_links);
-    let show_file = file_links || !(id_links || attachment_links);
-    let show_attach = attachment_links || !(file_links || id_links);
+    let show_id = id_links || !(file_links || attachment_links || filetags);
+    let show_file = file_links || !(id_links || attachment_links || filetags);
+    let show_attach = attachment_links || !(id_links || file_links || filetags);
+    let show_filetags = filetags || !(id_links || file_links || attachment_links);
 
     let mut broken_file = Vec::new();
     let mut broken_attachment = Vec::new();
@@ -135,9 +145,27 @@ pub fn run(
     } else {
         0
     };
+
+    let mut filetags_issues = Vec::new();
+    if show_filetags {
+        for node in graph.nodes.values() {
+            if let Ok(content) = std::fs::read_to_string(&node.path) {
+                for (raw, reason) in validate_filetags_format(&content) {
+                    filetags_issues.push(FiletagsIssue {
+                        path: node.path.to_string_lossy().to_string(),
+                        title: node.title.clone(),
+                        issue: format!("tag '{raw}' — {reason}"),
+                    });
+                }
+            }
+        }
+    }
+    let filetags_issue_count = filetags_issues.len();
+
     let healthy = broken_internal == 0
         && broken_file_count == 0
         && broken_attachment_count == 0
+        && filetags_issue_count == 0
         && (!show_id || graph.stats().parse_error_count == 0)
         && (!show_id || graph.stats().duplicate_uuid_count == 0);
 
@@ -148,6 +176,7 @@ pub fn run(
             &db_root,
             &broken_file,
             &broken_attachment,
+            &filetags_issues,
             show_id,
         )?;
     } else {
@@ -156,9 +185,11 @@ pub fn run(
             &db_root,
             &broken_file,
             &broken_attachment,
+            &filetags_issues,
             show_id,
             show_file,
             show_attach,
+            show_filetags,
         );
     }
 
@@ -175,6 +206,7 @@ fn print_check_json(
     db_root: &Path,
     broken_file: &[BrokenFileLinkEntry],
     broken_attachment: &[BrokenAttachmentLinkEntry],
+    filetags_issues: &[FiletagsIssue],
     show_id: bool,
 ) -> Result<()> {
     let stats = graph.stats();
@@ -205,6 +237,14 @@ fn print_check_json(
         })
         .collect();
 
+    let has_filetags_issues = !filetags_issues.is_empty();
+    let healthy = stats.broken_link_count == 0
+        && stats.parse_error_count == 0
+        && stats.duplicate_uuid_count == 0
+        && broken_file.is_empty()
+        && broken_attachment.is_empty()
+        && !has_filetags_issues;
+
     let output = CheckOutput {
         db_root: db_root.to_string_lossy().to_string(),
         stats: stats.clone(),
@@ -213,29 +253,30 @@ fn print_check_json(
         broken_file_links: broken_file.to_vec(),
         broken_attachment_links: broken_attachment.to_vec(),
         failed_files: failed,
-        healthy: stats.broken_link_count == 0
-            && stats.parse_error_count == 0
-            && stats.duplicate_uuid_count == 0
-            && broken_file.is_empty()
-            && broken_attachment.is_empty(),
+        filetags_issues: filetags_issues.to_vec(),
+        healthy,
     };
     ctx.print_json(&output)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn print_check_text(
     graph: &Graph,
     db_root: &Path,
     broken_file: &[BrokenFileLinkEntry],
     broken_attachment: &[BrokenAttachmentLinkEntry],
+    filetags_issues: &[FiletagsIssue],
     show_id: bool,
     show_file: bool,
     show_attach: bool,
+    show_filetags: bool,
 ) {
     let stats = graph.stats();
     let broken_internal_count = if show_id { stats.broken_link_count } else { 0 };
     let healthy = broken_internal_count == 0
         && broken_file.is_empty()
         && broken_attachment.is_empty()
+        && filetags_issues.is_empty()
         && (!show_id || stats.parse_error_count == 0)
         && (!show_id || stats.duplicate_uuid_count == 0);
 
@@ -264,6 +305,9 @@ fn print_check_text(
     }
     if show_attach {
         println!("  Broken attach:  {}", broken_attachment.len());
+    }
+    if show_filetags {
+        println!("  Filetags issues: {}", filetags_issues.len());
     }
 
     if show_id {
@@ -318,6 +362,14 @@ fn print_check_text(
         println!("Broken attachment links:");
         for entry in broken_attachment {
             println!("  {} -> {}", entry.source_title, entry.target_path);
+        }
+    }
+
+    if !filetags_issues.is_empty() {
+        println!();
+        println!("Invalid filetags format:");
+        for entry in filetags_issues {
+            println!("  {} ({}): {}", entry.title, entry.path, entry.issue);
         }
     }
 

@@ -116,7 +116,7 @@ Every command's JSON (`--output-format json|ndjson`) output has a specific struc
 
 | Command     | Top-level keys |
 |-------------|----------------|
-| `check`     | `db_root`, `stats`, `duplicates`, `broken_links`, `broken_file_links`, `broken_attachment_links`, `failed_files`, `healthy` |
+| `check`     | `db_root`, `stats`, `duplicates`, `broken_links`, `broken_file_links`, `broken_attachment_links`, `failed_files`, `filetags_issues[]` (path, title, issue), `healthy` |
 | `stats`     | `db_root`, `total_notes`, `total_links`, `internal_links`, `file_links`, `url_links`, `avg_links_per_note`, `orphans`, `broken_links`, `disk_size_bytes`, `directories[]`, `recent_notes[]` |
 | `resolve`   | `query`, `total`, `showed?`, `results[]` (uuid, title, path, filetags, aliases) |
 | `suggest`   | `target`, `target_uuid`, `total`, `showed?`, `suggestions[]` (uuid, title, score, scores{}, reasons[], target_uuid) |
@@ -145,6 +145,7 @@ Every command's JSON (`--output-format json|ndjson`) output has a specific struc
 | `--output-format FMT` | Output format: `text`, `json`, or `ndjson`   |
 | `--from-stdin`    | Read UUIDs from NDJSON stdin (Get, Suggest, Validate, Context) |
 | `--headings`      | Show heading structure (Get only)                            |
+| `--filetags`      | Check filetags format correctness (Check only)               |
 
 ## Command pipelining
 

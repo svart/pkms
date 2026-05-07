@@ -46,6 +46,8 @@ pub enum Command {
         attachment_links: bool,
         #[arg(long, help = "Check that id: link targets exist in the database")]
         id_links: bool,
+        #[arg(long, help = "Check filetags format correctness")]
+        filetags: bool,
     },
     #[command(about = "Validate health of a specific note")]
     Validate {

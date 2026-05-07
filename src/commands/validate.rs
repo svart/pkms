@@ -2,7 +2,7 @@ use crate::cli::OutputFormat;
 use crate::config::Config;
 use crate::graph::Graph;
 use crate::output::OutputContext;
-use crate::parser::Link;
+use crate::parser::{Link, validate_filetags_format};
 use crate::util;
 use anyhow::Result;
 use serde::Serialize;
@@ -165,6 +165,10 @@ fn validate_one(
     let content = std::fs::read_to_string(&node.path).unwrap_or_default();
     if !content.contains("#+title:") {
         issues.push("Missing #+title: property".to_string());
+    }
+
+    for (raw, reason) in validate_filetags_format(&content) {
+        issues.push(format!("Invalid filetags format '{}': {}", raw, reason));
     }
 
     let mut broken_internal = Vec::new();

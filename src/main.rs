@@ -62,6 +62,7 @@ fn dispatch_simple(
             file_links,
             attachment_links,
             id_links,
+            filetags,
         } => commands::check::run(
             cfg,
             ctx,
@@ -69,6 +70,7 @@ fn dispatch_simple(
             *file_links,
             *attachment_links,
             *id_links,
+            *filetags,
         )?,
         Command::Validate { target, from_stdin } => {
             commands::validate::run(cfg, ctx, target.as_deref(), *from_stdin, cli.db.as_deref())

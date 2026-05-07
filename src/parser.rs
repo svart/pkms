@@ -186,6 +186,46 @@ fn parse_property(line: &str) -> Option<(&str, &str)> {
     None
 }
 
+/// Validate that all `#+filetags:` lines in content have the correct format.
+/// Valid format: `:tag1:tag2:tag3:` — leading colon, trailing colon, tags separated
+/// by single colons, no empty segments.
+/// Tags may contain spaces (e.g. `:ai encyclopedia:test:` is valid).
+/// Returns `(raw_value, description)` for each invalid line.
+pub fn validate_filetags_format(content: &str) -> Vec<(String, String)> {
+    let mut issues = Vec::new();
+    for cap in FILETAGS_RE.captures_iter(content) {
+        let value = cap.get(1).map_or("", |m| m.as_str());
+        let trimmed = value.trim();
+
+        let mut reasons = Vec::new();
+
+        if !trimmed.starts_with(':') || !trimmed.ends_with(':') {
+            reasons.push("must start and end with ':'".to_string());
+        }
+        if trimmed.contains("::") {
+            reasons.push("must not have empty segments (::)".to_string());
+        }
+        let inner = if trimmed.len() >= 2 {
+            &trimmed[1..trimmed.len() - 1]
+        } else {
+            ""
+        };
+        for segment in inner.split(':') {
+            if segment.is_empty() || segment.chars().all(|c| c.is_whitespace()) {
+                reasons.push(
+                    "must not have empty or whitespace-only segments between colons".to_string(),
+                );
+                break;
+            }
+        }
+
+        if !reasons.is_empty() {
+            issues.push((value.to_string(), reasons.join("; ")));
+        }
+    }
+    issues
+}
+
 fn parse_link(target: &str) -> Option<Link> {
     if let Some(rest) = target.strip_prefix("id:") {
         return Some(Link::Internal(rest.to_string()));
@@ -297,6 +337,65 @@ Some content."#;
         assert_eq!(note.uuids.len(), 2);
         assert_eq!(note.uuids[0], "a1b2c3d4-e5f6-7890-abcd-ef1234567890");
         assert_eq!(note.uuids[1], "deadbeef-dead-beef-dead-beef00000001");
+    }
+
+    #[test]
+    fn test_validate_filetags_format_valid() {
+        let content = "#+filetags: :tag1:tag2:tag3:\n";
+        let issues = validate_filetags_format(content);
+        assert!(issues.is_empty(), "expected no issues, got: {:?}", issues);
+    }
+
+    #[test]
+    fn test_validate_filetags_format_spaces() {
+        let content = "#+filetags: :tag1: :tag2:\n";
+        let issues = validate_filetags_format(content);
+        assert!(!issues.is_empty(), "expected space-related issue");
+        assert!(issues[0].1.contains("whitespace-only"));
+    }
+
+    #[test]
+    fn test_validate_filetags_multi_word_tag() {
+        let content = "#+filetags: :ai encyclopedia:test:\n";
+        let issues = validate_filetags_format(content);
+        assert!(
+            issues.is_empty(),
+            "multi-word tags should be valid, got: {:?}",
+            issues
+        );
+    }
+
+    #[test]
+    fn test_validate_filetags_format_double_colon() {
+        let content = "#+filetags: :tag1::tag2:\n";
+        let issues = validate_filetags_format(content);
+        assert!(!issues.is_empty(), "expected double-colon issue");
+        assert!(issues[0].1.contains("empty segments"));
+    }
+
+    #[test]
+    fn test_validate_filetags_format_no_leading_colon() {
+        let content = "#+filetags: tag1:tag2:\n";
+        let issues = validate_filetags_format(content);
+        assert!(!issues.is_empty(), "expected missing leading colon issue");
+        assert!(issues[0].1.contains("start and end"));
+    }
+
+    #[test]
+    fn test_validate_filetags_format_no_trailing_colon() {
+        let content = "#+filetags: :tag1:tag2\n";
+        let issues = validate_filetags_format(content);
+        assert!(!issues.is_empty(), "expected missing trailing colon issue");
+        assert!(issues[0].1.contains("start and end"));
+    }
+
+    #[test]
+    fn test_validate_filetags_multiple_lines() {
+        let content =
+            "#+filetags: :good:tags:\n#+filetags: :bad::space:\n#+filetags: :also:good:\n";
+        let issues = validate_filetags_format(content);
+        assert_eq!(issues.len(), 1);
+        assert!(issues[0].1.contains("empty segments"));
     }
 
     proptest! {

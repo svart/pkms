@@ -1,13 +1,15 @@
 ---
 source: tests/integration.rs
-assertion_line: 1642
 expression: "normalize_snapshot(&stdout, &root)"
 ---
-Total: 11
+Total: 12
   Aliased Note
          UUID: 66666666-6666-4666-6666-666666666666
   Attachment Link Note
          UUID: aaaaaaaa-aaaa-4aaa-aaaa-bbbbbbbbbbbb
+  Bad Filetags Note
+         UUID: baadf00d-baad-4baa-dbaa-dbaadbaadbaa
+         Tags: bad, , filetags
   Broken Note
          UUID: eeeeeeee-eeee-4eee-eeee-eeeeeeeeeeee
   Categorized Note

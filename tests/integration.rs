@@ -250,6 +250,19 @@ Content with a category.
     )
     .unwrap();
 
+    // Bad filetags note -- invalid format (whitespace-only segment, empty segment)
+    fs::write(
+        personal.join("20220101000012-badfiletags.org"),
+        r#":PROPERTIES:
+:ID:       baadf00d-baad-4baa-dbaa-dbaadbaadbaa
+:END:
+#+title: Bad Filetags Note
+#+filetags: :bad: :filetags:
+#+filetags: :also::bad:
+"#,
+    )
+    .unwrap();
+
     // Malformed file -- no UUID
     fs::write(root.join("no_id.org"), "#+title: No ID\n").unwrap();
 
@@ -289,6 +302,19 @@ fn test_check_json() {
     assert!(v.get("stats").is_some());
     assert_eq!(v["healthy"], false);
     assert!(v.get("broken_links").is_some());
+    assert!(
+        v.get("filetags_issues").is_some(),
+        "expected filetags_issues field"
+    );
+    let ft_count = v["filetags_issues"]
+        .as_array()
+        .map(|a| a.len())
+        .unwrap_or(0);
+    assert!(
+        ft_count >= 1,
+        "expected at least 1 filetags issue, got {}",
+        ft_count
+    );
     let dups = v["duplicates"]
         .get("duplicate_uuids")
         .and_then(|a| a.as_array())
@@ -1046,6 +1072,36 @@ fn test_resolve_tags_matches_category() {
         titles.contains(&"Categorized Note"),
         "expected 'Categorized Note' to match via --tags 'example', got: {:?}",
         titles
+    );
+}
+
+// ----------------------------------------------------------------
+// FILETAGS VALIDATION
+// ----------------------------------------------------------------
+#[test]
+fn test_validate_bad_filetags() {
+    let (_dir, root) = setup_db();
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "validate",
+        "Bad Filetags Note",
+    ]);
+    assert!(status.success());
+    assert_eq!(v["healthy"], false);
+    let issues: Vec<&str> = v["issues"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|i| i.as_str())
+        .filter(|i| i.contains("filetags"))
+        .collect();
+    assert!(
+        issues.len() >= 2,
+        "expected at least 2 filetags issues, got {:?}",
+        issues
     );
 }
 
