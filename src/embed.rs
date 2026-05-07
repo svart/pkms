@@ -1,13 +1,11 @@
 use anyhow::Result;
-use fastembed::{EmbeddingModel, TextEmbedding, TextInitOptions};
+use fastembed::{EmbeddingModel, TextEmbedding, TextInitOptions, get_cache_dir};
 use std::path::PathBuf;
 
-fn model_cache_dir() -> PathBuf {
-    PathBuf::from(fastembed::get_cache_dir()).join("models--BAAI--bge-small-en-v1.5")
-}
-
 fn model_is_cached() -> bool {
-    model_cache_dir().exists()
+    let cache = PathBuf::from(get_cache_dir());
+    let model_dir = cache.join("models--Xenova--bge-small-en-v1.5");
+    model_dir.exists()
 }
 
 fn create_model() -> Result<TextEmbedding> {
