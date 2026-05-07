@@ -148,12 +148,7 @@ fn print_validate_text(
     }
 }
 
-fn validate_one(
-    config: &Config,
-    graph: &Graph,
-    target: &str,
-    db_cli: Option<&std::path::Path>,
-) -> Result<ValidateOutput> {
+fn validate_one(graph: &Graph, target: &str, db_root: &Path) -> Result<ValidateOutput> {
     let node = graph.resolve_target(target)?.clone();
     let mut issues = Vec::new();
 
@@ -191,14 +186,10 @@ fn validate_one(
                 };
                 let clean_path = expanded.split("::").next().unwrap_or(&expanded);
                 let file_path = Path::new(clean_path);
-                let db_root = config.resolve_db_root(db_cli).ok();
                 let full_path = if file_path.is_absolute() {
                     file_path.to_path_buf()
-                } else if let Some(ref root) = db_root {
-                    root.join(file_path)
                 } else {
-                    broken_files.push(path_str.clone());
-                    continue;
+                    db_root.join(file_path)
                 };
                 if !full_path.exists() {
                     broken_files.push(path_str.clone());
@@ -267,13 +258,14 @@ pub fn run(
     };
 
     let graph = Graph::load(config, db_cli)?;
+    let db_root = config.resolve_db_root(db_cli)?;
 
     match ctx.format {
         OutputFormat::Text => {
             for t in &targets {
                 let node = graph.resolve_target(t)?.clone();
                 let incoming = graph.backlinks.get(&node.uuid).cloned().unwrap_or_default();
-                let output = validate_one(config, &graph, t, db_cli)?;
+                let output = validate_one(&graph, t, &db_root)?;
                 print_validate_text(
                     &node,
                     &output.broken_internal,
@@ -290,7 +282,7 @@ pub fn run(
         OutputFormat::Json => {
             let mut all_outputs = Vec::new();
             for t in &targets {
-                all_outputs.push(validate_one(config, &graph, t, db_cli)?);
+                all_outputs.push(validate_one(&graph, t, &db_root)?);
             }
             if all_outputs.len() == 1 {
                 ctx.print_json(&all_outputs[0])?;
@@ -300,7 +292,7 @@ pub fn run(
         }
         OutputFormat::Ndjson => {
             for t in &targets {
-                let output = validate_one(config, &graph, t, db_cli)?;
+                let output = validate_one(&graph, t, &db_root)?;
                 println!("{}", serde_json::to_string(&output)?);
             }
         }
