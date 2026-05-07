@@ -36,7 +36,7 @@ pub struct Cli {
     pub command: Command,
 }
 
-#[derive(Subcommand)]
+#[derive(Debug, Subcommand)]
 pub enum Command {
     #[command(about = "Verify health of the entire org-roam database")]
     Check {

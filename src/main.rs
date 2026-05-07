@@ -221,7 +221,7 @@ fn dispatch_query(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Resul
             commands::path::run(cfg, ctx, from.as_deref(), to.as_deref(), cli.db.as_deref())
                 .map(|()| ExitCode::SUCCESS)?
         }
-        _ => unreachable!(),
+        _ => anyhow::bail!("unhandled command in dispatch_query: {:?}", cli.command),
     })
 }
 

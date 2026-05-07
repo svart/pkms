@@ -231,4 +231,4 @@ cargo test                    # Run unit + integration tests
 cargo run -- --db <path> <command>  # Test against real database
 ```
 
-See [TODO.md](./TODO.md) for the implementation roadmap.
+See [TODO.md](./TODO.md) for the development roadmap.
