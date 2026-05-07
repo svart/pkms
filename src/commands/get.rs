@@ -151,13 +151,10 @@ fn process_one_get(
 
     let node_json = NodeJson::from_node(&node, node_content.as_deref(), headings);
 
-    let estimated_tokens = if no_content {
-        None
-    } else {
-        node_content
-            .as_deref()
-            .map(|c| tokens::count_tokens(c, tokens::Encoding::Cl100kBase))
-    };
+    let full_content = std::fs::read_to_string(&node.path).ok();
+    let estimated_tokens = full_content
+        .as_deref()
+        .map(|c| tokens::count_tokens(c, tokens::Encoding::Cl100kBase));
 
     Ok(GetOutput {
         node: node_json,
@@ -181,6 +178,9 @@ fn print_one_get_text(
     };
 
     let full_content = std::fs::read_to_string(&node.path).ok();
+    let content_tokens = full_content
+        .as_deref()
+        .map(|c| tokens::count_tokens(c, tokens::Encoding::Cl100kBase));
 
     let node_content = if no_content {
         None
@@ -191,6 +191,9 @@ fn print_one_get_text(
     println!("Note: {}", node.title);
     println!("  UUID:   {}", node.uuid);
     println!("  Path:   {}", node.path.display());
+    if let Some(t) = content_tokens {
+        println!("  Content tokens: {t}");
+    }
     if !node.filetags.is_empty() {
         println!("  Tags:   {}", node.filetags.join(", "));
     }
@@ -213,12 +216,10 @@ fn print_one_get_text(
     if let Some(content) = node_content
         && !no_content
     {
-        let token_count = tokens::count_tokens(&content, tokens::Encoding::Cl100kBase);
         println!();
         println!("--- Content ---");
         println!("{content}");
         println!("--- End Content ---");
-        eprintln!("[content: {token_count} tokens, encoding: cl100k_base]");
     }
 
     if let Some(ns) = neighbors
