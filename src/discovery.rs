@@ -7,20 +7,16 @@ pub struct FileEntry {
     pub path: PathBuf,
 }
 
-pub fn discover_files(root: &Path, ignore_patterns: &[String]) -> Result<Vec<FileEntry>> {
-    let root = root
-        .canonicalize()
-        .map_err(|e| anyhow::anyhow!("Failed to resolve db root '{}': {}", root.display(), e))?;
-
+pub fn walk_org_files(root: &Path, ignore_patterns: &[String]) -> Result<Vec<PathBuf>> {
     let compiled_patterns: Vec<glob::Pattern> = ignore_patterns
         .iter()
         .filter_map(|p| glob::Pattern::new(p).ok())
         .collect();
 
-    let root_clone = root.clone();
-    let mut entries = Vec::new();
+    let root_clone = root.to_path_buf();
+    let mut files = Vec::new();
 
-    for entry in WalkDir::new(&root)
+    for entry in WalkDir::new(root)
         .follow_links(false)
         .into_iter()
         .filter_entry(move |e| {
@@ -32,14 +28,21 @@ pub fn discover_files(root: &Path, ignore_patterns: &[String]) -> Result<Vec<Fil
     {
         let entry = entry?;
         if entry.file_type().is_file() && entry.path().extension().is_some_and(|e| e == "org") {
-            entries.push(FileEntry {
-                path: entry.path().to_path_buf(),
-            });
+            files.push(entry.path().to_path_buf());
         }
     }
 
-    entries.sort_by(|a, b| a.path.cmp(&b.path));
-    Ok(entries)
+    files.sort();
+    Ok(files)
+}
+
+pub fn discover_files(root: &Path, ignore_patterns: &[String]) -> Result<Vec<FileEntry>> {
+    let root = root
+        .canonicalize()
+        .map_err(|e| anyhow::anyhow!("Failed to resolve db root '{}': {}", root.display(), e))?;
+
+    let files = walk_org_files(&root, ignore_patterns)?;
+    Ok(files.into_iter().map(|path| FileEntry { path }).collect())
 }
 
 pub(crate) fn is_ignored(entry: &walkdir::DirEntry, ignore_patterns: &[glob::Pattern]) -> bool {

@@ -9,7 +9,6 @@ use serde::Serialize;
 use std::collections::HashSet;
 use std::path::Path;
 use std::sync::LazyLock;
-use walkdir::WalkDir;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct ResolvedNote {
@@ -40,30 +39,14 @@ static ALIASES_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r":ROAM_ALIASES:\s+(.*)").unwrap());
 
 fn scan_files(root: &Path, ignore_patterns: &[String]) -> Vec<ResolvedNote> {
-    let compiled_patterns: Vec<glob::Pattern> = ignore_patterns
-        .iter()
-        .filter_map(|p| glob::Pattern::new(p).ok())
-        .collect();
+    let Ok(files) = discovery::walk_org_files(root, ignore_patterns) else {
+        return Vec::new();
+    };
 
-    let root_clone = root.to_path_buf();
     let mut notes = Vec::new();
 
-    for entry in WalkDir::new(root)
-        .follow_links(false)
-        .into_iter()
-        .filter_entry(move |e| {
-            if e.path() == root_clone {
-                return true;
-            }
-            !discovery::is_ignored(e, &compiled_patterns)
-        })
-    {
-        let Ok(entry) = entry else { continue };
-        if !entry.file_type().is_file() || entry.path().extension().is_none_or(|e| e != "org") {
-            continue;
-        }
-
-        let Ok(content) = std::fs::read_to_string(entry.path()) else {
+    for path in &files {
+        let Ok(content) = std::fs::read_to_string(path) else {
             continue;
         };
         let header: Vec<&str> = content.lines().take(100).collect();
@@ -114,7 +97,7 @@ fn scan_files(root: &Path, ignore_patterns: &[String]) -> Vec<ResolvedNote> {
         notes.push(ResolvedNote {
             uuid,
             title,
-            path: entry.path().to_string_lossy().to_string(),
+            path: path.to_string_lossy().to_string(),
             filetags,
             categories,
             aliases,
