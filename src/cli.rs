@@ -83,6 +83,12 @@ pub enum Command {
         depth: u32,
         #[arg(short, long, help = "Maximum tokens in output")]
         max_tokens: Option<usize>,
+        #[arg(
+            long,
+            default_value = "cl100k_base",
+            help = "Token encoding: cl100k_base (GPT-4) or o200k_base (GPT-4o)"
+        )]
+        encoding: String,
         #[arg(long, help = "Read UUIDs from NDJSON stdin")]
         from_stdin: bool,
     },

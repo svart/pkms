@@ -2,6 +2,7 @@ use crate::cli::OutputFormat;
 use crate::config::Config;
 use crate::graph::Graph;
 use crate::output::OutputContext;
+use crate::tokens;
 use crate::util;
 use anyhow::Result;
 use serde::Serialize;
@@ -14,6 +15,7 @@ pub struct ContextOutput {
     pub target: String,
     pub context: String,
     pub estimated_tokens: usize,
+    pub encoding: String,
     pub depth: u32,
 }
 
@@ -21,6 +23,7 @@ pub struct ContextOptions<'a> {
     pub target: Option<&'a str>,
     pub depth: u32,
     pub max_tokens: Option<usize>,
+    pub encoding: tokens::Encoding,
     pub from_stdin: bool,
 }
 
@@ -29,6 +32,7 @@ fn build_context_output(
     target: &str,
     depth: u32,
     max_tokens: Option<usize>,
+    encoding: tokens::Encoding,
 ) -> Result<ContextOutput> {
     let node = graph.resolve_target(target)?.clone();
     let content = std::fs::read_to_string(&node.path).unwrap_or_default();
@@ -85,17 +89,18 @@ fn build_context_output(
     );
 
     let rendered = if let Some(max) = max_tokens {
-        truncate_by_tokens(&rendered, max)
+        tokens::truncate_by_tokens(&rendered, max, encoding)
     } else {
         rendered
     };
 
-    let final_tokens = estimate_tokens(&rendered);
+    let final_tokens = tokens::count_tokens(&rendered, encoding);
 
     Ok(ContextOutput {
         target: node.title,
         context: rendered,
         estimated_tokens: final_tokens,
+        encoding: encoding.to_string(),
         depth,
     })
 }
@@ -121,14 +126,17 @@ pub fn run(
     let depth = opts.depth;
     let graph = Graph::load(config, db_cli)?;
 
+    let encoding = opts.encoding;
+
     match ctx.format {
         OutputFormat::Text => {
             for t in &targets {
-                let output = build_context_output(&graph, t, depth, opts.max_tokens)?;
+                let output = build_context_output(&graph, t, depth, opts.max_tokens, encoding)?;
                 println!("{}", output.context);
                 eprintln!(
-                    "[context: ~{} tokens, depth: {}, max_tokens: {}]",
+                    "[context: {} tokens, encoding: {}, depth: {}, max_tokens: {}]",
                     output.estimated_tokens,
+                    output.encoding,
                     depth,
                     opts.max_tokens
                         .map_or("unlimited".to_string(), |m| m.to_string())
@@ -141,7 +149,13 @@ pub fn run(
         OutputFormat::Json => {
             let mut all_outputs = Vec::new();
             for t in &targets {
-                all_outputs.push(build_context_output(&graph, t, depth, opts.max_tokens)?);
+                all_outputs.push(build_context_output(
+                    &graph,
+                    t,
+                    depth,
+                    opts.max_tokens,
+                    encoding,
+                )?);
             }
             if all_outputs.len() == 1 {
                 ctx.print_json(&all_outputs[0])?;
@@ -151,7 +165,7 @@ pub fn run(
         }
         OutputFormat::Ndjson => {
             for t in &targets {
-                let output = build_context_output(&graph, t, depth, opts.max_tokens)?;
+                let output = build_context_output(&graph, t, depth, opts.max_tokens, encoding)?;
                 println!("{}", serde_json::to_string(&output)?);
             }
         }
@@ -231,83 +245,9 @@ fn truncate_content(s: &str, max_chars: usize) -> String {
     truncated
 }
 
-fn count_tokens(text: &str, max: Option<usize>) -> (usize, Option<usize>) {
-    let mut tokens = 0usize;
-    let mut in_word = false;
-    let mut trunc_pos = None;
-
-    for (i, c) in text.char_indices() {
-        if c.is_whitespace() || c == '\n' {
-            in_word = false;
-        } else if c.is_ascii() {
-            if !in_word {
-                tokens += 1;
-                in_word = true;
-            }
-        } else {
-            tokens += 2;
-            in_word = false;
-        }
-
-        if let Some(max_tokens) = max
-            && tokens > max_tokens
-            && trunc_pos.is_none()
-        {
-            trunc_pos = Some(i);
-        }
-    }
-
-    (tokens, trunc_pos)
-}
-
-fn estimate_tokens(text: &str) -> usize {
-    count_tokens(text, None).0
-}
-
-fn truncate_by_tokens(text: &str, max_tokens: usize) -> String {
-    let (_, trunc_at) = count_tokens(text, Some(max_tokens));
-    match trunc_at {
-        Some(pos) => text[..pos].to_string(),
-        None => text.to_string(),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_estimate_tokens_empty() {
-        assert_eq!(estimate_tokens(""), 0);
-    }
-
-    #[test]
-    fn test_estimate_tokens_short() {
-        assert_eq!(estimate_tokens("hello world"), 2);
-    }
-
-    #[test]
-    fn test_estimate_tokens_single_word() {
-        assert_eq!(estimate_tokens("hello"), 1);
-    }
-
-    #[test]
-    fn test_estimate_tokens_cjk() {
-        assert_eq!(estimate_tokens("你好世界"), 8);
-    }
-
-    #[test]
-    fn test_truncate_by_tokens_short() {
-        let text = "hello world this is a test";
-        assert_eq!(truncate_by_tokens(text, 100), text);
-    }
-
-    #[test]
-    fn test_truncate_by_tokens_long() {
-        let text = "aaaa bbbb cccc dddd";
-        let truncated = truncate_by_tokens(text, 2);
-        assert!(truncated.len() < text.len());
-    }
 
     #[test]
     fn test_render_template_basic() {

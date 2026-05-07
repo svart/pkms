@@ -5,6 +5,7 @@ mod discovery;
 mod graph;
 mod output;
 mod parser;
+mod tokens;
 mod util;
 
 use anyhow::Result;
@@ -79,6 +80,7 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
             target,
             depth,
             max_tokens,
+            encoding,
             from_stdin,
         } => commands::context::run(
             cfg,
@@ -87,6 +89,8 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
                 target: target.as_deref(),
                 depth: *depth,
                 max_tokens: *max_tokens,
+                encoding: tokens::Encoding::from_str(encoding)
+                    .ok_or_else(|| anyhow::anyhow!("Unknown encoding: {encoding}"))?,
                 from_stdin: *from_stdin,
             },
             cli.db.as_deref(),

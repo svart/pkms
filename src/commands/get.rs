@@ -3,6 +3,7 @@ use crate::config::Config;
 use crate::graph::{Graph, Node};
 use crate::output::OutputContext;
 use crate::parser::HEADING_RE;
+use crate::tokens;
 use crate::util;
 use anyhow::Result;
 use serde::Serialize;
@@ -84,6 +85,8 @@ impl NodeJson {
 pub struct GetOutput {
     pub node: NodeJson,
     pub neighbors: HashMap<u32, NeighborOutput>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub estimated_tokens: Option<usize>,
 }
 
 #[derive(Serialize)]
@@ -148,9 +151,18 @@ fn process_one_get(
 
     let node_json = NodeJson::from_node(&node, node_content.as_deref(), headings);
 
+    let estimated_tokens = if no_content {
+        None
+    } else {
+        node_content
+            .as_deref()
+            .map(|c| tokens::count_tokens(c, tokens::Encoding::Cl100kBase))
+    };
+
     Ok(GetOutput {
         node: node_json,
         neighbors,
+        estimated_tokens,
     })
 }
 
@@ -201,10 +213,12 @@ fn print_one_get_text(
     if let Some(content) = node_content
         && !no_content
     {
+        let token_count = tokens::count_tokens(&content, tokens::Encoding::Cl100kBase);
         println!();
         println!("--- Content ---");
         println!("{content}");
         println!("--- End Content ---");
+        eprintln!("[content: {token_count} tokens, encoding: cl100k_base]");
     }
 
     if let Some(ns) = neighbors
