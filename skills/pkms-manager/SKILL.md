@@ -118,6 +118,7 @@ Results are scored and sorted by relevance.
 | `pkms query "term" --tags` | Search only within filetags. |
 | `pkms query "term" --limit N` | Show not more than N matching notes. |
 | `pkms query "term" --title` | Search only in titles, aliases, and refs. |
+| `pkms query "term" --embed` | Semantic search via embeddings. |
 
 ### `fix` — [Full reference](references/fix.md)
 Replace all occurrences of a broken UUID across the entire database. Both arguments must be full UUIDs (with dashes). Dry-run by default; use `--apply` to write changes.
@@ -139,6 +140,7 @@ Find thematically related notes by multi-factor scoring
 | Command | Usecase |
 |---------|---------|
 | `pkms suggest <uuid>` | Find related notes by multi-factor scoring. |
+| `pkms suggest <uuid> --embed` | Semantic suggestions via embeddings. |
 
 ### `context` — [Full reference](references/context.md)
 Build an AI-friendly context window for a note.
