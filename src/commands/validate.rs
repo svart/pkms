@@ -72,7 +72,6 @@ fn print_validate_text(
     broken_internal: &[String],
     broken_files: &[String],
     incoming: &[String],
-    _backlink_entries: &[BacklinkEntry],
     issues: &[String],
 ) {
     let outgoing_internal_len = node
@@ -271,7 +270,6 @@ pub fn run(
                     &output.broken_internal,
                     &output.broken_files,
                     &incoming,
-                    &output.backlinks,
                     &output.issues,
                 );
                 if targets.len() > 1 {
