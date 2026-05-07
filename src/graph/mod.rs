@@ -62,15 +62,15 @@ pub struct DuplicateEntry {
 
 #[derive(Debug)]
 pub struct Graph {
-    pub nodes: HashMap<String, Node>,
-    pub path_to_uuid: HashMap<PathBuf, String>,
-    pub title_to_uuid: HashMap<String, Vec<String>>,
-    pub alias_to_uuid: HashMap<String, Vec<String>>,
-    pub backlinks: HashMap<String, Vec<String>>,
-    pub broken_links: Vec<(String, String)>,
-    pub parse_errors: Vec<(PathBuf, String)>,
-    pub skipped_files: Vec<PathBuf>,
-    pub duplicates: DuplicateInfo,
+    pub(crate) nodes: HashMap<String, Node>,
+    pub(crate) path_to_uuid: HashMap<PathBuf, String>,
+    pub(crate) title_to_uuid: HashMap<String, Vec<String>>,
+    pub(crate) alias_to_uuid: HashMap<String, Vec<String>>,
+    pub(crate) backlinks: HashMap<String, Vec<String>>,
+    pub(crate) broken_links: Vec<(String, String)>,
+    pub(crate) parse_errors: Vec<(PathBuf, String)>,
+    pub(crate) skipped_files: Vec<PathBuf>,
+    pub(crate) duplicates: DuplicateInfo,
 }
 
 impl Graph {
