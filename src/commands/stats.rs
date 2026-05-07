@@ -262,17 +262,11 @@ fn print_stats(
 fn format_size(bytes: u64) -> String {
     const UNITS: &[&str] = &["B", "KB", "MB", "GB"];
     let mut unit = 0;
-    let mut scaled = bytes;
-    while scaled >= 1024 && unit < UNITS.len() - 1 {
-        scaled /= 1024;
+    let mut divisor = 1u64;
+    while bytes / divisor >= 1024 && unit < UNITS.len() - 1 {
+        divisor *= 1024;
         unit += 1;
     }
-    let divisor: u64 = match unit {
-        0 => 1,
-        1 => 1024,
-        2 => 1_048_576,
-        _ => 1_073_741_824,
-    };
     let whole = bytes / divisor;
     let frac = (bytes % divisor) * 10 / divisor;
     format!("{}.{} {}", whole, frac, UNITS[unit])
