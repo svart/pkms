@@ -97,7 +97,7 @@ pub fn title_to_slug(title: &str) -> String {
         .chars()
         .map(|c| match c {
             'a'..='z' | '0'..='9' => c,
-            '_' | ' ' | '-' => '_',
+            '_' | '-' => '_',
             _ if c.is_whitespace() => '_',
             _ => '-',
         })
