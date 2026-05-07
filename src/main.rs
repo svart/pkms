@@ -46,18 +46,7 @@ fn main() -> ExitCode {
 }
 
 fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<ExitCode> {
-    if let Some(result) = dispatch_simple(cli, cfg, ctx)? {
-        return Ok(result);
-    }
-    dispatch_complex(cli, cfg, ctx)
-}
-
-fn dispatch_simple(
-    cli: &Cli,
-    cfg: &config::Config,
-    ctx: &OutputContext,
-) -> Result<Option<ExitCode>> {
-    Ok(Some(match &cli.command {
+    Ok(match &cli.command {
         Command::Check {
             file_links,
             attachment_links,
@@ -86,23 +75,6 @@ fn dispatch_simple(
             commands::info::run(cfg, ctx, cli.db.as_deref()).map(|()| ExitCode::SUCCESS)?
         }
         Command::InitConfig { db } => init_config(db.as_deref(), ctx)?,
-        _ => return Ok(None),
-    }))
-}
-
-fn dispatch_complex(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<ExitCode> {
-    if let Some(result) = dispatch_mutating(cli, cfg, ctx)? {
-        return Ok(result);
-    }
-    dispatch_query(cli, cfg, ctx)
-}
-
-fn dispatch_mutating(
-    cli: &Cli,
-    cfg: &config::Config,
-    ctx: &OutputContext,
-) -> Result<Option<ExitCode>> {
-    Ok(Some(match &cli.command {
         Command::Context {
             target,
             depth,
@@ -194,12 +166,6 @@ fn dispatch_mutating(
             cli.db.as_deref(),
         )
         .map(|()| ExitCode::SUCCESS)?,
-        _ => return Ok(None),
-    }))
-}
-
-fn dispatch_query(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<ExitCode> {
-    Ok(match &cli.command {
         Command::Query {
             terms,
             limit,
@@ -221,7 +187,6 @@ fn dispatch_query(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Resul
             commands::path::run(cfg, ctx, from.as_deref(), to.as_deref(), cli.db.as_deref())
                 .map(|()| ExitCode::SUCCESS)?
         }
-        _ => anyhow::bail!("unhandled command in dispatch_query: {:?}", cli.command),
     })
 }
 
