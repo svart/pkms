@@ -42,9 +42,9 @@ Validates all notes, detects broken internal/file/attachment links, duplicate UU
 Returns exit code 0 if healthy, 1 if issues found.
 Run after edits to verify database integrity.
 
-Each section (stats, id-links, file-links, attachment-links, filetags,
-heading-backlinks) has its own flag. When no flags are given, all sections
-are shown. When specific flags are given, only those sections are shown.
+Each section (stats, id-links, file-links, attachment-links, filetags)
+has its own flag. When no flags are given, all sections are shown.
+When specific flags are given, only those sections are shown.
 
 | Command | Usecase |
 |---------|---------|
@@ -54,7 +54,7 @@ are shown. When specific flags are given, only those sections are shown.
 | `pkms check --file-links` | Check only that `file:` link targets exist on disk. |
 | `pkms check --attachment-links` | Check only that `attachment:` link targets exist on disk. |
 | `pkms check --filetags` | Verify that all `#+filetags:` lines use the canonical `:tag1:tag2:tag3:` format. |
-| `pkms check --heading-backlinks` | Check only for heading-level backlinks. |
+
 
 ### `validate` — [Full reference](references/validate.md)
 Health check for a single note.

@@ -50,8 +50,6 @@ pub enum Command {
         id_links: bool,
         #[arg(long, help = "Check filetags format correctness")]
         filetags: bool,
-        #[arg(long, help = "Check heading-level backlinks")]
-        heading_backlinks: bool,
     },
     #[command(about = "Validate health of a specific note")]
     Validate {

@@ -16,7 +16,6 @@ After making changes to notes (creating, editing, fixing links), always run `che
 - **Skipped files** — files with no UUID property or matching ignore patterns
 - **Broken `file:` links** — file links whose target path does not exist on disk
 - **Broken `attachment:` links** — attachment links whose target path does not exist on disk
-- **Heading backlinks** — internal links targeting heading-level UUIDs within another note
 
 It returns exit code **0** if healthy, **1** if issues are found.
 
@@ -33,7 +32,6 @@ are shown.
 | `--file-links` | Broken `file:` links (count + list) |
 | `--attachment-links` | Broken `attachment:` links (count + list) |
 | `--filetags` | Filetags format issues |
-| `--heading-backlinks` | Heading-level backlinks list |
 
 ## Output
 
@@ -103,7 +101,6 @@ With no flags (all sections present):
   "broken_attachment_links": [...],
   "failed_files": [...],
   "filetags_issues": [...],
-  "heading_backlinks": [...],
   "healthy": false
 }
 ```

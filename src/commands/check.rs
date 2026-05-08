@@ -1,5 +1,5 @@
 use crate::config::Config;
-use crate::graph::{DuplicateInfo, Graph, GraphStats, HeadingBacklinkEntry};
+use crate::graph::{DuplicateInfo, Graph, GraphStats};
 use crate::output::OutputContext;
 use crate::parser::{Link, validate_filetags_format};
 use anyhow::Result;
@@ -24,8 +24,6 @@ pub struct CheckOutput {
     pub failed_files: Option<Vec<FailedFileEntry>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub filetags_issues: Option<Vec<FiletagsIssue>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub heading_backlinks: Option<Vec<HeadingBacklinkEntry>>,
     pub healthy: bool,
 }
 
@@ -105,19 +103,16 @@ pub fn run(
     attachment_links: bool,
     id_links: bool,
     filetags: bool,
-    heading_backlinks: bool,
 ) -> Result<ExitCode> {
     let graph = Graph::load(config, db_cli)?;
     let db_root = config.resolve_db_root(db_cli)?;
 
-    let any_explicit =
-        stats || id_links || file_links || attachment_links || filetags || heading_backlinks;
+    let any_explicit = stats || id_links || file_links || attachment_links || filetags;
     let show_stats = stats || !any_explicit;
     let show_id = id_links || !any_explicit;
     let show_file = file_links || !any_explicit;
     let show_attach = attachment_links || !any_explicit;
     let show_filetags = filetags || !any_explicit;
-    let show_heading_backlinks = heading_backlinks || !any_explicit;
 
     let mut broken_file = Vec::new();
     let mut broken_attachment = Vec::new();
@@ -169,8 +164,6 @@ pub fn run(
         }
     }
 
-    let heading_backlinks_data = graph.heading_backlinks();
-
     let healthy = graph.stats().broken_link_count == 0
         && graph.stats().parse_error_count == 0
         && graph.stats().duplicate_uuid_count == 0
@@ -186,13 +179,11 @@ pub fn run(
             &broken_file,
             &broken_attachment,
             &filetags_issues,
-            &heading_backlinks_data,
             show_stats,
             show_id,
             show_file,
             show_attach,
             show_filetags,
-            show_heading_backlinks,
         )?;
     } else {
         print_check_text(
@@ -201,13 +192,11 @@ pub fn run(
             &broken_file,
             &broken_attachment,
             &filetags_issues,
-            &heading_backlinks_data,
             show_stats,
             show_id,
             show_file,
             show_attach,
             show_filetags,
-            show_heading_backlinks,
         );
     }
 
@@ -226,13 +215,11 @@ fn print_check_json(
     broken_file: &[BrokenFileLinkEntry],
     broken_attachment: &[BrokenAttachmentLinkEntry],
     filetags_issues: &[FiletagsIssue],
-    heading_backlinks: &[HeadingBacklinkEntry],
     show_stats: bool,
     show_id: bool,
     show_file: bool,
     show_attach: bool,
     show_filetags: bool,
-    show_heading_backlinks: bool,
 ) -> Result<()> {
     let stats = graph.stats();
 
@@ -304,11 +291,6 @@ fn print_check_json(
         } else {
             None
         },
-        heading_backlinks: if show_heading_backlinks {
-            Some(heading_backlinks.to_vec())
-        } else {
-            None
-        },
         healthy,
     };
     ctx.print_json(&output)
@@ -321,13 +303,11 @@ fn print_check_text(
     broken_file: &[BrokenFileLinkEntry],
     broken_attachment: &[BrokenAttachmentLinkEntry],
     filetags_issues: &[FiletagsIssue],
-    heading_backlinks: &[HeadingBacklinkEntry],
     show_stats: bool,
     show_id: bool,
     show_file: bool,
     show_attach: bool,
     show_filetags: bool,
-    show_heading_backlinks: bool,
 ) {
     let stats = graph.stats();
     let healthy = stats.broken_link_count == 0
@@ -337,8 +317,7 @@ fn print_check_text(
         && broken_attachment.is_empty()
         && filetags_issues.is_empty();
 
-    if show_stats || show_file || show_attach || show_filetags || show_id || show_heading_backlinks
-    {
+    if show_stats || show_file || show_attach || show_filetags || show_id {
         println!("Database: {}", db_root.display());
     }
 
@@ -433,19 +412,7 @@ fn print_check_text(
         }
     }
 
-    if show_heading_backlinks && !heading_backlinks.is_empty() {
-        println!();
-        println!("Heading backlinks:");
-        for entry in heading_backlinks {
-            println!(
-                "  heading {} (in \"{}\") <- {}",
-                entry.heading_uuid, entry.primary_title, entry.source_title
-            );
-        }
-    }
-
-    if show_stats || show_file || show_attach || show_filetags || show_id || show_heading_backlinks
-    {
+    if show_stats || show_file || show_attach || show_filetags || show_id {
         println!();
     }
     if healthy {
