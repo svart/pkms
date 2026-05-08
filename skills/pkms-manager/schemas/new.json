@@ -7,7 +7,15 @@
     "filename": { "type": "string" },
     "path": { "type": "string" },
     "title": { "type": "string" },
-    "created": { "type": "boolean" }
+    "created": { "type": "boolean" },
+    "heading": {
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "uuid": { "type": "string" }
+      },
+      "required": ["title", "uuid"]
+    }
   },
   "required": ["uuid", "filename", "path", "title", "created"]
 }

@@ -16,13 +16,14 @@
           "type": "array",
           "items": {
             "type": "object",
-            "properties": {
-              "level": { "type": "integer" },
-              "title": { "type": "string" },
-              "todo_state": { "type": "string" },
-              "tags": { "type": "array", "items": { "type": "string" } }
-            },
-            "required": ["level", "title", "tags"]
+              "properties": {
+                "level": { "type": "integer" },
+                "title": { "type": "string" },
+                "todo_state": { "type": "string" },
+                "tags": { "type": "array", "items": { "type": "string" } },
+                "uuid": { "type": "string" }
+              },
+              "required": ["level", "title", "tags"]
           }
         },
         "headings_count": { "type": "integer" }

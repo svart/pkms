@@ -160,6 +160,8 @@ pub enum Command {
         tags: Option<String>,
         #[arg(long, help = "Comma-separated list of aliases")]
         aliases: Option<String>,
+        #[arg(long, help = "Heading title to generate :ID: for")]
+        heading: Option<String>,
     },
     #[command(about = "Retrieve a note with its neighbors at specified depth")]
     Get {

@@ -1968,6 +1968,758 @@ fn test_pipe_resolve_to_validate() {
 }
 
 #[test]
+// ----------------------------------------------------------------
+// HEADING UUID TESTS
+// ----------------------------------------------------------------
+#[test]
+fn test_new_with_heading() {
+    let (_dir, root) = setup_db();
+    let db = root.to_str().unwrap();
+
+    let note_dir = root.join("roam").join("common");
+    let note_path = note_dir.join("test-heading-note.org");
+    fs::write(
+        &note_path,
+        r#":PROPERTIES:
+:ID:       11111111-1111-4111-8111-111111111111
+:END:
+#+title: Test Heading Note
+
+* My Heading
+Some content
+"#,
+    )
+    .unwrap();
+
+    let (stdout, _stderr, status) = run(&[
+        "--db",
+        db,
+        "new",
+        "Test Heading Note",
+        "--create",
+        "--heading",
+        "My Heading",
+    ]);
+    assert!(status.success(), "stdout: {}", stdout);
+    assert!(stdout.contains("Heading UUID"));
+
+    let content = std::fs::read_to_string(&note_path).unwrap();
+    let id_count = content.matches(":ID:").count();
+    assert_eq!(id_count, 2, "should have note-level and heading-level IDs");
+}
+
+#[test]
+fn test_new_with_heading_json() {
+    let (_dir, root) = setup_db();
+    let db = root.to_str().unwrap();
+
+    let note_dir = root.join("roam").join("common");
+    let note_path = note_dir.join("json-heading-test.org");
+    fs::write(
+        &note_path,
+        r#":PROPERTIES:
+:ID:       22222222-2222-4222-8222-222222222222
+:END:
+#+title: JSON Heading Test
+
+* JSON Section
+Some content
+"#,
+    )
+    .unwrap();
+
+    let (v, status) = run_json(&[
+        "--db",
+        db,
+        "--output-format",
+        "json",
+        "new",
+        "JSON Heading Test",
+        "--create",
+        "--heading",
+        "JSON Section",
+    ]);
+    assert!(status.success());
+    assert!(v.get("heading").is_some());
+    assert_eq!(v["heading"]["title"], "JSON Section");
+    assert!(v["heading"]["uuid"].is_string());
+}
+
+#[test]
+fn test_resolve_heading_uuid() {
+    let (_dir, root) = setup_db();
+    let db = root.to_str().unwrap();
+
+    let note_dir = root.join("roam").join("common");
+    let note_path = note_dir.join("resolve-heading-test.org");
+    fs::write(
+        &note_path,
+        r#":PROPERTIES:
+:ID:       33333333-3333-4333-8333-333333333333
+:END:
+#+title: Resolve Heading Test
+
+* My Section
+:PROPERTIES:
+:ID:       44444444-4444-4444-8444-444444444444
+:END:
+"#,
+    )
+    .unwrap();
+
+    let (v, status) = run_json(&[
+        "--db",
+        db,
+        "--output-format",
+        "json",
+        "resolve",
+        "--uuid",
+        "44444444-4444-4444-8444-444444444444",
+    ]);
+    assert!(status.success(), "resolve failed: {:?}", v);
+    assert_eq!(v["total"], 1, "should find 1 note by heading UUID");
+    assert_eq!(v["results"][0]["title"], "Resolve Heading Test");
+}
+
+#[test]
+fn test_get_headings_with_uuids() {
+    let (_dir, root) = setup_db();
+    let db = root.to_str().unwrap();
+
+    let note_dir = root.join("roam").join("personal");
+    let note_path = note_dir.join("get-heading-uuid-test.org");
+    fs::write(
+        &note_path,
+        r#":PROPERTIES:
+:ID:       55555555-5555-4555-8555-555555555555
+:END:
+#+title: Get Heading UUIDs Test
+
+* Section One
+:PROPERTIES:
+:ID:       66666666-6666-4666-8666-666666666666
+:END:
+Text
+* Section Two
+Some content
+"#,
+    )
+    .unwrap();
+
+    let (v, status) = run_json(&[
+        "--db",
+        db,
+        "--output-format",
+        "json",
+        "get",
+        "Get Heading UUIDs Test",
+        "--headings",
+    ]);
+    assert!(status.success());
+    assert!(v["node"]["headings"].is_array());
+    let headings = v["node"]["headings"].as_array().unwrap();
+    assert_eq!(headings.len(), 2);
+    assert_eq!(
+        headings[0]["uuid"], "66666666-6666-4666-8666-666666666666",
+        "first heading should have uuid"
+    );
+    assert!(
+        headings[1].get("uuid").is_none(),
+        "second heading should not have uuid"
+    );
+}
+
+#[test]
+fn test_link_to_heading_resolves() {
+    let (_dir, root) = setup_db();
+    let db = root.to_str().unwrap();
+
+    let note_dir = root.join("roam").join("common");
+    fs::create_dir_all(&note_dir).unwrap();
+
+    fs::write(
+        note_dir.join("heading-target.org"),
+        r#":PROPERTIES:
+:ID:       target-heading-note-uuid
+:END:
+#+title: Heading Target
+
+* Target Section
+:PROPERTIES:
+:ID:       heading-target-uuid-aaaa
+:END:
+"#,
+    )
+    .unwrap();
+
+    fs::write(
+        note_dir.join("heading-target.org"),
+        r#":PROPERTIES:
+:ID:       abababab-abab-4aba-8aba-abababababab
+:END:
+#+title: Heading Target
+
+* Target Section
+:PROPERTIES:
+:ID:       bcbcbcbc-bcbc-4bbc-8bbc-bcbcbcbcbcbc
+:END:
+"#,
+    )
+    .unwrap();
+
+    fs::write(
+        note_dir.join("heading-linker.org"),
+        r#":PROPERTIES:
+:ID:       cdcdcdcd-cdcd-4cdc-8cdc-cdcdcdcdcdcd
+:END:
+#+title: Heading Linker
+
+[[id:bcbcbcbc-bcbc-4bbc-8bbc-bcbcbcbcbcbc][Link to heading]]
+"#,
+    )
+    .unwrap();
+
+    let (v, status) = run_json(&[
+        "--db",
+        db,
+        "--output-format",
+        "json",
+        "validate",
+        "Heading Linker",
+    ]);
+    assert!(status.success());
+    assert_eq!(v["healthy"], true);
+    assert!(
+        v["broken_internal"].as_array().unwrap().is_empty(),
+        "link to heading UUID should not be broken"
+    );
+}
+
+#[test]
+fn test_heading_uuid_duplicate_detection() {
+    let (_dir, root) = setup_db();
+    let db = root.to_str().unwrap();
+
+    let note_dir = root.join("roam").join("common");
+    fs::create_dir_all(&note_dir).unwrap();
+
+    fs::write(
+        note_dir.join("dup-heading-1.org"),
+        r#":PROPERTIES:
+:ID:       dededede-dede-4ded-8ded-dededededede
+:END:
+#+title: Dup Heading 1
+
+* Section
+:PROPERTIES:
+:ID:       efefefef-efef-4efe-8efe-efefefefefef
+:END:
+"#,
+    )
+    .unwrap();
+
+    fs::write(
+        note_dir.join("dup-heading-2.org"),
+        r#":PROPERTIES:
+:ID:       fafafafa-fafa-4faf-8faf-fafafafafafa
+:END:
+#+title: Dup Heading 2
+
+* Section
+:PROPERTIES:
+:ID:       efefefef-efef-4efe-8efe-efefefefefef
+:END:
+"#,
+    )
+    .unwrap();
+
+    let (v, status) = run_json(&["--db", db, "--output-format", "json", "check", "--id-links"]);
+    assert!(!status.success(), "check should report issues");
+    let dups = v["duplicates"]["duplicate_uuids"].as_array().unwrap();
+    let clash = dups
+        .iter()
+        .find(|d| d["value"] == "efefefef-efef-4efe-8efe-efefefefefef");
+    assert!(
+        clash.is_some(),
+        "should report clashing heading UUID, got dups: {:?}",
+        dups
+    );
+}
+
+#[test]
+fn test_validate_heading_uuids_field() {
+    let (_dir, root) = setup_db();
+    let db = root.to_str().unwrap();
+
+    let note_dir = root.join("roam").join("personal");
+    let note_path = note_dir.join("validate-heading-uuids.org");
+    fs::write(
+        &note_path,
+        r#":PROPERTIES:
+:ID:       bebebebe-bebe-4beb-8beb-bebebebebebe
+:END:
+#+title: Validate Heading UUIDs
+
+* Section A
+:PROPERTIES:
+:ID:       cacacaca-caca-4cac-8cac-cacacacacaca
+:END:
+Text
+"#,
+    )
+    .unwrap();
+
+    let (v, status) = run_json(&[
+        "--db",
+        db,
+        "--output-format",
+        "json",
+        "validate",
+        "Validate Heading UUIDs",
+    ]);
+    assert!(status.success());
+    assert!(v.get("heading_uuids").is_some());
+    let heading_uuids = v["heading_uuids"].as_array().unwrap();
+    assert_eq!(heading_uuids.len(), 1);
+    assert_eq!(heading_uuids[0], "cacacaca-caca-4cac-8cac-cacacacacaca");
+}
+
+#[test]
+fn test_get_headings_text_with_uuids() {
+    let (_dir, root) = setup_db();
+    let db = root.to_str().unwrap();
+
+    let note_dir = root.join("roam").join("personal");
+    let note_path = note_dir.join("get-text-heading-uuid.org");
+    fs::write(
+        &note_path,
+        r#":PROPERTIES:
+:ID:       f0f0f0f0-f0f0-4f0f-8f0f-f0f0f0f0f0f0
+:END:
+#+title: Get Text Heading UUID
+
+* Visible Heading
+:PROPERTIES:
+:ID:       f1f1f1f1-f1f1-4f1f-8f1f-f1f1f1f1f1f1
+:END:
+"#,
+    )
+    .unwrap();
+
+    let (stdout, _stderr, status) = run(&[
+        "--db",
+        db,
+        "get",
+        "Get Text Heading UUID",
+        "--headings",
+        "--no-content",
+    ]);
+    assert!(status.success());
+    assert!(stdout.contains("f1f1f1f1-f1f1-4f1f-8f1f-f1f1f1f1f1f1"));
+    assert!(stdout.contains("Visible Heading"));
+}
+
+// ----------------------------------------------------------------
+// DUPLICATE UUID SCENARIOS (systematic coverage)
+// ----------------------------------------------------------------
+// Scenarios tested:
+//   #2 Pₐ = Hₐ   heading equals own note's primary
+//   #3 Hₐ₁ = Hₐ₂ two headings in same note share UUID
+//   #4 Pₐ = Hᵦ   primary of A equals heading of B
+//   #5 Hₐ = Hᵦ   heading in A equals heading in B
+
+fn setup_clean_db() -> (tempfile::TempDir, PathBuf) {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("db");
+    fs::create_dir_all(root.join("roam")).unwrap();
+    (dir, root)
+}
+
+fn db_write(root: &std::path::Path, name: &str, content: &str) {
+    fs::write(root.join("roam").join(name), content).unwrap();
+}
+
+// --- check tests ---
+
+#[test]
+fn test_check_heading_equals_primary() {
+    let (_dir, root) = setup_clean_db();
+    db_write(
+        &root,
+        "note.org",
+        r#":PROPERTIES:
+:ID:       aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa
+:END:
+#+title: Note
+
+* Heading
+:PROPERTIES:
+:ID:       aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa
+:END:
+"#,
+    );
+    let (v, _status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "check",
+        "--id-links",
+    ]);
+    let dups: Vec<&str> = v["duplicates"]["duplicate_uuids"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|d| d["value"].as_str().unwrap())
+        .collect();
+    assert!(
+        dups.contains(&"aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa"),
+        "scenario #2: heading equals own primary, got: {:?}",
+        dups
+    );
+}
+
+#[test]
+fn test_check_heading_heading_same_file() {
+    let (_dir, root) = setup_clean_db();
+    db_write(
+        &root,
+        "note.org",
+        r#":PROPERTIES:
+:ID:       aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa
+:END:
+#+title: Note
+
+* Heading One
+:PROPERTIES:
+:ID:       bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb
+:END:
+* Heading Two
+:PROPERTIES:
+:ID:       bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb
+:END:
+"#,
+    );
+    let (v, _status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "check",
+        "--id-links",
+    ]);
+    let dups: Vec<&str> = v["duplicates"]["duplicate_uuids"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|d| d["value"].as_str().unwrap())
+        .collect();
+    assert!(
+        dups.contains(&"bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb"),
+        "scenario #3: two headings share UUID, got: {:?}",
+        dups
+    );
+}
+
+#[test]
+fn test_check_primary_equals_heading_other_file() {
+    let (_dir, root) = setup_clean_db();
+    db_write(
+        &root,
+        "note_a.org",
+        r#":PROPERTIES:
+:ID:       aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa
+:END:
+#+title: Note A
+
+* Section
+:PROPERTIES:
+:ID:       bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb
+:END:
+"#,
+    );
+    db_write(
+        &root,
+        "note_b.org",
+        r#":PROPERTIES:
+:ID:       bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb
+:END:
+#+title: Note B
+"#,
+    );
+    let (v, _status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "check",
+        "--id-links",
+    ]);
+    let dups: Vec<&str> = v["duplicates"]["duplicate_uuids"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|d| d["value"].as_str().unwrap())
+        .collect();
+    assert!(
+        dups.contains(&"bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb"),
+        "scenario #4: primary of B equals heading of A, got: {:?}",
+        dups
+    );
+}
+
+#[test]
+fn test_check_heading_heading_cross_file() {
+    let (_dir, root) = setup_clean_db();
+    db_write(
+        &root,
+        "note_a.org",
+        r#":PROPERTIES:
+:ID:       aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa
+:END:
+#+title: Note A
+
+* Section
+:PROPERTIES:
+:ID:       bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb
+:END:
+"#,
+    );
+    db_write(
+        &root,
+        "note_b.org",
+        r#":PROPERTIES:
+:ID:       cccccccc-cccc-4ccc-cccc-cccccccccccc
+:END:
+#+title: Note B
+
+* Section
+:PROPERTIES:
+:ID:       bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb
+:END:
+"#,
+    );
+    let (v, _status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "check",
+        "--id-links",
+    ]);
+    let dups: Vec<&str> = v["duplicates"]["duplicate_uuids"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|d| d["value"].as_str().unwrap())
+        .collect();
+    assert!(
+        dups.contains(&"bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb"),
+        "scenario #5: heading in A equals heading in B, got: {:?}",
+        dups
+    );
+}
+
+// --- validate tests ---
+
+#[test]
+fn test_validate_heading_equals_primary() {
+    let (_dir, root) = setup_clean_db();
+    db_write(
+        &root,
+        "note.org",
+        r#":PROPERTIES:
+:ID:       aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa
+:END:
+#+title: Note
+
+* Heading
+:PROPERTIES:
+:ID:       aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa
+:END:
+"#,
+    );
+    let (v, _status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "validate",
+        "Note",
+    ]);
+    assert_eq!(
+        v["healthy"], false,
+        "scenario #2: validate should detect heading equals primary"
+    );
+    let issues: Vec<&str> = v["issues"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|i| i.as_str())
+        .collect();
+    assert!(
+        issues.iter().any(|i| i.contains("Duplicate UUID")),
+        "validate issues: {:?}",
+        issues
+    );
+}
+
+#[test]
+fn test_validate_heading_heading_same_file() {
+    let (_dir, root) = setup_clean_db();
+    db_write(
+        &root,
+        "note.org",
+        r#":PROPERTIES:
+:ID:       aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa
+:END:
+#+title: Note
+
+* Heading One
+:PROPERTIES:
+:ID:       bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb
+:END:
+* Heading Two
+:PROPERTIES:
+:ID:       bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb
+:END:
+"#,
+    );
+    let (v, _status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "validate",
+        "Note",
+    ]);
+    assert_eq!(
+        v["healthy"], false,
+        "scenario #3: validate should detect two headings sharing UUID"
+    );
+    let issues: Vec<&str> = v["issues"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|i| i.as_str())
+        .collect();
+    assert!(
+        issues
+            .iter()
+            .any(|i| i.contains("used by multiple headings")),
+        "validate issues: {:?}",
+        issues
+    );
+}
+
+#[test]
+fn test_validate_primary_equals_heading_other_file() {
+    let (_dir, root) = setup_clean_db();
+    db_write(
+        &root,
+        "note_a.org",
+        r#":PROPERTIES:
+:ID:       aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa
+:END:
+#+title: Note A
+
+* Section
+:PROPERTIES:
+:ID:       bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb
+:END:
+"#,
+    );
+    db_write(
+        &root,
+        "note_b.org",
+        r#":PROPERTIES:
+:ID:       bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb
+:END:
+#+title: Note B
+"#,
+    );
+    let (v, _status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "validate",
+        "Note A",
+    ]);
+    assert_eq!(
+        v["healthy"], false,
+        "scenario #4: validate should detect heading matching another note's primary"
+    );
+    let issues: Vec<&str> = v["issues"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|i| i.as_str())
+        .collect();
+    assert!(
+        issues.iter().any(|i| i.contains("belongs to another note")),
+        "validate issues: {:?}",
+        issues
+    );
+}
+
+#[test]
+fn test_validate_heading_heading_cross_file() {
+    let (_dir, root) = setup_clean_db();
+    db_write(
+        &root,
+        "note_a.org",
+        r#":PROPERTIES:
+:ID:       aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa
+:END:
+#+title: Note A
+
+* Section
+:PROPERTIES:
+:ID:       bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb
+:END:
+"#,
+    );
+    db_write(
+        &root,
+        "note_b.org",
+        r#":PROPERTIES:
+:ID:       cccccccc-cccc-4ccc-cccc-cccccccccccc
+:END:
+#+title: Note B
+
+* Section
+:PROPERTIES:
+:ID:       bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb
+:END:
+"#,
+    );
+    // Validate Note B (the second note indexed), whose heading clashes with Note A's heading
+    let (v, _status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "validate",
+        "Note B",
+    ]);
+    assert_eq!(
+        v["healthy"], false,
+        "scenario #5: validate should detect heading matching another note's heading"
+    );
+    let issues: Vec<&str> = v["issues"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|i| i.as_str())
+        .collect();
+    assert!(
+        issues.iter().any(|i| i.contains("belongs to another note")),
+        "validate issues: {:?}",
+        issues
+    );
+}
+
 fn test_pipe_suggest_to_get() {
     let (_dir, root) = setup_db();
     let db = root.to_str().unwrap();

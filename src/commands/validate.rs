@@ -5,8 +5,14 @@ use crate::output::OutputContext;
 use crate::parser::{Link, validate_filetags_format};
 use crate::util;
 use anyhow::Result;
+use regex::Regex;
 use serde::Serialize;
 use std::path::Path;
+use std::sync::LazyLock;
+
+static VALIDATE_UUID_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r":ID:\s+([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})").unwrap()
+});
 
 #[derive(Serialize)]
 pub struct ValidateOutput {
@@ -18,6 +24,7 @@ pub struct ValidateOutput {
     pub aliases: Vec<String>,
     pub refs: Vec<String>,
     pub headings: usize,
+    pub heading_uuids: Vec<String>,
     pub outgoing: usize,
     pub incoming: usize,
     pub outgoing_internal: usize,
@@ -52,6 +59,7 @@ fn build_validate_output(
         aliases: node.aliases.clone(),
         refs: node.refs.clone(),
         headings: node.headings_count,
+        heading_uuids: node.heading_uuids.clone(),
         outgoing: node.outgoing.len(),
         incoming: incoming.len(),
         outgoing_internal: node
@@ -96,6 +104,9 @@ fn print_validate_text(
         println!("  Refs:   {}", node.refs.join(", "));
     }
     println!("  Headings: {}", node.headings_count);
+    if !node.heading_uuids.is_empty() {
+        println!("  Heading UUIDs: {}", node.heading_uuids.join(", "));
+    }
     println!();
     println!("Links:");
     println!(
@@ -126,16 +137,10 @@ fn print_validate_text(
         }
     }
 
-    if !issues.is_empty()
-        && issues
-            .iter()
-            .any(|i| i.starts_with("Invalid") || i.starts_with("Missing"))
-    {
+    if !issues.is_empty() {
         println!();
         for i in issues {
-            if i.starts_with("Invalid") || i.starts_with("Missing") {
-                println!("Issue: {i}");
-            }
+            println!("Issue: {i}");
         }
     }
 
@@ -163,6 +168,37 @@ fn validate_one(graph: &Graph, target: &str, db_root: &Path) -> Result<ValidateO
 
     for (raw, reason) in validate_filetags_format(&content) {
         issues.push(format!("Invalid filetags format '{}': {}", raw, reason));
+    }
+
+    // Check for duplicate UUIDs (note-level vs heading-level)
+    let all_ids: Vec<String> = VALIDATE_UUID_RE
+        .captures_iter(&content)
+        .filter_map(|c| c.get(1))
+        .map(|m| m.as_str().to_string())
+        .collect();
+    if all_ids.len() > 1 {
+        let primary = &all_ids[0];
+        let mut seen_heading_ids = std::collections::HashSet::new();
+        for id in all_ids.iter().skip(1) {
+            if id == primary {
+                issues.push(format!(
+                    "Duplicate UUID: heading-level :ID: {} matches the note's primary :ID:",
+                    id
+                ));
+            } else if !seen_heading_ids.insert(id.clone()) {
+                issues.push(format!(
+                    "Duplicate UUID: heading-level :ID: {} is used by multiple headings in this note",
+                    id
+                ));
+            } else if let Some(other) = graph.find_node(id)
+                && other.uuid != node.uuid
+            {
+                issues.push(format!(
+                    "Duplicate UUID: heading-level :ID: {} belongs to another note \"{}\"",
+                    id, other.title
+                ));
+            }
+        }
     }
 
     let mut broken_internal = Vec::new();

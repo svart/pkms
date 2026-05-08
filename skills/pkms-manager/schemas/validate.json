@@ -11,6 +11,7 @@
     "aliases": { "type": "array", "items": { "type": "string" } },
     "refs": { "type": "array", "items": { "type": "string" } },
     "headings": { "type": "integer" },
+    "heading_uuids": { "type": "array", "items": { "type": "string" } },
     "outgoing": { "type": "integer" },
     "incoming": { "type": "integer" },
     "outgoing_internal": { "type": "integer" },

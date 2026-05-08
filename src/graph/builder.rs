@@ -49,6 +49,8 @@ impl Graph {
         let mut seen_titles: HashMap<String, std::path::PathBuf> = HashMap::new();
         let mut duplicate_titles = Vec::new();
         let mut uuid_to_outgoing: HashMap<String, Vec<Link>> = HashMap::new();
+        let mut heading_uuid_to_primary: HashMap<String, String> = HashMap::new();
+        let mut all_uuids_seen: HashMap<String, std::path::PathBuf> = HashMap::new();
 
         for result in results {
             if let Some(err) = result.parse_error {
@@ -65,35 +67,42 @@ impl Graph {
                 continue;
             }
 
-            let is_duplicate = parsed.uuids.iter().any(|uuid| {
-                seen_uuids
-                    .get(uuid.as_str())
-                    .is_some_and(|existing| existing != &path)
-            });
+            let primary_uuid = &parsed.uuids[0];
+
+            let is_duplicate = seen_uuids
+                .get(primary_uuid.as_str())
+                .is_some_and(|existing| existing != &path);
             if is_duplicate {
-                for uuid in &parsed.uuids {
-                    if let Some(existing) = seen_uuids.get(uuid.as_str())
-                        && existing != &path
-                    {
-                        duplicate_uuids.push(DuplicateEntry {
-                            value: uuid.clone(),
-                            paths: vec![
-                                existing.to_string_lossy().to_string(),
-                                path.to_string_lossy().to_string(),
-                            ],
-                        });
-                    }
-                }
+                duplicate_uuids.push(DuplicateEntry {
+                    value: primary_uuid.clone(),
+                    paths: vec![
+                        seen_uuids[primary_uuid.as_str()]
+                            .to_string_lossy()
+                            .to_string(),
+                        path.to_string_lossy().to_string(),
+                    ],
+                });
                 continue;
             }
 
-            for uuid in &parsed.uuids {
-                seen_uuids
-                    .entry(uuid.clone())
-                    .or_insert_with(|| path.clone());
+            // Check primary UUID against all_uuids_seen (which has heading UUIDs from other files)
+            if let Some(existing) = all_uuids_seen.get(primary_uuid.as_str())
+                && existing != &path
+            {
+                duplicate_uuids.push(DuplicateEntry {
+                    value: primary_uuid.clone(),
+                    paths: vec![
+                        existing.to_string_lossy().to_string(),
+                        path.to_string_lossy().to_string(),
+                    ],
+                });
             }
 
-            let primary_uuid = &parsed.uuids[0];
+            seen_uuids.insert(primary_uuid.clone(), path.clone());
+
+            // Track primary UUIDs in all_uuids_seen too, so heading UUIDs
+            // can be checked against primary UUIDs from other files
+            all_uuids_seen.insert(primary_uuid.clone(), path.clone());
 
             let title = if let Some(t) = parsed.title.clone() {
                 t
@@ -126,9 +135,62 @@ impl Graph {
             let node =
                 Node::from_parsed(primary_uuid.clone(), title.clone(), path.clone(), &parsed);
 
-            for uuid in &parsed.uuids {
-                nodes.insert(uuid.clone(), node.clone());
+            // Map heading UUIDs to primary UUID for resolution
+            for heading_uuid in &node.heading_uuids {
+                heading_uuid_to_primary
+                    .entry(heading_uuid.clone())
+                    .or_insert_with(|| primary_uuid.clone());
             }
+
+            // Check heading UUIDs for uniqueness against ALL seen UUIDs
+            let mut file_heading_uuids_seen = std::collections::HashSet::new();
+            for heading_uuid in &node.heading_uuids {
+                // Intra-file duplicate: heading UUID matches own primary UUID
+                if heading_uuid == primary_uuid {
+                    duplicate_uuids.push(DuplicateEntry {
+                        value: heading_uuid.clone(),
+                        paths: vec![
+                            path.to_string_lossy().to_string(),
+                            path.to_string_lossy().to_string(),
+                        ],
+                    });
+                    continue;
+                }
+                // Intra-file duplicate: same heading UUID appears in two headings
+                if !file_heading_uuids_seen.insert(heading_uuid.clone()) {
+                    duplicate_uuids.push(DuplicateEntry {
+                        value: heading_uuid.clone(),
+                        paths: vec![
+                            path.to_string_lossy().to_string(),
+                            path.to_string_lossy().to_string(),
+                        ],
+                    });
+                    continue;
+                }
+                if let Some(existing) = all_uuids_seen.get(heading_uuid.as_str())
+                    && existing != &path
+                {
+                    duplicate_uuids.push(DuplicateEntry {
+                        value: heading_uuid.clone(),
+                        paths: vec![
+                            existing.to_string_lossy().to_string(),
+                            path.to_string_lossy().to_string(),
+                        ],
+                    });
+                }
+                all_uuids_seen.insert(heading_uuid.clone(), path.clone());
+            }
+
+            // Insert primary UUID into nodes
+            nodes.insert(primary_uuid.clone(), node.clone());
+
+            // Also insert heading UUIDs pointing to the same node for link resolution
+            for heading_uuid in &node.heading_uuids {
+                nodes
+                    .entry(heading_uuid.clone())
+                    .or_insert_with(|| node.clone());
+            }
+
             path_to_uuid.insert(path, primary_uuid.clone());
             title_to_uuid
                 .entry(title)
@@ -156,6 +218,7 @@ impl Graph {
                     .map(|p| p.to_string_lossy().to_string())
                     .collect(),
             },
+            heading_uuid_to_primary,
         }
     }
 }

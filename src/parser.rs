@@ -27,6 +27,13 @@ impl ParsedNote {
             headings: vec![],
         }
     }
+
+    pub fn heading_uuids(&self) -> Vec<String> {
+        self.headings
+            .iter()
+            .filter_map(|h| h.uuid.clone())
+            .collect()
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -47,6 +54,8 @@ pub struct Heading {
     pub todo_state: Option<String>,
     #[cfg_attr(not(test), allow(dead_code))]
     pub tags: Vec<String>,
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub uuid: Option<String>,
 }
 
 const PROP_ID: &str = "ID";
@@ -75,8 +84,9 @@ pub fn parse_note(content: &str) -> ParsedNote {
     let mut roam_aliases = Vec::new();
     let mut roam_refs = Vec::new();
     let mut outgoing = Vec::new();
-    let mut headings = Vec::new();
+    let mut headings: Vec<Heading> = Vec::new();
     let mut in_properties = false;
+    let mut current_heading_idx: Option<usize> = None;
 
     for line in content.lines() {
         let trimmed = line.trim();
@@ -93,7 +103,13 @@ pub fn parse_note(content: &str) -> ParsedNote {
         if in_properties {
             if let Some((key, value)) = parse_property(trimmed) {
                 match key {
-                    PROP_ID => uuids.push(value.to_string()),
+                    PROP_ID => {
+                        if let Some(idx) = current_heading_idx {
+                            headings[idx].uuid = Some(value.to_string());
+                        } else {
+                            uuids.push(value.to_string());
+                        }
+                    }
                     PROP_CATEGORY => categories.push(value.to_string()),
                     PROP_ROAM_ALIASES => {
                         roam_aliases = value
@@ -148,7 +164,9 @@ pub fn parse_note(content: &str) -> ParsedNote {
                     title: heading_title,
                     todo_state,
                     tags,
+                    uuid: None,
                 });
+                current_heading_idx = Some(headings.len() - 1);
             }
 
             for cap in LINK_RE.captures_iter(line) {
@@ -310,6 +328,48 @@ Some text
     }
 
     #[test]
+    fn test_parse_heading_uuids() {
+        let content = r#":PROPERTIES:
+:ID:       a1b2c3d4-e5f6-7890-abcd-ef1234567890
+:END:
+#+title: heading uuids
+
+* Section 1
+Text
+** Subsection A
+:PROPERTIES:
+:ID:       sub-uuid-aaaa-0000-000000000001
+:END:
+* Section 2
+:PROPERTIES:
+:ID:       sec-uuid-bbbb-0000-000000000002
+:END:
+Some text
+** Subsection B"#;
+        let note = parse_note(content);
+        assert_eq!(note.uuids.len(), 1);
+        assert_eq!(note.uuids[0], "a1b2c3d4-e5f6-7890-abcd-ef1234567890");
+        assert_eq!(note.headings.len(), 4);
+        assert!(note.headings[0].uuid.is_none());
+        assert_eq!(
+            note.headings[1].uuid.as_deref(),
+            Some("sub-uuid-aaaa-0000-000000000001")
+        );
+        assert_eq!(
+            note.headings[2].uuid.as_deref(),
+            Some("sec-uuid-bbbb-0000-000000000002")
+        );
+        assert!(note.headings[3].uuid.is_none());
+        assert_eq!(
+            note.heading_uuids(),
+            vec![
+                "sub-uuid-aaaa-0000-000000000001",
+                "sec-uuid-bbbb-0000-000000000002"
+            ]
+        );
+    }
+
+    #[test]
     fn test_parse_category() {
         let content = r#":PROPERTIES:
 :ID:       a1b2c3d4-e5f6-7890-abcd-ef1234567890
@@ -334,9 +394,17 @@ Some content."#;
 :ID:       deadbeef-dead-beef-dead-beef00000001
 :END:"#;
         let note = parse_note(content);
-        assert_eq!(note.uuids.len(), 2);
+        assert_eq!(note.uuids.len(), 1);
         assert_eq!(note.uuids[0], "a1b2c3d4-e5f6-7890-abcd-ef1234567890");
-        assert_eq!(note.uuids[1], "deadbeef-dead-beef-dead-beef00000001");
+        assert_eq!(note.headings.len(), 1);
+        assert_eq!(
+            note.headings[0].uuid.as_deref(),
+            Some("deadbeef-dead-beef-dead-beef00000001")
+        );
+        assert_eq!(
+            note.heading_uuids(),
+            vec!["deadbeef-dead-beef-dead-beef00000001"]
+        );
     }
 
     #[test]

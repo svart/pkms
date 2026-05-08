@@ -167,6 +167,7 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
             create,
             tags,
             aliases,
+            heading,
         } => commands::new::run(
             cfg,
             ctx,
@@ -174,6 +175,7 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
             *create,
             tags.as_deref(),
             aliases.as_deref(),
+            heading.as_deref(),
             cli.db.as_deref(),
         )
         .map(|()| ExitCode::SUCCESS)?,

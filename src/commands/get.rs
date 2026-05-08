@@ -6,8 +6,14 @@ use crate::parser::HEADING_RE;
 use crate::tokens;
 use crate::util;
 use anyhow::Result;
+use regex::Regex;
 use serde::Serialize;
 use std::collections::HashMap;
+use std::sync::LazyLock;
+
+static HEADING_UUID_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r":ID:\s+([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})").unwrap()
+});
 
 #[derive(Serialize)]
 pub struct HeadingJson {
@@ -16,13 +22,37 @@ pub struct HeadingJson {
     pub todo_state: Option<String>,
     pub tags: Vec<String>,
     pub raw: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub uuid: Option<String>,
 }
 
 fn parse_headings_from_content(content: &str) -> Vec<HeadingJson> {
-    content
-        .lines()
-        .filter_map(|line| {
-            let cap = HEADING_RE.captures(line)?;
+    let mut headings: Vec<HeadingJson> = Vec::new();
+    let mut current_heading_idx: Option<usize> = None;
+    let mut in_properties = false;
+
+    for line in content.lines() {
+        let trimmed = line.trim();
+
+        if trimmed == ":PROPERTIES:" {
+            in_properties = true;
+            continue;
+        }
+        if trimmed == ":END:" {
+            in_properties = false;
+            continue;
+        }
+
+        if in_properties {
+            if let Some(cap) = HEADING_UUID_RE.captures(line)
+                && let Some(idx) = current_heading_idx
+            {
+                headings[idx].uuid = Some(cap[1].to_string());
+            }
+            continue;
+        }
+
+        if let Some(cap) = HEADING_RE.captures(line) {
             let level = cap[1].len();
             let todo_state = cap.get(2).map(|m| m.as_str().to_string());
             let heading_title = cap.get(3).map_or("", |m| m.as_str()).to_string();
@@ -37,18 +67,20 @@ fn parse_headings_from_content(content: &str) -> Vec<HeadingJson> {
                             .collect()
                     })
                     .unwrap_or_default();
-                Some(HeadingJson {
+                headings.push(HeadingJson {
                     level,
                     title: heading_title,
                     todo_state,
                     tags,
                     raw: line.to_string(),
-                })
-            } else {
-                None
+                    uuid: None,
+                });
+                current_heading_idx = Some(headings.len() - 1);
             }
-        })
-        .collect()
+        }
+    }
+
+    headings
 }
 
 #[derive(Serialize)]
@@ -207,7 +239,11 @@ fn print_one_get_text(
             println!();
             println!("--- Headings ---");
             for h in &headings {
-                println!("{}", h.raw);
+                if let Some(ref uuid) = h.uuid {
+                    println!("{} ({})", h.raw, uuid);
+                } else {
+                    println!("{}", h.raw);
+                }
             }
             println!("--- End Headings ---");
         }

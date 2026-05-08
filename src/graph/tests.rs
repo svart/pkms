@@ -18,6 +18,38 @@ fn make_note(uuid: &str, title: &str, outgoing: Vec<Link>) -> FileScanResult {
     }
 }
 
+fn make_note_with_headings(
+    uuid: &str,
+    title: &str,
+    outgoing: Vec<Link>,
+    heading_uuids: Vec<&str>,
+) -> FileScanResult {
+    let headings: Vec<crate::parser::Heading> = heading_uuids
+        .into_iter()
+        .map(|huid| crate::parser::Heading {
+            level: 1,
+            title: format!("Heading {}", huid),
+            todo_state: None,
+            tags: vec![],
+            uuid: Some(huid.to_string()),
+        })
+        .collect();
+    FileScanResult {
+        path: PathBuf::from(format!("{}.org", uuid)),
+        parsed: ParsedNote {
+            uuids: vec![uuid.to_string()],
+            title: Some(title.to_string()),
+            filetags: vec![],
+            categories: vec![],
+            roam_aliases: vec![],
+            roam_refs: vec![],
+            outgoing,
+            headings,
+        },
+        parse_error: None,
+    }
+}
+
 fn make_note_full(
     uuid: &str,
     title: &str,
@@ -252,6 +284,97 @@ fn test_resolve_target_ok() {
     let node = graph.resolve_target("a");
     assert!(node.is_ok());
     assert_eq!(node.unwrap().title, "Note A");
+}
+
+#[test]
+fn test_heading_uuid_resolves_to_parent() {
+    let results = vec![
+        make_note_with_headings("parent-uuid", "Parent Note", vec![], vec!["heading-uuid-1"]),
+        make_note(
+            "other",
+            "Other Note",
+            vec![Link::Internal("heading-uuid-1".to_string())],
+        ),
+    ];
+    let graph = Graph::build(results);
+    // heading UUID should resolve to parent node
+    let node = graph.find_node("heading-uuid-1");
+    assert!(node.is_some());
+    assert_eq!(node.unwrap().uuid, "parent-uuid");
+    // heading UUID should be in heading_uuid_to_primary
+    assert_eq!(
+        graph.heading_uuid_to_primary.get("heading-uuid-1"),
+        Some(&"parent-uuid".to_string())
+    );
+    // Link to heading UUID should not be broken
+    assert_eq!(graph.broken_links.len(), 0);
+}
+
+#[test]
+fn test_heading_uuid_duplicate_detection() {
+    let results = vec![
+        make_note_with_headings("a", "Note A", vec![], vec!["dup-heading-uuid"]),
+        make_note_with_headings("b", "Note B", vec![], vec!["dup-heading-uuid"]),
+    ];
+    let graph = Graph::build(results);
+    assert_eq!(graph.path_to_uuid.len(), 2, "both notes should be indexed");
+    assert!(
+        graph
+            .duplicates
+            .duplicate_uuids
+            .iter()
+            .any(|d| d.value == "dup-heading-uuid"),
+        "heading UUID duplicate should be reported"
+    );
+}
+
+#[test]
+fn test_intra_file_heading_heading_duplicate() {
+    let results = vec![make_note_with_headings(
+        "a",
+        "Note A",
+        vec![],
+        vec!["same-heading-uuid", "same-heading-uuid"],
+    )];
+    let graph = Graph::build(results);
+    assert_eq!(graph.path_to_uuid.len(), 1, "note should be indexed");
+    let dups = &graph.duplicates.duplicate_uuids;
+    assert!(
+        dups.iter().any(|d| d.value == "same-heading-uuid"),
+        "two headings sharing a UUID should be reported, got: {:?}",
+        dups.iter().map(|d| &d.value).collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn test_heading_uuid_clashes_with_primary_uuid() {
+    let results = vec![
+        make_note("primary-uuid-a", "Note A", vec![]),
+        make_note_with_headings("note-b", "Note B", vec![], vec!["primary-uuid-a"]),
+    ];
+    let graph = Graph::build(results);
+    assert!(graph.nodes.contains_key("primary-uuid-a"));
+    let dups = &graph.duplicates.duplicate_uuids;
+    assert!(
+        dups.iter().any(|d| d.value == "primary-uuid-a"),
+        "heading UUID clashing with primary UUID should be reported, got: {:?}",
+        dups.iter().map(|d| &d.value).collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn test_intra_file_heading_uuid_duplicate() {
+    let results = vec![
+        // Note where heading UUID equals its own primary UUID
+        make_note_with_headings("same-uuid", "Note", vec![], vec!["same-uuid"]),
+    ];
+    let graph = Graph::build(results);
+    let dups = &graph.duplicates.duplicate_uuids;
+    assert!(
+        dups.iter().any(|d| d.value == "same-uuid"),
+        "intra-file heading UUID duplicate should be reported, got: {:?}",
+        dups.iter().map(|d| &d.value).collect::<Vec<_>>()
+    );
 }
 
 #[test]

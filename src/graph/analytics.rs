@@ -7,10 +7,18 @@ use crate::parser::Link;
 use super::{Graph, GraphStats};
 
 impl Graph {
+    fn primary_nodes(&self) -> Vec<&super::Node> {
+        let mut seen = std::collections::HashSet::new();
+        self.nodes
+            .values()
+            .filter(|n| seen.insert(&n.uuid))
+            .collect()
+    }
+
     pub fn hubs(&self, limit: usize) -> Vec<(&super::Node, usize)> {
         let mut degrees: Vec<(&super::Node, usize)> = self
-            .nodes
-            .values()
+            .primary_nodes()
+            .iter()
             .map(|n| {
                 let outgoing = n
                     .outgoing
@@ -18,7 +26,7 @@ impl Graph {
                     .filter(|l| matches!(l, Link::Internal(_)))
                     .count();
                 let incoming = self.backlinks.get(&n.uuid).map_or(0, std::vec::Vec::len);
-                (n, outgoing + incoming)
+                (*n, outgoing + incoming)
             })
             .collect();
         degrees.sort_by_key(|b| std::cmp::Reverse(b.1));
@@ -28,7 +36,7 @@ impl Graph {
 
     pub fn directory_breakdown(&self, db_root: &Path) -> Vec<(String, usize)> {
         let mut dirs: HashMap<String, usize> = HashMap::new();
-        for node in self.nodes.values() {
+        for node in self.primary_nodes() {
             let rel = node.path.strip_prefix(db_root).unwrap_or(&node.path);
             let dir = rel
                 .parent()
@@ -42,8 +50,10 @@ impl Graph {
     }
 
     pub fn disk_size(&self) -> u64 {
+        let mut seen = std::collections::HashSet::new();
         self.nodes
             .values()
+            .filter(|n| seen.insert(&n.path))
             .filter_map(|n| n.path.metadata().ok())
             .map(|m| m.len())
             .sum()
@@ -51,8 +61,8 @@ impl Graph {
 
     pub fn notes_since(&self, days: u32) -> Vec<&super::Node> {
         let cutoff = SystemTime::now() - std::time::Duration::from_secs(u64::from(days) * 86400);
-        self.nodes
-            .values()
+        self.primary_nodes()
+            .into_iter()
             .filter(|n| {
                 n.path
                     .metadata()
@@ -64,8 +74,8 @@ impl Graph {
     }
 
     pub fn orphan_nodes(&self) -> Vec<&super::Node> {
-        self.nodes
-            .values()
+        self.primary_nodes()
+            .into_iter()
             .filter(|n| {
                 let has_outgoing = n.outgoing.iter().any(|l| matches!(l, Link::Internal(_)));
                 let has_incoming = self.backlinks.get(&n.uuid).is_some_and(|b| !b.is_empty());
@@ -75,22 +85,25 @@ impl Graph {
     }
 
     pub fn stats(&self) -> GraphStats {
-        let total_notes = self.nodes.len();
+        let total_notes = self.path_to_uuid.len();
         let total_internal_links: usize = self
-            .nodes
-            .values()
+            .path_to_uuid
+            .keys()
+            .filter_map(|p| self.nodes.get(self.path_to_uuid.get(p)?))
             .flat_map(|n| &n.outgoing)
             .filter(|l| matches!(l, Link::Internal(_)))
             .count();
         let total_file_links: usize = self
-            .nodes
-            .values()
+            .path_to_uuid
+            .keys()
+            .filter_map(|p| self.nodes.get(self.path_to_uuid.get(p)?))
             .flat_map(|n| &n.outgoing)
             .filter(|l| matches!(l, Link::File(_)))
             .count();
         let total_url_links: usize = self
-            .nodes
-            .values()
+            .path_to_uuid
+            .keys()
+            .filter_map(|p| self.nodes.get(self.path_to_uuid.get(p)?))
             .flat_map(|n| &n.outgoing)
             .filter(|l| matches!(l, Link::Url(_)))
             .count();

@@ -1,9 +1,15 @@
 use crate::config::Config;
 use crate::output::OutputContext;
-use anyhow::Result;
+use anyhow::{Context, Result};
 use serde::Serialize;
 use std::fmt::Write;
 use std::path::PathBuf;
+
+#[derive(Serialize)]
+pub struct HeadingId {
+    pub title: String,
+    pub uuid: String,
+}
 
 #[derive(Serialize)]
 pub struct NewOutput {
@@ -12,8 +18,30 @@ pub struct NewOutput {
     pub path: PathBuf,
     pub title: String,
     pub created: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub heading: Option<HeadingId>,
 }
 
+fn find_note_by_title(
+    db_root: &std::path::Path,
+    ignore: &[String],
+    title: &str,
+) -> Option<std::path::PathBuf> {
+    let title_re = regex::Regex::new(r"(?im)^#\+title:\s*(.*)$").ok()?;
+    let files = crate::discovery::walk_org_files(db_root, ignore).ok()?;
+    for path in files {
+        let content = std::fs::read_to_string(&path).ok()?;
+        if let Some(cap) = title_re.captures(&content) {
+            let note_title = cap.get(1).map_or("", |m| m.as_str()).trim();
+            if note_title == title {
+                return Some(path);
+            }
+        }
+    }
+    None
+}
+
+#[allow(clippy::too_many_arguments)]
 pub fn run(
     config: &Config,
     ctx: &OutputContext,
@@ -21,9 +49,11 @@ pub fn run(
     create: bool,
     tags: Option<&str>,
     aliases: Option<&str>,
+    heading: Option<&str>,
     db_cli: Option<&std::path::Path>,
 ) -> Result<()> {
     let db_root = config.resolve_db_root(db_cli)?;
+    let ignore = config.resolve_ignore_patterns();
     let new_notes_dir = config.resolve_new_notes_dir(&db_root);
 
     let uuid = uuid::Uuid::new_v4().to_string();
@@ -38,7 +68,32 @@ pub fn run(
     }
 
     let mut created = false;
-    if create {
+    let heading_output = if let Some(heading_title) = heading {
+        if !create {
+            anyhow::bail!(
+                "Cannot use --heading without --create. The note file must exist to add a heading UUID."
+            );
+        }
+        let existing = find_note_by_title(&db_root, &ignore, title);
+        if let Some(note_path) = existing {
+            let content = std::fs::read_to_string(&note_path)
+                .with_context(|| format!("Failed to read {}", note_path.display()))?;
+            let heading_uuid = insert_heading_uuid(&content, heading_title, &note_path)?;
+            Some(HeadingId {
+                title: heading_title.to_string(),
+                uuid: heading_uuid,
+            })
+        } else {
+            anyhow::bail!(
+                "Note not found with title \"{title}\". \
+                 Create the note first with `pkms new \"{title}\" --create`."
+            );
+        }
+    } else {
+        None
+    };
+
+    if create && heading_output.is_none() {
         let mut content = format!(":PROPERTIES:\n:ID:       {uuid}\n:END:\n#+title: {title}\n");
 
         if let Some(tags_str) = tags {
@@ -63,14 +118,17 @@ pub fn run(
 
         std::fs::write(&path, &content)?;
         created = true;
+    } else if create && heading_output.is_some() {
+        created = true;
     }
 
     let output = NewOutput {
         uuid,
         filename,
-        path,
+        path: path.clone(),
         title: title.to_string(),
         created,
+        heading: heading_output,
     };
 
     if ctx.is_json() {
@@ -81,6 +139,9 @@ pub fn run(
         println!("  UUID:     {}", output.uuid);
         println!("  Filename: {}", output.filename);
         println!("  Path:     {}", output.path.display());
+        if let Some(ref h) = output.heading {
+            println!("  Heading UUID: {} ({})", h.uuid, h.title);
+        }
         if create {
             println!("  Status:   created");
         } else {
@@ -89,6 +150,72 @@ pub fn run(
     }
 
     Ok(())
+}
+
+fn insert_heading_uuid(content: &str, heading_title: &str, path: &PathBuf) -> Result<String> {
+    let heading_re = regex::Regex::new(r"^(\*+)\s+(.*?)(?:\s+:\w+(?::\w+)*:)?\s*$").unwrap();
+    let uuid_re =
+        regex::Regex::new(r":ID:\s+([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})")
+            .unwrap();
+
+    let lines: Vec<&str> = content.lines().collect();
+    let mut heading_indices = Vec::new();
+
+    let stripped_title = heading_title.trim();
+    for (i, line) in lines.iter().enumerate() {
+        if let Some(cap) = heading_re.captures(line) {
+            let heading_text = cap.get(2).map_or("", |m| m.as_str()).trim();
+            // Match heading text without leading TODO keywords
+            let text = heading_text
+                .split_whitespace()
+                .last()
+                .unwrap_or(heading_text);
+            if heading_text == stripped_title || text == stripped_title {
+                heading_indices.push(i);
+            }
+        }
+    }
+
+    if heading_indices.is_empty() {
+        anyhow::bail!(
+            "Heading \"{heading_title}\" not found in {}",
+            path.display()
+        );
+    }
+    if heading_indices.len() > 1 {
+        anyhow::bail!(
+            "Multiple headings \"{heading_title}\" found in {}. \
+             Heading UUID generation requires a unique heading.",
+            path.display()
+        );
+    }
+
+    let idx = heading_indices[0];
+
+    // Check if heading already has a PROPERTIES drawer with :ID:
+    if idx + 1 < lines.len() && lines[idx + 1].trim() == ":PROPERTIES:" {
+        let props_section: Vec<&str> = lines[idx + 1..]
+            .iter()
+            .take_while(|l| l.trim() != ":END:" || **l == lines[idx + 1])
+            .copied()
+            .collect();
+        let props_text = props_section.join("\n");
+        if let Some(cap) = uuid_re.captures(&props_text) {
+            return Ok(cap[1].to_string());
+        }
+    }
+
+    let heading_uuid = uuid::Uuid::new_v4().to_string();
+
+    let mut new_lines: Vec<String> = lines.iter().map(|l| l.to_string()).collect();
+    new_lines.insert(idx + 1, String::new());
+    new_lines.insert(idx + 2, ":PROPERTIES:".to_string());
+    new_lines.insert(idx + 3, format!(":ID:       {heading_uuid}"));
+    new_lines.insert(idx + 4, ":END:".to_string());
+
+    std::fs::write(path, new_lines.join("\n"))?;
+
+    Ok(heading_uuid)
 }
 
 pub fn title_to_slug(title: &str) -> String {

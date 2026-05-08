@@ -13,7 +13,7 @@ The `pkms` binary should be available. The database location is configured via `
 
 ## Database
 
-The org-roam database contains org-mode notes organized in subdirectories (varies by database — run `pkms info` to see configuration). Each note has UUID v4 `:ID:` in a property drawer, `#+title:`, and internal links via `[[id:<uuid>][description]]`. Run `pkms info` as your first command to understand the active configuration.
+The org-roam database contains org-mode notes organized in subdirectories (varies by database — run `pkms info` to see configuration). Each note has UUID v4 `:ID:` in a property drawer, `#+title:`, and internal links via `[[id:<uuid>][description]]`. Headings within notes may also carry `:ID:` properties for direct section-level linking. Use `pkms get <target> --headings` to see heading UUIDs, and `pkms new --heading` to create them. Run `pkms info` as your first command to understand the active configuration.
 
 ### Before any workflow
 
@@ -163,6 +163,7 @@ Generate a UUID v4 and timestamped filename (`YYYYMMDDHHMMSS-slug.org`) in the c
 | `pkms new "Title"` | Dry-run: preview generated UUID, filename, and path. |
 | `pkms new "Title" --create` | Create boilerplate note file on disk. |
 | `pkms new "Title" --create --tags "tag1,tag2"` | Create note with filetags. |
+| `pkms new "Title" --create --heading "Heading 1"` | Generate heading-level `:ID:` for an existing heading in the note |
 
 ### `info` — [Full reference](references/info.md)
 Show the configuration with notes database path.
@@ -208,6 +209,21 @@ Show the configuration with notes database path.
 9. If mentioning orphan in already existing note is natural just create this link without adding direct forward link from orphan.
 10. `validate <uuid>` each changed note to confirm no broken links.
 11. `check` to verify overall database health.. `check` to verify overall health.
+
+### Creating and Linking Heading-Level IDs
+
+When a topic within a note deserves its own anchor point for cross-linking:
+
+1. Create the note with heading (if note is not available):
+   `pkms new "Note name" --create`
+2. Add the heading manually to the note file (e.g. `* Sub Topic`).
+3. Generate heading-level `:ID:`:
+   `pkms new "Note name" --create --heading "Sub Topic"`
+4. Find heading UUIDs in an existing note or get heading UUID from previous `new` command output:
+   `pkms get <target> --headings --no-content --output-format json`
+5. Link to a specific heading from another note:
+   `[[id:<heading-uuid>][contextual text here]]`
+6. Verify both notes with `pkms validate <uuid>`.
 
 ## Command Pipelining
 

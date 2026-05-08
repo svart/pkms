@@ -22,6 +22,7 @@ Use `new` when you need to create a new org-roam note. It generates a UUID v4, a
 | `--create` | false | Actually write the boilerplate file |
 | `--tags T1,T2` | — | Comma-separated filetags |
 | `--aliases A1,A2` | — | Comma-separated aliases |
+| `--heading TITLE` | — | Generate heading-level `:ID:` for an existing heading in the note |
 
 ## Boilerplate File Format
 
@@ -87,4 +88,9 @@ pkms new "New Concept" --create
 ### Create with tags and aliases
 ```bash
 pkms new "New Concept" --create --tags "learning,emacs" --aliases "Alt Name,Alternate"
+```
+
+### Add heading-level ID to existing heading
+```bash
+pkms new "Existing Note" --create --heading "HTTP/2"
 ```

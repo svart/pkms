@@ -44,10 +44,10 @@ Note: Note A
   Path:   /org/roam/common/note_a.org
 
 --- Headings ---
-1. Introduction  :tag1:
-  1.1 Background [DONE]
-2. Main Section
-  2.1 Subsection  :tag2:tag3:
+* Introduction  :tag1:
+** DONE Background
+* Main Section
+** Subsection (aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa)
 --- End Headings ---
 ```
 
@@ -78,7 +78,7 @@ Backlinks:
     "content": "Full file content...",
     "headings": [
       {"level": 1, "title": "Introduction", "todo_state": null, "tags": ["tag1"], "raw": "* Introduction     :tag1:"},
-      {"level": 2, "title": "Background", "todo_state": "DONE", "tags": [], "raw": "** DONE Background"}
+      {"level": 2, "title": "Subsection", "todo_state": null, "tags": [], "raw": "** Subsection", "uuid": "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa"}
     ],
     "headings_count": 2
   },

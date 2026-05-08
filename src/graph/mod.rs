@@ -22,6 +22,7 @@ pub struct Node {
     pub refs: Vec<String>,
     pub outgoing: Vec<Link>,
     pub headings_count: usize,
+    pub heading_uuids: Vec<String>,
 }
 
 impl Node {
@@ -36,6 +37,7 @@ impl Node {
             refs: parsed.roam_refs.clone(),
             outgoing: parsed.outgoing.clone(),
             headings_count: parsed.headings.len(),
+            heading_uuids: parsed.heading_uuids(),
         }
     }
 }
@@ -71,6 +73,7 @@ pub struct Graph {
     pub(crate) parse_errors: Vec<(PathBuf, String)>,
     pub(crate) skipped_files: Vec<PathBuf>,
     pub(crate) duplicates: DuplicateInfo,
+    pub(crate) heading_uuid_to_primary: HashMap<String, String>,
 }
 
 impl Graph {
@@ -124,6 +127,9 @@ impl Graph {
             && let Some(uuid) = uuids.first()
         {
             return self.nodes.get(uuid);
+        }
+        if let Some(primary) = self.heading_uuid_to_primary.get(target) {
+            return self.nodes.get(primary);
         }
         None
     }

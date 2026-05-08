@@ -54,6 +54,33 @@ Short, declarative sentences. Compound sentences joined by commas, not semicolon
 
 Headings must be consecutive — never skip a level. If the parent is `*`, the child is `**`, not `***`. A `***` is only valid when preceded by a `**`. This preserves the structural hierarchy for org-mode parsers.
 
+### Heading-Level `:ID:` Properties
+
+When a heading covers a concept that deserves its own link anchor, add a PROPERTIES drawer with `:ID:` immediately after the heading line:
+
+```org
+** HTTP/2
+:PROPERTIES:
+:ID:       bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb
+:END:
+```
+
+Generate heading UUIDs with `pkms new "Note Title" --create --heading "HTTP/2"`.
+Link to a heading from another note with:
+
+```
+[[id:bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb][HTTP/2]]
+```
+
+The link description should match the context of the surrounding text.
+
+Heading IDs are warranted when:
+- The heading covers a sub-concept that other notes need to reference directly.
+- The heading is a version/variant of the main topic (e.g., HTTP/2 under HTTP).
+- The heading is a distinct protocol, specification, standard, or case within a broader note.
+
+Do not add heading IDs mechanically to every heading. Only add them when cross-note linking to that specific section is expected.
+
 ### Key Principles Lists
 
 When a source lists principles, rules, or steps, introduce each as an imperative or directive subheading with a colon, then a short explanatory paragraph:

@@ -6,7 +6,7 @@ Use `resolve` for quick lookups when you know a title, UUID fragment, or tag but
 
 ## How It Works
 
-`resolve` scans all `.org` files in the database root, reading only the first 100 lines of each file to extract UUID, title, filetags, and aliases. It does NOT build the graph — this makes it significantly faster than commands that load the full graph (like `query`, `suggest`, or `get`).
+`resolve` scans all `.org` files in the database root, reading only the first 100 lines of each file to extract UUID, title, filetags, and aliases. When `--uuid` is specified, the full file is scanned to find both note-level and heading-level `:ID:` properties.
 
 Results are matched via substring comparison.
 

@@ -18,6 +18,8 @@ pub struct ResolvedNote {
     pub filetags: Vec<String>,
     pub categories: Vec<String>,
     pub aliases: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub matched_heading_uuid: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -38,73 +40,111 @@ static CATEGORY_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r":CATEGORY:\s
 static ALIASES_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r":ROAM_ALIASES:\s+(.*)").unwrap());
 
-fn scan_files(root: &Path, ignore_patterns: &[String]) -> Vec<ResolvedNote> {
+fn scan_files(
+    root: &Path,
+    ignore_patterns: &[String],
+    uuid_query: Option<&str>,
+) -> Vec<ResolvedNote> {
     let Ok(files) = discovery::walk_org_files(root, ignore_patterns) else {
         return Vec::new();
     };
 
+    let do_full_scan = uuid_query.is_some();
     let mut notes = Vec::new();
 
     for path in &files {
         let Ok(content) = std::fs::read_to_string(path) else {
             continue;
         };
-        let header: Vec<&str> = content.lines().take(100).collect();
-        let header_str = header.join("\n");
 
-        let uuid = UUID_RE
-            .captures_iter(&header_str)
-            .next()
-            .and_then(|c| c.get(1))
-            .map(|m| m.as_str().to_string());
-        let Some(uuid) = uuid else { continue };
-
-        let title = TITLE_RE
-            .captures(&header_str)
-            .and_then(|c| c.get(1))
-            .map(|m| m.as_str().trim().to_string())
-            .unwrap_or_default();
-
-        let filetags = FILETAGS_RE
-            .captures(&header_str)
-            .map(|c| {
-                c.get(1)
-                    .map_or("", |m| m.as_str())
-                    .split(':')
-                    .filter(|t| !t.is_empty())
-                    .map(|t| t.trim().to_string())
-                    .collect()
-            })
-            .unwrap_or_default();
-
-        let aliases = ALIASES_RE
-            .captures_iter(&header_str)
-            .last()
-            .map(|c| {
-                c.get(1)
-                    .map_or("", |m| m.as_str())
-                    .split_whitespace()
-                    .map(|s| s.trim_matches('"').to_string())
-                    .collect()
-            })
-            .unwrap_or_default();
-
-        let categories: Vec<String> = CATEGORY_RE
-            .captures_iter(&header_str)
-            .filter_map(|c| c.get(1).map(|m| m.as_str().trim().to_string()))
-            .collect();
-
-        notes.push(ResolvedNote {
-            uuid,
-            title,
-            path: path.to_string_lossy().to_string(),
-            filetags,
-            categories,
-            aliases,
-        });
+        if do_full_scan {
+            let all_uuids: Vec<String> = UUID_RE
+                .captures_iter(&content)
+                .filter_map(|c| c.get(1))
+                .map(|m| m.as_str().to_string())
+                .collect();
+            if all_uuids.is_empty() {
+                continue;
+            }
+            let primary_uuid = &all_uuids[0];
+            let uq = uuid_query.unwrap();
+            let matched_heading = all_uuids
+                .iter()
+                .skip(1)
+                .find(|u| u.to_lowercase().contains(&uq.to_lowercase()))
+                .cloned();
+            notes.push(scan_one_note(
+                path,
+                &content,
+                primary_uuid.clone(),
+                matched_heading,
+            ));
+        } else {
+            let header: Vec<&str> = content.lines().take(100).collect();
+            let header_str = header.join("\n");
+            let uuid = UUID_RE
+                .captures_iter(&header_str)
+                .next()
+                .and_then(|c| c.get(1))
+                .map(|m| m.as_str().to_string());
+            let Some(uuid) = uuid else { continue };
+            notes.push(scan_one_note(path, &header_str, uuid, None));
+        }
     }
 
     notes
+}
+
+fn scan_one_note(
+    path: &std::path::Path,
+    content: &str,
+    uuid: String,
+    matched_heading: Option<String>,
+) -> ResolvedNote {
+    let title = TITLE_RE
+        .captures(content)
+        .and_then(|c| c.get(1))
+        .map(|m| m.as_str().trim().to_string())
+        .unwrap_or_default();
+
+    let filetags = FILETAGS_RE
+        .captures(content)
+        .map(|c| {
+            c.get(1)
+                .map_or("", |m| m.as_str())
+                .split(':')
+                .filter(|t| !t.is_empty())
+                .map(|t| t.trim().to_string())
+                .collect()
+        })
+        .unwrap_or_default();
+
+    let aliases = ALIASES_RE
+        .captures_iter(content)
+        .last()
+        .map(|c| {
+            c.get(1)
+                .map_or("", |m| m.as_str())
+                .split_whitespace()
+                .map(|s| s.trim_matches('"').to_string())
+                .collect()
+        })
+        .unwrap_or_default();
+
+    let categories: Vec<String> = CATEGORY_RE
+        .captures_iter(content)
+        .filter_map(|c| c.get(1).map(|m| m.as_str().trim().to_string()))
+        .collect();
+
+    ResolvedNote {
+        uuid,
+        title,
+        path: path.to_string_lossy().to_string(),
+        filetags,
+        categories,
+        aliases,
+        matched_heading_uuid: matched_heading,
+    }
 }
 
 pub struct ResolveOptions<'a> {
@@ -123,16 +163,19 @@ pub fn run(
 ) -> Result<()> {
     let db_root = config.resolve_db_root(db_cli)?;
     let ignore = config.resolve_ignore_patterns();
-    let notes = scan_files(&db_root, &ignore);
+    let uuid_query = opts.uuid;
+    let notes = scan_files(&db_root, &ignore, uuid_query);
 
-    let uuid_query = opts.uuid.map(str::to_lowercase);
     let title_query = opts.title.map(str::to_lowercase);
 
     let mut all: Vec<ResolvedNote> = notes
         .into_iter()
         .filter(|n| {
-            if let Some(ref uq) = uuid_query
-                && !n.uuid.to_lowercase().contains(uq)
+            if let Some(uq) = opts.uuid
+                && !n.uuid.to_lowercase().contains(&uq.to_lowercase())
+                && n.matched_heading_uuid
+                    .as_ref()
+                    .is_none_or(|h| !h.to_lowercase().contains(&uq.to_lowercase()))
             {
                 return false;
             }
