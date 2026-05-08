@@ -67,16 +67,24 @@ pkms resolve --title <term> --limit 20  # Cap results
 ### Health & Validation
 
 ```
-pkms check                              # Full database health scan
+pkms check                              # Full database health scan (all sections)
+pkms check --stats                      # Show database statistics only
 pkms check --file-links                 # Check file: links exist on disk
 pkms check --attachment-links           # Check attachment: links on disk
-pkms check --id-links                   # Check id: links resolve (default)
+pkms check --id-links                   # Check id: links resolve
+pkms check --filetags                   # Check filetags format
+pkms check --heading-backlinks          # Check heading-level backlinks
 pkms validate <target>                  # Validate a specific note
 ```
 
 `check` scans all notes, validates IDs/titles, detects broken links,
 orphans, duplicates, and reports statistics. Returns exit code 1 if
 issues are found.
+
+Each section (`stats`, `id-links`, `file-links`, `attachment-links`,
+`filetags`, `heading-backlinks`) has its own flag. When no flags are given,
+all sections are shown. When specific flags are given, only those sections
+are shown — useful for focused scans or automation.
 
 `validate` checks a single note: UUID format, title presence, all
 outgoing links (internal + file existence), and lists backlinks.
@@ -189,7 +197,7 @@ pkms init-config --db ~/Documents/org  # With db_root pre-filled
 
 | Command       | Description                                               |
 |---------------|-----------------------------------------------------------|
-| `check`       | Full database health scan                                 |
+| `check`       | Full database health scan (+ --stats, --heading-backlinks) |
 | `validate`    | Validate a specific note                                  |
 | `stats`       | Comprehensive database statistics (+ --hubs, --tags)      |
 | `orphans`     | List orphan notes (no links, + --with-dailies)            |

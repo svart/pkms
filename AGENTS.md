@@ -8,7 +8,7 @@ After changes, run these commands **in this strict order**:
 cargo fmt --check              # 1. Check formatting (fail if unformatted)
 cargo clippy -- -D warnings    # 2. Lint with clippy (deny all warnings)
 cargo build                    # 3. Build the binary
-cargo test                     # 4. Run all unit + integration tests (153+ tests, ~1s)
+cargo test                     # 4. Run all unit + integration tests (157+ tests, ~1s)
 cargo test --test integration  # 5. Integration tests only (mock DB)
 target/debug/pkms --help       # 6. Verify CLI works
 ```
@@ -58,7 +58,7 @@ src/
     new.rs          # Generate UUID + filename for new note
     context.rs      # Build AI context window with token budget
 tests/
-  integration.rs    # 75 integration tests with temp mock DB
+  integration.rs    # 95 integration tests with temp mock DB
 ```
 
 ## How to add a new command
@@ -116,7 +116,7 @@ Every command's JSON (`--output-format json|ndjson`) output has a specific struc
 
 | Command     | Top-level keys |
 |-------------|----------------|
-| `check`     | `db_root`, `stats`, `duplicates`, `broken_links`, `broken_file_links`, `broken_attachment_links`, `failed_files`, `filetags_issues[]` (path, title, issue), `healthy` |
+| `check`     | `db_root`, `stats?`, `duplicates?`, `broken_links?`, `broken_file_links?`, `broken_attachment_links?`, `failed_files?`, `filetags_issues?` (path, title, issue), `heading_backlinks?`, `healthy` |
 | `stats`     | `db_root`, `total_notes`, `total_links`, `internal_links`, `file_links`, `url_links`, `avg_links_per_note`, `orphans`, `broken_links`, `disk_size_bytes`, `directories[]`, `recent_notes[]` |
 | `resolve`   | `query`, `total`, `showed?`, `results[]` (uuid, title, path, filetags, aliases) |
 | `suggest`   | `target`, `target_uuid`, `total`, `showed?`, `suggestions[]` (uuid, title, score, scores{}, reasons[], target_uuid) |
@@ -136,7 +136,7 @@ Every command's JSON (`--output-format json|ndjson`) output has a specific struc
 - **Integration tests** in `tests/integration.rs` spawn the actual binary with a temp mock DB
 - **Property-based tests** in `graph.rs` and `parser.rs` use `proptest` (random Graph::Build fuzzing, slug roundtrip, UUID format, panic fuzzing)
 - **JSON output testing**: All commands are tested with `--output-format json` via `test_all_commands_json`, verifying valid JSON output for every command
-- Mock DB helper in `tests/integration.rs::setup_db()` creates a 10+ note graph with duplicate UUIDs, broken links, filetags, aliases, and headings
+- Mock DB helper in `tests/integration.rs::setup_db()` creates a 12+ note graph with duplicate UUIDs, broken links, filetags, aliases, and headings
 
 ## Feature flags
 
@@ -151,7 +151,12 @@ Every command's JSON (`--output-format json|ndjson`) output has a specific struc
 | `--output-format FMT` | Output format: `text`, `json`, or `ndjson`   |
 | `--from-stdin`    | Read UUIDs from NDJSON stdin (Get, Suggest, Validate, Context) |
 | `--headings`      | Show heading structure (Get only)                            |
+| `--stats`         | Show database statistics (Check only)                        |
+| `--file-links`    | Check file: link targets exist on disk (Check only)          |
+| `--attachment-links` | Check attachment: link targets exist on disk (Check only) |
+| `--id-links`      | Check id: link targets exist in the database (Check only)    |
 | `--filetags`      | Check filetags format correctness (Check only)               |
+| `--heading-backlinks` | Check heading-level backlinks (Check only)               |
 
 ## Command pipelining
 

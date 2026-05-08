@@ -10,14 +10,22 @@ use std::process::ExitCode;
 #[derive(Serialize)]
 pub struct CheckOutput {
     pub db_root: String,
-    pub stats: GraphStats,
-    pub duplicates: DuplicateInfo,
-    pub broken_links: Vec<BrokenLinkEntry>,
-    pub broken_file_links: Vec<BrokenFileLinkEntry>,
-    pub broken_attachment_links: Vec<BrokenAttachmentLinkEntry>,
-    pub failed_files: Vec<FailedFileEntry>,
-    pub filetags_issues: Vec<FiletagsIssue>,
-    pub heading_backlinks: Vec<HeadingBacklinkEntry>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stats: Option<GraphStats>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub duplicates: Option<DuplicateInfo>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub broken_links: Option<Vec<BrokenLinkEntry>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub broken_file_links: Option<Vec<BrokenFileLinkEntry>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub broken_attachment_links: Option<Vec<BrokenAttachmentLinkEntry>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub failed_files: Option<Vec<FailedFileEntry>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub filetags_issues: Option<Vec<FiletagsIssue>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub heading_backlinks: Option<Vec<HeadingBacklinkEntry>>,
     pub healthy: bool,
 }
 
@@ -87,23 +95,29 @@ fn link_target_exists(target: &str, db_root: &Path) -> bool {
     true
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn run(
     config: &Config,
     ctx: &OutputContext,
     db_cli: Option<&std::path::Path>,
+    stats: bool,
     file_links: bool,
     attachment_links: bool,
     id_links: bool,
     filetags: bool,
+    heading_backlinks: bool,
 ) -> Result<ExitCode> {
     let graph = Graph::load(config, db_cli)?;
     let db_root = config.resolve_db_root(db_cli)?;
 
-    let any_explicit = id_links || file_links || attachment_links || filetags;
+    let any_explicit =
+        stats || id_links || file_links || attachment_links || filetags || heading_backlinks;
+    let show_stats = stats || !any_explicit;
     let show_id = id_links || !any_explicit;
     let show_file = file_links || !any_explicit;
     let show_attach = attachment_links || !any_explicit;
     let show_filetags = filetags || !any_explicit;
+    let show_heading_backlinks = heading_backlinks || !any_explicit;
 
     let mut broken_file = Vec::new();
     let mut broken_attachment = Vec::new();
@@ -140,14 +154,6 @@ pub fn run(
         }
     }
 
-    let broken_file_count = broken_file.len();
-    let broken_attachment_count = broken_attachment.len();
-    let broken_internal = if show_id {
-        graph.stats().broken_link_count
-    } else {
-        0
-    };
-
     let mut filetags_issues = Vec::new();
     if show_filetags {
         for node in graph.nodes.values() {
@@ -162,16 +168,15 @@ pub fn run(
             }
         }
     }
-    let filetags_issue_count = filetags_issues.len();
 
-    let healthy = broken_internal == 0
-        && broken_file_count == 0
-        && broken_attachment_count == 0
-        && filetags_issue_count == 0
-        && (!show_id || graph.stats().parse_error_count == 0)
-        && (!show_id || graph.stats().duplicate_uuid_count == 0);
+    let heading_backlinks_data = graph.heading_backlinks();
 
-    let heading_backlinks = graph.heading_backlinks();
+    let healthy = graph.stats().broken_link_count == 0
+        && graph.stats().parse_error_count == 0
+        && graph.stats().duplicate_uuid_count == 0
+        && broken_file.is_empty()
+        && broken_attachment.is_empty()
+        && filetags_issues.is_empty();
 
     if ctx.is_json() {
         print_check_json(
@@ -181,8 +186,13 @@ pub fn run(
             &broken_file,
             &broken_attachment,
             &filetags_issues,
-            &heading_backlinks,
+            &heading_backlinks_data,
+            show_stats,
             show_id,
+            show_file,
+            show_attach,
+            show_filetags,
+            show_heading_backlinks,
         )?;
     } else {
         print_check_text(
@@ -191,11 +201,13 @@ pub fn run(
             &broken_file,
             &broken_attachment,
             &filetags_issues,
-            &heading_backlinks,
+            &heading_backlinks_data,
+            show_stats,
             show_id,
             show_file,
             show_attach,
             show_filetags,
+            show_heading_backlinks,
         );
     }
 
@@ -215,9 +227,15 @@ fn print_check_json(
     broken_attachment: &[BrokenAttachmentLinkEntry],
     filetags_issues: &[FiletagsIssue],
     heading_backlinks: &[HeadingBacklinkEntry],
+    show_stats: bool,
     show_id: bool,
+    show_file: bool,
+    show_attach: bool,
+    show_filetags: bool,
+    show_heading_backlinks: bool,
 ) -> Result<()> {
     let stats = graph.stats();
+
     let broken = if show_id {
         graph
             .broken_links
@@ -236,14 +254,18 @@ fn print_check_json(
         vec![]
     };
 
-    let failed = graph
-        .parse_errors
-        .iter()
-        .map(|(path, err)| FailedFileEntry {
-            path: path.to_string_lossy().to_string(),
-            error: err.clone(),
-        })
-        .collect();
+    let failed = if show_id {
+        graph
+            .parse_errors
+            .iter()
+            .map(|(path, err)| FailedFileEntry {
+                path: path.to_string_lossy().to_string(),
+                error: err.clone(),
+            })
+            .collect()
+    } else {
+        vec![]
+    };
 
     let has_filetags_issues = !filetags_issues.is_empty();
     let healthy = stats.broken_link_count == 0
@@ -255,14 +277,38 @@ fn print_check_json(
 
     let output = CheckOutput {
         db_root: db_root.to_string_lossy().to_string(),
-        stats: stats.clone(),
-        duplicates: graph.duplicates.clone(),
-        broken_links: broken,
-        broken_file_links: broken_file.to_vec(),
-        broken_attachment_links: broken_attachment.to_vec(),
-        failed_files: failed,
-        filetags_issues: filetags_issues.to_vec(),
-        heading_backlinks: heading_backlinks.to_vec(),
+        stats: if show_stats {
+            Some(stats.clone())
+        } else {
+            None
+        },
+        duplicates: if show_id {
+            Some(graph.duplicates.clone())
+        } else {
+            None
+        },
+        broken_links: if show_id { Some(broken) } else { None },
+        broken_file_links: if show_file {
+            Some(broken_file.to_vec())
+        } else {
+            None
+        },
+        broken_attachment_links: if show_attach {
+            Some(broken_attachment.to_vec())
+        } else {
+            None
+        },
+        failed_files: if show_id { Some(failed) } else { None },
+        filetags_issues: if show_filetags {
+            Some(filetags_issues.to_vec())
+        } else {
+            None
+        },
+        heading_backlinks: if show_heading_backlinks {
+            Some(heading_backlinks.to_vec())
+        } else {
+            None
+        },
         healthy,
     };
     ctx.print_json(&output)
@@ -276,32 +322,36 @@ fn print_check_text(
     broken_attachment: &[BrokenAttachmentLinkEntry],
     filetags_issues: &[FiletagsIssue],
     heading_backlinks: &[HeadingBacklinkEntry],
+    show_stats: bool,
     show_id: bool,
     show_file: bool,
     show_attach: bool,
     show_filetags: bool,
+    show_heading_backlinks: bool,
 ) {
     let stats = graph.stats();
-    let broken_internal_count = if show_id { stats.broken_link_count } else { 0 };
-    let healthy = broken_internal_count == 0
+    let healthy = stats.broken_link_count == 0
+        && stats.parse_error_count == 0
+        && stats.duplicate_uuid_count == 0
         && broken_file.is_empty()
         && broken_attachment.is_empty()
-        && filetags_issues.is_empty()
-        && (!show_id || stats.parse_error_count == 0)
-        && (!show_id || stats.duplicate_uuid_count == 0);
+        && filetags_issues.is_empty();
 
-    println!("Database: {}", db_root.display());
-    println!("  Notes:          {}", stats.total_notes);
-    println!(
-        "  Links:          {} (internal: {}, file: {}, url: {})",
-        stats.total_links,
-        stats.total_internal_links,
-        stats.total_file_links,
-        stats.total_url_links,
-    );
-    println!("  Orphans:        {}", stats.orphan_notes);
+    if show_stats || show_file || show_attach || show_filetags || show_id || show_heading_backlinks
+    {
+        println!("Database: {}", db_root.display());
+    }
 
-    if show_id {
+    if show_stats {
+        println!("  Notes:          {}", stats.total_notes);
+        println!(
+            "  Links:          {} (internal: {}, file: {}, url: {})",
+            stats.total_links,
+            stats.total_internal_links,
+            stats.total_file_links,
+            stats.total_url_links,
+        );
+        println!("  Orphans:        {}", stats.orphan_notes);
         println!("  Broken links:   {}", stats.broken_link_count);
         println!("  Parse errors:   {}", stats.parse_error_count);
         println!("  Skipped files:  {}", stats.skipped_count);
@@ -383,7 +433,7 @@ fn print_check_text(
         }
     }
 
-    if !heading_backlinks.is_empty() {
+    if show_heading_backlinks && !heading_backlinks.is_empty() {
         println!();
         println!("Heading backlinks:");
         for entry in heading_backlinks {
@@ -394,7 +444,10 @@ fn print_check_text(
         }
     }
 
-    println!();
+    if show_stats || show_file || show_attach || show_filetags || show_id || show_heading_backlinks
+    {
+        println!();
+    }
     if healthy {
         println!("Status: healthy");
     } else {

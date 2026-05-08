@@ -40,6 +40,8 @@ pub struct Cli {
 pub enum Command {
     #[command(about = "Verify health of the entire org-roam database")]
     Check {
+        #[arg(long, help = "Show database statistics")]
+        stats: bool,
         #[arg(long, help = "Check that file: link targets exist on disk")]
         file_links: bool,
         #[arg(long, help = "Check that attachment: link targets exist on disk")]
@@ -48,6 +50,8 @@ pub enum Command {
         id_links: bool,
         #[arg(long, help = "Check filetags format correctness")]
         filetags: bool,
+        #[arg(long, help = "Check heading-level backlinks")]
+        heading_backlinks: bool,
     },
     #[command(about = "Validate health of a specific note")]
     Validate {

@@ -16,24 +16,65 @@ After making changes to notes (creating, editing, fixing links), always run `che
 - **Skipped files** — files with no UUID property or matching ignore patterns
 - **Broken `file:` links** — file links whose target path does not exist on disk
 - **Broken `attachment:` links** — attachment links whose target path does not exist on disk
+- **Heading backlinks** — internal links targeting heading-level UUIDs within another note
 
 It returns exit code **0** if healthy, **1** if issues are found.
 
-## Flags
+## Section flags
 
-| Flag | Default | Description |
-|------|---------|-------------|
-| (none) | all checks | Check id:, file:, and attachment: links |
-| `--file-links` | off | Check that `file:` link targets exist on disk |
-| `--attachment-links` | off | Check that `attachment:` link targets exist on disk |
-| `--id-links` | off | Check only that `id:` link targets exist in the database |
+Each output section is controlled by its own flag. When **no flags** are given,
+all sections are shown. When **specific flags** are given, only those sections
+are shown.
 
-When no flags are given, all three link types are checked. Flags can be combined to narrow scope.
+| Flag | Section shown |
+|------|---------------|
+| `--stats` | Database statistics: notes, links, orphans, broken counts, parse errors, skipped, duplicates, missing titles |
+| `--id-links` | Broken internal links list + duplicate UUIDs/titles + missing titles + failed files |
+| `--file-links` | Broken `file:` links (count + list) |
+| `--attachment-links` | Broken `attachment:` links (count + list) |
+| `--filetags` | Filetags format issues |
+| `--heading-backlinks` | Heading-level backlinks list |
 
 ## Output
 
 ### Text (default)
 
+With no flags:
+```
+Database: /home/user/Documents/org
+  Notes:          1450
+  Links:          12450 (internal: 9800, file: 450, url: 2200)
+  Orphans:        42
+  Broken links:   3
+  Parse errors:   0
+  Skipped files:  1
+  Dup UUIDs:      0
+  Dup titles:     1
+  Missing titles: 0
+  Broken files:   0
+  Broken attach:  0
+  Filetags issues: 2
+
+Duplicate UUIDs:
+  <uuid> -> /path/to/note.org
+  <uuid> -> /path/to/note.org
+
+Duplicate titles:
+  "Title" -> /path/to/a.org
+
+Missing #+title:
+  /path/to/no_title.org
+
+Broken links:
+  Some Note -> ffffffff-ffff-4fff-ffff-ffffffffffff
+
+Invalid filetags format:
+  Note (path): tag ':  bad:' — reason
+
+Status: issues found
+```
+
+With `--stats` only:
 ```
 Database: /home/user/Documents/org
   Notes:          1450
@@ -46,40 +87,32 @@ Database: /home/user/Documents/org
   Dup titles:     1
   Missing titles: 0
 
-Broken links:
-  Some Note -> ffffffff-ffff-4fff-ffff-ffffffffffff
-
 Status: issues found
 ```
 
 ### JSON
 
+With no flags (all sections present):
 ```json
 {
   "db_root": "/home/user/Documents/org",
-  "stats": {
-    "total_notes": 1450,
-    "total_links": 12450,
-    "total_internal_links": 9800,
-    "total_file_links": 450,
-    "total_url_links": 2200,
-    "orphan_notes": 42,
-    "broken_link_count": 3,
-    "skipped_count": 1,
-    "parse_error_count": 0,
-    "duplicate_uuid_count": 0,
-    "duplicate_title_count": 1,
-    "missing_title_count": 0
-  },
-  "duplicates": {
-    "duplicate_uuids": [],
-    "duplicate_titles": [{"value": "Duplicate Title", "paths": ["path1.org", "path2.org"]}],
-    "missing_titles": []
-  },
-  "broken_links": [{"source_uuid": "...", "source_title": "Some Note", "target_uuid": "ffffffff-ffff-4fff-ffff-ffffffffffff"}],
-  "broken_file_links": [],
-  "broken_attachment_links": [],
-  "failed_files": [],
+  "stats": { ... },
+  "duplicates": { ... },
+  "broken_links": [...],
+  "broken_file_links": [...],
+  "broken_attachment_links": [...],
+  "failed_files": [...],
+  "filetags_issues": [...],
+  "heading_backlinks": [...],
+  "healthy": false
+}
+```
+
+With `--file-links` only (other sections omitted):
+```json
+{
+  "db_root": "/home/user/Documents/org",
+  "broken_file_links": [...],
   "healthy": false
 }
 ```
@@ -94,6 +127,11 @@ pkms check
 ### Focus on file link health only
 ```bash
 pkms check --file-links
+```
+
+### Check just stats (quick overview)
+```bash
+pkms check --stats
 ```
 
 ### Machine-readable output for automation

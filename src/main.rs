@@ -51,18 +51,22 @@ fn main() -> ExitCode {
 fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<ExitCode> {
     Ok(match &cli.command {
         Command::Check {
+            stats,
             file_links,
             attachment_links,
             id_links,
             filetags,
+            heading_backlinks,
         } => commands::check::run(
             cfg,
             ctx,
             cli.db.as_deref(),
+            *stats,
             *file_links,
             *attachment_links,
             *id_links,
             *filetags,
+            *heading_backlinks,
         )?,
         Command::Validate { target, from_stdin } => {
             commands::validate::run(cfg, ctx, target.as_deref(), *from_stdin, cli.db.as_deref())

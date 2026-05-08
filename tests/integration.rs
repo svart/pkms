@@ -1222,11 +1222,22 @@ fn test_check_file_links_json() {
         "--file-links",
     ]);
     assert!(!status.success());
-    assert!(v.get("broken_file_links").is_some());
+    assert!(
+        v.get("broken_file_links").is_some(),
+        "expected broken_file_links field"
+    );
     let broken_files = v["broken_file_links"].as_array().unwrap();
     assert!(broken_files.len() >= 1, "expected broken file links");
     assert!(broken_files[0]["source_title"].is_string());
     assert!(broken_files[0]["target_path"].is_string());
+    assert!(
+        v.get("stats").is_none(),
+        "stats should not appear with --file-links only"
+    );
+    assert!(
+        v.get("broken_links").is_none(),
+        "broken_links should not appear with --file-links only"
+    );
 }
 
 // ----------------------------------------------------------------
@@ -1258,11 +1269,18 @@ fn test_check_attachment_links_json() {
         "--attachment-links",
     ]);
     assert!(!status.success());
-    assert!(v.get("broken_attachment_links").is_some());
+    assert!(
+        v.get("broken_attachment_links").is_some(),
+        "expected broken_attachment_links field"
+    );
     let broken_attach = v["broken_attachment_links"].as_array().unwrap();
     assert!(broken_attach.len() >= 1, "expected broken attachment links");
     assert!(broken_attach[0]["source_title"].is_string());
     assert!(broken_attach[0]["target_path"].is_string());
+    assert!(
+        v.get("stats").is_none(),
+        "stats should not appear with --attachment-links only"
+    );
 }
 
 #[test]
@@ -1282,6 +1300,10 @@ fn test_check_file_and_attachment_links_json() {
     assert!(v.get("broken_attachment_links").is_some());
     assert!(v["broken_file_links"].as_array().unwrap().len() >= 1);
     assert!(v["broken_attachment_links"].as_array().unwrap().len() >= 1);
+    assert!(
+        v.get("stats").is_none(),
+        "stats should not appear without --stats flag"
+    );
 }
 
 #[test]
@@ -1302,15 +1324,13 @@ fn test_check_id_links_json() {
             .map_or(false, |a| !a.is_empty())
     );
     assert!(v["broken_links"][0]["source_uuid"].is_string());
-    // file and attachment checks should be empty when only --id-links
-    assert_eq!(
-        v["broken_file_links"].as_array().unwrap().len(),
-        0,
+    // file and attachment checks should be absent when only --id-links
+    assert!(
+        v.get("broken_file_links").is_none(),
         "expected no file links with --id-links only"
     );
-    assert_eq!(
-        v["broken_attachment_links"].as_array().unwrap().len(),
-        0,
+    assert!(
+        v.get("broken_attachment_links").is_none(),
         "expected no attachment links with --id-links only"
     );
 }
@@ -1967,7 +1987,6 @@ fn test_pipe_resolve_to_validate() {
     }
 }
 
-#[test]
 // ----------------------------------------------------------------
 // HEADING UUID TESTS
 // ----------------------------------------------------------------
@@ -2760,6 +2779,7 @@ fn test_check_heading_backlinks() {
         "json",
         "check",
         "--id-links",
+        "--heading-backlinks",
     ]);
     let bl = v["heading_backlinks"].as_array().unwrap();
     assert_eq!(bl.len(), 1, "should report 1 heading backlink");
@@ -2799,13 +2819,23 @@ fn test_check_heading_backlinks_text() {
 [[id:bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb][link]]
 "#,
     );
-    let (stdout, _stderr, status) = run(&["--db", root.to_str().unwrap(), "check", "--id-links"]);
+    let (stdout, _stderr, status) = run(&[
+        "--db",
+        root.to_str().unwrap(),
+        "check",
+        "--id-links",
+        "--heading-backlinks",
+    ]);
     assert!(status.success());
     assert!(
         stdout.contains("Heading backlinks"),
         "text output should show heading backlinks"
     );
     assert!(stdout.contains("bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb"));
+    assert!(
+        !stdout.contains("Notes:"),
+        "stats should not appear with --id-links only"
+    );
 }
 
 #[test]
@@ -2891,6 +2921,7 @@ Some content
     );
 }
 
+#[test]
 fn test_pipe_suggest_to_get() {
     let (_dir, root) = setup_db();
     let db = root.to_str().unwrap();
