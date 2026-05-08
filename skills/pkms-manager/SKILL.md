@@ -79,6 +79,7 @@ Fast notes lookup by metadata.
 
 | Command | Usecase |
 |---------|---------|
+| `pkms resolve --uuid <UUID>` | Find a note by any :ID: (note-level or heading-level, substring match) |
 | `pkms resolve --title <title>` | Look up notes by title or alias substring |
 | `pkms resolve --title "graph"` | Look up notes with "graph" substring in title (e.g "subgraph", "graphs", etc.) |
 | `pkms resolve --title "gr alg"` | Look up notes with "gr" and "alg" substrings in title (e.g "graph algorithms", "algorithms on graphs", etc.) |

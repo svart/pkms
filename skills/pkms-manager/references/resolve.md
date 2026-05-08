@@ -71,6 +71,12 @@ pkms resolve --title "Concept"
 pkms resolve --uuid "aaaaaaa"
 ```
 
+### Find a note by heading-level UUID
+```bash
+pkms resolve --uuid "ba20ac20"
+```
+`--uuid` matches both note-level and heading-level IDs. The output includes the note's primary UUID and optionally `matched_heading_uuid` when the match came from a heading.
+
 ### Filter by tag
 ```bash
 pkms resolve --tags "emacs"
