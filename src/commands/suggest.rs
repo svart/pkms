@@ -4,11 +4,41 @@ use crate::config::Config;
 use crate::embed;
 use crate::graph::{Graph, Node};
 use crate::output::OutputContext;
-use crate::parser::Link;
+use crate::parser::{HEADING_RE, Link};
 use crate::util;
 use anyhow::Result;
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
+
+type SuggestResult = (Node, Vec<Suggestion>, usize, Option<usize>, Option<String>);
+
+fn find_heading_title_for_uuid(content: &str, heading_uuid: &str) -> Option<String> {
+    let lines: Vec<&str> = content.lines().collect();
+    for (i, line) in lines.iter().enumerate() {
+        if line.contains(heading_uuid) && i > 0 {
+            // The heading line should be the previous line
+            let prev = lines[i - 1].trim();
+            if let Some(cap) = HEADING_RE.captures(prev) {
+                let title = cap.get(3).map_or("", |m| m.as_str()).trim();
+                if !title.is_empty() {
+                    return Some(title.to_string());
+                }
+            }
+            // PROPERTIES: might be on the line after the heading,
+            // so check two lines back
+            if i > 1 {
+                let prev2 = lines[i - 2].trim();
+                if let Some(cap) = HEADING_RE.captures(prev2) {
+                    let title = cap.get(3).map_or("", |m| m.as_str()).trim();
+                    if !title.is_empty() {
+                        return Some(title.to_string());
+                    }
+                }
+            }
+        }
+    }
+    None
+}
 
 type ScoredItem<'a> = (
     &'a crate::graph::Node,
@@ -38,6 +68,8 @@ pub struct Suggestion {
     pub scores: HashMap<String, f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub target_uuid: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub heading_context: Option<String>,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -332,16 +364,30 @@ fn compute_suggestions_for_node(
     exclude_orphans: bool,
     limit: Option<usize>,
     target_uuid: Option<String>,
-) -> Result<(Node, Vec<Suggestion>, usize, Option<usize>)> {
+) -> Result<SuggestResult> {
     let node = graph
         .nodes
         .get(target)
         .cloned()
         .ok_or_else(|| anyhow::anyhow!("Note not found: {target}"))?;
 
-    let target_lower = node.title.to_lowercase();
+    let heading_context: Option<String> = if graph.heading_uuid_to_primary.contains_key(target) {
+        if let Ok(content) = std::fs::read_to_string(&node.path) {
+            find_heading_title_for_uuid(&content, target)
+        } else {
+            None
+        }
+    } else {
+        None
+    };
 
-    let target_keywords: HashSet<String> = target_lower
+    let target_lower = if let Some(ref h) = heading_context {
+        format!("{} {}", node.title, h)
+    } else {
+        node.title.to_lowercase()
+    };
+
+    let mut target_keywords: HashSet<String> = target_lower
         .split_whitespace()
         .filter(|w| w.len() > 2)
         .map(std::string::ToString::to_string)
@@ -392,6 +438,14 @@ fn compute_suggestions_for_node(
         })
         .collect();
 
+    if let Some(ref h) = heading_context {
+        target_keywords.extend(
+            h.split_whitespace()
+                .filter(|w| w.len() > 2)
+                .map(std::string::ToString::to_string),
+        );
+    }
+
     let mut scored = compute_scores(
         &node,
         graph,
@@ -421,10 +475,11 @@ fn compute_suggestions_for_node(
             filetags: n.filetags.clone(),
             scores: fs.clone(),
             target_uuid: target_uuid.clone(),
+            heading_context: heading_context.clone(),
         })
         .collect();
 
-    Ok((node, suggestions, total, showed))
+    Ok((node, suggestions, total, showed, heading_context))
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -464,9 +519,13 @@ pub fn run(
     match ctx.format {
         OutputFormat::Text => {
             for t in &targets {
-                let (node, suggestions, _total, _showed) =
+                let (node, suggestions, _total, _showed, heading_ctx) =
                     compute_suggestions_for_node(&graph, t, exclude_orphans, limit, None)?;
-                println!("Suggestions for \"{}\":", node.title);
+                if let Some(ref h) = heading_ctx {
+                    println!("Suggestions for \"{}\" ({})", node.title, h);
+                } else {
+                    println!("Suggestions for \"{}\":", node.title);
+                }
                 println!();
                 for (i, s) in suggestions.iter().enumerate() {
                     println!("{:3}. {}  (score: {:.1})", i + 1, s.title, s.score);
@@ -485,7 +544,7 @@ pub fn run(
         OutputFormat::Json => {
             let mut all_outputs = Vec::new();
             for t in &targets {
-                let (node, suggestions, total, showed) =
+                let (node, suggestions, total, showed, _heading_ctx) =
                     compute_suggestions_for_node(&graph, t, exclude_orphans, limit, None)?;
                 all_outputs.push(SuggestOutput {
                     target: node.title.clone(),
@@ -503,13 +562,14 @@ pub fn run(
         }
         OutputFormat::Ndjson => {
             for t in &targets {
-                let (_node, suggestions, _total, _showed) = compute_suggestions_for_node(
-                    &graph,
-                    t,
-                    exclude_orphans,
-                    limit,
-                    Some(t.clone()),
-                )?;
+                let (_node, suggestions, _total, _showed, _heading_ctx) =
+                    compute_suggestions_for_node(
+                        &graph,
+                        t,
+                        exclude_orphans,
+                        limit,
+                        Some(t.clone()),
+                    )?;
                 for s in &suggestions {
                     println!("{}", serde_json::to_string(s)?);
                 }
@@ -576,6 +636,7 @@ fn suggest_by_embedding(
                         filetags: n.filetags.clone(),
                         scores: m,
                         target_uuid: Some(target_node.uuid.clone()),
+                        heading_context: None,
                     }
                 })
                 .collect();

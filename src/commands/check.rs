@@ -1,5 +1,5 @@
 use crate::config::Config;
-use crate::graph::{DuplicateInfo, Graph, GraphStats};
+use crate::graph::{DuplicateInfo, Graph, GraphStats, HeadingBacklinkEntry};
 use crate::output::OutputContext;
 use crate::parser::{Link, validate_filetags_format};
 use anyhow::Result;
@@ -17,6 +17,7 @@ pub struct CheckOutput {
     pub broken_attachment_links: Vec<BrokenAttachmentLinkEntry>,
     pub failed_files: Vec<FailedFileEntry>,
     pub filetags_issues: Vec<FiletagsIssue>,
+    pub heading_backlinks: Vec<HeadingBacklinkEntry>,
     pub healthy: bool,
 }
 
@@ -170,6 +171,8 @@ pub fn run(
         && (!show_id || graph.stats().parse_error_count == 0)
         && (!show_id || graph.stats().duplicate_uuid_count == 0);
 
+    let heading_backlinks = graph.heading_backlinks();
+
     if ctx.is_json() {
         print_check_json(
             ctx,
@@ -178,6 +181,7 @@ pub fn run(
             &broken_file,
             &broken_attachment,
             &filetags_issues,
+            &heading_backlinks,
             show_id,
         )?;
     } else {
@@ -187,6 +191,7 @@ pub fn run(
             &broken_file,
             &broken_attachment,
             &filetags_issues,
+            &heading_backlinks,
             show_id,
             show_file,
             show_attach,
@@ -201,6 +206,7 @@ pub fn run(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn print_check_json(
     ctx: &OutputContext,
     graph: &Graph,
@@ -208,6 +214,7 @@ fn print_check_json(
     broken_file: &[BrokenFileLinkEntry],
     broken_attachment: &[BrokenAttachmentLinkEntry],
     filetags_issues: &[FiletagsIssue],
+    heading_backlinks: &[HeadingBacklinkEntry],
     show_id: bool,
 ) -> Result<()> {
     let stats = graph.stats();
@@ -255,6 +262,7 @@ fn print_check_json(
         broken_attachment_links: broken_attachment.to_vec(),
         failed_files: failed,
         filetags_issues: filetags_issues.to_vec(),
+        heading_backlinks: heading_backlinks.to_vec(),
         healthy,
     };
     ctx.print_json(&output)
@@ -267,6 +275,7 @@ fn print_check_text(
     broken_file: &[BrokenFileLinkEntry],
     broken_attachment: &[BrokenAttachmentLinkEntry],
     filetags_issues: &[FiletagsIssue],
+    heading_backlinks: &[HeadingBacklinkEntry],
     show_id: bool,
     show_file: bool,
     show_attach: bool,
@@ -371,6 +380,17 @@ fn print_check_text(
         println!("Invalid filetags format:");
         for entry in filetags_issues {
             println!("  {} ({}): {}", entry.title, entry.path, entry.issue);
+        }
+    }
+
+    if !heading_backlinks.is_empty() {
+        println!();
+        println!("Heading backlinks:");
+        for entry in heading_backlinks {
+            println!(
+                "  heading {} (in \"{}\") <- {}",
+                entry.heading_uuid, entry.primary_title, entry.source_title
+            );
         }
     }
 

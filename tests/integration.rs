@@ -2720,6 +2720,177 @@ fn test_validate_heading_heading_cross_file() {
     );
 }
 
+// ----------------------------------------------------------------
+// PART 6: Heading-level backlinks and suggest for headings
+// ----------------------------------------------------------------
+#[test]
+fn test_check_heading_backlinks() {
+    let (_dir, root) = setup_clean_db();
+    // Note with heading UUID
+    db_write(
+        &root,
+        "target.org",
+        r#":PROPERTIES:
+:ID:       aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa
+:END:
+#+title: Target
+
+* Section
+:PROPERTIES:
+:ID:       bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb
+:END:
+"#,
+    );
+    // Note that links TO the heading UUID
+    db_write(
+        &root,
+        "source.org",
+        r#":PROPERTIES:
+:ID:       cccccccc-cccc-4ccc-cccc-cccccccccccc
+:END:
+#+title: Source
+
+[[id:bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb][link]]
+"#,
+    );
+    let (v, _status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "check",
+        "--id-links",
+    ]);
+    let bl = v["heading_backlinks"].as_array().unwrap();
+    assert_eq!(bl.len(), 1, "should report 1 heading backlink");
+    assert_eq!(
+        bl[0]["heading_uuid"],
+        "bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb"
+    );
+    assert_eq!(bl[0]["primary_title"], "Target");
+    assert_eq!(bl[0]["source_title"], "Source");
+}
+
+#[test]
+fn test_check_heading_backlinks_text() {
+    let (_dir, root) = setup_clean_db();
+    db_write(
+        &root,
+        "target.org",
+        r#":PROPERTIES:
+:ID:       aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa
+:END:
+#+title: Target
+
+* Section
+:PROPERTIES:
+:ID:       bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb
+:END:
+"#,
+    );
+    db_write(
+        &root,
+        "source.org",
+        r#":PROPERTIES:
+:ID:       cccccccc-cccc-4ccc-cccc-cccccccccccc
+:END:
+#+title: Source
+
+[[id:bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb][link]]
+"#,
+    );
+    let (stdout, _stderr, status) = run(&["--db", root.to_str().unwrap(), "check", "--id-links"]);
+    assert!(status.success());
+    assert!(
+        stdout.contains("Heading backlinks"),
+        "text output should show heading backlinks"
+    );
+    assert!(stdout.contains("bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb"));
+}
+
+#[test]
+fn test_suggest_with_heading_uuid() {
+    let (_dir, root) = setup_clean_db();
+    db_write(
+        &root,
+        "note.org",
+        r#":PROPERTIES:
+:ID:       aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa
+:END:
+#+title: Note
+
+* Special Topic
+:PROPERTIES:
+:ID:       bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb
+:END:
+Content about special topic
+"#,
+    );
+    let (v, _status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "suggest",
+        "bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb",
+    ]);
+    assert!(
+        v["suggestions"].as_array().unwrap().is_empty(),
+        "no other notes to suggest, but command should succeed"
+    );
+    assert_eq!(v["target"], "Note");
+}
+
+#[test]
+fn test_suggest_with_heading_uuid_has_context() {
+    let (_dir, root) = setup_clean_db();
+    db_write(
+        &root,
+        "note_a.org",
+        r#":PROPERTIES:
+:ID:       aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa
+:END:
+#+title: Note A
+
+* Special Section
+:PROPERTIES:
+:ID:       bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb
+:END:
+Content about special topic
+[[id:cccccccc-cccc-4ccc-cccc-cccccccccccc][ref]]
+"#,
+    );
+    db_write(
+        &root,
+        "note_b.org",
+        r#":PROPERTIES:
+:ID:       cccccccc-cccc-4ccc-cccc-cccccccccccc
+:END:
+#+title: Note B
+
+Some content
+"#,
+    );
+    let (v, _status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "suggest",
+        "bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb",
+    ]);
+    let suggestions = v["suggestions"].as_array().unwrap();
+    assert!(!suggestions.is_empty(), "should have suggestions");
+    // The heading context should mention the heading title
+    let has_context = suggestions
+        .iter()
+        .any(|s| s.get("heading_context").and_then(|c| c.as_str()).is_some());
+    assert!(
+        has_context,
+        "suggest should include heading_context when targeting a heading UUID"
+    );
+}
+
 fn test_pipe_suggest_to_get() {
     let (_dir, root) = setup_db();
     let db = root.to_str().unwrap();

@@ -4,7 +4,7 @@ use std::time::SystemTime;
 
 use crate::parser::Link;
 
-use super::{Graph, GraphStats};
+use super::{Graph, GraphStats, HeadingBacklinkEntry};
 
 impl Graph {
     fn primary_nodes(&self) -> Vec<&super::Node> {
@@ -71,6 +71,30 @@ impl Graph {
                     .is_some_and(|t| t >= cutoff)
             })
             .collect()
+    }
+
+    /// Returns heading UUIDs that receive incoming backlinks, with source note info.
+    pub fn heading_backlinks(&self) -> Vec<HeadingBacklinkEntry> {
+        let mut entries = Vec::new();
+        for (heading_uuid, primary_uuid) in &self.heading_uuid_to_primary {
+            if let Some(sources) = self.backlinks.get(heading_uuid)
+                && !sources.is_empty()
+            {
+                let primary_node = self.nodes.get(primary_uuid);
+                for source_uuid in sources {
+                    let source_node = self.nodes.get(source_uuid);
+                    entries.push(HeadingBacklinkEntry {
+                        heading_uuid: heading_uuid.clone(),
+                        heading_title: String::new(), // filled by caller from node
+                        primary_title: primary_node.map(|n| n.title.clone()).unwrap_or_default(),
+                        primary_uuid: primary_uuid.clone(),
+                        source_uuid: source_uuid.clone(),
+                        source_title: source_node.map(|n| n.title.clone()).unwrap_or_default(),
+                    });
+                }
+            }
+        }
+        entries
     }
 
     pub fn orphan_nodes(&self) -> Vec<&super::Node> {

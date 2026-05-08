@@ -62,6 +62,16 @@ pub struct DuplicateEntry {
     pub paths: Vec<String>,
 }
 
+#[derive(Debug, Clone, Serialize)]
+pub struct HeadingBacklinkEntry {
+    pub heading_uuid: String,
+    pub heading_title: String,
+    pub primary_title: String,
+    pub primary_uuid: String,
+    pub source_uuid: String,
+    pub source_title: String,
+}
+
 #[derive(Debug)]
 pub struct Graph {
     pub(crate) nodes: HashMap<String, Node>,
