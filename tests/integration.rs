@@ -263,6 +263,18 @@ Content with a category.
     )
     .unwrap();
 
+    // Daily note -- orphan (no incoming/outgoing links), filename matches YYYY-MM-DD
+    fs::write(
+        personal.join("2024-06-15.org"),
+        r#":PROPERTIES:
+:ID:       d1a1y1d1-d1a1-41d1-a1d1-d1a1d1a1d1a1
+:END:
+#+title: Daily Note
+#+filetags: :daily:
+"#,
+    )
+    .unwrap();
+
     // Malformed file -- no UUID
     fs::write(root.join("no_id.org"), "#+title: No ID\n").unwrap();
 
@@ -451,6 +463,60 @@ fn test_orphans_json() {
     assert!(
         titles.contains(&"Orphan Note"),
         "expected 'Orphan Note' in orphans, got: {:?}",
+        titles
+    );
+}
+
+#[test]
+fn test_orphans_excludes_dailies_by_default() {
+    let (_dir, root) = setup_db();
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "orphans",
+    ]);
+    assert!(status.success());
+    let titles: Vec<&str> = v["orphans"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|o| o["title"].as_str())
+        .collect();
+    assert!(
+        !titles.contains(&"Daily Note"),
+        "expected 'Daily Note' excluded by default, got: {:?}",
+        titles
+    );
+}
+
+#[test]
+fn test_orphans_with_dailies_includes_daily_notes() {
+    let (_dir, root) = setup_db();
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "orphans",
+        "--with-dailies",
+    ]);
+    assert!(status.success());
+    let titles: Vec<&str> = v["orphans"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|o| o["title"].as_str())
+        .collect();
+    assert!(
+        titles.contains(&"Daily Note"),
+        "expected 'Daily Note' included with --with-dailies, got: {:?}",
+        titles
+    );
+    assert!(
+        titles.contains(&"Orphan Note"),
+        "expected 'Orphan Note' still included, got: {:?}",
         titles
     );
 }

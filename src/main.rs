@@ -72,7 +72,10 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
             commands::stats::run(cfg, ctx, *days, *hubs, *tags, cli.db.as_deref())
                 .map(|()| ExitCode::SUCCESS)?
         }
-        Command::Orphans { limit } => commands::orphans::run(cfg, ctx, *limit, cli.db.as_deref())
+        Command::Orphans {
+            limit,
+            with_dailies,
+        } => commands::orphans::run(cfg, ctx, *limit, *with_dailies, cli.db.as_deref())
             .map(|()| ExitCode::SUCCESS)?,
         Command::Info => {
             commands::info::run(cfg, ctx, cli.db.as_deref()).map(|()| ExitCode::SUCCESS)?

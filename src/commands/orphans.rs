@@ -3,6 +3,7 @@ use crate::graph::Graph;
 use crate::output::OutputContext;
 use crate::util;
 use anyhow::Result;
+use regex::Regex;
 use serde::Serialize;
 
 #[derive(Serialize)]
@@ -26,10 +27,21 @@ pub fn run(
     config: &Config,
     ctx: &OutputContext,
     limit: Option<usize>,
+    with_dailies: bool,
     db_cli: Option<&std::path::Path>,
 ) -> Result<()> {
     let graph = Graph::load(config, db_cli)?;
     let mut orphans = graph.orphan_nodes();
+
+    if !with_dailies {
+        let daily_re = Regex::new(r"^\d{4}-\d{2}-\d{2}$").unwrap();
+        orphans.retain(|n| {
+            n.path
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .is_none_or(|s| !daily_re.is_match(s))
+        });
+    }
 
     let count = orphans.len();
     let showed = limit.map(|l| {

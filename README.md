@@ -121,7 +121,8 @@ pkms stats --days 30           # Include recently modified notes
 pkms stats --hubs              # Show most-connected notes
 pkms stats --hubs 20           # Show top 20 hubs
 pkms stats --tags              # List all filetags with counts
-pkms orphans                   # List notes with no links
+pkms orphans                   # List notes with no links (excludes daily notes)
+pkms orphans --with-dailies    # Include daily notes (filename matching YYYY-MM-DD.org)
 ```
 
 `stats` shows total notes, links breakdown, orphans, broken links,
@@ -191,7 +192,7 @@ pkms init-config --db ~/Documents/org  # With db_root pre-filled
 | `check`       | Full database health scan                                 |
 | `validate`    | Validate a specific note                                  |
 | `stats`       | Comprehensive database statistics (+ --hubs, --tags)      |
-| `orphans`     | List orphan notes (no links)                              |
+| `orphans`     | List orphan notes (no links, + --with-dailies)            |
 | `resolve`     | Fast UUID/title resolution (header-only scan)             |
 | `fix`         | Replace broken UUIDs across all files                     |
 | `suggest`     | Find related notes (+ --embed for semantic similarity)    |

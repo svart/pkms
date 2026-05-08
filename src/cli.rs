@@ -74,6 +74,8 @@ pub enum Command {
     Orphans {
         #[arg(long, help = "Maximum results (default: unlimited)")]
         limit: Option<usize>,
+        #[arg(long, help = "Include daily notes in the orphans list")]
+        with_dailies: bool,
     },
     #[command(about = "Build a context window for AI consumption")]
     Context {
