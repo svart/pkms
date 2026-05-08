@@ -14,7 +14,7 @@ target/debug/pkms --help       # 6. Verify CLI works
 ```
 
 IMPORTANT: All tests **MUST** pass. Fix all issues which appear when running these commands.
-IMPORTANT: Never disable clippy lints by yourself. Always fix issues, mentioned by clippy.
+IMPORTANT: Never suppress clippy lints by yourself. Always fix issues, mentioned by clippy.
 
 ## Committing changes
 

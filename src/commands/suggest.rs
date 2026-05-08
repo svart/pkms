@@ -72,16 +72,19 @@ pub struct Suggestion {
     pub heading_context: Option<String>,
 }
 
-#[allow(clippy::too_many_arguments)]
+struct SuggestionContext<'a> {
+    target_keywords: &'a HashSet<String>,
+    content_keywords: &'a HashSet<String>,
+    target_tags: &'a HashSet<&'a str>,
+    target_backlinks: &'a HashSet<&'a str>,
+    target_outgoing: &'a HashSet<&'a str>,
+}
+
 fn neighbor_relevance(
     neighbor_uuid: &str,
     graph: &Graph,
     target_node: &Node,
-    target_keywords: &HashSet<String>,
-    content_keywords: &HashSet<String>,
-    target_tags: &HashSet<&str>,
-    target_backlinks: &HashSet<&str>,
-    target_outgoing: &HashSet<&str>,
+    ctx: &SuggestionContext,
 ) -> f64 {
     if neighbor_uuid == target_node.uuid {
         return 0.0;
@@ -100,17 +103,18 @@ fn neighbor_relevance(
         .collect();
     let title_overlap = neighbor_words
         .iter()
-        .filter(|w| target_keywords.iter().any(|kw| kw.as_str() == **w))
+        .filter(|w| ctx.target_keywords.iter().any(|kw| kw.as_str() == **w))
         .count();
     if title_overlap > 0 {
         score += title_overlap as f64 * 20.0;
     }
 
-    if !content_keywords.is_empty()
+    if !ctx.content_keywords.is_empty()
         && let Ok(nc) = std::fs::read_to_string(&neighbor.path)
     {
         let ncl = nc.to_lowercase();
-        let cm = content_keywords
+        let cm = ctx
+            .content_keywords
             .iter()
             .filter(|kw| ncl.contains(kw.as_str()))
             .count();
@@ -122,7 +126,7 @@ fn neighbor_relevance(
     let tag_overlap = neighbor
         .filetags
         .iter()
-        .filter(|t| target_tags.contains(t.as_str()))
+        .filter(|t| ctx.target_tags.contains(t.as_str()))
         .count();
     if tag_overlap > 0 {
         score += tag_overlap as f64 * 25.0;
@@ -131,7 +135,7 @@ fn neighbor_relevance(
     let cat_overlap = neighbor
         .categories
         .iter()
-        .filter(|c| target_tags.contains(c.as_str()))
+        .filter(|c| ctx.target_tags.contains(c.as_str()))
         .count();
     if cat_overlap > 0 {
         score += cat_overlap as f64 * 25.0;
@@ -142,7 +146,7 @@ fn neighbor_relevance(
         .get(neighbor_uuid)
         .map(|v| {
             v.iter()
-                .filter(|bl| target_backlinks.contains(bl.as_str()))
+                .filter(|bl| ctx.target_backlinks.contains(bl.as_str()))
                 .count()
         })
         .unwrap_or(0);
@@ -160,7 +164,7 @@ fn neighbor_relevance(
                 None
             }
         })
-        .filter(|u| target_outgoing.contains(u))
+        .filter(|u| ctx.target_outgoing.contains(u))
         .count();
     if shared_outgoing > 0 {
         score += shared_outgoing as f64 * 12.0;
@@ -169,15 +173,11 @@ fn neighbor_relevance(
     score
 }
 
-#[allow(clippy::cast_precision_loss, clippy::too_many_arguments)]
+#[allow(clippy::cast_precision_loss)]
 fn compute_scores<'a>(
     node: &'a crate::graph::Node,
     graph: &'a crate::graph::Graph,
-    target_keywords: &HashSet<String>,
-    content_keywords: &HashSet<String>,
-    target_tags: &HashSet<&str>,
-    target_backlinks: &HashSet<&str>,
-    target_outgoing: &HashSet<&str>,
+    ctx: &SuggestionContext,
     exclude_orphans: bool,
 ) -> Vec<ScoredItem<'a>> {
     let mut scored: Vec<ScoredItem<'a>> = Vec::new();
@@ -208,7 +208,7 @@ fn compute_scores<'a>(
         let other_words: Vec<&str> = other_lower.split_whitespace().collect();
         let title_overlap: usize = other_words
             .iter()
-            .filter(|w| target_keywords.iter().any(|kw| kw.as_str() == **w))
+            .filter(|w| ctx.target_keywords.iter().any(|kw| kw.as_str() == **w))
             .count();
         if title_overlap > 0 {
             let s = title_overlap as f64 * 20.0;
@@ -217,11 +217,12 @@ fn compute_scores<'a>(
             reasons.push(format!("shared title: \"{}\"", other.title));
         }
 
-        if !content_keywords.is_empty()
+        if !ctx.content_keywords.is_empty()
             && let Ok(other_content) = std::fs::read_to_string(&other.path)
         {
             let other_lc = other_content.to_lowercase();
-            let content_match_count: usize = content_keywords
+            let content_match_count: usize = ctx
+                .content_keywords
                 .iter()
                 .filter(|kw| other_lc.contains(kw.as_str()))
                 .count();
@@ -238,7 +239,7 @@ fn compute_scores<'a>(
         let tag_overlap: usize = other
             .filetags
             .iter()
-            .filter(|t| target_tags.contains(t.as_str()))
+            .filter(|t| ctx.target_tags.contains(t.as_str()))
             .count();
         if tag_overlap > 0 {
             let s = tag_overlap as f64 * 25.0;
@@ -250,7 +251,7 @@ fn compute_scores<'a>(
         let cat_overlap: usize = other
             .categories
             .iter()
-            .filter(|c| target_tags.contains(c.as_str()))
+            .filter(|c| ctx.target_tags.contains(c.as_str()))
             .count();
         if cat_overlap > 0 {
             let s = cat_overlap as f64 * 25.0;
@@ -264,7 +265,7 @@ fn compute_scores<'a>(
             .get(&other.uuid)
             .map(|v| v.iter().map(std::string::String::as_str).collect())
             .unwrap_or_default();
-        let shared_backlinks: usize = target_backlinks.intersection(&other_backlinks).count();
+        let shared_backlinks: usize = ctx.target_backlinks.intersection(&other_backlinks).count();
         if shared_backlinks > 0 {
             let s = shared_backlinks as f64 * 15.0;
             score += s;
@@ -283,7 +284,7 @@ fn compute_scores<'a>(
                 }
             })
             .collect();
-        let shared_outgoing: usize = target_outgoing.intersection(&other_outgoing).count();
+        let shared_outgoing: usize = ctx.target_outgoing.intersection(&other_outgoing).count();
         if shared_outgoing > 0 {
             let s = shared_outgoing as f64 * 12.0;
             score += s;
@@ -306,32 +307,14 @@ fn compute_scores<'a>(
 
         for link in &other.outgoing {
             if let Link::Internal(uuid) = link {
-                total_neighbor_score += neighbor_relevance(
-                    uuid,
-                    graph,
-                    node,
-                    target_keywords,
-                    content_keywords,
-                    target_tags,
-                    target_backlinks,
-                    target_outgoing,
-                );
+                total_neighbor_score += neighbor_relevance(uuid, graph, node, ctx);
                 neighbor_count += 1;
             }
         }
 
         if let Some(incoming) = graph.backlinks.get(&other.uuid) {
             for uuid in incoming {
-                total_neighbor_score += neighbor_relevance(
-                    uuid,
-                    graph,
-                    node,
-                    target_keywords,
-                    content_keywords,
-                    target_tags,
-                    target_backlinks,
-                    target_outgoing,
-                );
+                total_neighbor_score += neighbor_relevance(uuid, graph, node, ctx);
                 neighbor_count += 1;
             }
         }
@@ -446,16 +429,14 @@ fn compute_suggestions_for_node(
         );
     }
 
-    let mut scored = compute_scores(
-        &node,
-        graph,
-        &target_keywords,
-        &content_keywords,
-        &target_tags,
-        &target_backlinks,
-        &target_outgoing,
-        exclude_orphans,
-    );
+    let suggest_ctx = SuggestionContext {
+        target_keywords: &target_keywords,
+        content_keywords: &content_keywords,
+        target_tags: &target_tags,
+        target_backlinks: &target_backlinks,
+        target_outgoing: &target_outgoing,
+    };
+    let mut scored = compute_scores(&node, graph, &suggest_ctx, exclude_orphans);
     scored.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
     let total = scored.len();
     let showed = limit.map(|l| {

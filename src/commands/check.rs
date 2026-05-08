@@ -179,11 +179,13 @@ pub fn run(
             &broken_file,
             &broken_attachment,
             &filetags_issues,
-            show_stats,
-            show_id,
-            show_file,
-            show_attach,
-            show_filetags,
+            &CheckDisplayOptions {
+                show_stats,
+                show_id,
+                show_file,
+                show_attach,
+                show_filetags,
+            },
         )?;
     } else {
         print_check_text(
@@ -192,11 +194,13 @@ pub fn run(
             &broken_file,
             &broken_attachment,
             &filetags_issues,
-            show_stats,
-            show_id,
-            show_file,
-            show_attach,
-            show_filetags,
+            &CheckDisplayOptions {
+                show_stats,
+                show_id,
+                show_file,
+                show_attach,
+                show_filetags,
+            },
         );
     }
 
@@ -207,7 +211,14 @@ pub fn run(
     }
 }
 
-#[allow(clippy::too_many_arguments)]
+struct CheckDisplayOptions {
+    show_stats: bool,
+    show_id: bool,
+    show_file: bool,
+    show_attach: bool,
+    show_filetags: bool,
+}
+
 fn print_check_json(
     ctx: &OutputContext,
     graph: &Graph,
@@ -215,15 +226,11 @@ fn print_check_json(
     broken_file: &[BrokenFileLinkEntry],
     broken_attachment: &[BrokenAttachmentLinkEntry],
     filetags_issues: &[FiletagsIssue],
-    show_stats: bool,
-    show_id: bool,
-    show_file: bool,
-    show_attach: bool,
-    show_filetags: bool,
+    opts: &CheckDisplayOptions,
 ) -> Result<()> {
     let stats = graph.stats();
 
-    let broken = if show_id {
+    let broken = if opts.show_id {
         graph
             .broken_links
             .iter()
@@ -241,7 +248,7 @@ fn print_check_json(
         vec![]
     };
 
-    let failed = if show_id {
+    let failed = if opts.show_id {
         graph
             .parse_errors
             .iter()
@@ -264,29 +271,29 @@ fn print_check_json(
 
     let output = CheckOutput {
         db_root: db_root.to_string_lossy().to_string(),
-        stats: if show_stats {
+        stats: if opts.show_stats {
             Some(stats.clone())
         } else {
             None
         },
-        duplicates: if show_id {
+        duplicates: if opts.show_id {
             Some(graph.duplicates.clone())
         } else {
             None
         },
-        broken_links: if show_id { Some(broken) } else { None },
-        broken_file_links: if show_file {
+        broken_links: if opts.show_id { Some(broken) } else { None },
+        broken_file_links: if opts.show_file {
             Some(broken_file.to_vec())
         } else {
             None
         },
-        broken_attachment_links: if show_attach {
+        broken_attachment_links: if opts.show_attach {
             Some(broken_attachment.to_vec())
         } else {
             None
         },
-        failed_files: if show_id { Some(failed) } else { None },
-        filetags_issues: if show_filetags {
+        failed_files: if opts.show_id { Some(failed) } else { None },
+        filetags_issues: if opts.show_filetags {
             Some(filetags_issues.to_vec())
         } else {
             None
@@ -296,18 +303,13 @@ fn print_check_json(
     ctx.print_json(&output)
 }
 
-#[allow(clippy::too_many_arguments)]
 fn print_check_text(
     graph: &Graph,
     db_root: &Path,
     broken_file: &[BrokenFileLinkEntry],
     broken_attachment: &[BrokenAttachmentLinkEntry],
     filetags_issues: &[FiletagsIssue],
-    show_stats: bool,
-    show_id: bool,
-    show_file: bool,
-    show_attach: bool,
-    show_filetags: bool,
+    opts: &CheckDisplayOptions,
 ) {
     let stats = graph.stats();
     let healthy = stats.broken_link_count == 0
@@ -317,11 +319,11 @@ fn print_check_text(
         && broken_attachment.is_empty()
         && filetags_issues.is_empty();
 
-    if show_stats || show_file || show_attach || show_filetags || show_id {
+    if opts.show_stats || opts.show_file || opts.show_attach || opts.show_filetags || opts.show_id {
         println!("Database: {}", db_root.display());
     }
 
-    if show_stats {
+    if opts.show_stats {
         println!("  Notes:          {}", stats.total_notes);
         println!(
             "  Links:          {} (internal: {}, file: {}, url: {})",
@@ -339,17 +341,17 @@ fn print_check_text(
         println!("  Missing titles: {}", stats.missing_title_count);
     }
 
-    if show_file {
+    if opts.show_file {
         println!("  Broken files:   {}", broken_file.len());
     }
-    if show_attach {
+    if opts.show_attach {
         println!("  Broken attach:  {}", broken_attachment.len());
     }
-    if show_filetags {
+    if opts.show_filetags {
         println!("  Filetags issues: {}", filetags_issues.len());
     }
 
-    if show_id {
+    if opts.show_id {
         if !graph.duplicates.duplicate_uuids.is_empty() {
             println!();
             println!("Duplicate UUIDs:");
@@ -379,7 +381,7 @@ fn print_check_text(
         }
     }
 
-    if show_id && !graph.broken_links.is_empty() {
+    if opts.show_id && !graph.broken_links.is_empty() {
         println!();
         println!("Broken links:");
         for (src, tgt) in &graph.broken_links {
@@ -412,7 +414,7 @@ fn print_check_text(
         }
     }
 
-    if show_stats || show_file || show_attach || show_filetags || show_id {
+    if opts.show_stats || opts.show_file || opts.show_attach || opts.show_filetags || opts.show_id {
         println!();
     }
     if healthy {
