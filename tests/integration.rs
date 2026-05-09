@@ -790,6 +790,45 @@ fn test_fix_broken_not_found() {
     assert!(stdout.contains("0 broken link") || stdout.contains("Would fix"));
 }
 
+#[test]
+fn test_fix_apply_human_output() {
+    let (_dir, root) = setup_db();
+    let (stdout, _stderr, status) = run(&[
+        "--db",
+        root.to_str().unwrap(),
+        "fix",
+        "ffffffff-ffff-4fff-ffff-ffffffffffff",
+        "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa",
+        "--apply",
+    ]);
+    assert!(status.success());
+    assert!(
+        stdout.contains("Fixed"),
+        "Applied fix human output should say 'Fixed', got: {stdout}"
+    );
+    assert!(
+        stdout.contains("broken link"),
+        "Output should mention link count, got: {stdout}"
+    );
+}
+
+#[test]
+fn test_fix_apply_json_output() {
+    let (_dir, root) = setup_db();
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "fix",
+        "ffffffff-ffff-4fff-ffff-ffffffffffff",
+        "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa",
+        "--apply",
+    ]);
+    assert!(status.success());
+    assert_eq!(v["applied"], true, "fix should be applied, got: {v}");
+}
+
 // ----------------------------------------------------------------
 // SUGGEST
 // ----------------------------------------------------------------
@@ -846,6 +885,54 @@ fn test_suggest_note_not_found() {
     let (_stdout, _stderr, status) =
         run(&["--db", root.to_str().unwrap(), "suggest", "Nonexistent"]);
     assert!(!status.success());
+}
+
+#[test]
+fn test_suggest_exclude_orphans() {
+    let (_dir, root) = setup_db();
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "suggest",
+        "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa",
+        "--exclude-orphans",
+    ]);
+    assert!(status.success());
+    let suggestions = v["suggestions"].as_array().unwrap();
+    // The orphan note (dddddddd-dddd-4ddd-dddd-dddddddddddd) should not appear
+    assert!(
+        suggestions
+            .iter()
+            .all(|s| s["uuid"] != "dddddddd-dddd-4ddd-dddd-dddddddddddd"),
+        "orphans should be excluded, got: {v}"
+    );
+}
+
+#[test]
+fn test_suggest_ndjson() {
+    let (_dir, root) = setup_db();
+    let (stdout, _stderr, status) = run(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "ndjson",
+        "suggest",
+        "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa",
+    ]);
+    assert!(status.success());
+    let lines: Vec<&str> = stdout.lines().collect();
+    assert!(!lines.is_empty(), "should produce NDJSON output");
+    for line in &lines {
+        let v: serde_json::Value = serde_json::from_str(line).unwrap();
+        assert!(v.get("uuid").is_some(), "each line should have uuid");
+        assert!(v.get("score").is_some(), "each line should have score");
+        assert!(
+            v.get("target_uuid").is_some(),
+            "each line should have target_uuid"
+        );
+    }
 }
 
 // ----------------------------------------------------------------
@@ -1040,6 +1127,119 @@ fn test_query_limit() {
         "total should reflect all matches"
     );
     assert_eq!(v["showed"], 1);
+}
+
+#[test]
+fn test_query_content_only() {
+    let (_dir, root) = setup_db();
+    let (stdout, _stderr, status) = run(&[
+        "--db",
+        root.to_str().unwrap(),
+        "query",
+        "Content",
+        "--content",
+    ]);
+    assert!(status.success());
+    assert!(
+        stdout.contains("Content here") || stdout.contains("Content with tags"),
+        "content search should find content lines, got: {stdout}"
+    );
+}
+
+#[test]
+fn test_query_title_only() {
+    let (_dir, root) = setup_db();
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "query",
+        "Orphan",
+        "--title",
+    ]);
+    assert!(status.success());
+    let results = v["results"].as_array().unwrap();
+    assert_eq!(
+        results.len(),
+        1,
+        "title-only search for 'Orphan' should find only Orphan Note, got: {v}"
+    );
+    assert_eq!(results[0]["title"], "Orphan Note");
+}
+
+#[test]
+fn test_query_no_results() {
+    let (_dir, root) = setup_db();
+    let (stdout, _stderr, status) = run(&[
+        "--db",
+        root.to_str().unwrap(),
+        "query",
+        "zzzzzzzzzznonexistent",
+    ]);
+    assert!(status.success());
+    assert!(
+        stdout.contains("0") || stdout.contains("no results") || stdout.contains("Results: 0"),
+        "no results should be reported, got: {stdout}"
+    );
+}
+
+#[test]
+fn test_query_content_merge() {
+    let (_dir, root) = setup_db();
+    // Search for something that appears as both title match and content match
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "query",
+        "Broken",
+        "--content",
+    ]);
+    assert!(status.success());
+    let results = v["results"].as_array().unwrap();
+    assert!(
+        results.iter().any(|r| r["title"] == "Broken Note"),
+        "Broken Note should match via title+content, got: {v}"
+    );
+}
+
+#[test]
+fn test_query_content_text_truncation() {
+    let (_dir, root) = setup_clean_db();
+    // Create a note with many lines containing the search term
+    let content = (1..=10)
+        .map(|i| format!("Line {i} with the secret word"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    db_write(
+        &root,
+        "long_note.org",
+        &format!(
+            r#":PROPERTIES:
+:ID:       aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa
+:END:
+#+title: Long Note
+
+{content}
+"#,
+        ),
+    );
+    let (stdout, _stderr, status) = run(&[
+        "--db",
+        root.to_str().unwrap(),
+        "query",
+        "secret",
+        "--content",
+    ]);
+    assert!(status.success());
+    // Should show content matches (at most 3 visible + "... and N more")
+    assert!(stdout.contains("secret"), "should show content matches");
+    assert!(
+        stdout.contains("and 7 more") || stdout.contains("and 2 more") || stdout.contains("> Line"),
+        "should mention truncated count or show lines, got: {stdout}"
+    );
 }
 
 // ----------------------------------------------------------------

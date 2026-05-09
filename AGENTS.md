@@ -87,8 +87,6 @@ If performance optimization is needed, compute from scratch on every run — do 
 - **`anyhow::Result`** for all fallible functions. No custom error types.
 - **`serde::Serialize`** for all output structs. Every command supports `--output-format json`.
 - **`Graph::load(config, db_cli)`** to load the full database.
-- **`resolve`** command scans only file headers.
-- **`#[allow(dead_code)]`** on struct fields kept for future use. Remove if never needed after implementation.
 - **Use `ctx.print_count`**, **`ctx.print_json`**, and **`ctx.print_ndjson`** from `OutputContext` for output dispatch. Every command receives `&OutputContext`.
 
 ## Graph data model

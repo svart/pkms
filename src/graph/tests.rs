@@ -1,4 +1,5 @@
 use super::*;
+use crate::graph::search::SearchFields;
 use crate::parser::ParsedNote;
 
 fn make_note(uuid: &str, title: &str, outgoing: Vec<Link>) -> FileScanResult {
@@ -577,6 +578,248 @@ fn test_search_ref_outranks_tag() {
         note_a.1 > note_b.1,
         "ref score (6) should be higher than tag score (5)"
     );
+}
+
+#[test]
+fn test_shortest_path_same_node() {
+    let results = vec![make_note("a", "A", vec![])];
+    let graph = Graph::build(results);
+    let path = graph.find_shortest_path("a", "a", None);
+    assert!(path.is_some());
+    assert_eq!(path.unwrap(), vec!["a"]);
+}
+
+#[test]
+fn test_shortest_path_max_depth() {
+    let results = vec![
+        make_note("a", "A", vec![Link::Internal("b".to_string())]),
+        make_note("b", "B", vec![Link::Internal("c".to_string())]),
+        make_note("c", "C", vec![]),
+    ];
+    let graph = Graph::build(results);
+    // depth limit 1 should prevent reaching c
+    let path = graph.find_shortest_path("a", "c", Some(1));
+    assert!(path.is_none(), "should not find path with depth limit 1");
+    // depth limit 2 should work
+    let path2 = graph.find_shortest_path("a", "c", Some(2));
+    assert!(path2.is_some());
+    assert_eq!(path2.unwrap(), vec!["a", "b", "c"]);
+}
+
+#[test]
+fn test_shortest_path_via_backlinks() {
+    let results = vec![
+        make_note("a", "A", vec![Link::Internal("c".to_string())]),
+        make_note("b", "B", vec![]),
+        make_note("c", "C", vec![]),
+    ];
+    let graph = Graph::build(results);
+    // path from b to c: b has no outgoing, but a links to c and b has no link to a
+    // b -> backlinks of b are empty, so no path
+    let path = graph.find_shortest_path("b", "c", None);
+    assert!(path.is_none());
+
+    // path from c to a: c has no outgoing, but a links to c (backlink)
+    let path2 = graph.find_shortest_path("c", "a", None);
+    assert!(
+        path2.is_some(),
+        "should find path from c to a via backlinks"
+    );
+    let p2 = path2.unwrap();
+    assert_eq!(p2[0], "c");
+    assert_eq!(*p2.last().unwrap(), "a".to_string());
+}
+
+#[test]
+fn test_shortest_path_no_path() {
+    let results = vec![make_note("a", "A", vec![]), make_note("b", "B", vec![])];
+    let graph = Graph::build(results);
+    let path = graph.find_shortest_path("a", "b", None);
+    assert!(path.is_none());
+}
+
+#[test]
+fn test_get_neighbors_no_outgoing() {
+    let results = vec![make_note("a", "A", vec![])];
+    let graph = Graph::build(results);
+    let neighbors = graph.get_neighbors("a", 1);
+    assert!(neighbors.is_empty() || neighbors.get(&1).is_some());
+}
+
+#[test]
+fn test_get_neighbors_broken_outgoing() {
+    let results = vec![make_note(
+        "a",
+        "A",
+        vec![Link::Internal("nonexistent".to_string())],
+    )];
+    let graph = Graph::build(results);
+    let neighbors = graph.get_neighbors("a", 1);
+    assert_eq!(neighbors.len(), 1);
+    let n1 = neighbors.get(&1).unwrap();
+    assert_eq!(n1.outgoing.len(), 0, "broken target is not in nodes");
+    assert_eq!(
+        n1.broken_outgoing.len(),
+        1,
+        "broken link should be reported"
+    );
+}
+
+#[test]
+fn test_shortest_path_backlink_traversal() {
+    let results = vec![
+        make_note("a", "A", vec![Link::Internal("b".to_string())]),
+        make_note("c", "C", vec![Link::Internal("b".to_string())]),
+        make_note("d", "D", vec![Link::Internal("c".to_string())]),
+        make_note("b", "B", vec![]),
+    ];
+    let graph = Graph::build(results);
+    // Path from a to d: a -> b (backlink finds c) -> c (forward) -> d
+    // At b, backlinks include a (visited) and c (not visited, not target) -> traverse through c -> d
+    let path = graph.find_shortest_path("a", "d", None);
+    assert!(
+        path.is_some(),
+        "should find path from a to d via backlink traversal"
+    );
+    let p = path.unwrap();
+    assert_eq!(p[0], "a");
+    assert_eq!(*p.last().unwrap(), "d".to_string());
+}
+
+#[test]
+fn test_get_neighbors_with_depth() {
+    let results = vec![
+        make_note("a", "A", vec![Link::Internal("b".to_string())]),
+        make_note("b", "B", vec![Link::Internal("c".to_string())]),
+        make_note("c", "C", vec![]),
+    ];
+    let graph = Graph::build(results);
+    let neighbors = graph.get_neighbors("a", 1);
+    assert_eq!(neighbors.len(), 1);
+    let n1 = neighbors.get(&1).unwrap();
+    assert_eq!(n1.outgoing.len(), 1);
+    assert_eq!(n1.outgoing[0].uuid, "b");
+
+    let neighbors2 = graph.get_neighbors("a", 2);
+    assert_eq!(neighbors2.len(), 2);
+    let n2 = neighbors2.get(&2).unwrap();
+    assert_eq!(n2.outgoing.len(), 1);
+    assert_eq!(n2.outgoing[0].uuid, "c");
+}
+
+#[test]
+fn test_search_by_tag_only() {
+    let results = vec![
+        make_note_full("a", "Note A", vec![], vec!["quantum".to_string()], vec![]),
+        make_note_full("b", "Note B", vec![], vec![], vec![]),
+    ];
+    let graph = Graph::build(results);
+    let fields = SearchFields {
+        title: false,
+        alias: false,
+        ref_: false,
+        tag: true,
+        category: false,
+    };
+    let results = graph.search("quantum", &fields);
+    assert_eq!(results.len(), 1);
+    assert_eq!(results[0].0.uuid, "a");
+}
+
+#[test]
+fn test_search_by_ref() {
+    let results = vec![make_note_full("a", "A", vec![], vec![], vec![])];
+    let mut graph = Graph::build(results);
+    if let Some(node) = graph.nodes.get_mut("a") {
+        node.refs.push("reference-keyword".to_string());
+    }
+    let fields = SearchFields {
+        title: false,
+        alias: false,
+        ref_: true,
+        tag: false,
+        category: false,
+    };
+    let results = graph.search("reference-keyword", &fields);
+    assert_eq!(results.len(), 1);
+}
+
+#[test]
+fn test_search_by_category() {
+    let results = vec![make_note_full("a", "Category Note", vec![], vec![], vec![])];
+    let mut graph = Graph::build(results);
+    if let Some(node) = graph.nodes.get_mut("a") {
+        node.categories.push("example-category".to_string());
+    }
+    let fields = SearchFields {
+        title: false,
+        alias: false,
+        ref_: false,
+        tag: false,
+        category: true,
+    };
+    let results = graph.search("example-category", &fields);
+    assert_eq!(results.len(), 1);
+    assert_eq!(results[0].0.uuid, "a");
+}
+
+#[test]
+fn test_search_content_found() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("test_note.org");
+    std::fs::write(
+        &path,
+        r#":PROPERTIES:
+:ID:       aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa
+:END:
+#+title: Content Test
+
+This is the content with a unique-searchable-keyword here.
+"#,
+    )
+    .unwrap();
+
+    let results = vec![FileScanResult {
+        path: path.clone(),
+        parsed: crate::parser::ParsedNote {
+            uuids: vec!["aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa".to_string()],
+            title: Some("Content Test".to_string()),
+            filetags: vec![],
+            categories: vec![],
+            roam_aliases: vec![],
+            roam_refs: vec![],
+            outgoing: vec![],
+            headings: vec![],
+        },
+        parse_error: None,
+    }];
+    let graph = Graph::build(results);
+    let content_results = graph.search_content("unique-searchable-keyword");
+    assert_eq!(content_results.len(), 1);
+    assert_eq!(content_results[0].1, "Content Test");
+    assert!(!content_results[0].2.is_empty());
+}
+
+#[test]
+fn test_search_content_not_found() {
+    let results = vec![make_note("a", "A", vec![])];
+    let graph = Graph::build(results);
+    let content_results = graph.search_content("nonexistent");
+    assert!(content_results.is_empty());
+}
+
+#[test]
+fn test_all_categories() {
+    let results = vec![make_note_full("a", "A", vec![], vec![], vec![])];
+    let mut graph = Graph::build(results);
+    if let Some(node) = graph.nodes.get_mut("a") {
+        node.categories.push("cat1".to_string());
+        node.categories.push("cat2".to_string());
+    }
+    let cats = graph.all_categories();
+    assert_eq!(cats.len(), 2);
+    assert!(cats.iter().any(|(c, _)| c == "cat1"));
+    assert!(cats.iter().any(|(c, _)| c == "cat2"));
 }
 
 proptest::proptest! {
