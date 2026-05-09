@@ -26,6 +26,49 @@ Or run directly:
 cargo run -- <args>
 ```
 
+### Install with Nix
+
+Install from a local checkout:
+
+```bash
+# Default (no embedding)
+nix profile install .#default
+
+# With embedding-based semantic search
+nix profile install .#embed
+```
+
+Both commands make `pkms` available on your PATH globally.
+
+Install directly from GitHub (without cloning):
+
+```bash
+nix profile install github:svart/pkms
+nix profile install github:svart/pkms#embed
+```
+
+Run or build without installing:
+
+```bash
+nix run . -- <args>            # Run default build
+nix run .#embed -- <args>      # Run with embedding
+nix build                      # Build to ./result
+nix build .#embed              # Build with embedding
+```
+
+Enter the development shell:
+
+```bash
+nix develop
+```
+
+Uninstall:
+
+```bash
+nix profile list | grep pkms   # find the index
+nix profile remove <index>
+```
+
 ## Configuration
 
 `pkms` reads `~/.config/pkms.toml` for persistent settings:
