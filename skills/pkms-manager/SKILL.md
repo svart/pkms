@@ -206,6 +206,46 @@ Show the configuration with notes database path.
 4. Apply procedure from "Linking Orphans to the Graph" for finding and fixing orphans.
 5. `check` to verify final state
 
+### Fixing Broken Links
+
+When `check --id-links` reports broken links, follow this workflow to ensure every
+replacement points to the correct target.
+
+1. **Read the link before replacing.** The check output shows `source_note -> broken_uuid`,
+   which tells you where the link lives but not what it points to. Grep the broken UUID
+   across the database or use `pkms get <source_note>` to see the actual
+   `[[id:UUID][description]]` — the description text reveals the intended target. Search for
+   notes matching the *description* with `pkms resolve --title "description"`, not just the
+   source note's title.
+2. **Dry-run `fix` and apply non-conflicting replacements first.** Run `pkms fix <broken_uuid> <replacement>` without `--apply` to preview which files are affected. For
+   broken UUIDs that map to a single unambiguous replacement, run `pkms fix` with `--apply`
+   in batches.
+3. **Handle conflicting broken UUIDs manually.** When the same broken UUID appears in
+   multiple source notes with different link descriptions, `pkms fix` would replace all
+   occurrences identically. Instead, read each affected file and edit the link individually
+   to point to the correct target for that context.
+4. **Check for self-links after every batch.** Run `pkms check --self-links`.
+   A `pkms fix` that replaces a broken UUID with the note's own UUID creates a self-link.
+   For each self-link found:
+   - Search for a note matching the link's description text. If a canonical note exists,
+     replace the self-link with its UUID.
+   - If no note matches, remove the link markup entirely, keeping the description as plain
+     text.
+   - Do not just strip every self-link to plain text — most description texts *do* have
+     corresponding notes in the database.
+5. **Prefer canonical notes.** When multiple notes match a description, pick the most
+   general one (e.g. link "DNS" to the `dns` note, not `dns record types`). Check aliases
+   with `pkms resolve --title` — concepts may exist under variant names.
+6. **Create aliases, not approximations.** If a concept is frequently referenced by a
+   variant name, add it as a `:ROAM_ALIASES:` on the canonical note's property drawer instead
+   of linking to a vaguely related note.
+7. **Remove links that add no navigation value.** Drop links when: the description is
+   self-referential within its own note, the description is a filename or proper noun with
+   no corresponding note, or the sentence already provides the same information via another
+   mechanism (e.g. a direct URL).
+8. **Verify.** Run `pkms validate <uuid>` on each changed note and
+   `pkms check --self-links --id-links` after each batch to confirm no regressions.
+
 ### Linking Orphans to the Graph
 1. `orphans` to list all orphans. Pick ones with clear thematic connections.
 2. If orphaned note fills empty. Fill it with minimal necessary information.

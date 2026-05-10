@@ -151,6 +151,8 @@ A link must be justified by the immediate sentence, not by general relevance. A 
 - Don't enumerate platforms or ecosystems on general concept notes (html, markdown, etc.). A concept note defines the concept; it does not list where it is used.
 - "Comparable to" links are appropriate in a main topic note (e.g. gitlab → github), but not in child notes or concept notes.
 - Don't create intermediate notes to rescue a broken link. Remove the broken link instead if you cannot find corresponding note in the database.
+- Prefer the most general note when multiple candidates match. Link "DNS" to the `dns` note, not `dns record types`. Check aliases — a concept may be recorded under a variant name. Inspect candidates with `pkms resolve --title "term"` and `pkms get <target> --no-content`.
+- A link must earn its place by adding genuine navigation value. Remove links when: the referenced concept is already the subject of the current note (self-referencing), the description is a filename or proper noun with no corresponding note, or the sentence already provides the needed context through another mechanism (a direct URL, a code example, or the definition itself).
 - Prefer external URLs over internal links for reference and background context. An Arch Wiki link belongs as an external URL, not as a link to an internal Arch Linux note.
 - One link per sentence is enough. Multiple links in a single sentence dilute each link's justification.
 
