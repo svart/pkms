@@ -8,6 +8,18 @@ pub struct Config {
     pub db_root: Option<PathBuf>,
     pub new_notes_dir: Option<PathBuf>,
     pub ignore_patterns: Option<Vec<String>>,
+    pub agenda: Option<AgendaConfig>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct AgendaConfig {
+    #[serde(default = "default_todo_states")]
+    pub todo_states: Vec<String>,
+}
+
+fn default_todo_states() -> Vec<String> {
+    vec!["TODO".to_string(), "DONE".to_string()]
 }
 
 impl Config {
@@ -26,6 +38,7 @@ impl Config {
                 db_root: None,
                 new_notes_dir: None,
                 ignore_patterns: None,
+                agenda: None,
             })
         }
     }
@@ -57,6 +70,13 @@ impl Config {
 
     pub fn resolve_ignore_patterns(&self) -> Vec<String> {
         self.ignore_patterns.clone().unwrap_or_default()
+    }
+
+    pub fn todo_states(&self) -> Vec<String> {
+        self.agenda
+            .as_ref()
+            .map(|a| a.todo_states.clone())
+            .unwrap_or_else(default_todo_states)
     }
 
     pub fn resolved_info(&self, db_root: &Path, new_notes_dir: &Path) -> ConfigInfo {
@@ -102,6 +122,10 @@ pub fn generate_default_config(db_root: Option<&std::path::Path>) -> String {
 
 # Glob patterns to ignore during file discovery
 # ignore_patterns = [".attach", "*.bak"]
+
+# Agenda section: configure TODO state keywords
+# [agenda]
+# todo_states = ["TODO", "DONE", "WAITING", "IN-PROGRESS"]
 "#,
     )
 }
@@ -123,6 +147,7 @@ mod tests {
             db_root: Some(PathBuf::from("/nonexistent/config/path")),
             new_notes_dir: None,
             ignore_patterns: None,
+            agenda: None,
         };
         let result = config.resolve_db_root(Some(Path::new("/cli/path")));
         // CLI override wins, even though /cli/path doesn't exist -> canonicalize_or_abs
@@ -139,6 +164,7 @@ mod tests {
             db_root: Some(dir.path().to_path_buf()),
             new_notes_dir: None,
             ignore_patterns: None,
+            agenda: None,
         };
         let result = config.resolve_db_root(None);
         assert!(result.is_ok());
@@ -151,6 +177,7 @@ mod tests {
             db_root: None,
             new_notes_dir: None,
             ignore_patterns: None,
+            agenda: None,
         };
         let result = config.resolve_db_root(None);
         assert!(result.is_err());
@@ -168,6 +195,7 @@ mod tests {
             db_root: None,
             new_notes_dir: None,
             ignore_patterns: None,
+            agenda: None,
         };
         let db_root = Path::new("/test/root");
         assert_eq!(
@@ -182,6 +210,7 @@ mod tests {
             db_root: None,
             new_notes_dir: Some(PathBuf::from("/abs/path")),
             ignore_patterns: None,
+            agenda: None,
         };
         let db_root = Path::new("/test/root");
         assert_eq!(
@@ -196,6 +225,7 @@ mod tests {
             db_root: None,
             new_notes_dir: Some(PathBuf::from("subdir")),
             ignore_patterns: None,
+            agenda: None,
         };
         let db_root = Path::new("/test/root");
         assert_eq!(
@@ -210,6 +240,7 @@ mod tests {
             db_root: None,
             new_notes_dir: None,
             ignore_patterns: Some(vec!["*.bak".to_string(), ".attach".to_string()]),
+            agenda: None,
         };
         let patterns = config.resolve_ignore_patterns();
         assert_eq!(patterns.len(), 2);
@@ -222,6 +253,7 @@ mod tests {
             db_root: None,
             new_notes_dir: None,
             ignore_patterns: None,
+            agenda: None,
         };
         let patterns = config.resolve_ignore_patterns();
         assert!(patterns.is_empty());
@@ -258,6 +290,7 @@ mod tests {
             db_root: Some(PathBuf::from("/db")),
             new_notes_dir: None,
             ignore_patterns: Some(vec!["*.tmp".to_string()]),
+            agenda: None,
         };
         let info = config.resolved_info(Path::new("/actual/db"), Path::new("/notes/dir"));
         assert_eq!(info.db_root, PathBuf::from("/actual/db"));

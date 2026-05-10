@@ -321,6 +321,7 @@ DEADLINE: <2026-06-15 Mon>
 #+title: Missing Agenda Tag
 
 * TODO Fix this
+SCHEDULED: <2026-05-10 Sun>
 * WAITING Review
 * IDEA Something
 "#,
@@ -2282,7 +2283,7 @@ fn test_agenda_ndjson() {
 }
 
 #[test]
-fn test_agenda_only_agenda() {
+fn test_agenda_include() {
     let (_dir, root) = setup_db();
     let (v, status) = run_json(&[
         "--db",
@@ -2290,13 +2291,22 @@ fn test_agenda_only_agenda() {
         "--output-format",
         "json",
         "agenda",
-        "--only-agenda",
+        "--include",
+        "DONE",
     ]);
     assert!(status.success());
     let items = v["items"].as_array().unwrap();
-    assert!(!items.is_empty(), "expected agenda items");
+    let done_items: Vec<&serde_json::Value> = items
+        .iter()
+        .filter(|i| i["todo_state"].as_str() == Some("DONE"))
+        .collect();
+    assert!(
+        done_items.len() >= 1,
+        "expected DONE items with --include DONE"
+    );
     for item in items {
-        assert_eq!(item["has_agenda_tag"], true);
+        let state = item["todo_state"].as_str().unwrap_or("");
+        assert_eq!(state, "DONE", "expected all items to be DONE");
     }
 }
 
@@ -2320,7 +2330,7 @@ fn test_agenda_missing_agenda() {
 }
 
 #[test]
-fn test_agenda_include_done() {
+fn test_agenda_exclude() {
     let (_dir, root) = setup_db();
     let (v, status) = run_json(&[
         "--db",
@@ -2328,7 +2338,8 @@ fn test_agenda_include_done() {
         "--output-format",
         "json",
         "agenda",
-        "--include-done",
+        "--exclude",
+        "DONE",
     ]);
     assert!(status.success());
     let items = v["items"].as_array().unwrap();
@@ -2337,8 +2348,8 @@ fn test_agenda_include_done() {
         .filter(|i| i["todo_state"].as_str() == Some("DONE"))
         .collect();
     assert!(
-        done_items.len() >= 1,
-        "expected DONE items with --include-done"
+        done_items.is_empty(),
+        "expected no DONE items with --exclude DONE"
     );
 }
 

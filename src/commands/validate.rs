@@ -171,8 +171,12 @@ fn validate_one(graph: &Graph, target: &str, db_root: &Path) -> Result<ValidateO
     }
 
     let parsed = crate::parser::parse_note(&content);
-    if parsed.has_todo_headings() && !node.filetags.iter().any(|t| t == "agenda") {
-        issues.push("Issue: File has TODO headings but missing :agenda: filetag".to_string());
+    let has_planned_todos = parsed
+        .headings
+        .iter()
+        .any(|h| h.todo_state.is_some() && (h.scheduled.is_some() || h.deadline.is_some()));
+    if has_planned_todos && !node.filetags.iter().any(|t| t == "agenda") {
+        issues.push("Issue: File has planned TODO headings (SCHEDULED/DEADLINE) but missing :agenda: filetag".to_string());
     }
 
     // Check for duplicate UUIDs (note-level vs heading-level)

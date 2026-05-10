@@ -20,7 +20,7 @@ pub struct AgendaItem {
     pub daily_file_date: Option<String>,
     pub heading_title: String,
     pub heading_level: usize,
-    pub todo_state: String,
+    pub todo_state: Option<String>,
     pub priority: Option<char>,
     pub scheduled: Option<String>,
     pub scheduled_date: Option<String>,
@@ -49,18 +49,25 @@ fn is_overdue(raw: Option<&String>) -> bool {
     parsed.base_date < today
 }
 
+fn heading_is_eligible(heading: &crate::parser::Heading, valid_states: &[String]) -> bool {
+    let is_valid_todo = heading
+        .todo_state
+        .as_ref()
+        .is_some_and(|s| valid_states.iter().any(|vs| vs.eq_ignore_ascii_case(s)));
+    is_valid_todo || heading.scheduled.is_some() || heading.deadline.is_some()
+}
+
 #[allow(clippy::too_many_arguments)]
 pub fn run(
     config: &Config,
     ctx: &OutputContext,
-    only_agenda: bool,
     missing_agenda: bool,
-    states: Option<&str>,
+    include: Option<&str>,
+    exclude: Option<&str>,
     overdue: bool,
     date: Option<&str>,
     sort: Option<&str>,
     limit: Option<usize>,
-    include_done: bool,
     today: bool,
     week: bool,
     db_cli: Option<&Path>,
@@ -68,6 +75,8 @@ pub fn run(
     let db_root = config.resolve_db_root(db_cli)?;
     let ignore = config.resolve_ignore_patterns();
     let results = Graph::scan(&db_root, &ignore)?;
+
+    let valid_states = config.todo_states();
 
     let today_date = Local::now().date_naive();
     let week_start = today_date
@@ -86,8 +95,10 @@ pub fn run(
             }
         });
 
-    let states_filter: Option<Vec<String>> =
-        states.map(|s| s.split(',').map(|s| s.trim().to_string()).collect());
+    let include_set: Option<Vec<String>> =
+        include.map(|s| s.split(',').map(|s| s.trim().to_string()).collect());
+    let exclude_set: Option<Vec<String>> =
+        exclude.map(|s| s.split(',').map(|s| s.trim().to_string()).collect());
 
     let mut items: Vec<AgendaItem> = Vec::new();
 
@@ -103,25 +114,27 @@ pub fn run(
         let daily_date = find_daily_file_date(path).map(|d| d.format("%Y-%m-%d").to_string());
 
         for heading in &parsed.headings {
-            let Some(ref todo_state) = heading.todo_state else {
-                continue;
-            };
-
-            let todo_upper = todo_state.to_uppercase();
-
-            if !include_done && (todo_upper == "DONE" || todo_upper == "CANCELED") {
+            if !heading_is_eligible(heading, &valid_states) {
                 continue;
             }
 
-            if let Some(ref states) = states_filter
-                && !states.iter().any(|s| s.to_uppercase() == todo_upper)
+            if let Some(ref incl) = include_set {
+                let state_matches = heading
+                    .todo_state
+                    .as_ref()
+                    .is_some_and(|s| incl.iter().any(|is| is.eq_ignore_ascii_case(s)));
+                if !state_matches {
+                    continue;
+                }
+            }
+
+            if let Some(ref excl) = exclude_set
+                && let Some(ref todo_state) = heading.todo_state
+                && excl.iter().any(|es| es.eq_ignore_ascii_case(todo_state))
             {
                 continue;
             }
 
-            if only_agenda && !has_agenda {
-                continue;
-            }
             if missing_agenda && has_agenda {
                 continue;
             }
@@ -175,7 +188,7 @@ pub fn run(
                 daily_file_date: daily_date.clone(),
                 heading_title: heading.title.clone(),
                 heading_level: heading.level,
-                todo_state: todo_state.clone(),
+                todo_state: heading.todo_state.clone(),
                 priority: heading.priority,
                 scheduled: heading.scheduled.clone(),
                 scheduled_date: item_scheduled_date,
@@ -260,6 +273,14 @@ fn priority_value(p: char) -> u8 {
     }
 }
 
+fn format_scheduled_deadline(raw: &str) -> String {
+    let parsed = parse_org_date(raw);
+    match parsed {
+        Some(d) => d.base_date.format("%Y-%m-%d").to_string(),
+        None => raw.to_string(),
+    }
+}
+
 fn print_agenda_text(
     items: &[AgendaItem],
     total: usize,
@@ -290,8 +311,10 @@ fn print_agenda_text(
         })
         .collect();
 
-    let missing_agenda_items: Vec<&AgendaItem> =
-        items.iter().filter(|i| !i.has_agenda_tag).collect();
+    let missing_agenda_items: Vec<&AgendaItem> = items
+        .iter()
+        .filter(|i| !i.has_agenda_tag && (i.scheduled_date.is_some() || i.deadline_date.is_some()))
+        .collect();
 
     if !overdue_items.is_empty() {
         println!("=== Overdue (deadline passed) ===");
@@ -300,15 +323,16 @@ fn print_agenda_text(
                 .priority
                 .map(|p| format!("[#{}] ", p))
                 .unwrap_or_default();
+            let todo_display = item.todo_state.as_deref().unwrap_or_default();
             println!(
-                "  {}  {}{}  \u{2014} {}",
-                prio, item.todo_state, item.heading_title, item.title
+                "  {}  {} {}  \u{2014} {}",
+                prio, todo_display, item.heading_title, item.title
             );
             if let Some(ref d) = item.deadline {
-                println!("        DEADLINE: {d}");
+                println!("        DEADLINE: {}", format_scheduled_deadline(d));
             }
             if let Some(ref s) = item.scheduled {
-                println!("        SCHEDULED: {s}");
+                println!("        SCHEDULED: {}", format_scheduled_deadline(s));
             }
         }
         println!();
@@ -328,15 +352,16 @@ fn print_agenda_text(
                 .priority
                 .map(|p| format!("[#{}] ", p))
                 .unwrap_or_default();
+            let todo_display = item.todo_state.as_deref().unwrap_or_default();
             println!(
                 "  {}  {}{}{}  \u{2014} {}{}",
-                date_display, prio, item.todo_state, item.heading_title, item.title, daily_mark
+                date_display, prio, todo_display, item.heading_title, item.title, daily_mark
             );
             if let Some(ref s) = item.scheduled {
-                println!("        SCHEDULED: {s}");
+                println!("        SCHEDULED: {}", format_scheduled_deadline(s));
             }
             if let Some(ref d) = item.deadline {
-                println!("        DEADLINE: {d}");
+                println!("        DEADLINE: {}", format_scheduled_deadline(d));
             }
         }
         println!();
@@ -349,9 +374,10 @@ fn print_agenda_text(
                 .priority
                 .map(|p| format!("[#{}] ", p))
                 .unwrap_or_default();
+            let todo_display = item.todo_state.as_deref().unwrap_or_default();
             println!(
-                "  {}{} {}  \u{2014} {}",
-                prio, item.todo_state, item.heading_title, item.title
+                "  {} {} {}  \u{2014} {}",
+                prio, todo_display, item.heading_title, item.title
             );
         }
         println!();
@@ -368,7 +394,7 @@ fn print_agenda_text(
             entry.0 += 1;
         }
         for (title, (count, uuid)) in &by_file {
-            println!("  {title} ({uuid})  {count} TODOs, missing :agenda:");
+            println!("  {title} ({uuid})  {count} planned TODOs, missing :agenda:");
         }
         println!();
     }

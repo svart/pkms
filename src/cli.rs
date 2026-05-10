@@ -213,12 +213,18 @@ pub enum Command {
     },
     #[command(about = "Display TODO items, scheduled tasks and deadlines")]
     Agenda {
-        #[arg(long, help = "Only show items from files tagged :agenda:")]
-        only_agenda: bool,
         #[arg(long, help = "Only show items missing :agenda: filetag")]
         missing_agenda: bool,
-        #[arg(long, help = "Filter by TODO state (comma-separated, default: TODO)")]
-        states: Option<String>,
+        #[arg(
+            long,
+            help = "Include only these TODO states (comma-separated, no filtering by default)"
+        )]
+        include: Option<String>,
+        #[arg(
+            long,
+            help = "Exclude these TODO states (comma-separated, no filtering by default)"
+        )]
+        exclude: Option<String>,
         #[arg(long, help = "Only show overdue items (deadline in the past)")]
         overdue: bool,
         #[arg(long, help = "Show items scheduled or due on a specific date")]
@@ -230,8 +236,6 @@ pub enum Command {
         sort: Option<String>,
         #[arg(long, help = "Maximum results")]
         limit: Option<usize>,
-        #[arg(long, help = "Include DONE items (excluded by default)")]
-        include_done: bool,
         #[arg(long, help = "Show today's agenda items")]
         today: bool,
         #[arg(long, help = "Show this week's agenda items")]

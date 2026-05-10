@@ -116,7 +116,7 @@ Every command's JSON (`--output-format json|ndjson`) output has a specific struc
 
 | Command     | Top-level keys |
 |-------------|----------------|
-| `check`     | `db_root`, `stats?`, `duplicates?`, `broken_links?`, `broken_file_links?`, `broken_attachment_links?`, `failed_files?`, `filetags_issues?` (path, title, issue), `agenda_issues?` (path, title, uuid, todo_count, issue), `healthy` |
+| `check`     | `db_root`, `stats?`, `duplicates?`, `broken_links?`, `broken_file_links?`, `broken_attachment_links?`, `failed_files?`, `filetags_issues?` (path, title, issue), `agenda_issues?` (path, title, uuid, todo_count, issue — only for planned TODOs with SCHEDULED/DEADLINE), `healthy` |
 | `stats`     | `db_root`, `total_notes`, `total_links`, `internal_links`, `file_links`, `url_links`, `avg_links_per_note`, `orphans`, `broken_links`, `disk_size_bytes`, `directories[]`, `recent_notes[]` |
 | `stats --todos` | `total_todo_headings`, `files_with_todos`, `by_state[]` (state, count) |
 | `resolve`   | `query`, `total`, `showed?`, `results[]` (uuid, title, path, filetags, aliases, has_todos) |
@@ -130,7 +130,7 @@ Every command's JSON (`--output-format json|ndjson`) output has a specific struc
 | `fix`       | `broken_uuid`, `replacement_uuid`, `replacement_title`, `files_affected[]`, `total_replacements`, `applied` |
 | `new`       | `uuid`, `filename`, `path`, `title`, `created` |
 | `info`      | `config`, `config_path`, `cli_overrides` |
-| `agenda`    | `total`, `items[]` (uuid, title, path, filetags, has_agenda_tag, is_daily_file, daily_file_date?, heading_title, heading_level, todo_state, priority?, scheduled?, scheduled_date?, deadline?, deadline_date?, is_overdue, heading_tags[]) |
+| `agenda`    | `total`, `items[]` (uuid, title, path, filetags, has_agenda_tag, is_daily_file, daily_file_date?, heading_title, heading_level, todo_state?, priority?, scheduled?, scheduled_date?, deadline?, deadline_date?, is_overdue, heading_tags[]) |
 
 ## Testing patterns
 
@@ -158,16 +158,15 @@ Every command's JSON (`--output-format json|ndjson`) output has a specific struc
 | `--attachment-links` | Check attachment: link targets exist on disk (Check only) |
 | `--id-links`      | Check id: link targets exist in the database (Check only)    |
 | `--filetags`      | Check filetags format correctness (Check only)               |
-| `--agenda`        | Check for TODO headings missing :agenda: filetag (Check only)|
+| `--agenda`        | Check for planned TODO headings missing :agenda: filetag (Check only)|
 | `--todos`         | Show TODO/DONE statistics (Stats only)                       |
 | `--todos`         | Restrict to files with TODO headings (Query, Resolve)        |
-| `--only-agenda`   | Only show items from files tagged :agenda: (Agenda only)     |
 | `--missing-agenda`| Only show items missing :agenda: filetag (Agenda only)       |
-| `--states`        | Filter by TODO state (comma-separated) (Agenda only)         |
+| `--include`       | Include only these TODO states (comma-separated) (Agenda only)|
+| `--exclude`       | Exclude these TODO states (comma-separated) (Agenda only)    |
 | `--overdue`       | Only show overdue items (Agenda only)                        |
 | `--date`          | Show items scheduled/due on specific date (Agenda only)      |
 | `--sort`          | Sort: priority, scheduled, deadline, file (Agenda only)      |
-| `--include-done`  | Include DONE items (excluded by default) (Agenda only)       |
 | `--today`         | Show today's agenda items (Agenda only)                      |
 | `--week`          | Show this week's agenda items (Agenda only)                  |
 

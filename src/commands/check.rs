@@ -185,19 +185,21 @@ pub fn run(
             }
             if let Ok(content) = std::fs::read_to_string(&node.path) {
                 let parsed = parse_note(&content);
-                let todo_count = parsed
+                let planned_count = parsed
                     .headings
                     .iter()
-                    .filter(|h| h.todo_state.is_some())
+                    .filter(|h| {
+                        h.todo_state.is_some() && (h.scheduled.is_some() || h.deadline.is_some())
+                    })
                     .count();
-                if todo_count > 0 {
+                if planned_count > 0 {
                     agenda_issues.push(AgendaIssue {
                         path: node.path.to_string_lossy().to_string(),
                         title: node.title.clone(),
                         uuid: node.uuid.clone(),
-                        todo_count,
+                        todo_count: planned_count,
                         issue: format!(
-                            "{todo_count} TODO heading(s) found but :agenda: tag missing"
+                            "{planned_count} planned TODO heading(s) found but :agenda: tag missing"
                         ),
                     });
                 }
