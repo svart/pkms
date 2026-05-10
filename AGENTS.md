@@ -61,7 +61,27 @@ src/
     new.rs          # Generate UUID + filename for new note
     context.rs      # Build AI context window with token budget
 tests/
-  integration.rs    # 133 integration tests with temp mock DB
+  integration/
+    mod.rs          # Common test helpers (setup_db, run, run_json, etc.)
+    check.rs        # Check command tests
+    validate.rs     # Validate command tests
+    stats.rs        # Stats command tests
+    orphans.rs      # Orphans command tests
+    query.rs        # Query command tests
+    resolve.rs      # Resolve command tests
+    suggest.rs      # Suggest command tests
+    get.rs          # Get command tests
+    path.rs         # Path command tests
+    context.rs      # Context command tests
+    info.rs         # Info command tests
+    new.rs          # New command tests
+    fix.rs          # Fix command tests
+    agenda.rs       # Agenda command tests
+    todo.rs         # Todo command tests
+    error.rs        # Error path tests
+    pipe.rs         # NDJSON pipeline tests
+    snapshot.rs     # Snapshot tests
+    all_commands.rs # Parametric JSON output test
 ```
 
 ## How to add a new command
@@ -70,7 +90,7 @@ tests/
 2. **`src/commands/<name>.rs`** — Create file with `pub fn run(...)` that accepts `&Config, &OutputContext, ...` and returns `anyhow::Result<()>`
 3. **`src/commands/mod.rs`** — Add `pub mod <name>;`
 4. **`src/main.rs`** — Add `Command::<Name> => commands::<name>::run(...)` arm
-5. **`tests/integration.rs`** — Add test calling the binary
+5. **`tests/integration/<name>.rs`** — Create test file with `use super::*;` and `#[test]` functions
 
 ## Architecture: stateless single-run model
 
@@ -137,10 +157,10 @@ Every command's JSON (`--output-format json|ndjson`) output has a specific struc
 ## Testing patterns
 
 - **Unit tests** live in each module under `#[cfg(test)] mod tests { ... }`
-- **Integration tests** in `tests/integration.rs` spawn the actual binary with a temp mock DB
+- **Integration tests** in `tests/integration/` spawn the actual binary with a temp mock DB (one file per subcommand)
 - **Property-based tests** in `graph.rs` and `parser.rs` use `proptest` (random Graph::Build fuzzing, slug roundtrip, UUID format, panic fuzzing)
 - **JSON output testing**: All commands are tested with `--output-format json` via `test_all_commands_json`, verifying valid JSON output for every command
-- Mock DB helper in `tests/integration.rs::setup_db()` creates a 12+ note graph with duplicate UUIDs, broken links, filetags, aliases, and headings
+- Mock DB helper in `tests/integration/mod.rs::setup_db()` creates a 12+ note graph with duplicate UUIDs, broken links, filetags, aliases, and headings
 
 ## Feature flags
 

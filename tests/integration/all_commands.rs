@@ -1,0 +1,261 @@
+use super::*;
+use std::process::Command;
+
+#[test]
+fn test_all_commands_json() {
+    let (_dir, root) = setup_db();
+    let db = root.to_str().unwrap().to_string();
+    let cases: Vec<(Vec<String>, bool)> = vec![
+        (
+            vec![
+                "--db".into(),
+                db.clone(),
+                "--output-format".into(),
+                "json".into(),
+                "check".into(),
+            ],
+            false,
+        ),
+        (
+            vec![
+                "--db".into(),
+                db.clone(),
+                "--output-format".into(),
+                "json".into(),
+                "stats".into(),
+            ],
+            true,
+        ),
+        (
+            vec![
+                "--db".into(),
+                db.clone(),
+                "--output-format".into(),
+                "json".into(),
+                "orphans".into(),
+            ],
+            true,
+        ),
+        (
+            vec![
+                "--db".into(),
+                db.clone(),
+                "--output-format".into(),
+                "json".into(),
+                "check".into(),
+                "--file-links".into(),
+                "--attachment-links".into(),
+                "--id-links".into(),
+            ],
+            false,
+        ),
+        (
+            vec![
+                "--db".into(),
+                db.clone(),
+                "--output-format".into(),
+                "json".into(),
+                "stats".into(),
+                "--hubs".into(),
+            ],
+            true,
+        ),
+        (
+            vec![
+                "--db".into(),
+                db.clone(),
+                "--output-format".into(),
+                "json".into(),
+                "stats".into(),
+                "--tags".into(),
+            ],
+            true,
+        ),
+        (
+            vec![
+                "--db".into(),
+                db.clone(),
+                "--output-format".into(),
+                "json".into(),
+                "info".into(),
+            ],
+            true,
+        ),
+        (
+            vec![
+                "--db".into(),
+                db.clone(),
+                "--output-format".into(),
+                "json".into(),
+                "resolve".into(),
+                "--title".into(),
+                "Note".into(),
+            ],
+            true,
+        ),
+        (
+            vec![
+                "--db".into(),
+                db.clone(),
+                "--output-format".into(),
+                "json".into(),
+                "query".into(),
+                "Note".into(),
+            ],
+            true,
+        ),
+        (
+            vec![
+                "--db".into(),
+                db.clone(),
+                "--output-format".into(),
+                "json".into(),
+                "path".into(),
+                "Note A".into(),
+                "Note C".into(),
+            ],
+            true,
+        ),
+        (
+            vec![
+                "--db".into(),
+                db.clone(),
+                "--output-format".into(),
+                "json".into(),
+                "context".into(),
+                "Note A".into(),
+                "--depth".into(),
+                "1".into(),
+            ],
+            true,
+        ),
+        (
+            vec![
+                "--db".into(),
+                db.clone(),
+                "--output-format".into(),
+                "json".into(),
+                "validate".into(),
+                "Note A".into(),
+            ],
+            true,
+        ),
+        (
+            vec![
+                "--db".into(),
+                db.clone(),
+                "--output-format".into(),
+                "json".into(),
+                "get".into(),
+                "Note A".into(),
+                "--links".into(),
+            ],
+            true,
+        ),
+        (
+            vec![
+                "--db".into(),
+                db.clone(),
+                "--output-format".into(),
+                "json".into(),
+                "suggest".into(),
+                "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa".into(),
+            ],
+            true,
+        ),
+        (
+            vec![
+                "--db".into(),
+                db.clone(),
+                "--output-format".into(),
+                "json".into(),
+                "new".into(),
+                "Parametric Test".into(),
+            ],
+            true,
+        ),
+        (
+            vec![
+                "--db".into(),
+                db.clone(),
+                "--output-format".into(),
+                "json".into(),
+                "fix".into(),
+                "ffffffff-ffff-4fff-ffff-ffffffffffff".into(),
+                "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa".into(),
+            ],
+            true,
+        ),
+        (
+            vec![
+                "--db".into(),
+                db.clone(),
+                "--output-format".into(),
+                "json".into(),
+                "agenda".into(),
+            ],
+            true,
+        ),
+        (
+            vec![
+                "--db".into(),
+                db.clone(),
+                "--output-format".into(),
+                "json".into(),
+                "todo".into(),
+            ],
+            true,
+        ),
+        (
+            vec![
+                "--db".into(),
+                db.clone(),
+                "--output-format".into(),
+                "json".into(),
+                "stats".into(),
+                "--todos".into(),
+            ],
+            true,
+        ),
+        (
+            vec![
+                "--db".into(),
+                db.clone(),
+                "--output-format".into(),
+                "json".into(),
+                "check".into(),
+                "--agenda".into(),
+            ],
+            false,
+        ),
+    ];
+    for (args, expect_success) in &cases {
+        let args_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
+        let output = Command::new(pkms_binary())
+            .args(&args_refs)
+            .output()
+            .unwrap();
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        if *expect_success {
+            assert!(
+                output.status.success(),
+                "Expected success for {:?}\nstdout: {}\nstderr: {}",
+                args_refs,
+                stdout,
+                stderr
+            );
+        }
+        let trimmed = stdout.trim();
+        assert!(
+            trimmed.starts_with('{'),
+            "Expected JSON object for {:?}\nstdout: {}\nstderr: {}",
+            args_refs,
+            stdout,
+            stderr
+        );
+        let v: serde_json::Value = serde_json::from_str(trimmed)
+            .unwrap_or_else(|_| panic!("Invalid JSON for {:?}: {}", args_refs, stdout));
+        assert!(v.is_object(), "Expected object for {:?}", args_refs);
+    }
+}

@@ -1,5 +1,5 @@
 ---
-source: tests/integration.rs
+source: tests/integration/snapshot.rs
 expression: "normalize_snapshot(&stdout, &root)"
 ---
 Total: 12

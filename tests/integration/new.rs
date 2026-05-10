@@ -1,0 +1,131 @@
+use super::*;
+
+#[test]
+fn test_new_dry_run() {
+    let (_dir, root) = setup_db();
+    let (stdout, _stderr, status) = run(&["--db", root.to_str().unwrap(), "new", "Test Title"]);
+    assert!(status.success());
+    assert!(stdout.contains("Test Title"));
+    assert!(stdout.contains("dry-run"));
+}
+
+#[test]
+fn test_new_create() {
+    let (_dir, root) = setup_db();
+    let (stdout, _stderr, status) = run(&[
+        "--db",
+        root.to_str().unwrap(),
+        "new",
+        "Fresh Note",
+        "--create",
+    ]);
+    assert!(status.success());
+    assert!(stdout.contains("created"));
+}
+
+#[test]
+fn test_new_json() {
+    let (_dir, root) = setup_db();
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "new",
+        "Test Note",
+    ]);
+    assert!(status.success());
+    assert_eq!(v["title"], "Test Note");
+    assert_eq!(v["created"], false);
+    assert!(v.get("uuid").is_some());
+}
+
+#[test]
+fn test_new_with_tags() {
+    let (_dir, root) = setup_db();
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "new",
+        "Tagged New",
+        "--create",
+        "--tags",
+        "foo,bar",
+    ]);
+    assert!(status.success());
+    assert_eq!(v["created"], true);
+}
+
+#[test]
+fn test_new_with_heading() {
+    let (_dir, root) = setup_db();
+    let db = root.to_str().unwrap();
+    let note_dir = root.join("roam").join("common");
+    let note_path = note_dir.join("test-heading-note.org");
+    fs::write(
+        &note_path,
+        r#":PROPERTIES:
+:ID:       11111111-1111-4111-8111-111111111111
+:END:
+#+title: Test Heading Note
+
+* My Heading
+Some content
+"#,
+    )
+    .unwrap();
+
+    let (stdout, _stderr, status) = run(&[
+        "--db",
+        db,
+        "new",
+        "Test Heading Note",
+        "--create",
+        "--heading",
+        "My Heading",
+    ]);
+    assert!(status.success(), "stdout: {}", stdout);
+    assert!(stdout.contains("Heading UUID"));
+
+    let content = std::fs::read_to_string(&note_path).unwrap();
+    let id_count = content.matches(":ID:").count();
+    assert_eq!(id_count, 2, "should have note-level and heading-level IDs");
+}
+
+#[test]
+fn test_new_with_heading_json() {
+    let (_dir, root) = setup_db();
+    let db = root.to_str().unwrap();
+    let note_dir = root.join("roam").join("common");
+    let note_path = note_dir.join("json-heading-test.org");
+    fs::write(
+        &note_path,
+        r#":PROPERTIES:
+:ID:       22222222-2222-4222-8222-222222222222
+:END:
+#+title: JSON Heading Test
+
+* JSON Section
+Some content
+"#,
+    )
+    .unwrap();
+
+    let (v, status) = run_json(&[
+        "--db",
+        db,
+        "--output-format",
+        "json",
+        "new",
+        "JSON Heading Test",
+        "--create",
+        "--heading",
+        "JSON Section",
+    ]);
+    assert!(status.success());
+    assert!(v.get("heading").is_some());
+    assert_eq!(v["heading"]["title"], "JSON Section");
+    assert!(v["heading"]["uuid"].is_string());
+}
