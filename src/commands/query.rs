@@ -43,6 +43,7 @@ pub fn run(
     only_tags: bool,
     only_title: bool,
     only_content: bool,
+    only_todos: bool,
     use_embed: bool,
     db_cli: Option<&std::path::Path>,
 ) -> Result<()> {
@@ -62,6 +63,10 @@ pub fn run(
     } else {
         search_by_text(&graph, terms, only_tags, only_title, only_content)?
     };
+
+    if only_todos {
+        combined.retain(|r| graph.nodes.get(&r.uuid).is_some_and(|n| n.has_todos));
+    }
 
     let total_results = combined.len();
     let showed = limit.map(|l| {

@@ -32,7 +32,8 @@ src/
   cli.rs            # clap derive structs — Cli, Command enum (all subcommands)
   config.rs         # ~/.config/pkms.toml loading, merging with CLI --db flag
   discovery.rs      # Recursive .org file discovery with ignore patterns
-  parser.rs         # org-mode parser: IDs, titles, filetags, aliases, refs, links, headings
+  org_date.rs       # Org-mode timestamp parser (SCHEDULED/DEADLINE dates)
+  parser.rs         # org-mode parser: IDs, titles, filetags, aliases, refs, links, headings, priorities, SCHEDULED/DEADLINE
   util.rs           # Shared helpers: path_string, is_stdin_piped, read_stdin_ndjson
   output.rs         # OutputContext: format dispatch (Text/Json/Ndjson), print helpers
   graph/            # In-memory graph module (split into submodules)
@@ -44,10 +45,11 @@ src/
     tests.rs        # Unit + proptest tests for graph
   commands/         # One file per subcommand
     mod.rs          # Module declarations only
+    agenda.rs       # Display TODO items, scheduled tasks and deadlines
     info.rs         # Show resolved config
     check.rs        # Full DB health scan, returns healthy: bool
     validate.rs     # Single note health check
-    stats.rs        # Comprehensive statistics (+ --hubs, --tags flags)
+    stats.rs        # Comprehensive statistics (+ --hubs, --tags, --todos flags)
     orphans.rs      # List orphan notes
     resolve.rs      # UUID resolution
     fix.rs          # Replace broken UUIDs across all files
@@ -58,7 +60,7 @@ src/
     new.rs          # Generate UUID + filename for new note
     context.rs      # Build AI context window with token budget
 tests/
-  integration.rs    # 95 integration tests with temp mock DB
+  integration.rs    # 115 integration tests with temp mock DB
 ```
 
 ## How to add a new command
@@ -114,9 +116,10 @@ Every command's JSON (`--output-format json|ndjson`) output has a specific struc
 
 | Command     | Top-level keys |
 |-------------|----------------|
-| `check`     | `db_root`, `stats?`, `duplicates?`, `broken_links?`, `broken_file_links?`, `broken_attachment_links?`, `failed_files?`, `filetags_issues?` (path, title, issue), `healthy` |
+| `check`     | `db_root`, `stats?`, `duplicates?`, `broken_links?`, `broken_file_links?`, `broken_attachment_links?`, `failed_files?`, `filetags_issues?` (path, title, issue), `agenda_issues?` (path, title, uuid, todo_count, issue), `healthy` |
 | `stats`     | `db_root`, `total_notes`, `total_links`, `internal_links`, `file_links`, `url_links`, `avg_links_per_note`, `orphans`, `broken_links`, `disk_size_bytes`, `directories[]`, `recent_notes[]` |
-| `resolve`   | `query`, `total`, `showed?`, `results[]` (uuid, title, path, filetags, aliases) |
+| `stats --todos` | `total_todo_headings`, `files_with_todos`, `by_state[]` (state, count) |
+| `resolve`   | `query`, `total`, `showed?`, `results[]` (uuid, title, path, filetags, aliases, has_todos) |
 | `suggest`   | `target`, `target_uuid`, `total`, `showed?`, `suggestions[]` (uuid, title, score, scores{}, reasons[], target_uuid) |
 | `query`     | `query`, `total_results`, `showed?`, `results[]` (uuid, title, score, matches[], content_matches[]) |
 | `context`   | `target`, `context`, `estimated_tokens`, `depth` |
@@ -127,6 +130,7 @@ Every command's JSON (`--output-format json|ndjson`) output has a specific struc
 | `fix`       | `broken_uuid`, `replacement_uuid`, `replacement_title`, `files_affected[]`, `total_replacements`, `applied` |
 | `new`       | `uuid`, `filename`, `path`, `title`, `created` |
 | `info`      | `config`, `config_path`, `cli_overrides` |
+| `agenda`    | `total`, `items[]` (uuid, title, path, filetags, has_agenda_tag, is_daily_file, daily_file_date?, heading_title, heading_level, todo_state, priority?, scheduled?, scheduled_date?, deadline?, deadline_date?, is_overdue, heading_tags[]) |
 
 ## Testing patterns
 
@@ -154,6 +158,18 @@ Every command's JSON (`--output-format json|ndjson`) output has a specific struc
 | `--attachment-links` | Check attachment: link targets exist on disk (Check only) |
 | `--id-links`      | Check id: link targets exist in the database (Check only)    |
 | `--filetags`      | Check filetags format correctness (Check only)               |
+| `--agenda`        | Check for TODO headings missing :agenda: filetag (Check only)|
+| `--todos`         | Show TODO/DONE statistics (Stats only)                       |
+| `--todos`         | Restrict to files with TODO headings (Query, Resolve)        |
+| `--only-agenda`   | Only show items from files tagged :agenda: (Agenda only)     |
+| `--missing-agenda`| Only show items missing :agenda: filetag (Agenda only)       |
+| `--states`        | Filter by TODO state (comma-separated) (Agenda only)         |
+| `--overdue`       | Only show overdue items (Agenda only)                        |
+| `--date`          | Show items scheduled/due on specific date (Agenda only)      |
+| `--sort`          | Sort: priority, scheduled, deadline, file (Agenda only)      |
+| `--include-done`  | Include DONE items (excluded by default) (Agenda only)       |
+| `--today`         | Show today's agenda items (Agenda only)                      |
+| `--week`          | Show this week's agenda items (Agenda only)                  |
 
 
 ## Command pipelining

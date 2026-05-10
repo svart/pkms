@@ -2,7 +2,7 @@ use crate::cli::OutputFormat;
 use crate::config::Config;
 use crate::discovery;
 use crate::output::OutputContext;
-use crate::parser::{FILETAGS_RE, TITLE_RE};
+use crate::parser::{FILETAGS_RE, TITLE_RE, parse_note};
 use anyhow::Result;
 use regex::Regex;
 use serde::Serialize;
@@ -20,6 +20,7 @@ pub struct ResolvedNote {
     pub aliases: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub matched_heading_uuid: Option<String>,
+    pub has_todos: bool,
 }
 
 #[derive(Serialize)]
@@ -136,6 +137,8 @@ fn scan_one_note(
         .filter_map(|c| c.get(1).map(|m| m.as_str().trim().to_string()))
         .collect();
 
+    let has_todos = parse_note(content).has_todo_headings();
+
     ResolvedNote {
         uuid,
         title,
@@ -144,6 +147,7 @@ fn scan_one_note(
         categories,
         aliases,
         matched_heading_uuid: matched_heading,
+        has_todos,
     }
 }
 
@@ -153,6 +157,7 @@ pub struct ResolveOptions<'a> {
     pub tags: Option<&'a str>,
     pub limit: Option<usize>,
     pub fields: Option<&'a str>,
+    pub todos: bool,
 }
 
 pub fn run(
@@ -201,6 +206,9 @@ pub fn run(
                 if !matches_tag && !matches_category {
                     return false;
                 }
+            }
+            if opts.todos && !n.has_todos {
+                return false;
             }
             true
         })

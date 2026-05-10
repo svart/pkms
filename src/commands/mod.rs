@@ -1,3 +1,4 @@
+pub mod agenda;
 pub mod check;
 pub mod context;
 pub mod fix;

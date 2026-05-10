@@ -1,7 +1,7 @@
 use crate::config::Config;
 use crate::graph::{DuplicateInfo, Graph, GraphStats};
 use crate::output::OutputContext;
-use crate::parser::{Link, validate_filetags_format};
+use crate::parser::{Link, parse_note, validate_filetags_format};
 use anyhow::Result;
 use serde::Serialize;
 use std::path::Path;
@@ -24,6 +24,8 @@ pub struct CheckOutput {
     pub failed_files: Option<Vec<FailedFileEntry>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub filetags_issues: Option<Vec<FiletagsIssue>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub agenda_issues: Option<Vec<AgendaIssue>>,
     pub healthy: bool,
 }
 
@@ -58,6 +60,15 @@ pub struct FailedFileEntry {
 pub struct FiletagsIssue {
     pub path: String,
     pub title: String,
+    pub issue: String,
+}
+
+#[derive(Clone, Serialize)]
+pub struct AgendaIssue {
+    pub path: String,
+    pub title: String,
+    pub uuid: String,
+    pub todo_count: usize,
     pub issue: String,
 }
 
@@ -103,16 +114,18 @@ pub fn run(
     attachment_links: bool,
     id_links: bool,
     filetags: bool,
+    agenda: bool,
 ) -> Result<ExitCode> {
     let graph = Graph::load(config, db_cli)?;
     let db_root = config.resolve_db_root(db_cli)?;
 
-    let any_explicit = stats || id_links || file_links || attachment_links || filetags;
+    let any_explicit = stats || id_links || file_links || attachment_links || filetags || agenda;
     let show_stats = stats || !any_explicit;
     let show_id = id_links || !any_explicit;
     let show_file = file_links || !any_explicit;
     let show_attach = attachment_links || !any_explicit;
     let show_filetags = filetags || !any_explicit;
+    let show_agenda = agenda;
 
     let mut broken_file = Vec::new();
     let mut broken_attachment = Vec::new();
@@ -164,12 +177,41 @@ pub fn run(
         }
     }
 
+    let mut agenda_issues = Vec::new();
+    if show_agenda {
+        for node in graph.nodes.values() {
+            if node.filetags.iter().any(|t| t == "agenda") {
+                continue;
+            }
+            if let Ok(content) = std::fs::read_to_string(&node.path) {
+                let parsed = parse_note(&content);
+                let todo_count = parsed
+                    .headings
+                    .iter()
+                    .filter(|h| h.todo_state.is_some())
+                    .count();
+                if todo_count > 0 {
+                    agenda_issues.push(AgendaIssue {
+                        path: node.path.to_string_lossy().to_string(),
+                        title: node.title.clone(),
+                        uuid: node.uuid.clone(),
+                        todo_count,
+                        issue: format!(
+                            "{todo_count} TODO heading(s) found but :agenda: tag missing"
+                        ),
+                    });
+                }
+            }
+        }
+    }
+
     let healthy = graph.stats().broken_link_count == 0
         && graph.stats().parse_error_count == 0
         && graph.stats().duplicate_uuid_count == 0
         && broken_file.is_empty()
         && broken_attachment.is_empty()
-        && filetags_issues.is_empty();
+        && filetags_issues.is_empty()
+        && (!show_agenda || agenda_issues.is_empty());
 
     if ctx.is_json() {
         print_check_json(
@@ -179,12 +221,14 @@ pub fn run(
             &broken_file,
             &broken_attachment,
             &filetags_issues,
+            &agenda_issues,
             &CheckDisplayOptions {
                 show_stats,
                 show_id,
                 show_file,
                 show_attach,
                 show_filetags,
+                show_agenda,
             },
         )?;
     } else {
@@ -194,12 +238,14 @@ pub fn run(
             &broken_file,
             &broken_attachment,
             &filetags_issues,
+            &agenda_issues,
             &CheckDisplayOptions {
                 show_stats,
                 show_id,
                 show_file,
                 show_attach,
                 show_filetags,
+                show_agenda,
             },
         );
     }
@@ -217,8 +263,10 @@ struct CheckDisplayOptions {
     show_file: bool,
     show_attach: bool,
     show_filetags: bool,
+    show_agenda: bool,
 }
 
+#[allow(clippy::too_many_arguments)]
 fn print_check_json(
     ctx: &OutputContext,
     graph: &Graph,
@@ -226,6 +274,7 @@ fn print_check_json(
     broken_file: &[BrokenFileLinkEntry],
     broken_attachment: &[BrokenAttachmentLinkEntry],
     filetags_issues: &[FiletagsIssue],
+    agenda_issues: &[AgendaIssue],
     opts: &CheckDisplayOptions,
 ) -> Result<()> {
     let stats = graph.stats();
@@ -267,7 +316,8 @@ fn print_check_json(
         && stats.duplicate_uuid_count == 0
         && broken_file.is_empty()
         && broken_attachment.is_empty()
-        && !has_filetags_issues;
+        && !has_filetags_issues
+        && (!opts.show_agenda || agenda_issues.is_empty());
 
     let output = CheckOutput {
         db_root: db_root.to_string_lossy().to_string(),
@@ -298,6 +348,11 @@ fn print_check_json(
         } else {
             None
         },
+        agenda_issues: if opts.show_agenda {
+            Some(agenda_issues.to_vec())
+        } else {
+            None
+        },
         healthy,
     };
     ctx.print_json(&output)
@@ -309,6 +364,7 @@ fn print_check_text(
     broken_file: &[BrokenFileLinkEntry],
     broken_attachment: &[BrokenAttachmentLinkEntry],
     filetags_issues: &[FiletagsIssue],
+    agenda_issues: &[AgendaIssue],
     opts: &CheckDisplayOptions,
 ) {
     let stats = graph.stats();
@@ -317,9 +373,16 @@ fn print_check_text(
         && stats.duplicate_uuid_count == 0
         && broken_file.is_empty()
         && broken_attachment.is_empty()
-        && filetags_issues.is_empty();
+        && filetags_issues.is_empty()
+        && (!opts.show_agenda || agenda_issues.is_empty());
 
-    if opts.show_stats || opts.show_file || opts.show_attach || opts.show_filetags || opts.show_id {
+    if opts.show_stats
+        || opts.show_file
+        || opts.show_attach
+        || opts.show_filetags
+        || opts.show_id
+        || opts.show_agenda
+    {
         println!("Database: {}", db_root.display());
     }
 
@@ -414,7 +477,29 @@ fn print_check_text(
         }
     }
 
-    if opts.show_stats || opts.show_file || opts.show_attach || opts.show_filetags || opts.show_id {
+    if !agenda_issues.is_empty() {
+        println!();
+        println!("Missing :agenda: tag (files with TODOs but no agenda tag):");
+        for entry in agenda_issues {
+            let short_uuid = if entry.uuid.len() >= 8 {
+                &entry.uuid[..8]
+            } else {
+                &entry.uuid
+            };
+            println!(
+                "  {} ({})  \u{2014} {} TODOs",
+                entry.title, short_uuid, entry.todo_count
+            );
+        }
+    }
+
+    if opts.show_stats
+        || opts.show_file
+        || opts.show_attach
+        || opts.show_filetags
+        || opts.show_id
+        || opts.show_agenda
+    {
         println!();
     }
     if healthy {

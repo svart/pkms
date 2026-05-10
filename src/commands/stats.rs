@@ -5,6 +5,7 @@ use crate::output::OutputContext;
 use crate::parser::Link;
 use anyhow::Result;
 use serde::Serialize;
+use std::collections::BTreeMap;
 
 #[derive(Serialize)]
 pub struct StatsOutput {
@@ -20,6 +21,21 @@ pub struct StatsOutput {
     pub disk_size_bytes: u64,
     pub directories: Vec<DirEntry>,
     pub recent_notes: Option<Vec<RecentNote>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub todo_stats: Option<TodoStats>,
+}
+
+#[derive(Serialize)]
+pub struct TodoStats {
+    pub total_todo_headings: usize,
+    pub files_with_todos: usize,
+    pub by_state: Vec<TodoStateEntry>,
+}
+
+#[derive(Serialize)]
+pub struct TodoStateEntry {
+    pub state: String,
+    pub count: usize,
 }
 
 #[derive(Serialize)]
@@ -76,6 +92,7 @@ pub fn run(
     days: Option<u32>,
     hubs_limit: Option<usize>,
     show_tags: bool,
+    show_todos: bool,
     db_cli: Option<&std::path::Path>,
 ) -> Result<()> {
     let graph = Graph::load(config, db_cli)?;
@@ -87,6 +104,10 @@ pub fn run(
 
     if show_tags {
         return print_tags(ctx, &graph);
+    }
+
+    if show_todos {
+        return print_todo_stats(ctx, &graph);
     }
 
     print_stats(config, ctx, days, &graph, &db_root)
@@ -185,6 +206,61 @@ fn print_tags(ctx: &OutputContext, graph: &Graph) -> Result<()> {
     Ok(())
 }
 
+fn print_todo_stats(ctx: &OutputContext, graph: &Graph) -> Result<()> {
+    let mut by_state: BTreeMap<String, usize> = BTreeMap::new();
+    let mut files_with_todos = 0;
+
+    for node in graph.nodes.values() {
+        if node.has_todos {
+            files_with_todos += 1;
+        }
+    }
+
+    for node in graph.nodes.values() {
+        if let Ok(content) = std::fs::read_to_string(&node.path) {
+            let parsed = crate::parser::parse_note(&content);
+            for heading in &parsed.headings {
+                if let Some(ref state) = heading.todo_state {
+                    *by_state.entry(state.to_uppercase()).or_default() += 1;
+                }
+            }
+        }
+    }
+
+    let total: usize = by_state.values().sum();
+    let state_entries: Vec<TodoStateEntry> = by_state
+        .into_iter()
+        .map(|(state, count)| TodoStateEntry { state, count })
+        .collect();
+
+    let stats = TodoStats {
+        total_todo_headings: total,
+        files_with_todos,
+        by_state: state_entries,
+    };
+
+    match ctx.format {
+        OutputFormat::Text => {
+            println!("TODO Statistics:");
+            println!("  Total TODO headings: {}", stats.total_todo_headings);
+            println!("  Files with TODOs:    {}", stats.files_with_todos);
+            println!();
+            println!("  By state:");
+            for entry in &stats.by_state {
+                println!("    {:20} {}", entry.state, entry.count);
+            }
+        }
+        OutputFormat::Json => {
+            ctx.print_json(&stats)?;
+        }
+        OutputFormat::Ndjson => {
+            println!("{}", serde_json::to_string(&stats)?);
+        }
+    }
+
+    Ok(())
+}
+
 #[allow(clippy::cast_precision_loss)]
 fn print_stats(
     _config: &Config,
@@ -234,6 +310,7 @@ fn print_stats(
                     })
                     .collect()
             }),
+            todo_stats: None,
         };
         ctx.print_json(&output)?;
     } else {

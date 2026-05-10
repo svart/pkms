@@ -50,6 +50,8 @@ pub enum Command {
         id_links: bool,
         #[arg(long, help = "Check filetags format correctness")]
         filetags: bool,
+        #[arg(long, help = "Check for TODO headings missing :agenda: filetag")]
+        agenda: bool,
     },
     #[command(about = "Validate health of a specific note")]
     Validate {
@@ -71,6 +73,8 @@ pub enum Command {
         hubs: Option<usize>,
         #[arg(long, help = "List all filetags with note counts")]
         tags: bool,
+        #[arg(long, help = "Show TODO/DONE statistics per note")]
+        todos: bool,
     },
     #[command(about = "List orphan notes (no incoming or outgoing links)")]
     Orphans {
@@ -124,6 +128,8 @@ pub enum Command {
             help = "Comma-separated fields: uuid,title,path,tags,aliases"
         )]
         fields: Option<String>,
+        #[arg(long, help = "Restrict to files with TODO headings")]
+        todos: bool,
     },
     #[command(about = "Fix broken links by replacing UUIDs across the database")]
     Fix {
@@ -192,6 +198,8 @@ pub enum Command {
         title: bool,
         #[arg(long, help = "Search only in file content")]
         content: bool,
+        #[arg(long, help = "Restrict to files with TODO headings")]
+        todos: bool,
         #[cfg(feature = "embed")]
         #[arg(long, help = "Use embedding-based similarity")]
         embed: bool,
@@ -202,6 +210,32 @@ pub enum Command {
     InitConfig {
         #[arg(short, long, help = "Database root path to write into config")]
         db: Option<PathBuf>,
+    },
+    #[command(about = "Display TODO items, scheduled tasks and deadlines")]
+    Agenda {
+        #[arg(long, help = "Only show items from files tagged :agenda:")]
+        only_agenda: bool,
+        #[arg(long, help = "Only show items missing :agenda: filetag")]
+        missing_agenda: bool,
+        #[arg(long, help = "Filter by TODO state (comma-separated, default: TODO)")]
+        states: Option<String>,
+        #[arg(long, help = "Only show overdue items (deadline in the past)")]
+        overdue: bool,
+        #[arg(long, help = "Show items scheduled or due on a specific date")]
+        date: Option<String>,
+        #[arg(
+            long,
+            help = "Sort: priority, scheduled, deadline, file (default: priority)"
+        )]
+        sort: Option<String>,
+        #[arg(long, help = "Maximum results")]
+        limit: Option<usize>,
+        #[arg(long, help = "Include DONE items (excluded by default)")]
+        include_done: bool,
+        #[arg(long, help = "Show today's agenda items")]
+        today: bool,
+        #[arg(long, help = "Show this week's agenda items")]
+        week: bool,
     },
     #[command(name = "path", about = "Find shortest path between two notes")]
     Path {

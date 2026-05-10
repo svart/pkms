@@ -23,6 +23,7 @@ pub struct Node {
     pub outgoing: Vec<Link>,
     pub headings_count: usize,
     pub heading_uuids: Vec<String>,
+    pub has_todos: bool,
 }
 
 impl Node {
@@ -38,6 +39,7 @@ impl Node {
             outgoing: parsed.outgoing.clone(),
             headings_count: parsed.headings.len(),
             heading_uuids: parsed.heading_uuids(),
+            has_todos: parsed.has_todo_headings(),
         }
     }
 }

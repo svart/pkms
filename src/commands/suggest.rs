@@ -19,7 +19,7 @@ fn find_heading_title_for_uuid(content: &str, heading_uuid: &str) -> Option<Stri
             // The heading line should be the previous line
             let prev = lines[i - 1].trim();
             if let Some(cap) = HEADING_RE.captures(prev) {
-                let title = cap.get(3).map_or("", |m| m.as_str()).trim();
+                let title = cap.get(4).map_or("", |m| m.as_str()).trim();
                 if !title.is_empty() {
                     return Some(title.to_string());
                 }
@@ -29,7 +29,7 @@ fn find_heading_title_for_uuid(content: &str, heading_uuid: &str) -> Option<Stri
             if i > 1 {
                 let prev2 = lines[i - 2].trim();
                 if let Some(cap) = HEADING_RE.captures(prev2) {
-                    let title = cap.get(3).map_or("", |m| m.as_str()).trim();
+                    let title = cap.get(4).map_or("", |m| m.as_str()).trim();
                     if !title.is_empty() {
                         return Some(title.to_string());
                     }

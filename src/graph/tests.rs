@@ -33,6 +33,9 @@ fn make_note_with_headings(
             todo_state: None,
             tags: vec![],
             uuid: Some(huid.to_string()),
+            scheduled: None,
+            deadline: None,
+            priority: None,
         })
         .collect();
     FileScanResult {

@@ -5,6 +5,7 @@ mod discovery;
 #[cfg(feature = "embed")]
 mod embed;
 mod graph;
+mod org_date;
 mod output;
 mod parser;
 mod tokens;
@@ -56,6 +57,7 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
             attachment_links,
             id_links,
             filetags,
+            agenda,
         } => commands::check::run(
             cfg,
             ctx,
@@ -65,15 +67,19 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
             *attachment_links,
             *id_links,
             *filetags,
+            *agenda,
         )?,
         Command::Validate { target, from_stdin } => {
             commands::validate::run(cfg, ctx, target.as_deref(), *from_stdin, cli.db.as_deref())
                 .map(|()| ExitCode::SUCCESS)?
         }
-        Command::Stats { days, hubs, tags } => {
-            commands::stats::run(cfg, ctx, *days, *hubs, *tags, cli.db.as_deref())
-                .map(|()| ExitCode::SUCCESS)?
-        }
+        Command::Stats {
+            days,
+            hubs,
+            tags,
+            todos,
+        } => commands::stats::run(cfg, ctx, *days, *hubs, *tags, *todos, cli.db.as_deref())
+            .map(|()| ExitCode::SUCCESS)?,
         Command::Orphans {
             limit,
             with_dailies,
@@ -109,6 +115,7 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
             tags,
             limit,
             fields,
+            todos,
         } => commands::resolve::run(
             cfg,
             ctx,
@@ -118,6 +125,7 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
                 tags: tags.as_deref(),
                 limit: *limit,
                 fields: fields.as_deref(),
+                todos: *todos,
             },
             cli.db.as_deref(),
         )
@@ -207,6 +215,7 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
             tags,
             title,
             content,
+            todos,
             embed,
         } => commands::query::run(
             cfg,
@@ -216,6 +225,7 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
             *tags,
             *title,
             *content,
+            *todos,
             *embed,
             cli.db.as_deref(),
         )
@@ -227,6 +237,7 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
             tags,
             title,
             content,
+            todos,
             ..
         } => commands::query::run(
             cfg,
@@ -236,7 +247,35 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
             *tags,
             *title,
             *content,
+            *todos,
             false,
+            cli.db.as_deref(),
+        )
+        .map(|()| ExitCode::SUCCESS)?,
+        Command::Agenda {
+            only_agenda,
+            missing_agenda,
+            states,
+            overdue,
+            date,
+            sort,
+            limit,
+            include_done,
+            today,
+            week,
+        } => commands::agenda::run(
+            cfg,
+            ctx,
+            *only_agenda,
+            *missing_agenda,
+            states.as_deref(),
+            *overdue,
+            date.as_deref(),
+            sort.as_deref(),
+            *limit,
+            *include_done,
+            *today,
+            *week,
             cli.db.as_deref(),
         )
         .map(|()| ExitCode::SUCCESS)?,

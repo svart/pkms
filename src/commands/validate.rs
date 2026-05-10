@@ -170,6 +170,11 @@ fn validate_one(graph: &Graph, target: &str, db_root: &Path) -> Result<ValidateO
         issues.push(format!("Invalid filetags format '{}': {}", raw, reason));
     }
 
+    let parsed = crate::parser::parse_note(&content);
+    if parsed.has_todo_headings() && !node.filetags.iter().any(|t| t == "agenda") {
+        issues.push("Issue: File has TODO headings but missing :agenda: filetag".to_string());
+    }
+
     // Check for duplicate UUIDs (note-level vs heading-level)
     let all_ids: Vec<String> = VALIDATE_UUID_RE
         .captures_iter(&content)

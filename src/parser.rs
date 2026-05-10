@@ -1,3 +1,4 @@
+use chrono::NaiveDate;
 use regex::Regex;
 use serde::Serialize;
 use std::sync::LazyLock;
@@ -34,6 +35,14 @@ impl ParsedNote {
             .filter_map(|h| h.uuid.clone())
             .collect()
     }
+
+    pub fn has_todo_headings(&self) -> bool {
+        self.headings.iter().any(|h| {
+            h.todo_state
+                .as_ref()
+                .is_some_and(|s| s.chars().all(|c| c.is_uppercase() || c == '-'))
+        })
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -44,18 +53,16 @@ pub enum Link {
     Attachment(String),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct Heading {
-    #[cfg_attr(not(test), allow(dead_code))]
     pub level: usize,
-    #[cfg_attr(not(test), allow(dead_code))]
     pub title: String,
-    #[cfg_attr(not(test), allow(dead_code))]
     pub todo_state: Option<String>,
-    #[cfg_attr(not(test), allow(dead_code))]
     pub tags: Vec<String>,
-    #[cfg_attr(not(test), allow(dead_code))]
     pub uuid: Option<String>,
+    pub scheduled: Option<String>,
+    pub deadline: Option<String>,
+    pub priority: Option<char>,
 }
 
 const PROP_ID: &str = "ID";
@@ -67,8 +74,18 @@ pub(crate) static LINK_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"\[\[([^\]]+?)(?:\]\[([^\]]*))?\]\]").unwrap());
 
 pub(crate) static HEADING_RE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"^(\*+)\s+(?:(\w+)\s+)?(.*?)(?:\s+:(\w+(?::\w+)*):)?\s*$").unwrap()
+    Regex::new(r"^(\*+)\s+(?:(\w+)\s+)?(?:\[#([A-C])\]\s+)?(.*?)(?:\s+:(\w+(?::\w+)*):)?\s*$")
+        .unwrap()
 });
+
+pub(crate) static SCHEDULED_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"SCHEDULED:\s*(<[^>]+>)").unwrap());
+
+pub(crate) static DEADLINE_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"DEADLINE:\s*(<[^>]+>)").unwrap());
+
+pub(crate) static DAILY_FILE_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(\d{4}-\d{2}-\d{2})\.org$").unwrap());
 
 pub(crate) static TITLE_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"(?im)^#\+title:\s*(.*)$").unwrap());
@@ -87,6 +104,7 @@ pub fn parse_note(content: &str) -> ParsedNote {
     let mut headings: Vec<Heading> = Vec::new();
     let mut in_properties = false;
     let mut current_heading_idx: Option<usize> = None;
+    let mut just_saw_heading = false;
 
     for line in content.lines() {
         let trimmed = line.trim();
@@ -144,13 +162,14 @@ pub fn parse_note(content: &str) -> ParsedNote {
             }
 
             if let Some(cap) = HEADING_RE.captures(line)
-                && (cap[1].len() > 1 || cap.get(3).is_some_and(|m| !m.as_str().is_empty()))
+                && (cap[1].len() > 1 || cap.get(4).is_some_and(|m| !m.as_str().is_empty()))
             {
                 let level = cap[1].len();
                 let todo_state = cap.get(2).map(|m| m.as_str().to_string());
-                let heading_title = cap.get(3).map_or("", |m| m.as_str()).to_string();
+                let priority = cap.get(3).and_then(|m| m.as_str().chars().next());
+                let heading_title = cap.get(4).map_or("", |m| m.as_str()).to_string();
                 let tags = cap
-                    .get(4)
+                    .get(5)
                     .map(|m| {
                         m.as_str()
                             .split(':')
@@ -165,8 +184,27 @@ pub fn parse_note(content: &str) -> ParsedNote {
                     todo_state,
                     tags,
                     uuid: None,
+                    scheduled: None,
+                    deadline: None,
+                    priority,
                 });
                 current_heading_idx = Some(headings.len() - 1);
+                just_saw_heading = true;
+                continue;
+            }
+
+            if just_saw_heading && !trimmed.is_empty() {
+                if let Some(cap) = SCHEDULED_RE.captures(line)
+                    && let Some(idx) = current_heading_idx
+                {
+                    headings[idx].scheduled = cap.get(1).map(|m| m.as_str().to_string());
+                }
+                if let Some(cap) = DEADLINE_RE.captures(line)
+                    && let Some(idx) = current_heading_idx
+                {
+                    headings[idx].deadline = cap.get(1).map(|m| m.as_str().to_string());
+                }
+                just_saw_heading = false;
             }
 
             for cap in LINK_RE.captures_iter(line) {
@@ -188,6 +226,12 @@ pub fn parse_note(content: &str) -> ParsedNote {
         outgoing,
         headings,
     }
+}
+
+pub fn find_daily_file_date(path: &std::path::Path) -> Option<NaiveDate> {
+    let filename = path.file_name()?.to_str()?;
+    let cap = DAILY_FILE_RE.captures(filename)?;
+    NaiveDate::parse_from_str(cap.get(1)?.as_str(), "%Y-%m-%d").ok()
 }
 
 fn parse_property(line: &str) -> Option<(&str, &str)> {
@@ -464,6 +508,134 @@ Some content."#;
         let issues = validate_filetags_format(content);
         assert_eq!(issues.len(), 1);
         assert!(issues[0].1.contains("empty segments"));
+    }
+
+    #[test]
+    fn test_parse_priority() {
+        let content = r#":PROPERTIES:
+:ID:       a1b2c3d4-e5f6-7890-abcd-ef1234567890
+:END:
+#+title: priority test
+
+* TODO [#A] High priority :tag1:
+Some text
+** [#B] Medium sub :tag2:
+*** [#C] Low level
+*** No priority"#;
+        let note = parse_note(content);
+        assert_eq!(note.headings.len(), 4);
+        assert_eq!(note.headings[0].priority, Some('A'));
+        assert_eq!(note.headings[0].todo_state.as_deref(), Some("TODO"));
+        assert_eq!(note.headings[1].priority, Some('B'));
+        assert!(note.headings[1].todo_state.is_none());
+        assert_eq!(note.headings[2].priority, Some('C'));
+        assert!(note.headings[3].priority.is_none());
+    }
+
+    #[test]
+    fn test_parse_scheduled_deadline() {
+        let content = r#":PROPERTIES:
+:ID:       a1b2c3d4-e5f6-7890-abcd-ef1234567890
+:END:
+#+title: schedule test
+
+* TODO Task one
+SCHEDULED: <2026-05-10 Sun>
+Some text
+** DONE Subtask
+DEADLINE: <2026-06-22 Sun>
+More text
+* Task two
+DEADLINE: <2026-07-01 Wed>
+* TODO Combined
+SCHEDULED: <2026-05-10 Sun> DEADLINE: <2026-06-22 Sun>"#;
+        let note = parse_note(content);
+        assert_eq!(note.headings.len(), 4);
+
+        // Task one has SCHEDULED
+        assert_eq!(
+            note.headings[0].scheduled.as_deref(),
+            Some("<2026-05-10 Sun>")
+        );
+        assert!(note.headings[0].deadline.is_none());
+
+        // Subtask has DEADLINE
+        assert_eq!(
+            note.headings[1].deadline.as_deref(),
+            Some("<2026-06-22 Sun>")
+        );
+        assert!(note.headings[1].scheduled.is_none());
+
+        // Task two has DEADLINE
+        assert_eq!(
+            note.headings[2].deadline.as_deref(),
+            Some("<2026-07-01 Wed>")
+        );
+
+        // Combined has both on the same line
+        assert_eq!(
+            note.headings[3].scheduled.as_deref(),
+            Some("<2026-05-10 Sun>")
+        );
+        assert_eq!(
+            note.headings[3].deadline.as_deref(),
+            Some("<2026-06-22 Sun>")
+        );
+    }
+
+    #[test]
+    fn test_parse_scheduled_with_blank_line() {
+        let content = r#":PROPERTIES:
+:ID:       a1b2c3d4-e5f6-7890-abcd-ef1234567890
+:END:
+#+title: blank line test
+
+* TODO Task
+
+SCHEDULED: <2026-05-10 Sun>"#;
+        let note = parse_note(content);
+        assert_eq!(note.headings.len(), 1);
+        // Tolerate up to 1 blank line between heading and SCHEDULED/DEADLINE
+        assert_eq!(
+            note.headings[0].scheduled.as_deref(),
+            Some("<2026-05-10 Sun>")
+        );
+    }
+
+    #[test]
+    fn test_has_todo_headings() {
+        let content = r#":PROPERTIES:
+:ID:       a1b2c3d4-e5f6-7890-abcd-ef1234567890
+:END:
+#+title: todo test
+
+* TODO Task one
+* Done Task two
+* Plain heading"#;
+        let note = parse_note(content);
+        assert!(note.has_todo_headings());
+
+        let content2 = r#":PROPERTIES:
+:ID:       a1b2c3d4-e5f6-7890-abcd-ef1234567890
+:END:
+#+title: no todo test
+
+* Plain heading
+** Another one"#;
+        let note2 = parse_note(content2);
+        assert!(!note2.has_todo_headings());
+    }
+
+    #[test]
+    fn test_find_daily_file_date() {
+        let path = std::path::Path::new("/org/daily/2026-05-03.org");
+        assert_eq!(
+            find_daily_file_date(path),
+            Some(NaiveDate::from_ymd_opt(2026, 5, 3).unwrap())
+        );
+
+        let path = std::path::Path::new("/org/notes/regular-note.org");
+        assert!(find_daily_file_date(path).is_none());
     }
 
     proptest! {

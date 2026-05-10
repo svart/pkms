@@ -271,6 +271,58 @@ Content with a category.
 :END:
 #+title: Daily Note
 #+filetags: :daily:
+
+* TODO Daily task
+Some content
+"#,
+    )
+    .unwrap();
+
+    // Daily note with explicit SCHEDULED
+    fs::write(
+        personal.join("2026-05-03.org"),
+        r#":PROPERTIES:
+:ID:       e2e2e2e2-e2e2-4e2e-e2e2-e2e2e2e2e2e2
+:END:
+#+title: Daily Plan
+
+* TODO Morning routine
+SCHEDULED: <2026-05-03 Sun>
+* IN-PROGRESS Project work
+DEADLINE: <2026-05-05 Tue>
+"#,
+    )
+    .unwrap();
+
+    // Agenda tagged note with TODOs
+    fs::write(
+        common.join("20220101000013-agenda.org"),
+        r#":PROPERTIES:
+:ID:       f3f3f3f3-f3f3-4f3f-f3f3-f3f3f3f3f3f3
+:END:
+#+title: Agenda Item
+#+filetags: :agenda:
+
+* TODO [#A] High priority task
+SCHEDULED: <2026-05-10 Sun>
+* TODO Low priority task
+DEADLINE: <2026-06-15 Mon>
+* DONE Completed task
+"#,
+    )
+    .unwrap();
+
+    // No-agenda note with TODOs (missing :agenda: tag)
+    fs::write(
+        common.join("20220101000014-noagenda.org"),
+        r#":PROPERTIES:
+:ID:       g4g4g4g4-g4g4-4g4g-g4g4-g4g4g4g4g4g4
+:END:
+#+title: Missing Agenda Tag
+
+* TODO Fix this
+* WAITING Review
+* IDEA Something
 "#,
     )
     .unwrap();
@@ -1867,6 +1919,38 @@ fn test_all_commands_json() {
             ],
             true,
         ),
+        (
+            vec![
+                "--db".into(),
+                db.clone(),
+                "--output-format".into(),
+                "json".into(),
+                "agenda".into(),
+            ],
+            true,
+        ),
+        (
+            vec![
+                "--db".into(),
+                db.clone(),
+                "--output-format".into(),
+                "json".into(),
+                "stats".into(),
+                "--todos".into(),
+            ],
+            true,
+        ),
+        (
+            vec![
+                "--db".into(),
+                db.clone(),
+                "--output-format".into(),
+                "json".into(),
+                "check".into(),
+                "--agenda".into(),
+            ],
+            false,
+        ),
     ];
     for (args, expect_success) in &cases {
         let args_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
@@ -2135,11 +2219,253 @@ fn test_pipe_resolve_to_suggest() {
             .unwrap_or_else(|e| panic!("Bad JSON line '{}': {}", line, e));
         assert!(
             v.get("uuid").is_some(),
-            "expected suggestion, got: {}",
+            "expected suggest output with uuid, got: {}",
             line
         );
-        assert!(v.get("score").is_some(), "expected score, got: {}", line);
+        assert!(
+            v.get("score").is_some(),
+            "expected suggest output with score, got: {}",
+            line
+        );
     }
+}
+
+// ----------------------------------------------------------------
+// AGENDA
+// ----------------------------------------------------------------
+#[test]
+fn test_agenda_human() {
+    let (_dir, root) = setup_db();
+    let (stdout, _stderr, status) = run(&["--db", root.to_str().unwrap(), "agenda"]);
+    assert!(status.success(), "agenda failed: {stdout}");
+    assert!(
+        stdout.contains("TODO") || stdout.contains("Unscheduled"),
+        "stdout: {stdout}"
+    );
+}
+
+#[test]
+fn test_agenda_json() {
+    let (_dir, root) = setup_db();
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "agenda",
+    ]);
+    assert!(status.success());
+    assert!(v.get("total").is_some(), "expected total field");
+    assert!(v.get("items").is_some(), "expected items field");
+    assert!(
+        v["items"].as_array().unwrap().len() >= 1,
+        "expected at least 1 agenda item"
+    );
+}
+
+#[test]
+fn test_agenda_ndjson() {
+    let (_dir, root) = setup_db();
+    let (stdout, _stderr, status) = run(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "ndjson",
+        "agenda",
+    ]);
+    assert!(status.success());
+    for line in stdout.lines() {
+        let v: serde_json::Value = serde_json::from_str(line).unwrap();
+        assert!(v.get("uuid").is_some());
+        assert!(v.get("todo_state").is_some());
+    }
+}
+
+#[test]
+fn test_agenda_only_agenda() {
+    let (_dir, root) = setup_db();
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "agenda",
+        "--only-agenda",
+    ]);
+    assert!(status.success());
+    let items = v["items"].as_array().unwrap();
+    assert!(!items.is_empty(), "expected agenda items");
+    for item in items {
+        assert_eq!(item["has_agenda_tag"], true);
+    }
+}
+
+#[test]
+fn test_agenda_missing_agenda() {
+    let (_dir, root) = setup_db();
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "agenda",
+        "--missing-agenda",
+    ]);
+    assert!(status.success());
+    let items = v["items"].as_array().unwrap();
+    assert!(!items.is_empty(), "expected items missing agenda");
+    for item in items {
+        assert_eq!(item["has_agenda_tag"], false);
+    }
+}
+
+#[test]
+fn test_agenda_include_done() {
+    let (_dir, root) = setup_db();
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "agenda",
+        "--include-done",
+    ]);
+    assert!(status.success());
+    let items = v["items"].as_array().unwrap();
+    let done_items: Vec<&serde_json::Value> = items
+        .iter()
+        .filter(|i| i["todo_state"].as_str() == Some("DONE"))
+        .collect();
+    assert!(
+        done_items.len() >= 1,
+        "expected DONE items with --include-done"
+    );
+}
+
+#[test]
+fn test_agenda_today_and_week() {
+    let (_dir, root) = setup_db();
+    let (_, _stderr, status) = run(&["--db", root.to_str().unwrap(), "agenda", "--today"]);
+    assert!(status.success());
+
+    let (_, _stderr2, status2) = run(&["--db", root.to_str().unwrap(), "agenda", "--week"]);
+    assert!(status2.success());
+}
+
+// ----------------------------------------------------------------
+// STATS --TODOS
+// ----------------------------------------------------------------
+#[test]
+fn test_stats_todos_human() {
+    let (_dir, root) = setup_db();
+    let (stdout, _stderr, status) = run(&["--db", root.to_str().unwrap(), "stats", "--todos"]);
+    assert!(status.success());
+    assert!(
+        stdout.contains("TODO Statistics") || stdout.contains("Total TODO headings"),
+        "stdout: {stdout}"
+    );
+}
+
+#[test]
+fn test_stats_todos_json() {
+    let (_dir, root) = setup_db();
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "stats",
+        "--todos",
+    ]);
+    assert!(status.success());
+    assert!(v.get("total_todo_headings").is_some());
+    assert!(v.get("files_with_todos").is_some());
+    assert!(v.get("by_state").is_some());
+}
+
+// ----------------------------------------------------------------
+// CHECK --AGENDA
+// ----------------------------------------------------------------
+#[test]
+fn test_check_agenda() {
+    let (_dir, root) = setup_db();
+    let (stdout, _stderr, status) = run(&["--db", root.to_str().unwrap(), "check", "--agenda"]);
+    assert!(
+        !status.success(),
+        "check --agenda should find issues: {stdout}"
+    );
+    assert!(
+        stdout.contains("Missing :agenda: tag") || stdout.contains("agenda"),
+        "stdout: {stdout}"
+    );
+}
+
+#[test]
+fn test_check_agenda_json() {
+    let (_dir, root) = setup_db();
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "check",
+        "--agenda",
+    ]);
+    assert!(!status.success());
+    assert!(
+        v.get("agenda_issues").is_some(),
+        "expected agenda_issues field"
+    );
+    let issues = v["agenda_issues"].as_array().unwrap();
+    assert!(
+        issues.len() >= 1,
+        "expected at least 1 agenda issue, got {}",
+        issues.len()
+    );
+    assert!(issues[0]["uuid"].is_string());
+    assert!(issues[0]["todo_count"].as_u64().unwrap_or(0) >= 1);
+}
+
+#[test]
+fn test_check_agenda_healthy_false() {
+    let (_dir, root) = setup_db();
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "check",
+        "--agenda",
+    ]);
+    assert!(!status.success());
+    assert_eq!(v["healthy"], false);
+}
+
+// ----------------------------------------------------------------
+// VALIDATE with agenda check
+// ----------------------------------------------------------------
+#[test]
+fn test_validate_agenda_issue() {
+    let (_dir, root) = setup_db();
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "validate",
+        "Missing Agenda Tag",
+    ]);
+    assert!(status.success());
+    let issues = v["issues"].as_array().unwrap();
+    let has_agenda_issue = issues
+        .iter()
+        .any(|i| i.as_str().map_or(false, |s| s.contains("agenda")));
+    assert!(
+        has_agenda_issue,
+        "validate should report missing :agenda: filetag, issues: {:?}",
+        issues
+    );
+    assert_eq!(v["healthy"], false);
 }
 
 #[test]

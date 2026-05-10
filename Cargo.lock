@@ -344,6 +344,7 @@ dependencies = [
  "iana-time-zone",
  "js-sys",
  "num-traits",
+ "serde",
  "wasm-bindgen",
  "windows-link",
 ]
@@ -1911,7 +1912,7 @@ checksum = "19f132c84eca552bf34cab8ec81f1c1dcc229b811638f9d283dceabe58c5569e"
 
 [[package]]
 name = "pkms"
-version = "0.22.1"
+version = "0.24.0"
 dependencies = [
  "anyhow",
  "chrono",
