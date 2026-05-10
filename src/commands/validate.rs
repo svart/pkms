@@ -7,6 +7,7 @@ use crate::util;
 use anyhow::Result;
 use regex::Regex;
 use serde::Serialize;
+use std::collections::HashMap;
 use std::path::Path;
 use std::sync::LazyLock;
 
@@ -280,6 +281,27 @@ fn validate_one(graph: &Graph, target: &str, db_root: &Path) -> Result<ValidateO
                 }
             }
             _ => {}
+        }
+    }
+
+    // Overlinking check (2+ internal links to the same target note)
+    let mut target_counts: HashMap<String, usize> = HashMap::new();
+    for link in &node.outgoing {
+        if let Link::Internal(uuid) = link {
+            *target_counts.entry(uuid.clone()).or_default() += 1;
+        }
+    }
+    for (uuid, count) in target_counts {
+        if count >= 2 {
+            let title = graph
+                .nodes
+                .get(&uuid)
+                .map(|n| n.title.as_str())
+                .unwrap_or("<unknown>");
+            issues.push(format!(
+                "Overlinking: {} links to \"{}\" ({}) \u{2014} consider removing duplicate links",
+                count, title, uuid
+            ));
         }
     }
 

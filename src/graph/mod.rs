@@ -8,7 +8,7 @@ use crate::discovery::discover_files;
 use crate::parser::{Link, ParsedNote, parse_note};
 use rayon::prelude::*;
 use serde::Serialize;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, Serialize)]
@@ -88,6 +88,15 @@ pub struct SelfLinkEntry {
     pub suggestion: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize)]
+pub struct OverlinkEntry {
+    pub source_uuid: String,
+    pub source_title: String,
+    pub target_uuid: String,
+    pub target_title: String,
+    pub count: usize,
+}
+
 pub fn resolve_file_link_path(target_path: &str, db_root: &Path) -> PathBuf {
     let expanded = if target_path.starts_with('~') {
         if let Some(home) = dirs::home_dir() {
@@ -157,6 +166,39 @@ impl Graph {
             }
         }
 
+        results
+    }
+
+    pub fn detect_overlinks(&self) -> Vec<OverlinkEntry> {
+        let mut results = Vec::new();
+        let mut seen_primaries = HashSet::new();
+        for node in self.nodes.values() {
+            if !seen_primaries.insert(&node.uuid) {
+                continue;
+            }
+            let mut counts: HashMap<String, usize> = HashMap::new();
+            for link in &node.outgoing {
+                if let Link::Internal(target) = link {
+                    *counts.entry(target.clone()).or_default() += 1;
+                }
+            }
+            for (target_uuid, count) in counts {
+                if count >= 2 {
+                    let target_title = self
+                        .nodes
+                        .get(&target_uuid)
+                        .map(|n| n.title.clone())
+                        .unwrap_or_default();
+                    results.push(OverlinkEntry {
+                        source_uuid: node.uuid.clone(),
+                        source_title: node.title.clone(),
+                        target_uuid,
+                        target_title,
+                        count,
+                    });
+                }
+            }
+        }
         results
     }
 

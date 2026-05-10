@@ -137,14 +137,14 @@ Every command's JSON (`--output-format json|ndjson`) output has a specific struc
 
 | Command     | Top-level keys |
 |-------------|----------------|
-| `check`     | `db_root`, `stats?`, `duplicates?`, `broken_links?`, `broken_file_links?`, `broken_attachment_links?`, `failed_files?`, `filetags_issues?` (path, title, issue), `agenda_issues?` (path, title, uuid, todo_count, issue — only for planned TODOs with SCHEDULED/DEADLINE), `self_links?` (source_uuid, source_title, link_type, target, suggestion?), `healthy` |
+| `check`     | `db_root`, `stats?`, `duplicates?`, `broken_links?`, `broken_file_links?`, `broken_attachment_links?`, `failed_files?`, `filetags_issues?` (path, title, issue), `agenda_issues?` (path, title, uuid, todo_count, issue — only for planned TODOs with SCHEDULED/DEADLINE), `self_links?` (source_uuid, source_title, link_type, target, suggestion?), `overlinks?` (source_uuid, source_title, target_uuid, target_title, count), `cross_links?` (source_uuid, source_title, target_uuid, target_title, source_to_target, target_to_source), `healthy` |
 | `stats`     | `db_root`, `total_notes`, `total_links`, `internal_links`, `file_links`, `url_links`, `avg_links_per_note`, `orphans`, `broken_links`, `disk_size_bytes`, `directories[]`, `recent_notes[]` |
 | `stats --todos` | `total_todo_headings`, `files_with_todos`, `by_state[]` (state, count) |
 | `resolve`   | `query`, `total`, `showed?`, `results[]` (uuid, title, path, filetags, aliases, has_todos) |
 | `suggest`   | `target`, `target_uuid`, `total`, `showed?`, `suggestions[]` (uuid, title, score, scores{}, reasons[], target_uuid) |
 | `query`     | `query`, `total_results`, `showed?`, `results[]` (uuid, title, score, matches[], content_matches[]) |
 | `context`   | `target`, `context`, `estimated_tokens`, `depth` |
-| `validate`  | `uuid`, `title`, `path`, `filetags`, `categories`, `aliases`, `refs`, `headings`, `heading_uuids[]`, `outgoing`, `incoming`, `outgoing_internal`, `broken_internal[]`, `broken_files[]`, `backlinks[]` (uuid, title), `issues[]` (incl. self-links), `healthy` |
+| `validate`  | `uuid`, `title`, `path`, `filetags`, `categories`, `aliases`, `refs`, `headings`, `heading_uuids[]`, `outgoing`, `incoming`, `outgoing_internal`, `broken_internal[]`, `broken_files[]`, `backlinks[]` (uuid, title), `issues[]` (incl. self-links, overlinking), `healthy` |
 | `orphans`   | `count`, `showed?`, `orphans[]` (uuid, title, path, filetags) |
 | `get`       | `node` (uuid, title, path, filetags, categories, content?, headings?, headings_count?), `neighbors` |
 | `path`      | `from`, `to`, `found`, `hops`, `path[]` (uuid, title) |
@@ -182,6 +182,8 @@ Every command's JSON (`--output-format json|ndjson`) output has a specific struc
 | `--filetags`      | Check filetags format correctness (Check only)               |
 | `--agenda`        | Check for planned TODO headings missing :agenda: filetag (Check only)|
 | `--self-links`    | Check for self-referencing id: or file: links (Check only)          |
+| `--overlinks`     | Check for 2+ internal links to the same note (Check only)           |
+| `--cross-links`   | Check bidirectional links between two notes (Check only)            |
 | `--todos`         | Show TODO/DONE statistics (Stats only)                       |
 | `--todos`         | Restrict to files with TODO headings (Query, Resolve)        |
 | `--missing-agenda`| Only show items missing :agenda: filetag (Agenda, Todo)      |

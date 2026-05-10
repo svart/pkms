@@ -825,6 +825,95 @@ fn test_all_categories() {
     assert!(cats.iter().any(|(c, _)| c == "cat2"));
 }
 
+#[test]
+fn test_detect_overlinks_basic() {
+    let results = vec![make_note(
+        "uuid1",
+        "Note A",
+        vec![Link::Internal("target".to_string()), Link::Internal("target".to_string())],
+    )];
+    let graph = Graph::build(results);
+    let overlinks = graph.detect_overlinks();
+    assert_eq!(overlinks.len(), 1);
+    assert_eq!(overlinks[0].source_uuid, "uuid1");
+    assert_eq!(overlinks[0].target_uuid, "target");
+    assert_eq!(overlinks[0].count, 2);
+}
+
+#[test]
+fn test_detect_overlinks_single_not_reported() {
+    let results = vec![make_note(
+        "uuid1",
+        "Note A",
+        vec![Link::Internal("target".to_string())],
+    )];
+    let graph = Graph::build(results);
+    let overlinks = graph.detect_overlinks();
+    assert!(overlinks.is_empty(), "single link should not be overlinking");
+}
+
+#[test]
+fn test_detect_overlinks_heading_uuid_not_double_counted() {
+    // Rule 1: Link from UUID1 to X and link from heading UUID2 to X is NOT overlinking
+    // (In the current model, all outgoing links are file-level; a single link is not overlinking)
+    let results = vec![make_note_with_headings(
+        "uuid1",
+        "Note A",
+        vec![Link::Internal("target".to_string())],
+        vec!["heading-uuid"],
+    )];
+    let graph = Graph::build(results);
+    // Only 1 link to target in the file, so no overlinking
+    let overlinks = graph.detect_overlinks();
+    assert!(overlinks.is_empty(), "single link should not be overlinking even with heading UUID");
+}
+
+#[test]
+fn test_detect_overlinks_heading_uuid_dedup() {
+    // Rules 2 & 3: 2+ links from UUID1 or heading UUID2 to same target IS overlinking.
+    // Heading UUID nodes share the primary node's uuid field and outgoing links,
+    // so they are deduped by seen_primaries. Overlinking is reported once under the primary UUID.
+    let results = vec![make_note_with_headings(
+        "uuid1",
+        "Note A",
+        vec![
+            Link::Internal("target".to_string()),
+            Link::Internal("target".to_string()),
+        ],
+        vec!["heading-uuid"],
+    )];
+    let graph = Graph::build(results);
+    let overlinks = graph.detect_overlinks();
+    // Should report exactly 1 overlinking entry (not 2 — the heading UUID clone is deduped)
+    assert_eq!(overlinks.len(), 1, "heading UUID clone should be deduped");
+    assert_eq!(overlinks[0].source_uuid, "uuid1");
+    assert_eq!(overlinks[0].count, 2);
+}
+
+#[test]
+fn test_detect_overlinks_multiple_targets() {
+    let results = vec![make_note(
+        "uuid1",
+        "Note A",
+        vec![
+            Link::Internal("x".to_string()),
+            Link::Internal("x".to_string()),
+            Link::Internal("y".to_string()),
+            Link::Internal("y".to_string()),
+            Link::Internal("y".to_string()),
+        ],
+    )];
+    let graph = Graph::build(results);
+    let overlinks = graph.detect_overlinks();
+    assert_eq!(overlinks.len(), 2);
+    assert_eq!(overlinks[0].count, 2); // or 3, depends on order
+    assert_eq!(overlinks[1].count, 3); // or 2, depends on order
+    let counts: std::collections::HashMap<&str, usize> =
+        overlinks.iter().map(|e| (e.target_uuid.as_str(), e.count)).collect();
+    assert_eq!(counts.get("x"), Some(&2));
+    assert_eq!(counts.get("y"), Some(&3));
+}
+
 proptest::proptest! {
     #[test]
     fn test_graph_build_never_panics(

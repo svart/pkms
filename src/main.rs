@@ -59,6 +59,8 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
             filetags,
             agenda,
             self_links,
+            overlinks,
+            cross_links,
         } => commands::check::run(
             cfg,
             ctx,
@@ -70,6 +72,8 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
             *filetags,
             *agenda,
             *self_links,
+            *overlinks,
+            cross_links.clone(),
         )?,
         Command::Validate { target, from_stdin } => {
             commands::validate::run(cfg, ctx, target.as_deref(), *from_stdin, cli.db.as_deref())

@@ -1,5 +1,5 @@
 use crate::config::Config;
-use crate::graph::{DuplicateInfo, Graph, GraphStats, SelfLinkEntry};
+use crate::graph::{DuplicateInfo, Graph, GraphStats, OverlinkEntry, SelfLinkEntry};
 use crate::output::OutputContext;
 use crate::parser::{Link, parse_note, validate_filetags_format};
 use anyhow::Result;
@@ -28,7 +28,21 @@ pub struct CheckOutput {
     pub agenda_issues: Option<Vec<AgendaIssue>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub self_links: Option<Vec<SelfLinkEntry>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub overlinks: Option<Vec<OverlinkEntry>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cross_links: Option<CrossLinkResult>,
     pub healthy: bool,
+}
+
+#[derive(Clone, Serialize)]
+pub struct CrossLinkResult {
+    pub source_uuid: String,
+    pub source_title: String,
+    pub target_uuid: String,
+    pub target_title: String,
+    pub source_to_target: usize,
+    pub target_to_source: usize,
 }
 
 #[derive(Serialize)]
@@ -118,12 +132,22 @@ pub fn run(
     filetags: bool,
     agenda: bool,
     self_links: bool,
+    overlinks: bool,
+    cross_links: Option<Vec<String>>,
 ) -> Result<ExitCode> {
     let graph = Graph::load(config, db_cli)?;
     let db_root = config.resolve_db_root(db_cli)?;
 
-    let any_explicit =
-        stats || id_links || file_links || attachment_links || filetags || agenda || self_links;
+    let cross_links_specified = cross_links.is_some();
+    let any_explicit = stats
+        || id_links
+        || file_links
+        || attachment_links
+        || filetags
+        || agenda
+        || self_links
+        || overlinks
+        || cross_links_specified;
     let show_stats = stats || !any_explicit;
     let show_id = id_links || !any_explicit;
     let show_file = file_links || !any_explicit;
@@ -131,6 +155,7 @@ pub fn run(
     let show_filetags = filetags || !any_explicit;
     let show_agenda = agenda || !any_explicit;
     let show_self_links = self_links || !any_explicit;
+    let show_overlinks = overlinks || !any_explicit;
 
     let mut broken_file = Vec::new();
     let mut broken_attachment = Vec::new();
@@ -218,6 +243,37 @@ pub fn run(
         vec![]
     };
 
+    let overlink_entries = if show_overlinks {
+        graph.detect_overlinks()
+    } else {
+        vec![]
+    };
+
+    let cross_link_result = if let Some(pair) = cross_links {
+        let node_a = graph.resolve_target(&pair[0])?;
+        let node_b = graph.resolve_target(&pair[1])?;
+        let a_to_b = node_a
+            .outgoing
+            .iter()
+            .filter(|l| matches!(l, Link::Internal(u) if u == &node_b.uuid))
+            .count();
+        let b_to_a = node_b
+            .outgoing
+            .iter()
+            .filter(|l| matches!(l, Link::Internal(u) if u == &node_a.uuid))
+            .count();
+        Some(CrossLinkResult {
+            source_uuid: node_a.uuid.clone(),
+            source_title: node_a.title.clone(),
+            target_uuid: node_b.uuid.clone(),
+            target_title: node_b.title.clone(),
+            source_to_target: a_to_b,
+            target_to_source: b_to_a,
+        })
+    } else {
+        None
+    };
+
     let healthy = graph.stats().broken_link_count == 0
         && graph.stats().parse_error_count == 0
         && graph.stats().duplicate_uuid_count == 0
@@ -225,7 +281,8 @@ pub fn run(
         && broken_attachment.is_empty()
         && filetags_issues.is_empty()
         && (!show_agenda || agenda_issues.is_empty())
-        && self_link_entries.is_empty();
+        && self_link_entries.is_empty()
+        && overlink_entries.is_empty();
 
     if ctx.is_json() {
         print_check_json(
@@ -237,6 +294,8 @@ pub fn run(
             &filetags_issues,
             &agenda_issues,
             &self_link_entries,
+            &overlink_entries,
+            &cross_link_result,
             &CheckDisplayOptions {
                 show_stats,
                 show_id,
@@ -245,6 +304,7 @@ pub fn run(
                 show_filetags,
                 show_agenda,
                 show_self_links,
+                show_overlinks,
             },
         )?;
     } else {
@@ -256,6 +316,8 @@ pub fn run(
             &filetags_issues,
             &agenda_issues,
             &self_link_entries,
+            &overlink_entries,
+            &cross_link_result,
             &CheckDisplayOptions {
                 show_stats,
                 show_id,
@@ -264,6 +326,7 @@ pub fn run(
                 show_filetags,
                 show_agenda,
                 show_self_links,
+                show_overlinks,
             },
         );
     }
@@ -283,6 +346,7 @@ struct CheckDisplayOptions {
     show_filetags: bool,
     show_agenda: bool,
     show_self_links: bool,
+    show_overlinks: bool,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -295,6 +359,8 @@ fn print_check_json(
     filetags_issues: &[FiletagsIssue],
     agenda_issues: &[AgendaIssue],
     self_link_entries: &[SelfLinkEntry],
+    overlink_entries: &[OverlinkEntry],
+    cross_link_result: &Option<CrossLinkResult>,
     opts: &CheckDisplayOptions,
 ) -> Result<()> {
     let stats = graph.stats();
@@ -338,7 +404,8 @@ fn print_check_json(
         && broken_attachment.is_empty()
         && !has_filetags_issues
         && (!opts.show_agenda || agenda_issues.is_empty())
-        && self_link_entries.is_empty();
+        && self_link_entries.is_empty()
+        && overlink_entries.is_empty();
 
     let output = CheckOutput {
         db_root: db_root.to_string_lossy().to_string(),
@@ -379,6 +446,12 @@ fn print_check_json(
         } else {
             None
         },
+        overlinks: if opts.show_overlinks {
+            Some(overlink_entries.to_vec())
+        } else {
+            None
+        },
+        cross_links: cross_link_result.clone(),
         healthy,
     };
     ctx.print_json(&output)
@@ -393,6 +466,8 @@ fn print_check_text(
     filetags_issues: &[FiletagsIssue],
     agenda_issues: &[AgendaIssue],
     self_link_entries: &[SelfLinkEntry],
+    overlink_entries: &[OverlinkEntry],
+    cross_link_result: &Option<CrossLinkResult>,
     opts: &CheckDisplayOptions,
 ) {
     let stats = graph.stats();
@@ -403,16 +478,20 @@ fn print_check_text(
         && broken_attachment.is_empty()
         && filetags_issues.is_empty()
         && (!opts.show_agenda || agenda_issues.is_empty())
-        && self_link_entries.is_empty();
+        && self_link_entries.is_empty()
+        && overlink_entries.is_empty();
 
-    if opts.show_stats
+    let has_any_output = opts.show_stats
         || opts.show_file
         || opts.show_attach
         || opts.show_filetags
         || opts.show_id
         || opts.show_agenda
         || opts.show_self_links
-    {
+        || opts.show_overlinks
+        || cross_link_result.is_some();
+
+    if has_any_output {
         println!("Database: {}", db_root.display());
     }
 
@@ -442,6 +521,9 @@ fn print_check_text(
     }
     if opts.show_filetags {
         println!("  Filetags issues: {}", filetags_issues.len());
+    }
+    if opts.show_overlinks {
+        println!("  Overlinks:      {}", overlink_entries.len());
     }
 
     if opts.show_id {
@@ -552,14 +634,37 @@ fn print_check_text(
         }
     }
 
-    if opts.show_stats
-        || opts.show_file
-        || opts.show_attach
-        || opts.show_filetags
-        || opts.show_id
-        || opts.show_agenda
-        || opts.show_self_links
-    {
+    if !overlink_entries.is_empty() {
+        println!();
+        println!(
+            "Overlinking (2+ links to the same note) ({}):",
+            overlink_entries.len()
+        );
+        for entry in overlink_entries {
+            println!(
+                "  \"{}\" -> \"{}\" ({}x)",
+                entry.source_title, entry.target_title, entry.count
+            );
+        }
+    }
+
+    if let Some(cr) = cross_link_result {
+        println!();
+        println!(
+            "Cross-links between \"{}\" and \"{}\":",
+            cr.source_title, cr.target_title
+        );
+        println!(
+            "  \"{}\" -> \"{}\": {} link(s)",
+            cr.source_title, cr.target_title, cr.source_to_target
+        );
+        println!(
+            "  \"{}\" -> \"{}\": {} link(s)",
+            cr.target_title, cr.source_title, cr.target_to_source
+        );
+    }
+
+    if has_any_output {
         println!();
     }
     if healthy {

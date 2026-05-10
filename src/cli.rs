@@ -57,6 +57,18 @@ pub enum Command {
             help = "Check for self-referencing links (id: or file: pointing to self)"
         )]
         self_links: bool,
+        #[arg(
+            long,
+            help = "Check for overlinking (2+ internal links to the same note)"
+        )]
+        overlinks: bool,
+        #[arg(
+            long = "cross-links",
+            num_args = 2,
+            value_names = ["NOTE_A", "NOTE_B"],
+            help = "Check cross-links between two notes"
+        )]
+        cross_links: Option<Vec<String>>,
     },
     #[command(about = "Validate health of a specific note")]
     Validate {
