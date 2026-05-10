@@ -3541,3 +3541,400 @@ fn test_pipe_suggest_to_get() {
         );
     }
 }
+
+// ----------------------------------------------------------------
+// SELF-LINK CHECK (--self-links)
+// ----------------------------------------------------------------
+
+#[test]
+fn test_check_self_link_uuid() {
+    let (_dir, root) = setup_clean_db();
+    db_write(
+        &root,
+        "self_link.org",
+        r#":PROPERTIES:
+:ID:       aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa
+:END:
+#+title: Self-Link Note
+
+[[id:aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa]]
+"#,
+    );
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "check",
+        "--self-links",
+    ]);
+    assert!(!status.success(), "check should report issues");
+    let self_links = v["self_links"].as_array().unwrap();
+    assert_eq!(self_links.len(), 1);
+    assert_eq!(self_links[0]["source_title"], "Self-Link Note");
+    assert_eq!(self_links[0]["link_type"], "id");
+    assert_eq!(
+        self_links[0]["target"],
+        "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa"
+    );
+    assert!(self_links[0]["suggestion"].is_null());
+}
+
+#[test]
+fn test_check_self_link_file() {
+    let (_dir, root) = setup_clean_db();
+    // Write directly in db_root (not roam/) so file link resolves correctly
+    std::fs::write(
+        root.join("self_file.org"),
+        r#":PROPERTIES:
+:ID:       aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa
+:END:
+#+title: Self-File Note
+
+[[file:self_file.org]]
+"#,
+    )
+    .unwrap();
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "check",
+        "--self-links",
+    ]);
+    assert!(!status.success(), "check should report issues");
+    let self_links = v["self_links"].as_array().unwrap();
+    assert_eq!(self_links.len(), 1);
+    assert_eq!(self_links[0]["source_title"], "Self-File Note");
+    assert_eq!(self_links[0]["link_type"], "file");
+    assert_eq!(self_links[0]["target"], "self_file.org");
+}
+
+#[test]
+fn test_check_self_link_heading_uuid_not_flagged() {
+    let (_dir, root) = setup_clean_db();
+    db_write(
+        &root,
+        "note.org",
+        r#":PROPERTIES:
+:ID:       aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa
+:END:
+#+title: Note
+
+* Heading
+:PROPERTIES:
+:ID:       bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb
+:END:
+
+[[id:bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb]]
+"#,
+    );
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "check",
+        "--self-links",
+    ]);
+    assert!(
+        status.success(),
+        "link to heading UUID should not be a self-link"
+    );
+    let self_links = v["self_links"].as_array().unwrap();
+    assert!(
+        self_links.is_empty(),
+        "expected no self-links, got: {:?}",
+        self_links
+    );
+}
+
+#[test]
+fn test_check_self_link_file_with_headings_suggestion() {
+    let (_dir, root) = setup_clean_db();
+    std::fs::write(
+        root.join("note.org"),
+        r#":PROPERTIES:
+:ID:       aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa
+:END:
+#+title: Note with Heading
+
+* Section
+:PROPERTIES:
+:ID:       bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb
+:END:
+
+[[file:note.org]]
+"#,
+    )
+    .unwrap();
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "check",
+        "--self-links",
+    ]);
+    assert!(!status.success(), "check should report issues");
+    let self_links = v["self_links"].as_array().unwrap();
+    assert_eq!(self_links.len(), 1);
+    assert_eq!(self_links[0]["link_type"], "file");
+    assert!(
+        self_links[0]["suggestion"].is_string(),
+        "expected suggestion when file has heading UUIDs"
+    );
+    let suggestion = self_links[0]["suggestion"].as_str().unwrap();
+    assert!(
+        suggestion.contains("aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa"),
+        "suggestion should mention primary UUID: {}",
+        suggestion
+    );
+}
+
+#[test]
+fn test_check_self_link_no_false_positive() {
+    let (_dir, root) = setup_clean_db();
+    db_write(
+        &root,
+        "note_a.org",
+        r#":PROPERTIES:
+:ID:       aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa
+:END:
+#+title: Note A
+
+[[id:bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb]]
+"#,
+    );
+    db_write(
+        &root,
+        "note_b.org",
+        r#":PROPERTIES:
+:ID:       bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb
+:END:
+#+title: Note B
+"#,
+    );
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "check",
+        "--self-links",
+    ]);
+    assert!(status.success(), "cross-links should not be self-links");
+    let self_links = v["self_links"].as_array().unwrap();
+    assert!(
+        self_links.is_empty(),
+        "expected no self-links, got: {:?}",
+        self_links
+    );
+}
+
+#[test]
+fn test_validate_self_link_uuid() {
+    let (_dir, root) = setup_clean_db();
+    db_write(
+        &root,
+        "self_link.org",
+        r#":PROPERTIES:
+:ID:       aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa
+:END:
+#+title: Self-Link Note
+
+[[id:aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa]]
+"#,
+    );
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "validate",
+        "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa",
+    ]);
+    assert!(status.success());
+    let issues = v["issues"].as_array().unwrap();
+    assert!(
+        issues
+            .iter()
+            .any(|i| i.as_str().unwrap().contains("Self-link")),
+        "expected self-link issue, got: {:?}",
+        issues
+    );
+    assert_eq!(v["healthy"], false);
+}
+
+#[test]
+fn test_validate_self_link_file() {
+    let (_dir, root) = setup_clean_db();
+    std::fs::write(
+        root.join("self_file.org"),
+        r#":PROPERTIES:
+:ID:       aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa
+:END:
+#+title: Self-File Note
+
+[[file:self_file.org]]
+"#,
+    )
+    .unwrap();
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "validate",
+        "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa",
+    ]);
+    assert!(status.success());
+    let issues = v["issues"].as_array().unwrap();
+    assert!(
+        issues
+            .iter()
+            .any(|i| i.as_str().unwrap().contains("Self-link")),
+        "expected self-link issue, got: {:?}",
+        issues
+    );
+    assert_eq!(v["healthy"], false);
+}
+
+#[test]
+fn test_validate_self_link_heading_uuid_detected() {
+    let (_dir, root) = setup_clean_db();
+    db_write(
+        &root,
+        "note.org",
+        r#":PROPERTIES:
+:ID:       aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa
+:END:
+#+title: Note
+
+* Heading
+:PROPERTIES:
+:ID:       bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb
+:END:
+
+[[id:bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb]]
+"#,
+    );
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "validate",
+        "bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb",
+    ]);
+    assert!(status.success());
+    let issues = v["issues"].as_array().unwrap();
+    assert!(
+        issues
+            .iter()
+            .any(|i| i.as_str().unwrap().contains("Self-link")),
+        "heading UUID linking to itself should be detected, got: {:?}",
+        issues
+    );
+    assert_eq!(v["healthy"], false);
+}
+
+#[test]
+fn test_validate_self_link_file_with_heading_suggestion() {
+    let (_dir, root) = setup_clean_db();
+    std::fs::write(
+        root.join("note.org"),
+        r#":PROPERTIES:
+:ID:       aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa
+:END:
+#+title: Note
+
+* Section
+:PROPERTIES:
+:ID:       bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb
+:END:
+
+[[file:note.org]]
+"#,
+    )
+    .unwrap();
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "validate",
+        "bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb",
+    ]);
+    assert!(status.success());
+    let issues = v["issues"].as_array().unwrap();
+    let suggestion_issue = issues.iter().find(|i| {
+        i.as_str()
+            .unwrap()
+            .contains("consider using id:aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa")
+    });
+    assert!(
+        suggestion_issue.is_some(),
+        "expected suggestion to use UUID, got: {:?}",
+        issues
+    );
+}
+
+#[test]
+fn test_check_self_link_implicit_with_all_checks() {
+    let (_dir, root) = setup_clean_db();
+    db_write(
+        &root,
+        "self_link.org",
+        r#":PROPERTIES:
+:ID:       aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa
+:END:
+#+title: Self-Link Note
+
+[[id:aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa]]
+"#,
+    );
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "check",
+    ]);
+    assert!(!status.success());
+    let self_links = v["self_links"].as_array().unwrap();
+    assert_eq!(
+        self_links.len(),
+        1,
+        "self-link should be reported even without --self-links flag"
+    );
+}
+
+#[test]
+fn test_check_self_link_human_output() {
+    let (_dir, root) = setup_clean_db();
+    db_write(
+        &root,
+        "self_link.org",
+        r#":PROPERTIES:
+:ID:       aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa
+:END:
+#+title: Self-Link Note
+
+[[id:aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa]]
+"#,
+    );
+    let (stdout, _stderr, status) = run(&["--db", root.to_str().unwrap(), "check"]);
+    assert!(!status.success());
+    assert!(
+        stdout.contains("Self-referencing links"),
+        "human output should mention self-referencing links, got: {}",
+        stdout
+    );
+    assert!(
+        stdout.contains("Self-Link Note"),
+        "human output should mention the note title, got: {}",
+        stdout
+    );
+}

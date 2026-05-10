@@ -58,6 +58,7 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
             id_links,
             filetags,
             agenda,
+            self_links,
         } => commands::check::run(
             cfg,
             ctx,
@@ -68,6 +69,7 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
             *id_links,
             *filetags,
             *agenda,
+            *self_links,
         )?,
         Command::Validate { target, from_stdin } => {
             commands::validate::run(cfg, ctx, target.as_deref(), *from_stdin, cli.db.as_deref())

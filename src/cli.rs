@@ -52,6 +52,11 @@ pub enum Command {
         filetags: bool,
         #[arg(long, help = "Check for TODO headings missing :agenda: filetag")]
         agenda: bool,
+        #[arg(
+            long,
+            help = "Check for self-referencing links (id: or file: pointing to self)"
+        )]
+        self_links: bool,
     },
     #[command(about = "Validate health of a specific note")]
     Validate {

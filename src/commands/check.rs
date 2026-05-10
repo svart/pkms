@@ -1,5 +1,5 @@
 use crate::config::Config;
-use crate::graph::{DuplicateInfo, Graph, GraphStats};
+use crate::graph::{DuplicateInfo, Graph, GraphStats, SelfLinkEntry};
 use crate::output::OutputContext;
 use crate::parser::{Link, parse_note, validate_filetags_format};
 use anyhow::Result;
@@ -26,6 +26,8 @@ pub struct CheckOutput {
     pub filetags_issues: Option<Vec<FiletagsIssue>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub agenda_issues: Option<Vec<AgendaIssue>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub self_links: Option<Vec<SelfLinkEntry>>,
     pub healthy: bool,
 }
 
@@ -115,17 +117,20 @@ pub fn run(
     id_links: bool,
     filetags: bool,
     agenda: bool,
+    self_links: bool,
 ) -> Result<ExitCode> {
     let graph = Graph::load(config, db_cli)?;
     let db_root = config.resolve_db_root(db_cli)?;
 
-    let any_explicit = stats || id_links || file_links || attachment_links || filetags || agenda;
+    let any_explicit =
+        stats || id_links || file_links || attachment_links || filetags || agenda || self_links;
     let show_stats = stats || !any_explicit;
     let show_id = id_links || !any_explicit;
     let show_file = file_links || !any_explicit;
     let show_attach = attachment_links || !any_explicit;
     let show_filetags = filetags || !any_explicit;
     let show_agenda = agenda || !any_explicit;
+    let show_self_links = self_links || !any_explicit;
 
     let mut broken_file = Vec::new();
     let mut broken_attachment = Vec::new();
@@ -207,13 +212,20 @@ pub fn run(
         }
     }
 
+    let self_link_entries = if show_self_links {
+        graph.detect_self_links(&db_root)
+    } else {
+        vec![]
+    };
+
     let healthy = graph.stats().broken_link_count == 0
         && graph.stats().parse_error_count == 0
         && graph.stats().duplicate_uuid_count == 0
         && broken_file.is_empty()
         && broken_attachment.is_empty()
         && filetags_issues.is_empty()
-        && (!show_agenda || agenda_issues.is_empty());
+        && (!show_agenda || agenda_issues.is_empty())
+        && self_link_entries.is_empty();
 
     if ctx.is_json() {
         print_check_json(
@@ -224,6 +236,7 @@ pub fn run(
             &broken_attachment,
             &filetags_issues,
             &agenda_issues,
+            &self_link_entries,
             &CheckDisplayOptions {
                 show_stats,
                 show_id,
@@ -231,6 +244,7 @@ pub fn run(
                 show_attach,
                 show_filetags,
                 show_agenda,
+                show_self_links,
             },
         )?;
     } else {
@@ -241,6 +255,7 @@ pub fn run(
             &broken_attachment,
             &filetags_issues,
             &agenda_issues,
+            &self_link_entries,
             &CheckDisplayOptions {
                 show_stats,
                 show_id,
@@ -248,6 +263,7 @@ pub fn run(
                 show_attach,
                 show_filetags,
                 show_agenda,
+                show_self_links,
             },
         );
     }
@@ -266,6 +282,7 @@ struct CheckDisplayOptions {
     show_attach: bool,
     show_filetags: bool,
     show_agenda: bool,
+    show_self_links: bool,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -277,6 +294,7 @@ fn print_check_json(
     broken_attachment: &[BrokenAttachmentLinkEntry],
     filetags_issues: &[FiletagsIssue],
     agenda_issues: &[AgendaIssue],
+    self_link_entries: &[SelfLinkEntry],
     opts: &CheckDisplayOptions,
 ) -> Result<()> {
     let stats = graph.stats();
@@ -319,7 +337,8 @@ fn print_check_json(
         && broken_file.is_empty()
         && broken_attachment.is_empty()
         && !has_filetags_issues
-        && (!opts.show_agenda || agenda_issues.is_empty());
+        && (!opts.show_agenda || agenda_issues.is_empty())
+        && self_link_entries.is_empty();
 
     let output = CheckOutput {
         db_root: db_root.to_string_lossy().to_string(),
@@ -355,11 +374,17 @@ fn print_check_json(
         } else {
             None
         },
+        self_links: if opts.show_self_links {
+            Some(self_link_entries.to_vec())
+        } else {
+            None
+        },
         healthy,
     };
     ctx.print_json(&output)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn print_check_text(
     graph: &Graph,
     db_root: &Path,
@@ -367,6 +392,7 @@ fn print_check_text(
     broken_attachment: &[BrokenAttachmentLinkEntry],
     filetags_issues: &[FiletagsIssue],
     agenda_issues: &[AgendaIssue],
+    self_link_entries: &[SelfLinkEntry],
     opts: &CheckDisplayOptions,
 ) {
     let stats = graph.stats();
@@ -376,7 +402,8 @@ fn print_check_text(
         && broken_file.is_empty()
         && broken_attachment.is_empty()
         && filetags_issues.is_empty()
-        && (!opts.show_agenda || agenda_issues.is_empty());
+        && (!opts.show_agenda || agenda_issues.is_empty())
+        && self_link_entries.is_empty();
 
     if opts.show_stats
         || opts.show_file
@@ -384,6 +411,7 @@ fn print_check_text(
         || opts.show_filetags
         || opts.show_id
         || opts.show_agenda
+        || opts.show_self_links
     {
         println!("Database: {}", db_root.display());
     }
@@ -507,12 +535,30 @@ fn print_check_text(
         }
     }
 
+    if !self_link_entries.is_empty() {
+        println!();
+        println!("Self-referencing links ({}):", self_link_entries.len());
+        for entry in self_link_entries {
+            match entry.suggestion.as_ref() {
+                Some(suggestion) => println!(
+                    "  {} — {} link to self: {} ({})",
+                    entry.source_title, entry.link_type, entry.target, suggestion
+                ),
+                None => println!(
+                    "  {} — {} link to self: {}",
+                    entry.source_title, entry.link_type, entry.target
+                ),
+            }
+        }
+    }
+
     if opts.show_stats
         || opts.show_file
         || opts.show_attach
         || opts.show_filetags
         || opts.show_id
         || opts.show_agenda
+        || opts.show_self_links
     {
         println!();
     }

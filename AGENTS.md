@@ -8,7 +8,7 @@ After changes, run these commands **in this strict order**:
 cargo fmt --check              # 1. Check formatting (fail if unformatted)
 cargo clippy -- -D warnings    # 2. Lint with clippy (deny all warnings)
 cargo build                    # 3. Build the binary
-cargo test                     # 4. Run all unit + integration tests (157+ tests, ~1s)
+cargo test                     # 4. Run all unit + integration tests (237+ tests, ~1s)
 cargo test --test integration  # 5. Integration tests only (mock DB)
 target/debug/pkms --help       # 6. Verify CLI works
 ```
@@ -37,7 +37,7 @@ src/
   util.rs           # Shared helpers: path_string, is_stdin_piped, read_stdin_ndjson
   output.rs         # OutputContext: format dispatch (Text/Json/Ndjson), print helpers
   graph/            # In-memory graph module (split into submodules)
-    mod.rs          # Struct defs: Node, Graph, FileScanResult; load/scan/find_node/resolve_target
+    mod.rs          # Struct defs: Node, Graph, FileScanResult, SelfLinkEntry; load/scan/find_node/resolve_target, detect_self_links
     builder.rs      # Graph::build constructor
     traversal.rs    # get_neighbors, find_shortest_path (BFS)
     search.rs       # search, search_content, all_tags
@@ -61,7 +61,7 @@ src/
     new.rs          # Generate UUID + filename for new note
     context.rs      # Build AI context window with token budget
 tests/
-  integration.rs    # 115 integration tests with temp mock DB
+  integration.rs    # 133 integration tests with temp mock DB
 ```
 
 ## How to add a new command
@@ -117,14 +117,14 @@ Every command's JSON (`--output-format json|ndjson`) output has a specific struc
 
 | Command     | Top-level keys |
 |-------------|----------------|
-| `check`     | `db_root`, `stats?`, `duplicates?`, `broken_links?`, `broken_file_links?`, `broken_attachment_links?`, `failed_files?`, `filetags_issues?` (path, title, issue), `agenda_issues?` (path, title, uuid, todo_count, issue — only for planned TODOs with SCHEDULED/DEADLINE), `healthy` |
+| `check`     | `db_root`, `stats?`, `duplicates?`, `broken_links?`, `broken_file_links?`, `broken_attachment_links?`, `failed_files?`, `filetags_issues?` (path, title, issue), `agenda_issues?` (path, title, uuid, todo_count, issue — only for planned TODOs with SCHEDULED/DEADLINE), `self_links?` (source_uuid, source_title, link_type, target, suggestion?), `healthy` |
 | `stats`     | `db_root`, `total_notes`, `total_links`, `internal_links`, `file_links`, `url_links`, `avg_links_per_note`, `orphans`, `broken_links`, `disk_size_bytes`, `directories[]`, `recent_notes[]` |
 | `stats --todos` | `total_todo_headings`, `files_with_todos`, `by_state[]` (state, count) |
 | `resolve`   | `query`, `total`, `showed?`, `results[]` (uuid, title, path, filetags, aliases, has_todos) |
 | `suggest`   | `target`, `target_uuid`, `total`, `showed?`, `suggestions[]` (uuid, title, score, scores{}, reasons[], target_uuid) |
 | `query`     | `query`, `total_results`, `showed?`, `results[]` (uuid, title, score, matches[], content_matches[]) |
 | `context`   | `target`, `context`, `estimated_tokens`, `depth` |
-| `validate`  | `uuid`, `title`, `path`, `filetags`, `aliases`, `headings`, `outgoing`, `incoming`, `outgoing_internal`, `broken_internal[]`, `broken_files[]`, `backlinks[]` (uuid, title), `issues[]`, `healthy` |
+| `validate`  | `uuid`, `title`, `path`, `filetags`, `categories`, `aliases`, `refs`, `headings`, `heading_uuids[]`, `outgoing`, `incoming`, `outgoing_internal`, `broken_internal[]`, `broken_files[]`, `backlinks[]` (uuid, title), `issues[]` (incl. self-links), `healthy` |
 | `orphans`   | `count`, `showed?`, `orphans[]` (uuid, title, path, filetags) |
 | `get`       | `node` (uuid, title, path, filetags, categories, content?, headings?, headings_count?), `neighbors` |
 | `path`      | `from`, `to`, `found`, `hops`, `path[]` (uuid, title) |
@@ -161,6 +161,7 @@ Every command's JSON (`--output-format json|ndjson`) output has a specific struc
 | `--id-links`      | Check id: link targets exist in the database (Check only)    |
 | `--filetags`      | Check filetags format correctness (Check only)               |
 | `--agenda`        | Check for planned TODO headings missing :agenda: filetag (Check only)|
+| `--self-links`    | Check for self-referencing id: or file: links (Check only)          |
 | `--todos`         | Show TODO/DONE statistics (Stats only)                       |
 | `--todos`         | Restrict to files with TODO headings (Query, Resolve)        |
 | `--missing-agenda`| Only show items missing :agenda: filetag (Agenda, Todo)      |

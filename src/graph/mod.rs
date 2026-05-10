@@ -78,7 +78,88 @@ pub struct Graph {
     pub(crate) heading_uuid_to_primary: HashMap<String, String>,
 }
 
+#[derive(Debug, Clone, Serialize)]
+pub struct SelfLinkEntry {
+    pub source_uuid: String,
+    pub source_title: String,
+    pub link_type: String,
+    pub target: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub suggestion: Option<String>,
+}
+
+pub fn resolve_file_link_path(target_path: &str, db_root: &Path) -> PathBuf {
+    let expanded = if target_path.starts_with('~') {
+        if let Some(home) = dirs::home_dir() {
+            target_path.replacen('~', &home.to_string_lossy(), 1)
+        } else {
+            target_path.to_string()
+        }
+    } else {
+        target_path.to_string()
+    };
+    let clean = expanded.split("::").next().unwrap_or(&expanded).to_string();
+    let path = Path::new(&clean);
+    if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        db_root.join(path)
+    }
+}
+
 impl Graph {
+    pub fn detect_self_links(&self, db_root: &Path) -> Vec<SelfLinkEntry> {
+        let mut results = Vec::new();
+        let mut seen_paths = std::collections::HashSet::new();
+
+        for (path, primary_uuid) in &self.path_to_uuid {
+            if !seen_paths.insert(path.clone()) {
+                continue;
+            }
+            let Some(node) = self.nodes.get(primary_uuid) else {
+                continue;
+            };
+
+            for link in &node.outgoing {
+                match link {
+                    Link::Internal(uuid) if uuid == primary_uuid => {
+                        results.push(SelfLinkEntry {
+                            source_uuid: node.uuid.clone(),
+                            source_title: node.title.clone(),
+                            link_type: "id".to_string(),
+                            target: uuid.clone(),
+                            suggestion: None,
+                        });
+                    }
+                    Link::File(target_path) => {
+                        let resolved = resolve_file_link_path(target_path, db_root);
+                        if resolved == *path {
+                            let has_headings = !node.heading_uuids.is_empty();
+                            let suggestion = if has_headings {
+                                Some(format!(
+                                    "Use id:{} instead of file link to this file",
+                                    node.uuid
+                                ))
+                            } else {
+                                None
+                            };
+                            results.push(SelfLinkEntry {
+                                source_uuid: node.uuid.clone(),
+                                source_title: node.title.clone(),
+                                link_type: "file".to_string(),
+                                target: target_path.clone(),
+                                suggestion,
+                            });
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        results
+    }
+
     pub fn scan(db_root: &Path, ignore: &[String]) -> anyhow::Result<Vec<FileScanResult>> {
         let files = discover_files(db_root, ignore)?;
         let results: Vec<FileScanResult> = files

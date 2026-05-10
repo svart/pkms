@@ -1,6 +1,6 @@
 use crate::cli::OutputFormat;
 use crate::config::Config;
-use crate::graph::Graph;
+use crate::graph::{Graph, resolve_file_link_path};
 use crate::output::OutputContext;
 use crate::parser::{Link, validate_filetags_format};
 use crate::util;
@@ -12,6 +12,10 @@ use std::sync::LazyLock;
 
 static VALIDATE_UUID_RE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r":ID:\s+([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})").unwrap()
+});
+
+static UUID_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$").unwrap()
 });
 
 #[derive(Serialize)]
@@ -212,6 +216,7 @@ fn validate_one(graph: &Graph, target: &str, db_root: &Path) -> Result<ValidateO
 
     let mut broken_internal = Vec::new();
     let mut broken_files = Vec::new();
+    let target_is_uuid = UUID_RE.is_match(target);
 
     for link in &node.outgoing {
         match link {
@@ -248,6 +253,29 @@ fn validate_one(graph: &Graph, target: &str, db_root: &Path) -> Result<ValidateO
                         }
                     } else {
                         broken_files.push(path_str.clone());
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    // Self-link check
+    for link in &node.outgoing {
+        match link {
+            Link::Internal(uuid) if uuid == target || (!target_is_uuid && uuid == &node.uuid) => {
+                issues.push(format!("Self-link via id link: {}", uuid));
+            }
+            Link::File(path) => {
+                let resolved = resolve_file_link_path(path, db_root);
+                if resolved == node.path {
+                    if target == node.uuid || !target_is_uuid {
+                        issues.push(format!("Self-link via file link to own file: {}", path));
+                    } else {
+                        issues.push(format!(
+                            "File link to own file; consider using id:{} instead of file:{}",
+                            node.uuid, path
+                        ));
                     }
                 }
             }
