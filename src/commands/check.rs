@@ -125,7 +125,7 @@ pub fn run(
     let show_file = file_links || !any_explicit;
     let show_attach = attachment_links || !any_explicit;
     let show_filetags = filetags || !any_explicit;
-    let show_agenda = agenda;
+    let show_agenda = agenda || !any_explicit;
 
     let mut broken_file = Vec::new();
     let mut broken_attachment = Vec::new();

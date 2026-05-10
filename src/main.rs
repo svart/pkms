@@ -252,6 +252,23 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
             cli.db.as_deref(),
         )
         .map(|()| ExitCode::SUCCESS)?,
+        Command::Todo {
+            missing_agenda,
+            include,
+            exclude,
+            sort,
+            limit,
+        } => commands::todo::run(
+            cfg,
+            ctx,
+            *missing_agenda,
+            include.as_deref(),
+            exclude.as_deref(),
+            sort.as_deref(),
+            *limit,
+            cli.db.as_deref(),
+        )
+        .map(|()| ExitCode::SUCCESS)?,
         Command::Agenda {
             missing_agenda,
             include,

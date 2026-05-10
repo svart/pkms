@@ -5,12 +5,12 @@ use crate::org_date::parse_org_date;
 use crate::output::OutputContext;
 use crate::parser::find_daily_file_date;
 use anyhow::Result;
-use chrono::{Datelike, Local, NaiveDate};
+use chrono::Local;
 use serde::Serialize;
 use std::path::Path;
 
 #[derive(Debug, Clone, Serialize)]
-pub struct AgendaItem {
+pub struct TodoItem {
     pub uuid: String,
     pub title: String,
     pub path: String,
@@ -49,8 +49,11 @@ fn is_overdue(raw: Option<&String>) -> bool {
     parsed.base_date < today
 }
 
-fn heading_is_eligible(heading: &crate::parser::Heading) -> bool {
-    heading.scheduled.is_some() || heading.deadline.is_some()
+fn heading_is_eligible(heading: &crate::parser::Heading, valid_states: &[String]) -> bool {
+    heading
+        .todo_state
+        .as_ref()
+        .is_some_and(|s| valid_states.iter().any(|vs| vs.eq_ignore_ascii_case(s)))
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -60,41 +63,24 @@ pub fn run(
     missing_agenda: bool,
     include: Option<&str>,
     exclude: Option<&str>,
-    overdue: bool,
-    date: Option<&str>,
     sort: Option<&str>,
     limit: Option<usize>,
-    today: bool,
-    week: bool,
     db_cli: Option<&Path>,
 ) -> Result<()> {
     let db_root = config.resolve_db_root(db_cli)?;
     let ignore = config.resolve_ignore_patterns();
     let results = Graph::scan(&db_root, &ignore)?;
 
-    let today_date = Local::now().date_naive();
-    let week_start = today_date
-        - chrono::Duration::days((today_date.weekday().num_days_from_monday() as i64).min(6));
-    let _week_end = week_start + chrono::Duration::days(6);
+    let valid_states = config.todo_states();
 
-    let date_filter = date
-        .and_then(|d| NaiveDate::parse_from_str(d, "%Y-%m-%d").ok())
-        .or({
-            if today {
-                Some(today_date)
-            } else if week {
-                Some(week_start)
-            } else {
-                None
-            }
-        });
+    let today_date = Local::now().date_naive();
 
     let include_set: Option<Vec<String>> =
         include.map(|s| s.split(',').map(|s| s.trim().to_string()).collect());
     let exclude_set: Option<Vec<String>> =
         exclude.map(|s| s.split(',').map(|s| s.trim().to_string()).collect());
 
-    let mut items: Vec<AgendaItem> = Vec::new();
+    let mut items: Vec<TodoItem> = Vec::new();
 
     for result in &results {
         if result.parse_error.is_some() {
@@ -108,7 +94,7 @@ pub fn run(
         let daily_date = find_daily_file_date(path).map(|d| d.format("%Y-%m-%d").to_string());
 
         for heading in &parsed.headings {
-            if !heading_is_eligible(heading) {
+            if !heading_is_eligible(heading, &valid_states) {
                 continue;
             }
 
@@ -137,23 +123,6 @@ pub fn run(
             let item_deadline_date = extract_date(heading.deadline.as_ref());
             let item_is_overdue = is_overdue(heading.deadline.as_ref());
 
-            if let Some(filter_date) = date_filter {
-                let matches = item_scheduled_date.as_deref()
-                    == Some(&filter_date.format("%Y-%m-%d").to_string())
-                    || item_deadline_date.as_deref()
-                        == Some(&filter_date.format("%Y-%m-%d").to_string())
-                    || (is_daily
-                        && daily_date.as_deref()
-                            == Some(&filter_date.format("%Y-%m-%d").to_string()));
-                if !matches {
-                    continue;
-                }
-            }
-
-            if overdue && !item_is_overdue {
-                continue;
-            }
-
             let primary_uuid = parsed.uuids.first().cloned().unwrap_or_default();
             let note_title = parsed.title.clone().unwrap_or_else(|| {
                 path.file_stem()
@@ -161,7 +130,7 @@ pub fn run(
                     .unwrap_or_default()
             });
 
-            items.push(AgendaItem {
+            items.push(TodoItem {
                 uuid: primary_uuid,
                 title: note_title,
                 path: path.to_string_lossy().to_string(),
@@ -193,14 +162,14 @@ pub fn run(
     }
 
     match ctx.format {
-        OutputFormat::Text => print_agenda_text(&items, total),
+        OutputFormat::Text => print_todo_text(&items, total, &today_date),
         OutputFormat::Json => {
             #[derive(Serialize)]
-            struct AgendaOutput {
+            struct TodoOutput {
                 total: usize,
-                items: Vec<AgendaItem>,
+                items: Vec<TodoItem>,
             }
-            ctx.print_json(&AgendaOutput { total, items })?;
+            ctx.print_json(&TodoOutput { total, items })?;
         }
         OutputFormat::Ndjson => {
             ctx.print_ndjson(&items)?;
@@ -210,26 +179,14 @@ pub fn run(
     Ok(())
 }
 
-fn sort_items(items: &mut [AgendaItem], sort_field: &str) {
+fn sort_items(items: &mut [TodoItem], sort_field: &str) {
     match sort_field {
-        "scheduled" => {
+        "state" => {
             items.sort_by(|a, b| {
-                a.scheduled_date
+                a.todo_state
                     .as_deref()
-                    .cmp(&b.scheduled_date.as_deref())
-                    .then_with(|| a.deadline_date.as_deref().cmp(&b.deadline_date.as_deref()))
-            });
-        }
-        "deadline" => {
-            items.sort_by(|a, b| {
-                a.deadline_date
-                    .as_deref()
-                    .cmp(&b.deadline_date.as_deref())
-                    .then_with(|| {
-                        a.scheduled_date
-                            .as_deref()
-                            .cmp(&b.scheduled_date.as_deref())
-                    })
+                    .cmp(&b.todo_state.as_deref())
+                    .then_with(|| a.title.cmp(&b.title))
             });
         }
         "file" => {
@@ -256,79 +213,61 @@ fn priority_value(p: char) -> u8 {
     }
 }
 
-fn format_scheduled_deadline(raw: &str) -> String {
-    let parsed = parse_org_date(raw);
-    match parsed {
-        Some(d) => d.base_date.format("%Y-%m-%d").to_string(),
-        None => raw.to_string(),
-    }
-}
-
-fn print_agenda_text(items: &[AgendaItem], total: usize) {
+fn print_todo_text(items: &[TodoItem], total: usize, _today_date: &chrono::NaiveDate) {
     if items.is_empty() {
-        println!("No planned agenda items found.");
+        println!("No TODO items found.");
         return;
     }
 
-    let overdue_items: Vec<&AgendaItem> = items.iter().filter(|i| i.is_overdue).collect();
-    let upcoming_items: Vec<&AgendaItem> = items
-        .iter()
-        .filter(|i| {
-            !i.is_overdue
-                && (i.scheduled_date.is_some() || i.deadline_date.is_some() || i.is_daily_file)
-        })
-        .collect();
+    let mut by_state: std::collections::BTreeMap<String, Vec<&TodoItem>> =
+        std::collections::BTreeMap::new();
+    for item in items {
+        let state = item.todo_state.as_deref().unwrap_or("NONE").to_string();
+        by_state.entry(state).or_default().push(item);
+    }
 
-    if !overdue_items.is_empty() {
-        println!("=== Overdue (deadline passed) ===");
-        for item in &overdue_items {
+    for (state, group) in &by_state {
+        println!("=== {state} ({}) ===", group.len());
+        for item in group {
             let prio = item
                 .priority
                 .map(|p| format!("[#{}] ", p))
                 .unwrap_or_default();
-            let todo_display = item.todo_state.as_deref().unwrap_or_default();
-            println!(
-                "  {}  {} {}  \u{2014} {}",
-                prio, todo_display, item.heading_title, item.title
-            );
-            if let Some(ref d) = item.deadline {
-                println!("        DEADLINE: {}", format_scheduled_deadline(d));
-            }
-            if let Some(ref s) = item.scheduled {
-                println!("        SCHEDULED: {}", format_scheduled_deadline(s));
-            }
-        }
-        println!();
-    }
-
-    if !upcoming_items.is_empty() {
-        println!("=== Upcoming ===");
-        for item in &upcoming_items {
-            let date_display = item
+            let date_info = item
                 .scheduled_date
                 .as_deref()
                 .or(item.deadline_date.as_deref())
-                .or(item.daily_file_date.as_deref())
-                .unwrap_or("");
-            let daily_mark = if item.is_daily_file { " [daily]" } else { "" };
-            let prio = item
-                .priority
-                .map(|p| format!("[#{}] ", p))
+                .map(|d| format!(" ({})", d))
                 .unwrap_or_default();
-            let todo_display = item.todo_state.as_deref().unwrap_or_default();
             println!(
-                "  {}  {}{}{}  \u{2014} {}{}",
-                date_display, prio, todo_display, item.heading_title, item.title, daily_mark
+                "  {}{}{}  \u{2014} {}{}",
+                prio,
+                item.heading_title,
+                date_info,
+                item.title,
+                if item.is_daily_file { " [daily]" } else { "" }
             );
-            if let Some(ref s) = item.scheduled {
-                println!("        SCHEDULED: {}", format_scheduled_deadline(s));
-            }
-            if let Some(ref d) = item.deadline {
-                println!("        DEADLINE: {}", format_scheduled_deadline(d));
-            }
         }
         println!();
     }
 
-    println!("Total: {total} planned item(s)");
+    let missing_agenda_items: Vec<&TodoItem> = items.iter().filter(|i| !i.has_agenda_tag).collect();
+
+    if !missing_agenda_items.is_empty() {
+        println!("=== Missing :agenda: tag ===");
+        let mut by_file: std::collections::BTreeMap<&str, (usize, &str)> =
+            std::collections::BTreeMap::new();
+        for item in &missing_agenda_items {
+            let entry = by_file
+                .entry(item.title.as_str())
+                .or_insert_with(|| (0, item.uuid.as_str()));
+            entry.0 += 1;
+        }
+        for (title, (count, uuid)) in &by_file {
+            println!("  {title} ({uuid})  {count} TODOs, missing :agenda:");
+        }
+        println!();
+    }
+
+    println!("Total: {total} TODO item(s)");
 }

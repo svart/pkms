@@ -12,14 +12,19 @@ pub struct Config {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct AgendaConfig {
-    #[serde(default = "default_todo_states")]
-    pub todo_states: Vec<String>,
+    #[serde(default = "default_open_todo_states")]
+    pub open_todo_states: Vec<String>,
+    #[serde(default = "default_closed_todo_states")]
+    pub closed_todo_states: Vec<String>,
 }
 
-fn default_todo_states() -> Vec<String> {
-    vec!["TODO".to_string(), "DONE".to_string()]
+fn default_open_todo_states() -> Vec<String> {
+    vec!["TODO".to_string()]
+}
+
+fn default_closed_todo_states() -> Vec<String> {
+    vec!["DONE".to_string()]
 }
 
 impl Config {
@@ -73,10 +78,23 @@ impl Config {
     }
 
     pub fn todo_states(&self) -> Vec<String> {
+        let mut states = self.open_todo_states();
+        states.extend(self.closed_todo_states());
+        states
+    }
+
+    pub fn open_todo_states(&self) -> Vec<String> {
         self.agenda
             .as_ref()
-            .map(|a| a.todo_states.clone())
-            .unwrap_or_else(default_todo_states)
+            .map(|a| a.open_todo_states.clone())
+            .unwrap_or_else(default_open_todo_states)
+    }
+
+    pub fn closed_todo_states(&self) -> Vec<String> {
+        self.agenda
+            .as_ref()
+            .map(|a| a.closed_todo_states.clone())
+            .unwrap_or_else(default_closed_todo_states)
     }
 
     pub fn resolved_info(&self, db_root: &Path, new_notes_dir: &Path) -> ConfigInfo {
@@ -123,9 +141,10 @@ pub fn generate_default_config(db_root: Option<&std::path::Path>) -> String {
 # Glob patterns to ignore during file discovery
 # ignore_patterns = [".attach", "*.bak"]
 
-# Agenda section: configure TODO state keywords
+# Agenda section: configure TODO state keyword lists
 # [agenda]
-# todo_states = ["TODO", "DONE", "WAITING", "IN-PROGRESS"]
+# open_todo_states = ["TODO"]
+# closed_todo_states = ["DONE"]
 "#,
     )
 }

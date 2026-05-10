@@ -211,7 +211,7 @@ pub enum Command {
         #[arg(short, long, help = "Database root path to write into config")]
         db: Option<PathBuf>,
     },
-    #[command(about = "Display TODO items, scheduled tasks and deadlines")]
+    #[command(about = "Display upcoming and overdue items with SCHEDULED/DEADLINE dates")]
     Agenda {
         #[arg(long, help = "Only show items missing :agenda: filetag")]
         missing_agenda: bool,
@@ -240,6 +240,25 @@ pub enum Command {
         today: bool,
         #[arg(long, help = "Show this week's agenda items")]
         week: bool,
+    },
+    #[command(about = "Display TODO items grouped by state")]
+    Todo {
+        #[arg(long, help = "Only show items missing :agenda: filetag")]
+        missing_agenda: bool,
+        #[arg(
+            long,
+            help = "Include only these TODO states (comma-separated, no filtering by default)"
+        )]
+        include: Option<String>,
+        #[arg(
+            long,
+            help = "Exclude these TODO states (comma-separated, no filtering by default)"
+        )]
+        exclude: Option<String>,
+        #[arg(long, help = "Sort: priority, state, file (default: priority)")]
+        sort: Option<String>,
+        #[arg(long, help = "Maximum results")]
+        limit: Option<usize>,
     },
     #[command(name = "path", about = "Find shortest path between two notes")]
     Path {

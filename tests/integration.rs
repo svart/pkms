@@ -1936,6 +1936,16 @@ fn test_all_commands_json() {
                 db.clone(),
                 "--output-format".into(),
                 "json".into(),
+                "todo".into(),
+            ],
+            true,
+        ),
+        (
+            vec![
+                "--db".into(),
+                db.clone(),
+                "--output-format".into(),
+                "json".into(),
                 "stats".into(),
                 "--todos".into(),
             ],
@@ -2239,10 +2249,7 @@ fn test_agenda_human() {
     let (_dir, root) = setup_db();
     let (stdout, _stderr, status) = run(&["--db", root.to_str().unwrap(), "agenda"]);
     assert!(status.success(), "agenda failed: {stdout}");
-    assert!(
-        stdout.contains("TODO") || stdout.contains("Unscheduled"),
-        "stdout: {stdout}"
-    );
+    assert!(stdout.contains("planned item"), "stdout: {stdout}");
 }
 
 #[test]
@@ -2292,21 +2299,21 @@ fn test_agenda_include() {
         "json",
         "agenda",
         "--include",
-        "DONE",
+        "TODO",
     ]);
     assert!(status.success());
     let items = v["items"].as_array().unwrap();
-    let done_items: Vec<&serde_json::Value> = items
+    let todo_items: Vec<&serde_json::Value> = items
         .iter()
-        .filter(|i| i["todo_state"].as_str() == Some("DONE"))
+        .filter(|i| i["todo_state"].as_str() == Some("TODO"))
         .collect();
     assert!(
-        done_items.len() >= 1,
-        "expected DONE items with --include DONE"
+        todo_items.len() >= 1,
+        "expected TODO items with --include TODO"
     );
     for item in items {
         let state = item["todo_state"].as_str().unwrap_or("");
-        assert_eq!(state, "DONE", "expected all items to be DONE");
+        assert_eq!(state, "TODO", "expected all items to be TODO");
     }
 }
 
@@ -2361,6 +2368,137 @@ fn test_agenda_today_and_week() {
 
     let (_, _stderr2, status2) = run(&["--db", root.to_str().unwrap(), "agenda", "--week"]);
     assert!(status2.success());
+}
+
+// ----------------------------------------------------------------
+// TODO
+// ----------------------------------------------------------------
+#[test]
+fn test_todo_human() {
+    let (_dir, root) = setup_db();
+    let (stdout, _stderr, status) = run(&["--db", root.to_str().unwrap(), "todo"]);
+    assert!(status.success(), "todo failed: {stdout}");
+    assert!(stdout.contains("TODO"), "stdout: {stdout}");
+}
+
+#[test]
+fn test_todo_json() {
+    let (_dir, root) = setup_db();
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "todo",
+    ]);
+    assert!(status.success());
+    assert!(v.get("total").is_some(), "expected total field");
+    assert!(v.get("items").is_some(), "expected items field");
+    assert!(
+        v["items"].as_array().unwrap().len() >= 1,
+        "expected at least 1 todo item"
+    );
+}
+
+#[test]
+fn test_todo_ndjson() {
+    let (_dir, root) = setup_db();
+    let (stdout, _stderr, status) = run(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "ndjson",
+        "todo",
+    ]);
+    assert!(status.success());
+    for line in stdout.lines() {
+        let v: serde_json::Value = serde_json::from_str(line).unwrap();
+        assert!(v.get("uuid").is_some());
+        assert!(v.get("todo_state").is_some());
+    }
+}
+
+#[test]
+fn test_todo_include() {
+    let (_dir, root) = setup_db();
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "todo",
+        "--include",
+        "DONE",
+    ]);
+    assert!(status.success());
+    let items = v["items"].as_array().unwrap();
+    let done_items: Vec<&serde_json::Value> = items
+        .iter()
+        .filter(|i| i["todo_state"].as_str() == Some("DONE"))
+        .collect();
+    assert!(
+        done_items.len() >= 1,
+        "expected DONE items with --include DONE"
+    );
+    for item in items {
+        let state = item["todo_state"].as_str().unwrap_or("");
+        assert_eq!(state, "DONE", "expected all items to be DONE");
+    }
+}
+
+#[test]
+fn test_todo_exclude() {
+    let (_dir, root) = setup_db();
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "todo",
+        "--exclude",
+        "DONE",
+    ]);
+    assert!(status.success());
+    let items = v["items"].as_array().unwrap();
+    let done_items: Vec<&serde_json::Value> = items
+        .iter()
+        .filter(|i| i["todo_state"].as_str() == Some("DONE"))
+        .collect();
+    assert!(
+        done_items.is_empty(),
+        "expected no DONE items with --exclude DONE"
+    );
+}
+
+#[test]
+fn test_todo_missing_agenda() {
+    let (_dir, root) = setup_db();
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "todo",
+        "--missing-agenda",
+    ]);
+    assert!(status.success());
+    let items = v["items"].as_array().unwrap();
+    assert!(!items.is_empty(), "expected items missing agenda");
+    for item in items {
+        assert_eq!(item["has_agenda_tag"], false);
+    }
+}
+
+#[test]
+fn test_todo_sort_state() {
+    let (_dir, root) = setup_db();
+    let (stdout, _stderr, status) =
+        run(&["--db", root.to_str().unwrap(), "todo", "--sort", "state"]);
+    assert!(status.success(), "todo --sort state failed: {stdout}");
+    assert!(
+        stdout.contains("TODO") || stdout.contains("DONE"),
+        "stdout: {stdout}"
+    );
 }
 
 // ----------------------------------------------------------------

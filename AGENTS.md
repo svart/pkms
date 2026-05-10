@@ -45,7 +45,8 @@ src/
     tests.rs        # Unit + proptest tests for graph
   commands/         # One file per subcommand
     mod.rs          # Module declarations only
-    agenda.rs       # Display TODO items, scheduled tasks and deadlines
+    agenda.rs       # Display upcoming and overdue items with SCHEDULED/DEADLINE dates
+    todo.rs         # Display TODO items grouped by state
     info.rs         # Show resolved config
     check.rs        # Full DB health scan, returns healthy: bool
     validate.rs     # Single note health check
@@ -131,6 +132,7 @@ Every command's JSON (`--output-format json|ndjson`) output has a specific struc
 | `new`       | `uuid`, `filename`, `path`, `title`, `created` |
 | `info`      | `config`, `config_path`, `cli_overrides` |
 | `agenda`    | `total`, `items[]` (uuid, title, path, filetags, has_agenda_tag, is_daily_file, daily_file_date?, heading_title, heading_level, todo_state?, priority?, scheduled?, scheduled_date?, deadline?, deadline_date?, is_overdue, heading_tags[]) |
+| `todo`      | `total`, `items[]` (uuid, title, path, filetags, has_agenda_tag, is_daily_file, daily_file_date?, heading_title, heading_level, todo_state?, priority?, scheduled?, scheduled_date?, deadline?, deadline_date?, is_overdue, heading_tags[]) |
 
 ## Testing patterns
 
@@ -161,14 +163,15 @@ Every command's JSON (`--output-format json|ndjson`) output has a specific struc
 | `--agenda`        | Check for planned TODO headings missing :agenda: filetag (Check only)|
 | `--todos`         | Show TODO/DONE statistics (Stats only)                       |
 | `--todos`         | Restrict to files with TODO headings (Query, Resolve)        |
-| `--missing-agenda`| Only show items missing :agenda: filetag (Agenda only)       |
-| `--include`       | Include only these TODO states (comma-separated) (Agenda only)|
-| `--exclude`       | Exclude these TODO states (comma-separated) (Agenda only)    |
+| `--missing-agenda`| Only show items missing :agenda: filetag (Agenda, Todo)      |
+| `--include`       | Include only these TODO states (comma-separated) (Agenda, Todo)|
+| `--exclude`       | Exclude these TODO states (comma-separated) (Agenda, Todo)    |
 | `--overdue`       | Only show overdue items (Agenda only)                        |
 | `--date`          | Show items scheduled/due on specific date (Agenda only)      |
-| `--sort`          | Sort: priority, scheduled, deadline, file (Agenda only)      |
+| `--sort`          | Sort: priority, scheduled, deadline, file (Agenda); priority, state, file (Todo) |
 | `--today`         | Show today's agenda items (Agenda only)                      |
 | `--week`          | Show this week's agenda items (Agenda only)                  |
+| `--limit`         | Maximum results (Agenda, Todo)                                |
 
 
 ## Command pipelining

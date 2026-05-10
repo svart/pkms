@@ -84,10 +84,10 @@ new_notes_dir = "roam"
 ignore_patterns = [".attach", "*.bak"]
 
 # Agenda configuration: define recognized TODO state keywords
-# Only states listed here are treated as valid TODO states.
-# Headings with unrecognized states are only shown if they have SCHEDULED/DEADLINE.
+# Open states represent in-progress items, closed states represent completed items.
 [agenda]
-todo_states = ["TODO", "DONE", "WAITING", "IN-PROGRESS"]
+open_todo_states = ["TODO", "WAITING", "IN-PROGRESS"]
+closed_todo_states = ["DONE"]
 ```
 
 The `--db` flag overrides `db_root` from the config. If neither is provided, the tool errors with instructions.
