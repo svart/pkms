@@ -419,7 +419,10 @@ fn print_check_text(
     if opts.show_id {
         if !graph.duplicates.duplicate_uuids.is_empty() {
             println!();
-            println!("Duplicate UUIDs:");
+            println!(
+                "Duplicate UUIDs ({}):",
+                graph.duplicates.duplicate_uuids.len()
+            );
             for d in &graph.duplicates.duplicate_uuids {
                 for p in &d.paths {
                     println!("  {} -> {}", d.value, p);
@@ -429,7 +432,10 @@ fn print_check_text(
 
         if !graph.duplicates.duplicate_titles.is_empty() {
             println!();
-            println!("Duplicate titles:");
+            println!(
+                "Duplicate titles ({}):",
+                graph.duplicates.duplicate_titles.len()
+            );
             for d in &graph.duplicates.duplicate_titles {
                 for p in &d.paths {
                     println!("  \"{}\" -> {}", d.value, p);
@@ -439,7 +445,10 @@ fn print_check_text(
 
         if !graph.duplicates.missing_titles.is_empty() {
             println!();
-            println!("Missing #+title:");
+            println!(
+                "Missing #+title ({}):",
+                graph.duplicates.missing_titles.len()
+            );
             for p in &graph.duplicates.missing_titles {
                 println!("  {p}");
             }
@@ -448,7 +457,7 @@ fn print_check_text(
 
     if opts.show_id && !graph.broken_links.is_empty() {
         println!();
-        println!("Broken links:");
+        println!("Broken links ({}):", graph.broken_links.len());
         for (src, tgt) in &graph.broken_links {
             let title = graph.nodes.get(src).map_or("?", |n| n.title.as_str());
             println!("  {title} -> {tgt}");
@@ -457,7 +466,7 @@ fn print_check_text(
 
     if !broken_file.is_empty() {
         println!();
-        println!("Broken file links:");
+        println!("Broken file links ({}):", broken_file.len());
         for entry in broken_file {
             println!("  {} -> {}", entry.source_title, entry.target_path);
         }
@@ -465,7 +474,7 @@ fn print_check_text(
 
     if !broken_attachment.is_empty() {
         println!();
-        println!("Broken attachment links:");
+        println!("Broken attachment links ({}):", broken_attachment.len());
         for entry in broken_attachment {
             println!("  {} -> {}", entry.source_title, entry.target_path);
         }
@@ -473,7 +482,7 @@ fn print_check_text(
 
     if !filetags_issues.is_empty() {
         println!();
-        println!("Invalid filetags format:");
+        println!("Invalid filetags format ({}):", filetags_issues.len());
         for entry in filetags_issues {
             println!("  {} ({}): {}", entry.title, entry.path, entry.issue);
         }
@@ -481,7 +490,10 @@ fn print_check_text(
 
     if !agenda_issues.is_empty() {
         println!();
-        println!("Missing :agenda: tag (files with TODOs but no agenda tag):");
+        println!(
+            "Missing :agenda: tag (files with TODOs but no agenda tag) ({}):",
+            agenda_issues.len()
+        );
         for entry in agenda_issues {
             let short_uuid = if entry.uuid.len() >= 8 {
                 &entry.uuid[..8]
