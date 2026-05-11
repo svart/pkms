@@ -51,7 +51,7 @@ pub fn run(config: &Config, ctx: &OutputContext, opts: &QueryOptions) -> Result<
     let mut combined = if opts.embed {
         #[cfg(feature = "embed")]
         {
-            search_by_embedding(&graph, terms)?
+            search_by_embedding(&graph, &opts.terms)?
         }
         #[cfg(not(feature = "embed"))]
         {
