@@ -104,12 +104,25 @@ pub fn parse_note(content: &str) -> ParsedNote {
     let mut outgoing = Vec::new();
     let mut headings: Vec<Heading> = Vec::new();
     let mut in_properties = false;
+    let mut in_src_block = false;
     let mut current_heading_idx: Option<usize> = None;
     let mut just_saw_heading = false;
     let mut heading_stack: Vec<usize> = Vec::new();
 
     for line in content.lines() {
         let trimmed = line.trim();
+
+        if trimmed.starts_with("#+begin_src") {
+            in_src_block = true;
+            continue;
+        }
+        if trimmed == "#+end_src" {
+            in_src_block = false;
+            continue;
+        }
+        if in_src_block {
+            continue;
+        }
 
         if trimmed == ":PROPERTIES:" {
             in_properties = true;
