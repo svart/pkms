@@ -24,12 +24,11 @@ pub fn run(
     ctx: &OutputContext,
     from: Option<&str>,
     to: Option<&str>,
-    db_cli: Option<&std::path::Path>,
 ) -> Result<()> {
     let from = from.ok_or_else(|| anyhow::anyhow!("No source specified. Provide --from"))?;
     let to = to.ok_or_else(|| anyhow::anyhow!("No target specified. Provide --to"))?;
 
-    let graph = Graph::load(config, db_cli)?;
+    let graph = Graph::load(config)?;
 
     let from_node = graph.find_node(from);
     let to_node = graph.find_node(to);

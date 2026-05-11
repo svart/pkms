@@ -45,11 +45,10 @@ pub fn run(
     only_content: bool,
     only_todos: bool,
     use_embed: bool,
-    db_cli: Option<&std::path::Path>,
 ) -> Result<()> {
     let terms = terms.ok_or_else(|| anyhow::anyhow!("No search terms specified. Provide terms"))?;
 
-    let graph = Graph::load(config, db_cli)?;
+    let graph = Graph::load(config)?;
 
     let mut combined = if use_embed {
         #[cfg(feature = "embed")]

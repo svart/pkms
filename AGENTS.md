@@ -8,7 +8,7 @@ After changes, run these commands **in this strict order**:
 cargo fmt --check              # 1. Check formatting (fail if unformatted)
 cargo clippy -- -D warnings    # 2. Lint with clippy (deny all warnings)
 cargo build                    # 3. Build the binary
-cargo test                     # 4. Run all unit + integration tests (237+ tests, ~1s)
+cargo test                     # 4. Run all unit + integration tests (239+ tests, ~1s)
 cargo test --test integration  # 5. Integration tests only (mock DB)
 target/debug/pkms --help       # 6. Verify CLI works
 ```
@@ -30,7 +30,7 @@ Then commit changes.
 src/
   main.rs           # CLI dispatch — match on Command enum, call commands::*::run()
   cli.rs            # clap derive structs — Cli, Command enum (all subcommands)
-  config.rs         # ~/.config/pkms.toml loading, merging with CLI --db flag
+  config.rs         # ~/.config/pkms.toml loading, resolved_db_root() accessor
   discovery.rs      # Recursive .org file discovery with ignore patterns
   org_date.rs       # Org-mode timestamp parser (SCHEDULED/DEADLINE dates)
   parser.rs         # org-mode parser: IDs, titles, filetags, aliases, refs, links, headings, priorities, SCHEDULED/DEADLINE
@@ -58,6 +58,7 @@ There is **no state persisted between invocations**:
 - No server mode, watch mode, or background workers.
 - `Graph::load()` re-scans and re-parses every `.org` file on each invocation.
 - Every command's `run()` is a self-contained function.
+- **Single resolution point**: `db_root` is resolved once in `main.rs` from CLI `--db` > `PKMS_DB_ROOT` env var > `config.db_root`, then stored into `Config` via `cfg.db_root = Some(resolved)`. All functions read from `config.resolved_db_root()?`.
 
 **Do not introduce** statefulness (caches, databases, daemon mode) in future development.
 If performance optimization is needed, optimize reading from scratch on every run — do not persist state.
@@ -67,7 +68,8 @@ If performance optimization is needed, optimize reading from scratch on every ru
 - **No comments** unless the logic is non-obvious. Code should be self-documenting.
 - **`anyhow::Result`** for all fallible functions. No custom error types.
 - **`serde::Serialize`** for all output structs. Every command supports `--output-format json`.
-- **`Graph::load`** to load the full database.
+- **`Graph::load`** to load the full database (accepts only `&Config`, uses `config.resolved_db_root()?` internally; stores raw `FileScanResult`s in `graph.results` for commands needing heading-level data).
+- **`config.resolved_db_root()?`** to get the resolved database path (panics if not set — main ensures it's set before dispatch).
 - **Use `ctx.print_count`**, **`ctx.print_json`**, and **`ctx.print_ndjson`** from `OutputContext` for output dispatch. Every command receives `&OutputContext`.
 
 ### Heading nodes
@@ -77,8 +79,8 @@ Each org-mode heading with an `:ID:` property becomes a **first-class `Node`** i
 ## Command pattern
 
 Every command's `run()` follows the same pattern:
-1. Accept `&Config, &OutputContext, ...specific_args..., db_cli: Option<&Path>`
-2. Call `Graph::load(config, db_cli)` if the full graph is needed
+1. Accept `&Config, &OutputContext, ...specific_args...`
+2. Call `Graph::load(config)` if the full graph is needed
 3. Perform the command logic
 4. Dispatch output using `ctx.print_json()`, `ctx.print_ndjson()`, or the `OutputFormat` match
 

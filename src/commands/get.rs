@@ -306,12 +306,7 @@ fn print_one_get_text(
     Ok(())
 }
 
-pub fn run(
-    config: &Config,
-    ctx: &OutputContext,
-    opts: &GetOptions,
-    db_cli: Option<&std::path::Path>,
-) -> Result<()> {
+pub fn run(config: &Config, ctx: &OutputContext, opts: &GetOptions) -> Result<()> {
     let targets: Vec<String> = if opts.from_stdin
         || (opts.target.is_none() && util::is_stdin_piped())
     {
@@ -328,7 +323,7 @@ pub fn run(
     let show_headings = opts.show_headings;
     let no_content = opts.no_content;
 
-    let graph = Graph::load(config, db_cli)?;
+    let graph = Graph::load(config)?;
 
     match ctx.format {
         OutputFormat::Text => {

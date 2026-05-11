@@ -925,8 +925,6 @@ fn test_detect_overlinks_multiple_targets() {
     let graph = Graph::build(results);
     let overlinks = graph.detect_overlinks();
     assert_eq!(overlinks.len(), 2);
-    assert_eq!(overlinks[0].count, 2); // or 3, depends on order
-    assert_eq!(overlinks[1].count, 3); // or 2, depends on order
     let counts: std::collections::HashMap<&str, usize> = overlinks
         .iter()
         .map(|e| (e.target_uuid.as_str(), e.count))

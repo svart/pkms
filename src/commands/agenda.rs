@@ -7,7 +7,6 @@ use crate::parser::find_daily_file_date;
 use anyhow::Result;
 use chrono::{Datelike, Local, NaiveDate};
 use serde::Serialize;
-use std::path::Path;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct AgendaItem {
@@ -66,11 +65,8 @@ pub fn run(
     limit: Option<usize>,
     today: bool,
     week: bool,
-    db_cli: Option<&Path>,
 ) -> Result<()> {
-    let db_root = config.resolve_db_root(db_cli)?;
-    let ignore = config.resolve_ignore_patterns();
-    let results = Graph::scan(&db_root, &ignore)?;
+    let graph = Graph::load(config)?;
 
     let today_date = Local::now().date_naive();
     let week_start = today_date
@@ -96,7 +92,7 @@ pub fn run(
 
     let mut items: Vec<AgendaItem> = Vec::new();
 
-    for result in &results {
+    for result in &graph.results {
         if result.parse_error.is_some() {
             continue;
         }

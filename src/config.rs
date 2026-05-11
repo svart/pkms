@@ -48,18 +48,6 @@ impl Config {
         }
     }
 
-    pub fn resolve_db_root(&self, cli_override: Option<&std::path::Path>) -> Result<PathBuf> {
-        if let Some(path) = cli_override {
-            return Ok(canonicalize_or_abs(path));
-        }
-        if let Some(ref path) = self.db_root {
-            return Ok(canonicalize_or_abs(path));
-        }
-        anyhow::bail!(
-            "No database root specified. Provide --db PATH or set db_root in ~/.config/pkms.toml"
-        );
-    }
-
     pub fn resolve_new_notes_dir(&self, db_root: &std::path::Path) -> PathBuf {
         match &self.new_notes_dir {
             Some(dir) => {
@@ -75,6 +63,12 @@ impl Config {
 
     pub fn resolve_ignore_patterns(&self) -> Vec<String> {
         self.ignore_patterns.clone().unwrap_or_default()
+    }
+
+    pub fn resolved_db_root(&self) -> Result<&Path> {
+        self.db_root
+            .as_deref()
+            .ok_or_else(|| anyhow::anyhow!("db_root not resolved before use"))
     }
 
     pub fn todo_states(&self) -> Vec<String> {
@@ -115,7 +109,7 @@ pub struct ConfigInfo {
     pub has_config_file: bool,
 }
 
-fn canonicalize_or_abs(path: &std::path::Path) -> PathBuf {
+pub fn canonicalize_or_abs(path: &std::path::Path) -> PathBuf {
     std::fs::canonicalize(path).unwrap_or_else(|_| {
         if path.is_absolute() {
             path.to_path_buf()
@@ -158,54 +152,6 @@ mod tests {
         // Config::load() should always succeed (returns defaults if file missing)
         let config = Config::load();
         assert!(config.is_ok());
-    }
-
-    #[test]
-    fn test_resolve_db_root_with_cli_override() {
-        let config = Config {
-            db_root: Some(PathBuf::from("/nonexistent/config/path")),
-            new_notes_dir: None,
-            ignore_patterns: None,
-            agenda: None,
-        };
-        let result = config.resolve_db_root(Some(Path::new("/cli/path")));
-        // CLI override wins, even though /cli/path doesn't exist -> canonicalize_or_abs
-        // returns it as-is since it's absolute
-        assert!(result.is_ok());
-        let p = result.unwrap();
-        assert_eq!(p, PathBuf::from("/cli/path"));
-    }
-
-    #[test]
-    fn test_resolve_db_root_with_config_value() {
-        let dir = tempfile::tempdir().unwrap();
-        let config = Config {
-            db_root: Some(dir.path().to_path_buf()),
-            new_notes_dir: None,
-            ignore_patterns: None,
-            agenda: None,
-        };
-        let result = config.resolve_db_root(None);
-        assert!(result.is_ok());
-        assert_eq!(result.unwrap(), dir.path().canonicalize().unwrap());
-    }
-
-    #[test]
-    fn test_resolve_db_root_none() {
-        let config = Config {
-            db_root: None,
-            new_notes_dir: None,
-            ignore_patterns: None,
-            agenda: None,
-        };
-        let result = config.resolve_db_root(None);
-        assert!(result.is_err());
-        assert!(
-            result
-                .unwrap_err()
-                .to_string()
-                .contains("No database root specified")
-        );
     }
 
     #[test]

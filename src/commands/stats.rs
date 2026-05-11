@@ -93,10 +93,9 @@ pub fn run(
     hubs_limit: Option<usize>,
     show_tags: bool,
     show_todos: bool,
-    db_cli: Option<&std::path::Path>,
 ) -> Result<()> {
-    let graph = Graph::load(config, db_cli)?;
-    let db_root = config.resolve_db_root(db_cli)?;
+    let graph = Graph::load(config)?;
+    let db_root = config.resolved_db_root()?;
 
     if let Some(limit) = hubs_limit {
         return print_hubs(ctx, &graph, limit);
@@ -110,7 +109,7 @@ pub fn run(
         return print_todo_stats(ctx, &graph);
     }
 
-    print_stats(config, ctx, days, &graph, &db_root)
+    print_stats(config, ctx, days, &graph, db_root)
 }
 
 fn print_hubs(ctx: &OutputContext, graph: &Graph, limit: usize) -> Result<()> {

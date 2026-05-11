@@ -24,13 +24,42 @@ fn main() -> ExitCode {
     };
     let machine = ctx.is_json();
 
-    let cfg = match config::Config::load() {
+    let mut cfg = match config::Config::load() {
         Ok(c) => c,
         Err(e) => {
             if machine {
                 println!("{}", serde_json::json!({"error": e.to_string()}));
             } else {
                 eprintln!("Error: {e:#}");
+            }
+            return ExitCode::from(2);
+        }
+    };
+
+    let resolved = cli
+        .db
+        .clone()
+        .or_else(|| {
+            std::env::var("PKMS_DB_ROOT")
+                .ok()
+                .map(std::path::PathBuf::from)
+        })
+        .or_else(|| cfg.db_root.clone())
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "No database root specified. Provide --db PATH, set PKMS_DB_ROOT env var, \
+                 or set db_root in ~/.config/pkms.toml"
+            )
+        })
+        .map(|p| config::canonicalize_or_abs(&p));
+
+    cfg.db_root = match resolved {
+        Ok(db_root) => Some(db_root),
+        Err(e) => {
+            if machine {
+                println!("{}", serde_json::json!({"error": e.to_string()}));
+            } else {
+                eprintln!("Error: {e}");
             }
             return ExitCode::from(2);
         }
@@ -64,7 +93,6 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
         } => commands::check::run(
             cfg,
             ctx,
-            cli.db.as_deref(),
             *stats,
             *file_links,
             *attachment_links,
@@ -76,7 +104,7 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
             cross_links.clone(),
         )?,
         Command::Validate { target, from_stdin } => {
-            commands::validate::run(cfg, ctx, target.as_deref(), *from_stdin, cli.db.as_deref())
+            commands::validate::run(cfg, ctx, target.as_deref(), *from_stdin)
                 .map(|()| ExitCode::SUCCESS)?
         }
         Command::Stats {
@@ -84,16 +112,13 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
             hubs,
             tags,
             todos,
-        } => commands::stats::run(cfg, ctx, *days, *hubs, *tags, *todos, cli.db.as_deref())
+        } => commands::stats::run(cfg, ctx, *days, *hubs, *tags, *todos)
             .map(|()| ExitCode::SUCCESS)?,
         Command::Orphans {
             limit,
             with_dailies,
-        } => commands::orphans::run(cfg, ctx, *limit, *with_dailies, cli.db.as_deref())
-            .map(|()| ExitCode::SUCCESS)?,
-        Command::Info => {
-            commands::info::run(cfg, ctx, cli.db.as_deref()).map(|()| ExitCode::SUCCESS)?
-        }
+        } => commands::orphans::run(cfg, ctx, *limit, *with_dailies).map(|()| ExitCode::SUCCESS)?,
+        Command::Info => commands::info::run(cfg, ctx).map(|()| ExitCode::SUCCESS)?,
         Command::InitConfig { db } => init_config(db.as_deref(), ctx)?,
         Command::Context {
             target,
@@ -112,7 +137,6 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
                     .ok_or_else(|| anyhow::anyhow!("Unknown encoding: {encoding}"))?,
                 from_stdin: *from_stdin,
             },
-            cli.db.as_deref(),
         )
         .map(|()| ExitCode::SUCCESS)?,
         Command::Resolve {
@@ -133,15 +157,15 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
                 fields: fields.as_deref(),
                 todos: *todos,
             },
-            cli.db.as_deref(),
         )
         .map(|()| ExitCode::SUCCESS)?,
         Command::Fix {
             broken_uuid,
             target,
             apply,
-        } => commands::fix::run(cfg, ctx, broken_uuid, target, *apply, cli.db.as_deref())
-            .map(|()| ExitCode::SUCCESS)?,
+        } => {
+            commands::fix::run(cfg, ctx, broken_uuid, target, *apply).map(|()| ExitCode::SUCCESS)?
+        }
         #[cfg(feature = "embed")]
         Command::Suggest {
             target,
@@ -157,7 +181,6 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
             *exclude_orphans,
             *from_stdin,
             *embed,
-            cli.db.as_deref(),
         )
         .map(|()| ExitCode::SUCCESS)?,
         #[cfg(not(feature = "embed"))]
@@ -175,7 +198,6 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
             *exclude_orphans,
             *from_stdin,
             false,
-            cli.db.as_deref(),
         )
         .map(|()| ExitCode::SUCCESS)?,
         Command::New {
@@ -192,7 +214,6 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
             tags.as_deref(),
             aliases.as_deref(),
             heading.as_deref(),
-            cli.db.as_deref(),
         )
         .map(|()| ExitCode::SUCCESS)?,
         Command::Get {
@@ -211,7 +232,6 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
                 no_content: *no_content,
                 from_stdin: *from_stdin,
             },
-            cli.db.as_deref(),
         )
         .map(|()| ExitCode::SUCCESS)?,
         #[cfg(feature = "embed")]
@@ -233,7 +253,6 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
             *content,
             *todos,
             *embed,
-            cli.db.as_deref(),
         )
         .map(|()| ExitCode::SUCCESS)?,
         #[cfg(not(feature = "embed"))]
@@ -255,7 +274,6 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
             *content,
             *todos,
             false,
-            cli.db.as_deref(),
         )
         .map(|()| ExitCode::SUCCESS)?,
         Command::Todo {
@@ -272,7 +290,6 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
             exclude.as_deref(),
             sort.as_deref(),
             *limit,
-            cli.db.as_deref(),
         )
         .map(|()| ExitCode::SUCCESS)?,
         Command::Agenda {
@@ -297,13 +314,10 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
             *limit,
             *today,
             *week,
-            cli.db.as_deref(),
         )
         .map(|()| ExitCode::SUCCESS)?,
-        Command::Path { from, to } => {
-            commands::path::run(cfg, ctx, from.as_deref(), to.as_deref(), cli.db.as_deref())
-                .map(|()| ExitCode::SUCCESS)?
-        }
+        Command::Path { from, to } => commands::path::run(cfg, ctx, from.as_deref(), to.as_deref())
+            .map(|()| ExitCode::SUCCESS)?,
     })
 }
 

@@ -76,6 +76,7 @@ pub struct Graph {
     pub(crate) skipped_files: Vec<PathBuf>,
     pub(crate) duplicates: DuplicateInfo,
     pub(crate) heading_uuid_to_primary: HashMap<String, String>,
+    pub(crate) results: Vec<FileScanResult>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -234,11 +235,13 @@ impl Graph {
         Ok(results)
     }
 
-    pub fn load(config: &Config, db_cli: Option<&Path>) -> anyhow::Result<Self> {
-        let db_root = config.resolve_db_root(db_cli)?;
+    pub fn load(config: &Config) -> anyhow::Result<Self> {
+        let db_root = config.resolved_db_root()?;
         let ignore = config.resolve_ignore_patterns();
-        let results = Self::scan(&db_root, &ignore)?;
-        Ok(Graph::build(results))
+        let results = Self::scan(db_root, &ignore)?;
+        let mut graph = Graph::build(results.clone());
+        graph.results = results;
+        Ok(graph)
     }
 
     pub fn find_node(&self, target: &str) -> Option<&Node> {

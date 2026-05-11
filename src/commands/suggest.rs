@@ -472,7 +472,6 @@ pub fn run(
     exclude_orphans: bool,
     from_stdin: bool,
     use_embed: bool,
-    db_cli: Option<&std::path::Path>,
 ) -> Result<()> {
     let targets: Vec<String> = if from_stdin || (target.is_none() && util::is_stdin_piped()) {
         util::read_stdin_ndjson()?
@@ -484,7 +483,7 @@ pub fn run(
         );
     };
 
-    let graph = Graph::load(config, db_cli)?;
+    let graph = Graph::load(config)?;
 
     if use_embed {
         #[cfg(feature = "embed")]

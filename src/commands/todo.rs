@@ -7,7 +7,6 @@ use crate::parser::find_daily_file_date;
 use anyhow::Result;
 use chrono::Local;
 use serde::Serialize;
-use std::path::Path;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct TodoItem {
@@ -65,11 +64,8 @@ pub fn run(
     exclude: Option<&str>,
     sort: Option<&str>,
     limit: Option<usize>,
-    db_cli: Option<&Path>,
 ) -> Result<()> {
-    let db_root = config.resolve_db_root(db_cli)?;
-    let ignore = config.resolve_ignore_patterns();
-    let results = Graph::scan(&db_root, &ignore)?;
+    let graph = Graph::load(config)?;
 
     let valid_states = config.todo_states();
 
@@ -82,7 +78,7 @@ pub fn run(
 
     let mut items: Vec<TodoItem> = Vec::new();
 
-    for result in &results {
+    for result in &graph.results {
         if result.parse_error.is_some() {
             continue;
         }

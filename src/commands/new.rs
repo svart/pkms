@@ -50,11 +50,10 @@ pub fn run(
     tags: Option<&str>,
     aliases: Option<&str>,
     heading: Option<&str>,
-    db_cli: Option<&std::path::Path>,
 ) -> Result<()> {
-    let db_root = config.resolve_db_root(db_cli)?;
+    let db_root = config.resolved_db_root()?;
     let ignore = config.resolve_ignore_patterns();
-    let new_notes_dir = config.resolve_new_notes_dir(&db_root);
+    let new_notes_dir = config.resolve_new_notes_dir(db_root);
 
     let uuid = uuid::Uuid::new_v4().to_string();
     let slug = title_to_slug(title);
@@ -74,7 +73,7 @@ pub fn run(
                 "Cannot use --heading without --create. The note file must exist to add a heading UUID."
             );
         }
-        let existing = find_note_by_title(&db_root, &ignore, title);
+        let existing = find_note_by_title(db_root, &ignore, title);
         if let Some(note_path) = existing {
             let content = std::fs::read_to_string(&note_path)
                 .with_context(|| format!("Failed to read {}", note_path.display()))?;

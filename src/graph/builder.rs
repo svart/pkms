@@ -304,6 +304,7 @@ impl Graph {
                     .collect(),
             },
             heading_uuid_to_primary,
+            results: vec![],
         }
     }
 }

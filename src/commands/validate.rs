@@ -352,7 +352,6 @@ pub fn run(
     ctx: &OutputContext,
     target: Option<&str>,
     from_stdin: bool,
-    db_cli: Option<&std::path::Path>,
 ) -> Result<()> {
     let targets: Vec<String> = if from_stdin || (target.is_none() && util::is_stdin_piped()) {
         util::read_stdin_ndjson()?
@@ -364,15 +363,15 @@ pub fn run(
         );
     };
 
-    let graph = Graph::load(config, db_cli)?;
-    let db_root = config.resolve_db_root(db_cli)?;
+    let graph = Graph::load(config)?;
+    let db_root = config.resolved_db_root()?;
 
     match ctx.format {
         OutputFormat::Text => {
             for t in &targets {
                 let node = graph.resolve_target(t)?.clone();
                 let incoming = graph.backlinks.get(&node.uuid).cloned().unwrap_or_default();
-                let output = validate_one(&graph, t, &db_root)?;
+                let output = validate_one(&graph, t, db_root)?;
                 print_validate_text(
                     &node,
                     &output.broken_internal,
@@ -388,7 +387,7 @@ pub fn run(
         OutputFormat::Json => {
             let mut all_outputs = Vec::new();
             for t in &targets {
-                all_outputs.push(validate_one(&graph, t, &db_root)?);
+                all_outputs.push(validate_one(&graph, t, db_root)?);
             }
             if all_outputs.len() == 1 {
                 ctx.print_json(&all_outputs[0])?;
@@ -398,7 +397,7 @@ pub fn run(
         }
         OutputFormat::Ndjson => {
             for t in &targets {
-                let output = validate_one(&graph, t, &db_root)?;
+                let output = validate_one(&graph, t, db_root)?;
                 println!("{}", serde_json::to_string(&output)?);
             }
         }

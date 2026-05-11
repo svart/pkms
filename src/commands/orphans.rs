@@ -28,9 +28,8 @@ pub fn run(
     ctx: &OutputContext,
     limit: Option<usize>,
     with_dailies: bool,
-    db_cli: Option<&std::path::Path>,
 ) -> Result<()> {
-    let graph = Graph::load(config, db_cli)?;
+    let graph = Graph::load(config)?;
     let mut orphans = graph.orphan_nodes();
 
     if !with_dailies {

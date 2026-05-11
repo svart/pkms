@@ -102,10 +102,9 @@ pub fn run(
     broken_uuid: &str,
     target: &str,
     apply: bool,
-    db_cli: Option<&std::path::Path>,
 ) -> Result<()> {
-    let graph = Graph::load(config, db_cli)?;
-    let db_root = config.resolve_db_root(db_cli)?;
+    let graph = Graph::load(config)?;
+    let db_root = config.resolved_db_root()?;
 
     let broken = validate_uuid(broken_uuid)?;
     let target_uuid = validate_uuid(target)?;
@@ -117,7 +116,7 @@ pub fn run(
         .ok_or_else(|| anyhow::anyhow!("Replacement UUID not found in database: {target}"))?;
 
     let (files_affected, total_replacements) =
-        find_and_replace_links(&db_root, &broken, &replacement_uuid, apply)?;
+        find_and_replace_links(db_root, &broken, &replacement_uuid, apply)?;
 
     let output = FixOutput {
         broken_uuid: broken.clone(),

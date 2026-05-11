@@ -105,12 +105,7 @@ fn build_context_output(
     })
 }
 
-pub fn run(
-    config: &Config,
-    ctx: &OutputContext,
-    opts: &ContextOptions,
-    db_cli: Option<&std::path::Path>,
-) -> Result<()> {
+pub fn run(config: &Config, ctx: &OutputContext, opts: &ContextOptions) -> Result<()> {
     let targets: Vec<String> = if opts.from_stdin
         || (opts.target.is_none() && util::is_stdin_piped())
     {
@@ -124,7 +119,7 @@ pub fn run(
     };
 
     let depth = opts.depth;
-    let graph = Graph::load(config, db_cli)?;
+    let graph = Graph::load(config)?;
 
     let encoding = opts.encoding;
 

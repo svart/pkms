@@ -124,7 +124,6 @@ fn link_target_exists(target: &str, db_root: &Path) -> bool {
 pub fn run(
     config: &Config,
     ctx: &OutputContext,
-    db_cli: Option<&std::path::Path>,
     stats: bool,
     file_links: bool,
     attachment_links: bool,
@@ -135,8 +134,8 @@ pub fn run(
     overlinks: bool,
     cross_links: Option<Vec<String>>,
 ) -> Result<ExitCode> {
-    let graph = Graph::load(config, db_cli)?;
-    let db_root = config.resolve_db_root(db_cli)?;
+    let graph = Graph::load(config)?;
+    let db_root = config.resolved_db_root()?;
 
     let cross_links_specified = cross_links.is_some();
     let any_explicit = stats
@@ -164,7 +163,7 @@ pub fn run(
         for node in graph.nodes.values() {
             for link in &node.outgoing {
                 if let Link::File(target) = link
-                    && !link_target_exists(target, &db_root)
+                    && !link_target_exists(target, db_root)
                 {
                     broken_file.push(BrokenFileLinkEntry {
                         source_uuid: node.uuid.clone(),
@@ -180,7 +179,7 @@ pub fn run(
         for node in graph.nodes.values() {
             for link in &node.outgoing {
                 if let Link::Attachment(target) = link
-                    && !link_target_exists(target, &db_root)
+                    && !link_target_exists(target, db_root)
                 {
                     broken_attachment.push(BrokenAttachmentLinkEntry {
                         source_uuid: node.uuid.clone(),
@@ -238,7 +237,7 @@ pub fn run(
     }
 
     let self_link_entries = if show_self_links {
-        graph.detect_self_links(&db_root)
+        graph.detect_self_links(db_root)
     } else {
         vec![]
     };
@@ -288,7 +287,7 @@ pub fn run(
         print_check_json(
             ctx,
             &graph,
-            &db_root,
+            db_root,
             &broken_file,
             &broken_attachment,
             &filetags_issues,
@@ -310,7 +309,7 @@ pub fn run(
     } else {
         print_check_text(
             &graph,
-            &db_root,
+            db_root,
             &broken_file,
             &broken_attachment,
             &filetags_issues,

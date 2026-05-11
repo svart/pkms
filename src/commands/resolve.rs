@@ -160,16 +160,11 @@ pub struct ResolveOptions<'a> {
     pub todos: bool,
 }
 
-pub fn run(
-    config: &Config,
-    ctx: &OutputContext,
-    opts: &ResolveOptions,
-    db_cli: Option<&std::path::Path>,
-) -> Result<()> {
-    let db_root = config.resolve_db_root(db_cli)?;
+pub fn run(config: &Config, ctx: &OutputContext, opts: &ResolveOptions) -> Result<()> {
+    let db_root = config.resolved_db_root()?;
     let ignore = config.resolve_ignore_patterns();
     let uuid_query = opts.uuid;
-    let notes = scan_files(&db_root, &ignore, uuid_query);
+    let notes = scan_files(db_root, &ignore, uuid_query);
 
     let title_query = opts.title.map(str::to_lowercase);
 
