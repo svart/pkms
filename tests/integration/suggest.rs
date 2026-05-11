@@ -125,7 +125,7 @@ Content about special topic
         "suggest",
         "bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb",
     ]);
-    assert_eq!(v["target"], "Topic");
+    assert_eq!(v["target"], "Special Topic");
     let suggestions = v["suggestions"].as_array().unwrap();
     // The parent note should appear as a suggestion (content keyword overlap)
     assert!(

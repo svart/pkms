@@ -14,7 +14,6 @@ pub struct TodoItem {
     pub title: String,
     pub path: String,
     pub filetags: Vec<String>,
-    pub has_agenda_tag: bool,
     pub is_daily_file: bool,
     pub daily_file_date: Option<String>,
     pub heading_title: String,
@@ -78,7 +77,6 @@ pub fn run(config: &Config, ctx: &OutputContext, opts: &TodoOptions) -> Result<(
 
         let parsed = &result.parsed;
         let path = &result.path;
-        let has_agenda = parsed.filetags.iter().any(|t| t == "agenda");
         let is_daily = find_daily_file_date(path).is_some();
         let daily_date = find_daily_file_date(path).map(|d| d.format("%Y-%m-%d").to_string());
 
@@ -123,7 +121,6 @@ pub fn run(config: &Config, ctx: &OutputContext, opts: &TodoOptions) -> Result<(
                 title: note_title,
                 path: path.to_string_lossy().to_string(),
                 filetags: parsed.filetags.clone(),
-                has_agenda_tag: has_agenda,
                 is_daily_file: is_daily,
                 daily_file_date: daily_date.clone(),
                 heading_title: heading.title.clone(),
@@ -235,24 +232,6 @@ fn print_todo_text(items: &[TodoItem], total: usize, _today_date: &chrono::Naive
                 item.title,
                 if item.is_daily_file { " [daily]" } else { "" }
             );
-        }
-        println!();
-    }
-
-    let missing_agenda_items: Vec<&TodoItem> = items.iter().filter(|i| !i.has_agenda_tag).collect();
-
-    if !missing_agenda_items.is_empty() {
-        println!("=== Missing :agenda: tag ===");
-        let mut by_file: std::collections::BTreeMap<&str, (usize, &str)> =
-            std::collections::BTreeMap::new();
-        for item in &missing_agenda_items {
-            let entry = by_file
-                .entry(item.title.as_str())
-                .or_insert_with(|| (0, item.uuid.as_str()));
-            entry.0 += 1;
-        }
-        for (title, (count, uuid)) in &by_file {
-            println!("  {title} ({uuid})  {count} TODOs, missing :agenda:");
         }
         println!();
     }
