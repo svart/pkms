@@ -159,6 +159,7 @@ fn print_validate_text(
 
 fn validate_one(graph: &Graph, target: &str, db_root: &Path) -> Result<ValidateOutput> {
     let node = graph.resolve_target(target)?.clone();
+    let is_heading_node = graph.heading_uuid_to_primary.contains_key(&node.uuid);
     let mut issues = Vec::new();
 
     let uuid_parts: Vec<&str> = node.uuid.split('-').collect();
@@ -270,8 +271,20 @@ fn validate_one(graph: &Graph, target: &str, db_root: &Path) -> Result<ValidateO
             Link::File(path) => {
                 let resolved = resolve_file_link_path(path, db_root);
                 if resolved == node.path {
-                    if target == node.uuid || !target_is_uuid {
-                        issues.push(format!("Self-link via file link to own file: {}", path));
+                    if target == node.uuid || !target_is_uuid || is_heading_node {
+                        issues.push(if is_heading_node {
+                            let primary_uuid = graph
+                                .heading_uuid_to_primary
+                                .get(&node.uuid)
+                                .cloned()
+                                .unwrap_or_else(|| node.uuid.clone());
+                            format!(
+                                "File link to own file; consider using id:{} instead of file:{}",
+                                primary_uuid, path
+                            )
+                        } else {
+                            format!("Self-link via file link to own file: {}", path)
+                        });
                     } else {
                         issues.push(format!(
                             "File link to own file; consider using id:{} instead of file:{}",

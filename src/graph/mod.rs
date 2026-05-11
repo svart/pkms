@@ -8,7 +8,7 @@ use crate::discovery::discover_files;
 use crate::parser::{Link, ParsedNote, parse_note};
 use rayon::prelude::*;
 use serde::Serialize;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, Serialize)]
@@ -121,47 +121,56 @@ impl Graph {
         let mut results = Vec::new();
         let mut seen_paths = std::collections::HashSet::new();
 
-        for (path, primary_uuid) in &self.path_to_uuid {
+        for path in self.path_to_uuid.keys() {
             if !seen_paths.insert(path.clone()) {
                 continue;
             }
-            let Some(node) = self.nodes.get(primary_uuid) else {
+            let Some(primary_uuid) = self.path_to_uuid.get(path) else {
                 continue;
             };
 
-            for link in &node.outgoing {
-                match link {
-                    Link::Internal(uuid) if uuid == primary_uuid => {
-                        results.push(SelfLinkEntry {
-                            source_uuid: node.uuid.clone(),
-                            source_title: node.title.clone(),
-                            link_type: "id".to_string(),
-                            target: uuid.clone(),
-                            suggestion: None,
-                        });
-                    }
-                    Link::File(target_path) => {
-                        let resolved = resolve_file_link_path(target_path, db_root);
-                        if resolved == *path {
-                            let has_headings = !node.heading_uuids.is_empty();
-                            let suggestion = if has_headings {
-                                Some(format!(
-                                    "Use id:{} instead of file link to this file",
-                                    node.uuid
-                                ))
-                            } else {
-                                None
-                            };
+            let has_headings = self
+                .nodes
+                .values()
+                .any(|n| n.path == *path && n.uuid != *primary_uuid);
+
+            for node in self.nodes.values() {
+                if node.path != *path {
+                    continue;
+                }
+                for link in &node.outgoing {
+                    match link {
+                        Link::Internal(uuid) if uuid == &node.uuid => {
                             results.push(SelfLinkEntry {
                                 source_uuid: node.uuid.clone(),
                                 source_title: node.title.clone(),
-                                link_type: "file".to_string(),
-                                target: target_path.clone(),
-                                suggestion,
+                                link_type: "id".to_string(),
+                                target: uuid.clone(),
+                                suggestion: None,
                             });
                         }
+                        Link::File(target_path) => {
+                            let resolved = resolve_file_link_path(target_path, db_root);
+                            if resolved == *path {
+                                let suggestion = if has_headings {
+                                    Some(format!(
+                                        "Use id:{} instead of file link to this file",
+                                        primary_uuid
+                                    ))
+                                } else {
+                                    None
+                                };
+                                results.push(SelfLinkEntry {
+                                    source_uuid: node.uuid.clone(),
+                                    source_title: node.title.clone(),
+                                    link_type: "file".to_string(),
+                                    target: target_path.clone(),
+                                    suggestion,
+                                });
+                            }
+                        }
+                        _ => {}
                     }
-                    _ => {}
                 }
             }
         }
@@ -171,11 +180,7 @@ impl Graph {
 
     pub fn detect_overlinks(&self) -> Vec<OverlinkEntry> {
         let mut results = Vec::new();
-        let mut seen_primaries = HashSet::new();
         for node in self.nodes.values() {
-            if !seen_primaries.insert(&node.uuid) {
-                continue;
-            }
             let mut counts: HashMap<String, usize> = HashMap::new();
             for link in &node.outgoing {
                 if let Link::Internal(target) = link {

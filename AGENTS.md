@@ -115,10 +115,49 @@ If performance optimization is needed, compute from scratch on every run — do 
 ## Graph data model
 
 ```
-Node { uuid, title, path, filetags, aliases, refs, outgoing: Vec<Link>, headings_count }
+Node { uuid, title, path, filetags, aliases, refs, outgoing: Vec<Link>, headings_count, heading_uuids, has_todos }
 Link::Internal(String) | File(String) | Url(String) | Attachment(String)
-Graph { nodes: HashMap<uuid, Node>, path_to_uuid, title_to_uuid, backlinks, broken_links, ... }
+Graph { nodes: HashMap<uuid, Node>, path_to_uuid, title_to_uuid, backlinks, broken_links, heading_uuid_to_primary, ... }
 ```
+
+### Heading nodes
+
+Each org-mode heading with an `:ID:` property becomes a **first-class `Node`** in the graph:
+- Its own `uuid` (the heading's `:ID:`)
+- Its own `title` (the heading text)
+- Its own `outgoing` (links found under this heading subtree only)
+- An explicit parent→child edge (`Link::Internal`) both ways between heading and parent
+- File-level properties (`filetags`, `categories`, `aliases`, `refs`) inherited from the parent + heading-level tags
+- `headings_count` / `heading_uuids` for sub-headings (non-zero only for headings with child heading UUIDs)
+
+The tree structure is:
+```
+File Primary UUID   ← primary node (file-level links + parent→child edges to top-level headings)
+├── Heading (no UUID)   ← not a graph node
+├── Heading UUID A      ← graph node, parent=Primary
+│   ├── Heading (no UUID)
+│   └── Heading UUID B  ← graph node, parent=UUID A
+├── Heading (no UUID)
+└── Heading UUID C      ← graph node, parent=Primary
+```
+
+`Graph::heading_uuid_to_primary` maps each heading UUID to the file-level primary UUID.
+
+### Link attribution
+
+The parser (`parse_note`) attributes links to the active heading stack:
+- Links before any heading → file-level (`parsed.outgoing`)
+- Links under a heading → that heading's `heading.outgoing`
+- Nested headings attribute correctly based on heading level
+- Properties drawer links remain file-level
+
+### Overlinking detection
+
+`detect_overlinks` simply counts internal links per node (no dedup needed — each heading node has its own `outgoing`). A parent→child edge counts as one internal link, so heading nodes with only a parent link do not trigger overlinking alerts.
+
+### Self-link detection
+
+`detect_self_links` checks all nodes per file path. An `id:` link is only a self-link if `uuid == node.uuid` (prevents parent-child edges from being flagged).
 
 `Graph::build(results)` processes `FileScanResult`s and produces the graph with backlinks and broken link detection. The `load()` static method is the main entry point — it calls `scan()` to discover and parse files, then `build()` to construct the graph. The `scan()` method can be called independently for commands that need the raw results.
 

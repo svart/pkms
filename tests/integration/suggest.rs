@@ -125,11 +125,18 @@ Content about special topic
         "suggest",
         "bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb",
     ]);
+    assert_eq!(v["target"], "Topic");
+    let suggestions = v["suggestions"].as_array().unwrap();
+    // The parent note should appear as a suggestion (content keyword overlap)
     assert!(
-        v["suggestions"].as_array().unwrap().is_empty(),
-        "no other notes to suggest, but command should succeed"
+        !suggestions.is_empty(),
+        "should have parent note as suggestion"
     );
-    assert_eq!(v["target"], "Note");
+    // The first suggestion's heading_context should be set
+    assert!(
+        suggestions[0].get("heading_context").is_some(),
+        "heading_context should be present when targeting a heading UUID"
+    );
 }
 
 #[test]

@@ -63,6 +63,7 @@ pub struct Heading {
     pub scheduled: Option<String>,
     pub deadline: Option<String>,
     pub priority: Option<char>,
+    pub outgoing: Vec<Link>,
 }
 
 const PROP_ID: &str = "ID";
@@ -105,6 +106,7 @@ pub fn parse_note(content: &str) -> ParsedNote {
     let mut in_properties = false;
     let mut current_heading_idx: Option<usize> = None;
     let mut just_saw_heading = false;
+    let mut heading_stack: Vec<usize> = Vec::new();
 
     for line in content.lines() {
         let trimmed = line.trim();
@@ -165,6 +167,15 @@ pub fn parse_note(content: &str) -> ParsedNote {
                 && (cap[1].len() > 1 || cap.get(4).is_some_and(|m| !m.as_str().is_empty()))
             {
                 let level = cap[1].len();
+
+                while let Some(&top_idx) = heading_stack.last() {
+                    if headings[top_idx].level >= level {
+                        heading_stack.pop();
+                    } else {
+                        break;
+                    }
+                }
+
                 let todo_state = cap.get(2).map(|m| m.as_str().to_string());
                 let priority = cap.get(3).and_then(|m| m.as_str().chars().next());
                 let heading_title = cap.get(4).map_or("", |m| m.as_str()).to_string();
@@ -187,7 +198,9 @@ pub fn parse_note(content: &str) -> ParsedNote {
                     scheduled: None,
                     deadline: None,
                     priority,
+                    outgoing: vec![],
                 });
+                heading_stack.push(headings.len() - 1);
                 current_heading_idx = Some(headings.len() - 1);
                 just_saw_heading = true;
                 continue;
@@ -210,7 +223,11 @@ pub fn parse_note(content: &str) -> ParsedNote {
             for cap in LINK_RE.captures_iter(line) {
                 let link_target = cap[1].to_string();
                 if let Some(link) = parse_link(&link_target) {
-                    outgoing.push(link);
+                    if let Some(&idx) = heading_stack.last() {
+                        headings[idx].outgoing.push(link);
+                    } else {
+                        outgoing.push(link);
+                    }
                 }
             }
         }

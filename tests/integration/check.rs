@@ -473,7 +473,7 @@ fn test_check_self_link_file() {
 }
 
 #[test]
-fn test_check_self_link_heading_uuid_not_flagged() {
+fn test_check_self_link_heading_self_link_detected() {
     let (_dir, root) = setup_clean_db();
     db_write(
         &root,
@@ -500,14 +500,20 @@ fn test_check_self_link_heading_uuid_not_flagged() {
         "--self-links",
     ]);
     assert!(
-        status.success(),
-        "link to heading UUID should not be a self-link"
+        !status.success(),
+        "heading linking to its own UUID should be detected as self-link"
     );
     let self_links = v["self_links"].as_array().unwrap();
-    assert!(
-        self_links.is_empty(),
-        "expected no self-links, got: {:?}",
+    assert_eq!(
+        self_links.len(),
+        1,
+        "expected heading self-link, got: {:?}",
         self_links
+    );
+    assert_eq!(self_links[0]["link_type"], "id");
+    assert_eq!(
+        self_links[0]["target"],
+        "bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb"
     );
 }
 

@@ -87,23 +87,20 @@ impl Graph {
     pub fn stats(&self) -> GraphStats {
         let total_notes = self.path_to_uuid.len();
         let total_internal_links: usize = self
-            .path_to_uuid
-            .keys()
-            .filter_map(|p| self.nodes.get(self.path_to_uuid.get(p)?))
+            .nodes
+            .values()
             .flat_map(|n| &n.outgoing)
             .filter(|l| matches!(l, Link::Internal(_)))
             .count();
         let total_file_links: usize = self
-            .path_to_uuid
-            .keys()
-            .filter_map(|p| self.nodes.get(self.path_to_uuid.get(p)?))
+            .nodes
+            .values()
             .flat_map(|n| &n.outgoing)
             .filter(|l| matches!(l, Link::File(_)))
             .count();
         let total_url_links: usize = self
-            .path_to_uuid
-            .keys()
-            .filter_map(|p| self.nodes.get(self.path_to_uuid.get(p)?))
+            .nodes
+            .values()
             .flat_map(|n| &n.outgoing)
             .filter(|l| matches!(l, Link::Url(_)))
             .count();

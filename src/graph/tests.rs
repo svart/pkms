@@ -36,6 +36,7 @@ fn make_note_with_headings(
             scheduled: None,
             deadline: None,
             priority: None,
+            outgoing: vec![],
         })
         .collect();
     FileScanResult {
@@ -291,7 +292,7 @@ fn test_resolve_target_ok() {
 }
 
 #[test]
-fn test_heading_uuid_resolves_to_parent() {
+fn test_heading_uuid_resolves_to_own_node() {
     let results = vec![
         make_note_with_headings("parent-uuid", "Parent Note", vec![], vec!["heading-uuid-1"]),
         make_note(
@@ -301,10 +302,11 @@ fn test_heading_uuid_resolves_to_parent() {
         ),
     ];
     let graph = Graph::build(results);
-    // heading UUID should resolve to parent node
+    // heading UUID should resolve to its own node, not the parent
     let node = graph.find_node("heading-uuid-1");
     assert!(node.is_some());
-    assert_eq!(node.unwrap().uuid, "parent-uuid");
+    assert_eq!(node.unwrap().uuid, "heading-uuid-1");
+    assert_eq!(node.unwrap().title, "Heading heading-uuid-1");
     // heading UUID should be in heading_uuid_to_primary
     assert_eq!(
         graph.heading_uuid_to_primary.get("heading-uuid-1"),
@@ -312,6 +314,14 @@ fn test_heading_uuid_resolves_to_parent() {
     );
     // Link to heading UUID should not be broken
     assert_eq!(graph.broken_links.len(), 0);
+    // Heading node should have parent-child edge back to parent
+    let heading_node = graph.nodes.get("heading-uuid-1").unwrap();
+    assert!(
+        heading_node
+            .outgoing
+            .iter()
+            .any(|l| matches!(l, Link::Internal(u) if u == "parent-uuid"))
+    );
 }
 
 #[test]
@@ -830,7 +840,10 @@ fn test_detect_overlinks_basic() {
     let results = vec![make_note(
         "uuid1",
         "Note A",
-        vec![Link::Internal("target".to_string()), Link::Internal("target".to_string())],
+        vec![
+            Link::Internal("target".to_string()),
+            Link::Internal("target".to_string()),
+        ],
     )];
     let graph = Graph::build(results);
     let overlinks = graph.detect_overlinks();
@@ -849,7 +862,10 @@ fn test_detect_overlinks_single_not_reported() {
     )];
     let graph = Graph::build(results);
     let overlinks = graph.detect_overlinks();
-    assert!(overlinks.is_empty(), "single link should not be overlinking");
+    assert!(
+        overlinks.is_empty(),
+        "single link should not be overlinking"
+    );
 }
 
 #[test]
@@ -865,7 +881,10 @@ fn test_detect_overlinks_heading_uuid_not_double_counted() {
     let graph = Graph::build(results);
     // Only 1 link to target in the file, so no overlinking
     let overlinks = graph.detect_overlinks();
-    assert!(overlinks.is_empty(), "single link should not be overlinking even with heading UUID");
+    assert!(
+        overlinks.is_empty(),
+        "single link should not be overlinking even with heading UUID"
+    );
 }
 
 #[test]
@@ -908,8 +927,10 @@ fn test_detect_overlinks_multiple_targets() {
     assert_eq!(overlinks.len(), 2);
     assert_eq!(overlinks[0].count, 2); // or 3, depends on order
     assert_eq!(overlinks[1].count, 3); // or 2, depends on order
-    let counts: std::collections::HashMap<&str, usize> =
-        overlinks.iter().map(|e| (e.target_uuid.as_str(), e.count)).collect();
+    let counts: std::collections::HashMap<&str, usize> = overlinks
+        .iter()
+        .map(|e| (e.target_uuid.as_str(), e.count))
+        .collect();
     assert_eq!(counts.get("x"), Some(&2));
     assert_eq!(counts.get("y"), Some(&3));
 }

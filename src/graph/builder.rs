@@ -1,6 +1,7 @@
 use std::collections::HashMap;
+use std::path::Path;
 
-use crate::parser::Link;
+use crate::parser::{Heading, Link};
 
 use super::{DuplicateEntry, DuplicateInfo, FileScanResult, Graph, Node};
 
@@ -33,6 +34,95 @@ fn build_links(
     broken_links.dedup();
 
     (backlinks, broken_links)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn process_headings(
+    headings: &[Heading],
+    primary_uuid: &str,
+    filetags: &[String],
+    categories: &[String],
+    aliases: &[String],
+    refs: &[String],
+    path: &Path,
+    nodes: &mut HashMap<String, Node>,
+    uuid_to_outgoing: &mut HashMap<String, Vec<Link>>,
+    heading_uuid_to_primary: &mut HashMap<String, String>,
+) {
+    let mut stack: Vec<(usize, String, Vec<String>)> = Vec::new();
+
+    for (i, heading) in headings.iter().enumerate() {
+        while let Some(&(top_idx, _, _)) = stack.last() {
+            if headings[top_idx].level >= heading.level {
+                let (_, uuid, children) = stack.pop().unwrap();
+                if let Some(node) = nodes.get_mut(&uuid) {
+                    node.heading_uuids = children;
+                    node.headings_count = node.heading_uuids.len();
+                }
+            } else {
+                break;
+            }
+        }
+
+        if let Some(uuid) = &heading.uuid {
+            let parent_uuid = stack
+                .last()
+                .map(|(_, u, _)| u.clone())
+                .unwrap_or_else(|| primary_uuid.to_string());
+
+            let mut heading_node = Node {
+                uuid: uuid.clone(),
+                title: heading.title.clone(),
+                path: path.to_path_buf(),
+                filetags: {
+                    let mut ft = filetags.to_vec();
+                    ft.extend(heading.tags.clone());
+                    ft
+                },
+                categories: categories.to_vec(),
+                aliases: aliases.to_vec(),
+                refs: refs.to_vec(),
+                outgoing: {
+                    let mut o = heading.outgoing.clone();
+                    o.push(Link::Internal(parent_uuid.clone()));
+                    o
+                },
+                headings_count: 0,
+                heading_uuids: vec![],
+                has_todos: heading.todo_state.is_some(),
+            };
+
+            uuid_to_outgoing.insert(uuid.clone(), {
+                let mut o = heading.outgoing.clone();
+                o.push(Link::Internal(parent_uuid.clone()));
+                o
+            });
+
+            uuid_to_outgoing
+                .entry(parent_uuid.clone())
+                .or_default()
+                .push(Link::Internal(uuid.clone()));
+
+            heading_node.outgoing = uuid_to_outgoing[&uuid.clone()].clone();
+
+            heading_uuid_to_primary.insert(uuid.clone(), primary_uuid.to_string());
+
+            nodes.insert(uuid.clone(), heading_node);
+
+            if let Some((_, _, children)) = stack.last_mut() {
+                children.push(uuid.clone());
+            }
+
+            stack.push((i, uuid.clone(), vec![]));
+        }
+    }
+
+    while let Some((_, uuid, children)) = stack.pop() {
+        if let Some(node) = nodes.get_mut(&uuid) {
+            node.heading_uuids = children;
+            node.headings_count = node.heading_uuids.len();
+        }
+    }
 }
 
 impl Graph {
@@ -85,7 +175,6 @@ impl Graph {
                 continue;
             }
 
-            // Check primary UUID against all_uuids_seen (which has heading UUIDs from other files)
             if let Some(existing) = all_uuids_seen.get(primary_uuid.as_str())
                 && existing != &path
             {
@@ -99,9 +188,6 @@ impl Graph {
             }
 
             seen_uuids.insert(primary_uuid.clone(), path.clone());
-
-            // Track primary UUIDs in all_uuids_seen too, so heading UUIDs
-            // can be checked against primary UUIDs from other files
             all_uuids_seen.insert(primary_uuid.clone(), path.clone());
 
             let title = if let Some(t) = parsed.title.clone() {
@@ -135,17 +221,14 @@ impl Graph {
             let node =
                 Node::from_parsed(primary_uuid.clone(), title.clone(), path.clone(), &parsed);
 
-            // Map heading UUIDs to primary UUID for resolution
-            for heading_uuid in &node.heading_uuids {
-                heading_uuid_to_primary
-                    .entry(heading_uuid.clone())
-                    .or_insert_with(|| primary_uuid.clone());
-            }
+            // Insert primary UUID into nodes
+            nodes.insert(primary_uuid.clone(), node.clone());
+            uuid_to_outgoing.insert(primary_uuid.clone(), parsed.outgoing.clone());
 
-            // Check heading UUIDs for uniqueness against ALL seen UUIDs
+            // Check heading UUIDs for uniqueness
             let mut file_heading_uuids_seen = std::collections::HashSet::new();
-            for heading_uuid in &node.heading_uuids {
-                // Intra-file duplicate: heading UUID matches own primary UUID
+            let heading_uuids_list: Vec<String> = parsed.heading_uuids();
+            for heading_uuid in &heading_uuids_list {
                 if heading_uuid == primary_uuid {
                     duplicate_uuids.push(DuplicateEntry {
                         value: heading_uuid.clone(),
@@ -156,7 +239,6 @@ impl Graph {
                     });
                     continue;
                 }
-                // Intra-file duplicate: same heading UUID appears in two headings
                 if !file_heading_uuids_seen.insert(heading_uuid.clone()) {
                     duplicate_uuids.push(DuplicateEntry {
                         value: heading_uuid.clone(),
@@ -181,22 +263,25 @@ impl Graph {
                 all_uuids_seen.insert(heading_uuid.clone(), path.clone());
             }
 
-            // Insert primary UUID into nodes
-            nodes.insert(primary_uuid.clone(), node.clone());
-
-            // Also insert heading UUIDs pointing to the same node for link resolution
-            for heading_uuid in &node.heading_uuids {
-                nodes
-                    .entry(heading_uuid.clone())
-                    .or_insert_with(|| node.clone());
-            }
+            // Process headings to create heading nodes with parent-child edges
+            process_headings(
+                &parsed.headings,
+                primary_uuid,
+                &parsed.filetags,
+                &parsed.categories,
+                &parsed.roam_aliases,
+                &parsed.roam_refs,
+                &path,
+                &mut nodes,
+                &mut uuid_to_outgoing,
+                &mut heading_uuid_to_primary,
+            );
 
             path_to_uuid.insert(path, primary_uuid.clone());
             title_to_uuid
                 .entry(title)
                 .or_default()
                 .push(primary_uuid.clone());
-            uuid_to_outgoing.insert(primary_uuid.clone(), parsed.outgoing);
         }
 
         let (backlinks, broken_links) = build_links(&uuid_to_outgoing, &nodes);
