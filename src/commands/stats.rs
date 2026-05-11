@@ -86,30 +86,30 @@ pub struct TagNote {
     pub path: String,
 }
 
-pub fn run(
-    config: &Config,
-    ctx: &OutputContext,
-    days: Option<u32>,
-    hubs_limit: Option<usize>,
-    show_tags: bool,
-    show_todos: bool,
-) -> Result<()> {
+pub struct StatsOptions {
+    pub days: Option<u32>,
+    pub hubs: Option<usize>,
+    pub tags: bool,
+    pub todos: bool,
+}
+
+pub fn run(config: &Config, ctx: &OutputContext, opts: &StatsOptions) -> Result<()> {
     let graph = Graph::load(config)?;
     let db_root = config.resolved_db_root()?;
 
-    if let Some(limit) = hubs_limit {
+    if let Some(limit) = opts.hubs {
         return print_hubs(ctx, &graph, limit);
     }
 
-    if show_tags {
+    if opts.tags {
         return print_tags(ctx, &graph);
     }
 
-    if show_todos {
+    if opts.todos {
         return print_todo_stats(ctx, &graph);
     }
 
-    print_stats(config, ctx, days, &graph, db_root)
+    print_stats(config, ctx, opts.days, &graph, db_root)
 }
 
 fn print_hubs(ctx: &OutputContext, graph: &Graph, limit: usize) -> Result<()> {

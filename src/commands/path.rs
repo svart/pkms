@@ -19,21 +19,18 @@ pub struct PathNode {
     pub title: String,
 }
 
-pub fn run(
-    config: &Config,
-    ctx: &OutputContext,
-    from: Option<&str>,
-    to: Option<&str>,
-) -> Result<()> {
-    let from = from.ok_or_else(|| anyhow::anyhow!("No source specified. Provide --from"))?;
-    let to = to.ok_or_else(|| anyhow::anyhow!("No target specified. Provide --to"))?;
+pub struct PathOptions {
+    pub from: String,
+    pub to: String,
+}
 
+pub fn run(config: &Config, ctx: &OutputContext, opts: &PathOptions) -> Result<()> {
     let graph = Graph::load(config)?;
 
-    let from_node = graph.find_node(from);
-    let to_node = graph.find_node(to);
+    let from_node = graph.find_node(&opts.from);
+    let to_node = graph.find_node(&opts.to);
 
-    let (from_str, to_str) = (from.to_string(), to.to_string());
+    let (from_str, to_str) = (opts.from.clone(), opts.to.clone());
 
     match (from_node, to_node) {
         (Some(f), Some(t)) => {

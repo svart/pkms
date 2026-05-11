@@ -151,12 +151,11 @@ pub struct NeighborOutput {
     pub incoming: Vec<NodeJson>,
 }
 
-pub struct GetOptions<'a> {
-    pub target: Option<&'a str>,
+pub struct GetOptions {
+    pub targets: Vec<String>,
     pub show_links: bool,
     pub show_headings: bool,
     pub no_content: bool,
-    pub from_stdin: bool,
 }
 
 fn get_neighbor_map(graph: &Graph, uuid: &str) -> HashMap<u32, NeighborOutput> {
@@ -307,42 +306,32 @@ fn print_one_get_text(
 }
 
 pub fn run(config: &Config, ctx: &OutputContext, opts: &GetOptions) -> Result<()> {
-    let targets: Vec<String> = if opts.from_stdin
-        || (opts.target.is_none() && util::is_stdin_piped())
-    {
-        util::read_stdin_ndjson()?
-    } else if let Some(t) = opts.target {
-        vec![t.to_string()]
-    } else {
-        anyhow::bail!(
-            "No target specified and no stdin pipe detected. Provide a target or use --from-stdin."
-        );
-    };
-
-    let show_links = opts.show_links;
-    let show_headings = opts.show_headings;
-    let no_content = opts.no_content;
-
     let graph = Graph::load(config)?;
 
     match ctx.format {
         OutputFormat::Text => {
-            for target in &targets {
-                print_one_get_text(&graph, target, show_links, show_headings, no_content)?;
-                if targets.len() > 1 {
+            for target in &opts.targets {
+                print_one_get_text(
+                    &graph,
+                    target,
+                    opts.show_links,
+                    opts.show_headings,
+                    opts.no_content,
+                )?;
+                if opts.targets.len() > 1 {
                     println!();
                 }
             }
         }
         OutputFormat::Json => {
             let mut all_outputs = Vec::new();
-            for target in &targets {
+            for target in &opts.targets {
                 all_outputs.push(process_one_get(
                     &graph,
                     target,
-                    show_links,
-                    show_headings,
-                    no_content,
+                    opts.show_links,
+                    opts.show_headings,
+                    opts.no_content,
                 )?);
             }
             if all_outputs.len() == 1 {
@@ -352,9 +341,14 @@ pub fn run(config: &Config, ctx: &OutputContext, opts: &GetOptions) -> Result<()
             }
         }
         OutputFormat::Ndjson => {
-            for target in &targets {
-                let output =
-                    process_one_get(&graph, target, show_links, show_headings, no_content)?;
+            for target in &opts.targets {
+                let output = process_one_get(
+                    &graph,
+                    target,
+                    opts.show_links,
+                    opts.show_headings,
+                    opts.no_content,
+                )?;
                 println!("{}", serde_json::to_string(&output)?);
             }
         }

@@ -23,16 +23,16 @@ pub struct OrphanEntry {
     pub categories: Vec<String>,
 }
 
-pub fn run(
-    config: &Config,
-    ctx: &OutputContext,
-    limit: Option<usize>,
-    with_dailies: bool,
-) -> Result<()> {
+pub struct OrphansOptions {
+    pub limit: Option<usize>,
+    pub with_dailies: bool,
+}
+
+pub fn run(config: &Config, ctx: &OutputContext, opts: &OrphansOptions) -> Result<()> {
     let graph = Graph::load(config)?;
     let mut orphans = graph.orphan_nodes();
 
-    if !with_dailies {
+    if !opts.with_dailies {
         let daily_re = Regex::new(r"^\d{4}-\d{2}-\d{2}$").unwrap();
         orphans.retain(|n| {
             n.path
@@ -43,7 +43,7 @@ pub fn run(
     }
 
     let count = orphans.len();
-    let showed = limit.map(|l| {
+    let showed = opts.limit.map(|l| {
         let shown = orphans.len().min(l);
         orphans.truncate(l);
         shown

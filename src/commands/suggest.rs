@@ -5,7 +5,6 @@ use crate::embed;
 use crate::graph::{Graph, Node};
 use crate::output::OutputContext;
 use crate::parser::{HEADING_RE, Link};
-use crate::util;
 use anyhow::Result;
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
@@ -464,31 +463,20 @@ fn compute_suggestions_for_node(
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn run(
-    config: &Config,
-    ctx: &OutputContext,
-    target: Option<&str>,
-    limit: Option<usize>,
-    exclude_orphans: bool,
-    from_stdin: bool,
-    use_embed: bool,
-) -> Result<()> {
-    let targets: Vec<String> = if from_stdin || (target.is_none() && util::is_stdin_piped()) {
-        util::read_stdin_ndjson()?
-    } else if let Some(t) = target {
-        vec![t.to_string()]
-    } else {
-        anyhow::bail!(
-            "No target specified and no stdin pipe detected. Provide a target or use --from-stdin."
-        );
-    };
+pub struct SuggestOptions {
+    pub targets: Vec<String>,
+    pub limit: Option<usize>,
+    pub exclude_orphans: bool,
+    pub use_embed: bool,
+}
 
+pub fn run(config: &Config, ctx: &OutputContext, opts: &SuggestOptions) -> Result<()> {
     let graph = Graph::load(config)?;
 
-    if use_embed {
+    if opts.use_embed {
         #[cfg(feature = "embed")]
         {
-            return suggest_by_embedding(&graph, ctx, &targets, limit);
+            return suggest_by_embedding(&graph, ctx, &opts.targets, opts.limit);
         }
         #[cfg(not(feature = "embed"))]
         {
@@ -498,9 +486,15 @@ pub fn run(
 
     match ctx.format {
         OutputFormat::Text => {
-            for t in &targets {
+            for t in &opts.targets {
                 let (node, suggestions, _total, _showed, heading_ctx) =
-                    compute_suggestions_for_node(&graph, t, exclude_orphans, limit, None)?;
+                    compute_suggestions_for_node(
+                        &graph,
+                        t,
+                        opts.exclude_orphans,
+                        opts.limit,
+                        None,
+                    )?;
                 if let Some(ref h) = heading_ctx {
                     println!("Suggestions for \"{}\" ({})", node.title, h);
                 } else {
@@ -516,16 +510,22 @@ pub fn run(
                         println!("       Matches: {}", factors.join(", "));
                     }
                 }
-                if targets.len() > 1 {
+                if opts.targets.len() > 1 {
                     println!();
                 }
             }
         }
         OutputFormat::Json => {
             let mut all_outputs = Vec::new();
-            for t in &targets {
+            for t in &opts.targets {
                 let (node, suggestions, total, showed, _heading_ctx) =
-                    compute_suggestions_for_node(&graph, t, exclude_orphans, limit, None)?;
+                    compute_suggestions_for_node(
+                        &graph,
+                        t,
+                        opts.exclude_orphans,
+                        opts.limit,
+                        None,
+                    )?;
                 all_outputs.push(SuggestOutput {
                     target: node.title.clone(),
                     target_uuid: node.uuid.clone(),
@@ -541,13 +541,13 @@ pub fn run(
             }
         }
         OutputFormat::Ndjson => {
-            for t in &targets {
+            for t in &opts.targets {
                 let (_node, suggestions, _total, _showed, _heading_ctx) =
                     compute_suggestions_for_node(
                         &graph,
                         t,
-                        exclude_orphans,
-                        limit,
+                        opts.exclude_orphans,
+                        opts.limit,
                         Some(t.clone()),
                     )?;
                 for s in &suggestions {

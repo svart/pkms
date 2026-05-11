@@ -79,6 +79,8 @@ fn main() -> ExitCode {
 }
 
 fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<ExitCode> {
+    use util::{is_stdin_piped, read_stdin_ndjson};
+
     Ok(match &cli.command {
         Command::Check {
             stats,
@@ -93,18 +95,30 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
         } => commands::check::run(
             cfg,
             ctx,
-            *stats,
-            *file_links,
-            *attachment_links,
-            *id_links,
-            *filetags,
-            *agenda,
-            *self_links,
-            *overlinks,
-            cross_links.clone(),
+            &commands::check::CheckOptions {
+                stats: *stats,
+                file_links: *file_links,
+                attachment_links: *attachment_links,
+                id_links: *id_links,
+                filetags: *filetags,
+                agenda: *agenda,
+                self_links: *self_links,
+                overlinks: *overlinks,
+                cross_links: cross_links.clone(),
+            },
         )?,
         Command::Validate { target, from_stdin } => {
-            commands::validate::run(cfg, ctx, target.as_deref(), *from_stdin)
+            let targets = if *from_stdin || (target.is_none() && is_stdin_piped()) {
+                read_stdin_ndjson()?
+            } else if let Some(t) = target {
+                vec![t.clone()]
+            } else {
+                anyhow::bail!(
+                    "No target specified and no stdin pipe detected. \
+                     Provide a target or use --from-stdin."
+                );
+            };
+            commands::validate::run(cfg, ctx, &commands::validate::ValidateOptions { targets })
                 .map(|()| ExitCode::SUCCESS)?
         }
         Command::Stats {
@@ -112,12 +126,29 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
             hubs,
             tags,
             todos,
-        } => commands::stats::run(cfg, ctx, *days, *hubs, *tags, *todos)
-            .map(|()| ExitCode::SUCCESS)?,
+        } => commands::stats::run(
+            cfg,
+            ctx,
+            &commands::stats::StatsOptions {
+                days: *days,
+                hubs: *hubs,
+                tags: *tags,
+                todos: *todos,
+            },
+        )
+        .map(|()| ExitCode::SUCCESS)?,
         Command::Orphans {
             limit,
             with_dailies,
-        } => commands::orphans::run(cfg, ctx, *limit, *with_dailies).map(|()| ExitCode::SUCCESS)?,
+        } => commands::orphans::run(
+            cfg,
+            ctx,
+            &commands::orphans::OrphansOptions {
+                limit: *limit,
+                with_dailies: *with_dailies,
+            },
+        )
+        .map(|()| ExitCode::SUCCESS)?,
         Command::Info => commands::info::run(cfg, ctx).map(|()| ExitCode::SUCCESS)?,
         Command::InitConfig { db } => init_config(db.as_deref(), ctx)?,
         Command::Context {
@@ -126,19 +157,30 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
             max_tokens,
             encoding,
             from_stdin,
-        } => commands::context::run(
-            cfg,
-            ctx,
-            &commands::context::ContextOptions {
-                target: target.as_deref(),
-                depth: *depth,
-                max_tokens: *max_tokens,
-                encoding: tokens::Encoding::from_str(encoding)
-                    .ok_or_else(|| anyhow::anyhow!("Unknown encoding: {encoding}"))?,
-                from_stdin: *from_stdin,
-            },
-        )
-        .map(|()| ExitCode::SUCCESS)?,
+        } => {
+            let targets = if *from_stdin || (target.is_none() && is_stdin_piped()) {
+                read_stdin_ndjson()?
+            } else if let Some(t) = target {
+                vec![t.clone()]
+            } else {
+                anyhow::bail!(
+                    "No target specified and no stdin pipe detected. \
+                     Provide a target or use --from-stdin."
+                );
+            };
+            commands::context::run(
+                cfg,
+                ctx,
+                &commands::context::ContextOptions {
+                    targets,
+                    depth: *depth,
+                    max_tokens: *max_tokens,
+                    encoding: tokens::Encoding::from_str(encoding)
+                        .ok_or_else(|| anyhow::anyhow!("Unknown encoding: {encoding}"))?,
+                },
+            )
+            .map(|()| ExitCode::SUCCESS)?
+        }
         Command::Resolve {
             uuid,
             title,
@@ -150,11 +192,15 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
             cfg,
             ctx,
             &commands::resolve::ResolveOptions {
-                uuid: uuid.as_deref(),
-                title: title.as_deref(),
-                tags: tags.as_deref(),
+                uuid: uuid.clone(),
+                title: title.clone(),
+                tags: tags
+                    .as_deref()
+                    .map(|s| s.split(',').map(|s| s.trim().to_string()).collect()),
                 limit: *limit,
-                fields: fields.as_deref(),
+                fields: fields
+                    .as_deref()
+                    .map(|s| s.split(',').map(|s| s.trim().to_string()).collect()),
                 todos: *todos,
             },
         )
@@ -164,7 +210,22 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
             target,
             apply,
         } => {
-            commands::fix::run(cfg, ctx, broken_uuid, target, *apply).map(|()| ExitCode::SUCCESS)?
+            let broken = uuid::Uuid::parse_str(broken_uuid)
+                .map_err(|_| anyhow::anyhow!("Invalid UUID format: {broken_uuid}"))?
+                .to_string();
+            let target_uuid = uuid::Uuid::parse_str(target)
+                .map_err(|_| anyhow::anyhow!("Invalid UUID format: {target}"))?
+                .to_string();
+            commands::fix::run(
+                cfg,
+                ctx,
+                &commands::fix::FixOptions {
+                    broken_uuid: broken,
+                    target_uuid,
+                    apply: *apply,
+                },
+            )
+            .map(|()| ExitCode::SUCCESS)?
         }
         #[cfg(feature = "embed")]
         Command::Suggest {
@@ -173,16 +234,29 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
             exclude_orphans,
             from_stdin,
             embed,
-        } => commands::suggest::run(
-            cfg,
-            ctx,
-            target.as_deref(),
-            *limit,
-            *exclude_orphans,
-            *from_stdin,
-            *embed,
-        )
-        .map(|()| ExitCode::SUCCESS)?,
+        } => {
+            let targets = if *from_stdin || (target.is_none() && is_stdin_piped()) {
+                read_stdin_ndjson()?
+            } else if let Some(t) = target {
+                vec![t.clone()]
+            } else {
+                anyhow::bail!(
+                    "No target specified and no stdin pipe detected. \
+                     Provide a target or use --from-stdin."
+                );
+            };
+            commands::suggest::run(
+                cfg,
+                ctx,
+                &commands::suggest::SuggestOptions {
+                    targets,
+                    limit: *limit,
+                    exclude_orphans: *exclude_orphans,
+                    use_embed: *embed,
+                },
+            )
+            .map(|()| ExitCode::SUCCESS)?
+        }
         #[cfg(not(feature = "embed"))]
         Command::Suggest {
             target,
@@ -190,16 +264,29 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
             exclude_orphans,
             from_stdin,
             ..
-        } => commands::suggest::run(
-            cfg,
-            ctx,
-            target.as_deref(),
-            *limit,
-            *exclude_orphans,
-            *from_stdin,
-            false,
-        )
-        .map(|()| ExitCode::SUCCESS)?,
+        } => {
+            let targets = if *from_stdin || (target.is_none() && is_stdin_piped()) {
+                read_stdin_ndjson()?
+            } else if let Some(t) = target {
+                vec![t.clone()]
+            } else {
+                anyhow::bail!(
+                    "No target specified and no stdin pipe detected. \
+                     Provide a target or use --from-stdin."
+                );
+            };
+            commands::suggest::run(
+                cfg,
+                ctx,
+                &commands::suggest::SuggestOptions {
+                    targets,
+                    limit: *limit,
+                    exclude_orphans: *exclude_orphans,
+                    use_embed: false,
+                },
+            )
+            .map(|()| ExitCode::SUCCESS)?
+        }
         Command::New {
             title,
             create,
@@ -209,11 +296,17 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
         } => commands::new::run(
             cfg,
             ctx,
-            title,
-            *create,
-            tags.as_deref(),
-            aliases.as_deref(),
-            heading.as_deref(),
+            &commands::new::NewOptions {
+                title: title.clone(),
+                create: *create,
+                tags: tags
+                    .as_deref()
+                    .map(|s| s.split(',').map(|s| s.trim().to_string()).collect()),
+                aliases: aliases
+                    .as_deref()
+                    .map(|s| s.split(',').map(|s| s.trim().to_string()).collect()),
+                heading: heading.clone(),
+            },
         )
         .map(|()| ExitCode::SUCCESS)?,
         Command::Get {
@@ -222,18 +315,29 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
             headings,
             no_content,
             from_stdin,
-        } => commands::get::run(
-            cfg,
-            ctx,
-            &commands::get::GetOptions {
-                target: target.as_deref(),
-                show_links: *links,
-                show_headings: *headings,
-                no_content: *no_content,
-                from_stdin: *from_stdin,
-            },
-        )
-        .map(|()| ExitCode::SUCCESS)?,
+        } => {
+            let targets = if *from_stdin || (target.is_none() && is_stdin_piped()) {
+                read_stdin_ndjson()?
+            } else if let Some(t) = target {
+                vec![t.clone()]
+            } else {
+                anyhow::bail!(
+                    "No target specified and no stdin pipe detected. \
+                     Provide a target or use --from-stdin."
+                );
+            };
+            commands::get::run(
+                cfg,
+                ctx,
+                &commands::get::GetOptions {
+                    targets,
+                    show_links: *links,
+                    show_headings: *headings,
+                    no_content: *no_content,
+                },
+            )
+            .map(|()| ExitCode::SUCCESS)?
+        }
         #[cfg(feature = "embed")]
         Command::Query {
             terms,
@@ -246,13 +350,17 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
         } => commands::query::run(
             cfg,
             ctx,
-            terms.as_deref(),
-            *limit,
-            *tags,
-            *title,
-            *content,
-            *todos,
-            *embed,
+            &commands::query::QueryOptions {
+                terms: terms
+                    .clone()
+                    .ok_or_else(|| anyhow::anyhow!("No search terms specified. Provide terms"))?,
+                limit: *limit,
+                tags: *tags,
+                title: *title,
+                content: *content,
+                todos: *todos,
+                embed: *embed,
+            },
         )
         .map(|()| ExitCode::SUCCESS)?,
         #[cfg(not(feature = "embed"))]
@@ -267,13 +375,17 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
         } => commands::query::run(
             cfg,
             ctx,
-            terms.as_deref(),
-            *limit,
-            *tags,
-            *title,
-            *content,
-            *todos,
-            false,
+            &commands::query::QueryOptions {
+                terms: terms
+                    .clone()
+                    .ok_or_else(|| anyhow::anyhow!("No search terms specified. Provide terms"))?,
+                limit: *limit,
+                tags: *tags,
+                title: *title,
+                content: *content,
+                todos: *todos,
+                embed: false,
+            },
         )
         .map(|()| ExitCode::SUCCESS)?,
         Command::Todo {
@@ -285,11 +397,19 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
         } => commands::todo::run(
             cfg,
             ctx,
-            *missing_agenda,
-            include.as_deref(),
-            exclude.as_deref(),
-            sort.as_deref(),
-            *limit,
+            &commands::todo::TodoOptions {
+                missing_agenda: *missing_agenda,
+                include: include
+                    .as_deref()
+                    .map(|s| s.split(',').map(|s| s.trim().to_string()).collect())
+                    .unwrap_or_default(),
+                exclude: exclude
+                    .as_deref()
+                    .map(|s| s.split(',').map(|s| s.trim().to_string()).collect())
+                    .unwrap_or_default(),
+                sort: sort.clone(),
+                limit: *limit,
+            },
         )
         .map(|()| ExitCode::SUCCESS)?,
         Command::Agenda {
@@ -305,19 +425,37 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
         } => commands::agenda::run(
             cfg,
             ctx,
-            *missing_agenda,
-            include.as_deref(),
-            exclude.as_deref(),
-            *overdue,
-            date.as_deref(),
-            sort.as_deref(),
-            *limit,
-            *today,
-            *week,
+            &commands::agenda::AgendaOptions {
+                missing_agenda: *missing_agenda,
+                include: include
+                    .as_deref()
+                    .map(|s| s.split(',').map(|s| s.trim().to_string()).collect())
+                    .unwrap_or_default(),
+                exclude: exclude
+                    .as_deref()
+                    .map(|s| s.split(',').map(|s| s.trim().to_string()).collect())
+                    .unwrap_or_default(),
+                overdue: *overdue,
+                date: date
+                    .as_deref()
+                    .and_then(|d| chrono::NaiveDate::parse_from_str(d, "%Y-%m-%d").ok()),
+                sort: sort.clone(),
+                limit: *limit,
+                today: *today,
+                week: *week,
+            },
         )
         .map(|()| ExitCode::SUCCESS)?,
-        Command::Path { from, to } => commands::path::run(cfg, ctx, from.as_deref(), to.as_deref())
-            .map(|()| ExitCode::SUCCESS)?,
+        Command::Path { from, to } => {
+            let from = from
+                .clone()
+                .ok_or_else(|| anyhow::anyhow!("No source specified. Provide --from"))?;
+            let to = to
+                .clone()
+                .ok_or_else(|| anyhow::anyhow!("No target specified. Provide --to"))?;
+            commands::path::run(cfg, ctx, &commands::path::PathOptions { from, to })
+                .map(|()| ExitCode::SUCCESS)?
+        }
     })
 }
 

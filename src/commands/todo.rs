@@ -55,26 +55,20 @@ fn heading_is_eligible(heading: &crate::parser::Heading, valid_states: &[String]
         .is_some_and(|s| valid_states.iter().any(|vs| vs.eq_ignore_ascii_case(s)))
 }
 
-#[allow(clippy::too_many_arguments)]
-pub fn run(
-    config: &Config,
-    ctx: &OutputContext,
-    missing_agenda: bool,
-    include: Option<&str>,
-    exclude: Option<&str>,
-    sort: Option<&str>,
-    limit: Option<usize>,
-) -> Result<()> {
+pub struct TodoOptions {
+    pub missing_agenda: bool,
+    pub include: Vec<String>,
+    pub exclude: Vec<String>,
+    pub sort: Option<String>,
+    pub limit: Option<usize>,
+}
+
+pub fn run(config: &Config, ctx: &OutputContext, opts: &TodoOptions) -> Result<()> {
     let graph = Graph::load(config)?;
 
     let valid_states = config.todo_states();
 
     let today_date = Local::now().date_naive();
-
-    let include_set: Option<Vec<String>> =
-        include.map(|s| s.split(',').map(|s| s.trim().to_string()).collect());
-    let exclude_set: Option<Vec<String>> =
-        exclude.map(|s| s.split(',').map(|s| s.trim().to_string()).collect());
 
     let mut items: Vec<TodoItem> = Vec::new();
 
@@ -94,24 +88,27 @@ pub fn run(
                 continue;
             }
 
-            if let Some(ref incl) = include_set {
+            if !opts.include.is_empty() {
                 let state_matches = heading
                     .todo_state
                     .as_ref()
-                    .is_some_and(|s| incl.iter().any(|is| is.eq_ignore_ascii_case(s)));
+                    .is_some_and(|s| opts.include.iter().any(|is| is.eq_ignore_ascii_case(s)));
                 if !state_matches {
                     continue;
                 }
             }
 
-            if let Some(ref excl) = exclude_set
+            if !opts.exclude.is_empty()
                 && let Some(ref todo_state) = heading.todo_state
-                && excl.iter().any(|es| es.eq_ignore_ascii_case(todo_state))
+                && opts
+                    .exclude
+                    .iter()
+                    .any(|es| es.eq_ignore_ascii_case(todo_state))
             {
                 continue;
             }
 
-            if missing_agenda && has_agenda {
+            if opts.missing_agenda && has_agenda {
                 continue;
             }
 
@@ -148,12 +145,12 @@ pub fn run(
         }
     }
 
-    let sort_field = sort.unwrap_or("priority");
+    let sort_field = opts.sort.as_deref().unwrap_or("priority");
     sort_items(&mut items, sort_field);
 
     let total = items.len();
 
-    if let Some(l) = limit {
+    if let Some(l) = opts.limit {
         items.truncate(l);
     }
 

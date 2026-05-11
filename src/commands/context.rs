@@ -3,7 +3,6 @@ use crate::config::Config;
 use crate::graph::Graph;
 use crate::output::OutputContext;
 use crate::tokens;
-use crate::util;
 use anyhow::Result;
 use serde::Serialize;
 use std::fmt::Write;
@@ -19,12 +18,11 @@ pub struct ContextOutput {
     pub depth: u32,
 }
 
-pub struct ContextOptions<'a> {
-    pub target: Option<&'a str>,
+pub struct ContextOptions {
+    pub targets: Vec<String>,
     pub depth: u32,
     pub max_tokens: Option<usize>,
     pub encoding: tokens::Encoding,
-    pub from_stdin: bool,
 }
 
 fn build_context_output(
@@ -106,50 +104,36 @@ fn build_context_output(
 }
 
 pub fn run(config: &Config, ctx: &OutputContext, opts: &ContextOptions) -> Result<()> {
-    let targets: Vec<String> = if opts.from_stdin
-        || (opts.target.is_none() && util::is_stdin_piped())
-    {
-        util::read_stdin_ndjson()?
-    } else if let Some(t) = opts.target {
-        vec![t.to_string()]
-    } else {
-        anyhow::bail!(
-            "No target specified and no stdin pipe detected. Provide a target or use --from-stdin."
-        );
-    };
-
-    let depth = opts.depth;
     let graph = Graph::load(config)?;
-
-    let encoding = opts.encoding;
 
     match ctx.format {
         OutputFormat::Text => {
-            for t in &targets {
-                let output = build_context_output(&graph, t, depth, opts.max_tokens, encoding)?;
+            for t in &opts.targets {
+                let output =
+                    build_context_output(&graph, t, opts.depth, opts.max_tokens, opts.encoding)?;
                 println!("{}", output.context);
                 eprintln!(
                     "[context: {} tokens, encoding: {}, depth: {}, max_tokens: {}]",
                     output.estimated_tokens,
                     output.encoding,
-                    depth,
+                    opts.depth,
                     opts.max_tokens
                         .map_or("unlimited".to_string(), |m| m.to_string())
                 );
-                if targets.len() > 1 {
+                if opts.targets.len() > 1 {
                     println!();
                 }
             }
         }
         OutputFormat::Json => {
             let mut all_outputs = Vec::new();
-            for t in &targets {
+            for t in &opts.targets {
                 all_outputs.push(build_context_output(
                     &graph,
                     t,
-                    depth,
+                    opts.depth,
                     opts.max_tokens,
-                    encoding,
+                    opts.encoding,
                 )?);
             }
             if all_outputs.len() == 1 {
@@ -159,8 +143,9 @@ pub fn run(config: &Config, ctx: &OutputContext, opts: &ContextOptions) -> Resul
             }
         }
         OutputFormat::Ndjson => {
-            for t in &targets {
-                let output = build_context_output(&graph, t, depth, opts.max_tokens, encoding)?;
+            for t in &opts.targets {
+                let output =
+                    build_context_output(&graph, t, opts.depth, opts.max_tokens, opts.encoding)?;
                 println!("{}", serde_json::to_string(&output)?);
             }
         }

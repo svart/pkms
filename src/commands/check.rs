@@ -121,40 +121,40 @@ fn link_target_exists(target: &str, db_root: &Path) -> bool {
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn run(
-    config: &Config,
-    ctx: &OutputContext,
-    stats: bool,
-    file_links: bool,
-    attachment_links: bool,
-    id_links: bool,
-    filetags: bool,
-    agenda: bool,
-    self_links: bool,
-    overlinks: bool,
-    cross_links: Option<Vec<String>>,
-) -> Result<ExitCode> {
+pub struct CheckOptions {
+    pub stats: bool,
+    pub file_links: bool,
+    pub attachment_links: bool,
+    pub id_links: bool,
+    pub filetags: bool,
+    pub agenda: bool,
+    pub self_links: bool,
+    pub overlinks: bool,
+    pub cross_links: Option<Vec<String>>,
+}
+
+pub fn run(config: &Config, ctx: &OutputContext, opts: &CheckOptions) -> Result<ExitCode> {
     let graph = Graph::load(config)?;
     let db_root = config.resolved_db_root()?;
 
-    let cross_links_specified = cross_links.is_some();
-    let any_explicit = stats
-        || id_links
-        || file_links
-        || attachment_links
-        || filetags
-        || agenda
-        || self_links
-        || overlinks
+    let cross_links_specified = opts.cross_links.is_some();
+    let any_explicit = opts.stats
+        || opts.id_links
+        || opts.file_links
+        || opts.attachment_links
+        || opts.filetags
+        || opts.agenda
+        || opts.self_links
+        || opts.overlinks
         || cross_links_specified;
-    let show_stats = stats || !any_explicit;
-    let show_id = id_links || !any_explicit;
-    let show_file = file_links || !any_explicit;
-    let show_attach = attachment_links || !any_explicit;
-    let show_filetags = filetags || !any_explicit;
-    let show_agenda = agenda || !any_explicit;
-    let show_self_links = self_links || !any_explicit;
-    let show_overlinks = overlinks || !any_explicit;
+    let show_stats = opts.stats || !any_explicit;
+    let show_id = opts.id_links || !any_explicit;
+    let show_file = opts.file_links || !any_explicit;
+    let show_attach = opts.attachment_links || !any_explicit;
+    let show_filetags = opts.filetags || !any_explicit;
+    let show_agenda = opts.agenda || !any_explicit;
+    let show_self_links = opts.self_links || !any_explicit;
+    let show_overlinks = opts.overlinks || !any_explicit;
 
     let mut broken_file = Vec::new();
     let mut broken_attachment = Vec::new();
@@ -248,7 +248,7 @@ pub fn run(
         vec![]
     };
 
-    let cross_link_result = if let Some(pair) = cross_links {
+    let cross_link_result = if let Some(ref pair) = opts.cross_links {
         let node_a = graph.resolve_target(&pair[0])?;
         let node_b = graph.resolve_target(&pair[1])?;
         let a_to_b = node_a

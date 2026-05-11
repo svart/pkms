@@ -42,38 +42,38 @@ fn find_note_by_title(
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn run(
-    config: &Config,
-    ctx: &OutputContext,
-    title: &str,
-    create: bool,
-    tags: Option<&str>,
-    aliases: Option<&str>,
-    heading: Option<&str>,
-) -> Result<()> {
+pub struct NewOptions {
+    pub title: String,
+    pub create: bool,
+    pub tags: Option<Vec<String>>,
+    pub aliases: Option<Vec<String>>,
+    pub heading: Option<String>,
+}
+
+pub fn run(config: &Config, ctx: &OutputContext, opts: &NewOptions) -> Result<()> {
     let db_root = config.resolved_db_root()?;
     let ignore = config.resolve_ignore_patterns();
     let new_notes_dir = config.resolve_new_notes_dir(db_root);
 
     let uuid = uuid::Uuid::new_v4().to_string();
-    let slug = title_to_slug(title);
+    let slug = title_to_slug(&opts.title);
     let now = chrono::Local::now();
     let timestamp = now.format("%Y%m%d%H%M%S").to_string();
     let filename = format!("{timestamp}-{slug}.org");
     let path = new_notes_dir.join(&filename);
 
-    if create {
+    if opts.create {
         std::fs::create_dir_all(&new_notes_dir)?;
     }
 
     let mut created = false;
-    let heading_output = if let Some(heading_title) = heading {
-        if !create {
+    let heading_output = if let Some(ref heading_title) = opts.heading {
+        if !opts.create {
             anyhow::bail!(
                 "Cannot use --heading without --create. The note file must exist to add a heading UUID."
             );
         }
-        let existing = find_note_by_title(db_root, &ignore, title);
+        let existing = find_note_by_title(db_root, &ignore, &opts.title);
         if let Some(note_path) = existing {
             let content = std::fs::read_to_string(&note_path)
                 .with_context(|| format!("Failed to read {}", note_path.display()))?;
@@ -84,40 +84,43 @@ pub fn run(
             })
         } else {
             anyhow::bail!(
-                "Note not found with title \"{title}\". \
-                 Create the note first with `pkms new \"{title}\" --create`."
+                "Note not found with title \"{}\". \
+                 Create the note first with `pkms new \"{}\" --create`.",
+                opts.title,
+                opts.title
             );
         }
     } else {
         None
     };
 
-    if create && heading_output.is_none() {
-        let mut content = format!(":PROPERTIES:\n:ID:       {uuid}\n:END:\n#+title: {title}\n");
+    if opts.create && heading_output.is_none() {
+        let mut content = format!(
+            ":PROPERTIES:\n:ID:       {uuid}\n:END:\n#+title: {}\n",
+            opts.title
+        );
 
-        if let Some(tags_str) = tags {
-            let tags_list: Vec<&str> = tags_str.split(',').map(str::trim).collect();
-            if !tags_list.is_empty() {
-                let ft = tags_list.iter().fold(String::new(), |mut acc, t| {
-                    let _ = write!(acc, ":{t}:");
-                    acc
-                });
-                let _ = writeln!(content, "#+filetags: {ft}");
-            }
+        if let Some(ref tags) = opts.tags
+            && !tags.is_empty()
+        {
+            let ft = tags.iter().fold(String::new(), |mut acc, t| {
+                let _ = write!(acc, ":{t}:");
+                acc
+            });
+            let _ = writeln!(content, "#+filetags: {ft}");
         }
 
-        if let Some(aliases_str) = aliases {
-            let aliases_list: Vec<&str> = aliases_str.split(',').map(str::trim).collect();
-            if !aliases_list.is_empty() {
-                content.push_str(":PROPERTIES:\n");
-                let _ = writeln!(content, ":ROAM_ALIASES: {}", aliases_list.join(" "));
-                content.push_str(":END:\n");
-            }
+        if let Some(ref aliases) = opts.aliases
+            && !aliases.is_empty()
+        {
+            content.push_str(":PROPERTIES:\n");
+            let _ = writeln!(content, ":ROAM_ALIASES: {}", aliases.join(" "));
+            content.push_str(":END:\n");
         }
 
         std::fs::write(&path, &content)?;
         created = true;
-    } else if create && heading_output.is_some() {
+    } else if opts.create && heading_output.is_some() {
         created = true;
     }
 
@@ -125,7 +128,7 @@ pub fn run(
         uuid,
         filename,
         path: path.clone(),
-        title: title.to_string(),
+        title: opts.title.clone(),
         created,
         heading: heading_output,
     };
@@ -141,7 +144,7 @@ pub fn run(
         if let Some(ref h) = output.heading {
             println!("  Heading UUID: {} ({})", h.uuid, h.title);
         }
-        if create {
+        if opts.create {
             println!("  Status:   created");
         } else {
             println!("  Status:   dry-run (use --create to write)");

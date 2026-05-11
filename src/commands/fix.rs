@@ -15,12 +15,6 @@ pub struct FixOutput {
     pub applied: bool,
 }
 
-fn validate_uuid(s: &str) -> Result<String> {
-    Ok(uuid::Uuid::parse_str(s)
-        .map_err(|_| anyhow::anyhow!("Invalid UUID format: {s}"))?
-        .to_string())
-}
-
 fn print_fix_output(ctx: &OutputContext, output: &FixOutput) -> Result<()> {
     if ctx.is_json() {
         ctx.print_json(output)?;
@@ -96,35 +90,37 @@ fn find_and_replace_links(
     Ok((files_affected, total_replacements))
 }
 
-pub fn run(
-    config: &Config,
-    ctx: &OutputContext,
-    broken_uuid: &str,
-    target: &str,
-    apply: bool,
-) -> Result<()> {
+pub struct FixOptions {
+    pub broken_uuid: String,
+    pub target_uuid: String,
+    pub apply: bool,
+}
+
+pub fn run(config: &Config, ctx: &OutputContext, opts: &FixOptions) -> Result<()> {
     let graph = Graph::load(config)?;
     let db_root = config.resolved_db_root()?;
 
-    let broken = validate_uuid(broken_uuid)?;
-    let target_uuid = validate_uuid(target)?;
-
     let (replacement_uuid, replacement_title) = graph
         .nodes
-        .get(&target_uuid)
+        .get(&opts.target_uuid)
         .map(|n| (n.uuid.clone(), n.title.clone()))
-        .ok_or_else(|| anyhow::anyhow!("Replacement UUID not found in database: {target}"))?;
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "Replacement UUID not found in database: {}",
+                opts.target_uuid
+            )
+        })?;
 
     let (files_affected, total_replacements) =
-        find_and_replace_links(db_root, &broken, &replacement_uuid, apply)?;
+        find_and_replace_links(db_root, &opts.broken_uuid, &replacement_uuid, opts.apply)?;
 
     let output = FixOutput {
-        broken_uuid: broken.clone(),
+        broken_uuid: opts.broken_uuid.clone(),
         replacement_uuid: replacement_uuid.clone(),
         replacement_title,
         files_affected: files_affected.clone(),
         total_replacements,
-        applied: apply,
+        applied: opts.apply,
     };
 
     print_fix_output(ctx, &output)

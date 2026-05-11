@@ -151,27 +151,26 @@ fn scan_one_note(
     }
 }
 
-pub struct ResolveOptions<'a> {
-    pub uuid: Option<&'a str>,
-    pub title: Option<&'a str>,
-    pub tags: Option<&'a str>,
+pub struct ResolveOptions {
+    pub uuid: Option<String>,
+    pub title: Option<String>,
+    pub tags: Option<Vec<String>>,
     pub limit: Option<usize>,
-    pub fields: Option<&'a str>,
+    pub fields: Option<Vec<String>>,
     pub todos: bool,
 }
 
 pub fn run(config: &Config, ctx: &OutputContext, opts: &ResolveOptions) -> Result<()> {
     let db_root = config.resolved_db_root()?;
     let ignore = config.resolve_ignore_patterns();
-    let uuid_query = opts.uuid;
-    let notes = scan_files(db_root, &ignore, uuid_query);
+    let notes = scan_files(db_root, &ignore, opts.uuid.as_deref());
 
-    let title_query = opts.title.map(str::to_lowercase);
+    let title_query = opts.title.as_ref().map(|s| s.to_lowercase());
 
     let mut all: Vec<ResolvedNote> = notes
         .into_iter()
         .filter(|n| {
-            if let Some(uq) = opts.uuid
+            if let Some(ref uq) = opts.uuid
                 && !n.uuid.to_lowercase().contains(&uq.to_lowercase())
                 && n.matched_heading_uuid
                     .as_ref()
@@ -190,12 +189,11 @@ pub fn run(config: &Config, ctx: &OutputContext, opts: &ResolveOptions) -> Resul
                     return false;
                 }
             }
-            if let Some(t) = opts.tags {
-                let wanted: Vec<&str> = t.split(',').map(str::trim).collect();
-                let matches_tag = wanted
+            if let Some(ref tags) = opts.tags {
+                let matches_tag = tags
                     .iter()
                     .any(|w| n.filetags.iter().any(|ft| ft.contains(w)));
-                let matches_category = wanted
+                let matches_category = tags
                     .iter()
                     .any(|w| n.categories.iter().any(|c| c.contains(w)));
                 if !matches_tag && !matches_category {
@@ -220,14 +218,14 @@ pub fn run(config: &Config, ctx: &OutputContext, opts: &ResolveOptions) -> Resul
         (all, None)
     };
 
-    let field_set: Option<HashSet<String>> = opts
-        .fields
-        .map(|f| f.split(',').map(|s| s.trim().to_string()).collect());
+    let field_set: Option<HashSet<String>> =
+        opts.fields.as_ref().map(|f| f.iter().cloned().collect());
 
     let query_str = opts
         .title
-        .or(opts.uuid)
-        .or(opts.tags)
+        .as_deref()
+        .or(opts.uuid.as_deref())
+        .or_else(|| opts.tags.as_ref().map(|_| "tags"))
         .unwrap_or_default()
         .to_string();
 

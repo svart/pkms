@@ -3,7 +3,6 @@ use crate::config::Config;
 use crate::graph::{Graph, resolve_file_link_path};
 use crate::output::OutputContext;
 use crate::parser::{Link, validate_filetags_format};
-use crate::util;
 use anyhow::Result;
 use regex::Regex;
 use serde::Serialize;
@@ -347,28 +346,17 @@ fn validate_one(graph: &Graph, target: &str, db_root: &Path) -> Result<ValidateO
     ))
 }
 
-pub fn run(
-    config: &Config,
-    ctx: &OutputContext,
-    target: Option<&str>,
-    from_stdin: bool,
-) -> Result<()> {
-    let targets: Vec<String> = if from_stdin || (target.is_none() && util::is_stdin_piped()) {
-        util::read_stdin_ndjson()?
-    } else if let Some(t) = target {
-        vec![t.to_string()]
-    } else {
-        anyhow::bail!(
-            "No target specified and no stdin pipe detected. Provide a target or use --from-stdin."
-        );
-    };
+pub struct ValidateOptions {
+    pub targets: Vec<String>,
+}
 
+pub fn run(config: &Config, ctx: &OutputContext, opts: &ValidateOptions) -> Result<()> {
     let graph = Graph::load(config)?;
     let db_root = config.resolved_db_root()?;
 
     match ctx.format {
         OutputFormat::Text => {
-            for t in &targets {
+            for t in &opts.targets {
                 let node = graph.resolve_target(t)?.clone();
                 let incoming = graph.backlinks.get(&node.uuid).cloned().unwrap_or_default();
                 let output = validate_one(&graph, t, db_root)?;
@@ -379,14 +367,14 @@ pub fn run(
                     &incoming,
                     &output.issues,
                 );
-                if targets.len() > 1 {
+                if opts.targets.len() > 1 {
                     println!();
                 }
             }
         }
         OutputFormat::Json => {
             let mut all_outputs = Vec::new();
-            for t in &targets {
+            for t in &opts.targets {
                 all_outputs.push(validate_one(&graph, t, db_root)?);
             }
             if all_outputs.len() == 1 {
@@ -396,7 +384,7 @@ pub fn run(
             }
         }
         OutputFormat::Ndjson => {
-            for t in &targets {
+            for t in &opts.targets {
                 let output = validate_one(&graph, t, db_root)?;
                 println!("{}", serde_json::to_string(&output)?);
             }

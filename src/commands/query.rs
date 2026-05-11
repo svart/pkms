@@ -35,22 +35,20 @@ pub struct ContextLine {
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn run(
-    config: &Config,
-    ctx: &OutputContext,
-    terms: Option<&str>,
-    limit: Option<usize>,
-    only_tags: bool,
-    only_title: bool,
-    only_content: bool,
-    only_todos: bool,
-    use_embed: bool,
-) -> Result<()> {
-    let terms = terms.ok_or_else(|| anyhow::anyhow!("No search terms specified. Provide terms"))?;
+pub struct QueryOptions {
+    pub terms: String,
+    pub limit: Option<usize>,
+    pub tags: bool,
+    pub title: bool,
+    pub content: bool,
+    pub todos: bool,
+    pub embed: bool,
+}
 
+pub fn run(config: &Config, ctx: &OutputContext, opts: &QueryOptions) -> Result<()> {
     let graph = Graph::load(config)?;
 
-    let mut combined = if use_embed {
+    let mut combined = if opts.embed {
         #[cfg(feature = "embed")]
         {
             search_by_embedding(&graph, terms)?
@@ -60,21 +58,21 @@ pub fn run(
             anyhow::bail!("--embed requires building with the 'embed' feature enabled")
         }
     } else {
-        search_by_text(&graph, terms, only_tags, only_title, only_content)?
+        search_by_text(&graph, &opts.terms, opts.tags, opts.title, opts.content)?
     };
 
-    if only_todos {
+    if opts.todos {
         combined.retain(|r| graph.nodes.get(&r.uuid).is_some_and(|n| n.has_todos));
     }
 
     let total_results = combined.len();
-    let showed = limit.map(|l| {
+    let showed = opts.limit.map(|l| {
         let shown = combined.len().min(l);
         combined.truncate(l);
         shown
     });
 
-    print_query_output(ctx, terms, combined, total_results, showed)?;
+    print_query_output(ctx, &opts.terms, combined, total_results, showed)?;
 
     Ok(())
 }
