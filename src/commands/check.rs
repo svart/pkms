@@ -88,7 +88,7 @@ pub struct AgendaIssue {
     pub issue: String,
 }
 
-fn link_target_exists(target: &str, db_root: &Path) -> bool {
+fn link_target_exists(target: &str, source_path: &Path, db_root: &Path) -> bool {
     let expanded = if target.starts_with('~') {
         if let Some(home) = dirs::home_dir() {
             target.replacen('~', &home.to_string_lossy(), 1)
@@ -103,7 +103,7 @@ fn link_target_exists(target: &str, db_root: &Path) -> bool {
     let full_path = if path.is_absolute() {
         path.to_path_buf()
     } else {
-        db_root.join(path)
+        source_path.parent().unwrap_or(db_root).join(path)
     };
     if !full_path.exists() {
         return false;
@@ -163,7 +163,7 @@ pub fn run(config: &Config, ctx: &OutputContext, opts: &CheckOptions) -> Result<
         for node in graph.nodes.values() {
             for link in &node.outgoing {
                 if let Link::File(target) = link
-                    && !link_target_exists(target, db_root)
+                    && !link_target_exists(target, &node.path, db_root)
                 {
                     broken_file.push(BrokenFileLinkEntry {
                         source_uuid: node.uuid.clone(),
@@ -179,7 +179,7 @@ pub fn run(config: &Config, ctx: &OutputContext, opts: &CheckOptions) -> Result<
         for node in graph.nodes.values() {
             for link in &node.outgoing {
                 if let Link::Attachment(target) = link
-                    && !link_target_exists(target, db_root)
+                    && !link_target_exists(target, &node.path, db_root)
                 {
                     broken_attachment.push(BrokenAttachmentLinkEntry {
                         source_uuid: node.uuid.clone(),

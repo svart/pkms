@@ -239,7 +239,7 @@ fn validate_one(graph: &Graph, target: &str, db_root: &Path) -> Result<ValidateO
                 let full_path = if file_path.is_absolute() {
                     file_path.to_path_buf()
                 } else {
-                    db_root.join(file_path)
+                    node.path.parent().unwrap_or(db_root).join(file_path)
                 };
                 if !full_path.exists() {
                     broken_files.push(path_str.clone());
@@ -268,7 +268,7 @@ fn validate_one(graph: &Graph, target: &str, db_root: &Path) -> Result<ValidateO
                 issues.push(format!("Self-link via id link: {}", uuid));
             }
             Link::File(path) => {
-                let resolved = resolve_file_link_path(path, db_root);
+                let resolved = resolve_file_link_path(path, &node.path, db_root);
                 if resolved == node.path {
                     if target == node.uuid || !target_is_uuid || is_heading_node {
                         issues.push(if is_heading_node {

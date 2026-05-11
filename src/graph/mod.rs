@@ -98,7 +98,7 @@ pub struct OverlinkEntry {
     pub count: usize,
 }
 
-pub fn resolve_file_link_path(target_path: &str, db_root: &Path) -> PathBuf {
+pub fn resolve_file_link_path(target_path: &str, source_path: &Path, db_root: &Path) -> PathBuf {
     let expanded = if target_path.starts_with('~') {
         if let Some(home) = dirs::home_dir() {
             target_path.replacen('~', &home.to_string_lossy(), 1)
@@ -113,7 +113,7 @@ pub fn resolve_file_link_path(target_path: &str, db_root: &Path) -> PathBuf {
     if path.is_absolute() {
         path.to_path_buf()
     } else {
-        db_root.join(path)
+        source_path.parent().unwrap_or(db_root).join(path)
     }
 }
 
@@ -151,7 +151,7 @@ impl Graph {
                             });
                         }
                         Link::File(target_path) => {
-                            let resolved = resolve_file_link_path(target_path, db_root);
+                            let resolved = resolve_file_link_path(target_path, &node.path, db_root);
                             if resolved == *path {
                                 let suggestion = if has_headings {
                                     Some(format!(
