@@ -74,25 +74,6 @@ fn test_agenda_include() {
 }
 
 #[test]
-fn test_agenda_missing_agenda() {
-    let (_dir, root) = setup_db();
-    let (v, status) = run_json(&[
-        "--db",
-        root.to_str().unwrap(),
-        "--output-format",
-        "json",
-        "agenda",
-        "--missing-agenda",
-    ]);
-    assert!(status.success());
-    let items = v["items"].as_array().unwrap();
-    assert!(!items.is_empty(), "expected items missing agenda");
-    for item in items {
-        assert_eq!(item["has_agenda_tag"], false);
-    }
-}
-
-#[test]
 fn test_agenda_exclude() {
     let (_dir, root) = setup_db();
     let (v, status) = run_json(&[

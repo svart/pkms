@@ -98,25 +98,6 @@ fn test_todo_exclude() {
 }
 
 #[test]
-fn test_todo_missing_agenda() {
-    let (_dir, root) = setup_db();
-    let (v, status) = run_json(&[
-        "--db",
-        root.to_str().unwrap(),
-        "--output-format",
-        "json",
-        "todo",
-        "--missing-agenda",
-    ]);
-    assert!(status.success());
-    let items = v["items"].as_array().unwrap();
-    assert!(!items.is_empty(), "expected items missing agenda");
-    for item in items {
-        assert_eq!(item["has_agenda_tag"], false);
-    }
-}
-
-#[test]
 fn test_todo_sort_state() {
     let (_dir, root) = setup_db();
     let (stdout, _stderr, status) =

@@ -389,7 +389,6 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
         )
         .map(|()| ExitCode::SUCCESS)?,
         Command::Todo {
-            missing_agenda,
             include,
             exclude,
             sort,
@@ -398,7 +397,6 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
             cfg,
             ctx,
             &commands::todo::TodoOptions {
-                missing_agenda: *missing_agenda,
                 include: include
                     .as_deref()
                     .map(|s| s.split(',').map(|s| s.trim().to_string()).collect())
@@ -413,7 +411,6 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
         )
         .map(|()| ExitCode::SUCCESS)?,
         Command::Agenda {
-            missing_agenda,
             include,
             exclude,
             overdue,
@@ -426,7 +423,6 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
             cfg,
             ctx,
             &commands::agenda::AgendaOptions {
-                missing_agenda: *missing_agenda,
                 include: include
                     .as_deref()
                     .map(|s| s.split(',').map(|s| s.trim().to_string()).collect())

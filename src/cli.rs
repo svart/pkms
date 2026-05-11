@@ -230,8 +230,6 @@ pub enum Command {
     },
     #[command(about = "Display upcoming and overdue items with SCHEDULED/DEADLINE dates")]
     Agenda {
-        #[arg(long, help = "Only show items missing :agenda: filetag")]
-        missing_agenda: bool,
         #[arg(
             long,
             help = "Include only these TODO states (comma-separated, no filtering by default)"
@@ -260,8 +258,6 @@ pub enum Command {
     },
     #[command(about = "Display TODO items grouped by state")]
     Todo {
-        #[arg(long, help = "Only show items missing :agenda: filetag")]
-        missing_agenda: bool,
         #[arg(
             long,
             help = "Include only these TODO states (comma-separated, no filtering by default)"

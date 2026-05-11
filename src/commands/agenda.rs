@@ -53,7 +53,6 @@ fn heading_is_eligible(heading: &crate::parser::Heading) -> bool {
 }
 
 pub struct AgendaOptions {
-    pub missing_agenda: bool,
     pub include: Vec<String>,
     pub exclude: Vec<String>,
     pub overdue: bool,
@@ -116,10 +115,6 @@ pub fn run(config: &Config, ctx: &OutputContext, opts: &AgendaOptions) -> Result
                     .iter()
                     .any(|es| es.eq_ignore_ascii_case(todo_state))
             {
-                continue;
-            }
-
-            if opts.missing_agenda && has_agenda {
                 continue;
             }
 

@@ -56,7 +56,6 @@ fn heading_is_eligible(heading: &crate::parser::Heading, valid_states: &[String]
 }
 
 pub struct TodoOptions {
-    pub missing_agenda: bool,
     pub include: Vec<String>,
     pub exclude: Vec<String>,
     pub sort: Option<String>,
@@ -105,10 +104,6 @@ pub fn run(config: &Config, ctx: &OutputContext, opts: &TodoOptions) -> Result<(
                     .iter()
                     .any(|es| es.eq_ignore_ascii_case(todo_state))
             {
-                continue;
-            }
-
-            if opts.missing_agenda && has_agenda {
                 continue;
             }
 
