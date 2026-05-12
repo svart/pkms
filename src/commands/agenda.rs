@@ -5,7 +5,7 @@ use crate::org_date::parse_org_date;
 use crate::output::OutputContext;
 use crate::parser::{find_daily_file_date, strip_org_links};
 use anyhow::Result;
-use chrono::{Datelike, Local, NaiveDate, Timelike};
+use chrono::{Local, NaiveDate, Timelike};
 use serde::Serialize;
 use tabled::builder::Builder;
 use tabled::settings::style::{HorizontalLine, Style};
@@ -70,18 +70,16 @@ pub fn run(config: &Config, ctx: &OutputContext, opts: &AgendaOptions) -> Result
     let graph = Graph::load(config)?;
 
     let today_date = Local::now().date_naive();
-    let week_start = today_date
-        - chrono::Duration::days((today_date.weekday().num_days_from_monday() as i64).min(6));
 
-    let date_filter = opts.date.or({
-        if opts.today {
-            Some(today_date)
-        } else if opts.week {
-            Some(week_start)
-        } else {
-            None
-        }
-    });
+    let date_filter = opts
+        .date
+        .or(if opts.today { Some(today_date) } else { None });
+
+    let week_cutoff = if opts.week {
+        Some(today_date + chrono::Duration::days(7))
+    } else {
+        None
+    };
 
     let closed_states = config.closed_todo_states();
     let mut items: Vec<AgendaItem> = Vec::new();
@@ -136,7 +134,17 @@ pub fn run(config: &Config, ctx: &OutputContext, opts: &AgendaOptions) -> Result
             let item_is_overdue =
                 is_overdue(heading.deadline.as_ref()) || is_overdue(heading.scheduled.as_ref());
 
-            if let Some(filter_date) = date_filter {
+            if let Some(cutoff) = week_cutoff {
+                let item_date = item_scheduled_date
+                    .as_deref()
+                    .or(item_deadline_date.as_deref())
+                    .or(daily_date.as_deref())
+                    .and_then(|d| NaiveDate::parse_from_str(d, "%Y-%m-%d").ok());
+                let matches = item_date.is_some_and(|d| d <= cutoff);
+                if !matches {
+                    continue;
+                }
+            } else if let Some(filter_date) = date_filter {
                 let matches = item_scheduled_date.as_deref()
                     == Some(&filter_date.format("%Y-%m-%d").to_string())
                     || item_deadline_date.as_deref()
