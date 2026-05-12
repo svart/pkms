@@ -1,56 +1,115 @@
 use chrono::{NaiveDate, NaiveTime};
-use regex::Regex;
 use serde::Serialize;
-use std::sync::LazyLock;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct OrgDate {
     pub base_date: NaiveDate,
     pub has_time: bool,
     pub time: Option<NaiveTime>,
+    pub time_end: Option<NaiveTime>,
+    pub inactive: bool,
     pub repeater: Option<String>,
     pub warning: Option<String>,
     pub raw: String,
 }
 
-static ORG_DATE_RE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(
-        r"^<(\d{4}-\d{2}-\d{2})(?:\s+\S+)?(?:\s+(\d{2}:\d{2}))?(?:\s+((?:\.\+|\+\+|\+)\d+[wdmy]))?(?:\s+(-\d+[wdmy]))?>$",
-    )
-    .unwrap()
-});
-
 pub fn parse_org_date(raw: &str) -> Option<OrgDate> {
     let trimmed = raw.trim();
-    let cap = ORG_DATE_RE.captures(trimmed)?;
-    let base_date = NaiveDate::parse_from_str(cap.get(1)?.as_str(), "%Y-%m-%d").ok()?;
 
-    let time_str = cap.get(2).map(|m| m.as_str());
-    let has_time = time_str.is_some();
-    let time = time_str.and_then(|t| NaiveTime::parse_from_str(t, "%H:%M").ok());
-    let repeater = cap.get(3).map(|m| m.as_str().to_string());
-    let warning = cap.get(4).map(|m| m.as_str().to_string());
+    let (inactive, inner) = if trimmed.starts_with('<') && trimmed.ends_with('>') {
+        (false, &trimmed[1..trimmed.len() - 1])
+    } else if trimmed.starts_with('[') && trimmed.ends_with(']') {
+        (true, &trimmed[1..trimmed.len() - 1])
+    } else {
+        return None;
+    };
+
+    let inner = inner.trim();
+    if inner.is_empty() {
+        return None;
+    }
+
+    if inner.starts_with('%') {
+        return None;
+    }
+
+    let tokens: Vec<&str> = inner.split_whitespace().collect();
+    let base_date = NaiveDate::parse_from_str(tokens[0], "%Y-%m-%d").ok()?;
+
+    let mut has_time = false;
+    let mut time = None;
+    let mut time_end = None;
+    let mut repeater = None;
+    let mut warning = None;
+
+    for token in &tokens[1..] {
+        if token.is_empty() {
+            continue;
+        }
+        if token.contains(':') {
+            has_time = true;
+            if let Some(pos) = token.find('-') {
+                let start = NaiveTime::parse_from_str(&token[..pos], "%H:%M").ok()?;
+                let end = NaiveTime::parse_from_str(&token[pos + 1..], "%H:%M").ok()?;
+                time = Some(start);
+                time_end = Some(end);
+            } else {
+                time = Some(NaiveTime::parse_from_str(token, "%H:%M").ok()?);
+            }
+        } else if token.starts_with('+') || token.starts_with('.') {
+            if !is_valid_repeater(token) {
+                return None;
+            }
+            repeater = Some(token.to_string());
+        } else if token.starts_with('-') {
+            if !is_valid_warning(token) {
+                return None;
+            }
+            warning = Some(token.to_string());
+        }
+    }
 
     Some(OrgDate {
         base_date,
         has_time,
         time,
+        time_end,
+        inactive,
         repeater,
         warning,
         raw: raw.to_string(),
     })
 }
 
-#[allow(dead_code)]
-pub fn extract_timestamp(raw: &str) -> Option<String> {
-    org_timestamp_re().find(raw).map(|m| m.as_str().to_string())
+fn is_valid_repeater(s: &str) -> bool {
+    let body = s
+        .strip_prefix(".+")
+        .or_else(|| s.strip_prefix("++"))
+        .or_else(|| s.strip_prefix('+'))
+        .unwrap_or(s);
+    if body.len() < 2 {
+        return false;
+    }
+    let (num_str, unit) = body.split_at(body.len() - 1);
+    if num_str.is_empty() {
+        return false;
+    }
+    num_str.chars().all(|c| c.is_ascii_digit()) && matches!(unit, "h" | "d" | "w" | "m" | "y")
 }
 
-fn org_timestamp_re() -> &'static Regex {
-    static RE: LazyLock<Regex> = LazyLock::new(|| {
-        Regex::new(r"<(\d{4}-\d{2}-\d{2}(?:\s+\S+)?(?:\s+\d{2}:\d{2})?(?:\s+[+-]+\.?\d+[wdmy])?(?:\s+-?\d+[wdmy])?)>").unwrap()
-    });
-    &RE
+fn is_valid_warning(s: &str) -> bool {
+    let body = s
+        .strip_prefix("--")
+        .or_else(|| s.strip_prefix('-'))
+        .unwrap_or(s);
+    if body.len() < 2 {
+        return false;
+    }
+    let (num_str, unit) = body.split_at(body.len() - 1);
+    if num_str.is_empty() {
+        return false;
+    }
+    num_str.chars().all(|c| c.is_ascii_digit()) && matches!(unit, "d" | "w" | "m" | "y")
 }
 
 #[cfg(test)]
@@ -64,8 +123,18 @@ mod tests {
         assert_eq!(d.base_date, NaiveDate::from_ymd_opt(2026, 5, 10).unwrap());
         assert!(!d.has_time);
         assert!(d.time.is_none());
+        assert!(d.time_end.is_none());
+        assert!(!d.inactive);
         assert!(d.repeater.is_none());
         assert!(d.warning.is_none());
+    }
+
+    #[test]
+    fn test_date_without_dayname() {
+        let d = parse_org_date("<2026-05-10>").unwrap();
+        assert_eq!(d.base_date, NaiveDate::from_ymd_opt(2026, 5, 10).unwrap());
+        assert!(!d.has_time);
+        assert!(!d.inactive);
     }
 
     #[test]
@@ -74,6 +143,36 @@ mod tests {
         assert_eq!(d.base_date, NaiveDate::from_ymd_opt(2026, 5, 10).unwrap());
         assert!(d.has_time);
         assert_eq!(d.time.unwrap(), NaiveTime::from_hms_opt(14, 0, 0).unwrap());
+        assert!(d.time_end.is_none());
+    }
+
+    #[test]
+    fn test_time_range() {
+        let d = parse_org_date("<2026-05-10 Sun 10:00-12:00>").unwrap();
+        assert_eq!(d.base_date, NaiveDate::from_ymd_opt(2026, 5, 10).unwrap());
+        assert!(d.has_time);
+        assert_eq!(d.time.unwrap(), NaiveTime::from_hms_opt(10, 0, 0).unwrap());
+        assert_eq!(
+            d.time_end.unwrap(),
+            NaiveTime::from_hms_opt(12, 0, 0).unwrap()
+        );
+    }
+
+    #[test]
+    fn test_inactive_timestamp() {
+        let d = parse_org_date("[2006-11-01 Wed]").unwrap();
+        assert_eq!(d.base_date, NaiveDate::from_ymd_opt(2006, 11, 1).unwrap());
+        assert!(d.inactive);
+        assert!(!d.has_time);
+    }
+
+    #[test]
+    fn test_inactive_with_time() {
+        let d = parse_org_date("[2006-11-01 Wed 19:15]").unwrap();
+        assert_eq!(d.base_date, NaiveDate::from_ymd_opt(2006, 11, 1).unwrap());
+        assert!(d.inactive);
+        assert!(d.has_time);
+        assert_eq!(d.time.unwrap(), NaiveTime::from_hms_opt(19, 15, 0).unwrap());
     }
 
     #[test]
@@ -89,9 +188,23 @@ mod tests {
     }
 
     #[test]
+    fn test_hourly_repeater() {
+        let d = parse_org_date("<2026-05-10 Sun 12:30 +1h>").unwrap();
+        assert_eq!(d.repeater, Some("+1h".to_string()));
+        assert!(d.has_time);
+        assert_eq!(d.time.unwrap(), NaiveTime::from_hms_opt(12, 30, 0).unwrap());
+    }
+
+    #[test]
     fn test_with_warning() {
         let d = parse_org_date("<2026-05-10 Sun -3d>").unwrap();
         assert_eq!(d.warning, Some("-3d".to_string()));
+    }
+
+    #[test]
+    fn test_warning_double_dash() {
+        let d = parse_org_date("<2024-12-25 Sat --2d>").unwrap();
+        assert_eq!(d.warning, Some("--2d".to_string()));
     }
 
     #[test]
@@ -109,6 +222,8 @@ mod tests {
         assert!(parse_org_date("not a date").is_none());
         assert!(parse_org_date("<not-a-date>").is_none());
         assert!(parse_org_date("<2026-13-01>").is_none());
+        assert!(parse_org_date("").is_none());
+        assert!(parse_org_date("<>").is_none());
     }
 
     #[test]
@@ -129,16 +244,35 @@ mod tests {
     }
 
     #[test]
-    fn test_extract_timestamp() {
-        let raw = "<2026-05-10 Sun>";
-        assert_eq!(extract_timestamp(raw), Some(raw.to_string()));
+    fn test_diary_style_skipped() {
+        assert!(parse_org_date("<%%(diary-float t 4 2) 22:00-23:00>").is_none());
+    }
 
-        let raw = "SCHEDULED: <2026-05-10 Sun>";
-        assert_eq!(extract_timestamp(raw), Some("<2026-05-10 Sun>".to_string()));
+    #[test]
+    fn test_date_range_individual() {
+        let d = parse_org_date("<2004-08-23 Mon>").unwrap();
+        assert_eq!(d.base_date, NaiveDate::from_ymd_opt(2004, 8, 23).unwrap());
+        assert!(!d.inactive);
+    }
+
+    #[test]
+    fn test_invalid_repeater() {
+        assert!(parse_org_date("<2026-05-10 Sun +>").is_none());
+        assert!(parse_org_date("<2026-05-10 Sun +x>").is_none());
+        assert!(parse_org_date("<2026-05-10 Sun .>").is_none());
+        assert!(parse_org_date("<2026-05-10 Sun ++>").is_none());
+    }
+
+    #[test]
+    fn test_invalid_warning() {
+        assert!(parse_org_date("<2026-05-10 Sun ->").is_none());
+        assert!(parse_org_date("<2026-05-10 Sun -x>").is_none());
+        assert!(parse_org_date("<2026-05-10 Sun -->").is_none());
+        assert!(parse_org_date("<2026-05-10 Sun --x>").is_none());
     }
 
     #[test]
     fn test_no_timestamp() {
-        assert!(extract_timestamp("No timestamp here").is_none());
+        assert!(parse_org_date("No timestamp here").is_none());
     }
 }
