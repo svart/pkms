@@ -2,6 +2,7 @@ use crate::config::Config;
 use crate::graph::{DuplicateInfo, Graph, GraphStats, OverlinkEntry, SelfLinkEntry};
 use crate::output::OutputContext;
 use crate::parser::{Link, parse_note, validate_filetags_format};
+use crate::util;
 use anyhow::Result;
 use serde::Serialize;
 use std::path::Path;
@@ -185,14 +186,15 @@ pub fn run(config: &Config, ctx: &OutputContext, opts: &CheckOptions) -> Result<
     if show_attach {
         for node in graph.nodes.values() {
             for link in &node.outgoing {
-                if let Link::Attachment(target) = link
-                    && !link_target_exists(target, &node.path, db_root)
-                {
-                    broken_attachment.push(BrokenAttachmentLinkEntry {
-                        source_uuid: node.uuid.clone(),
-                        source_title: node.title.clone(),
-                        target_path: target.clone(),
-                    });
+                if let Link::Attachment(target) = link {
+                    let attach_path = util::resolve_attachment_path(db_root, &node.uuid, target);
+                    if !attach_path.exists() {
+                        broken_attachment.push(BrokenAttachmentLinkEntry {
+                            source_uuid: node.uuid.clone(),
+                            source_title: node.title.clone(),
+                            target_path: target.clone(),
+                        });
+                    }
                 }
             }
         }
