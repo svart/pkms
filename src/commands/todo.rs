@@ -9,8 +9,8 @@ use chrono::{Local, NaiveDate, NaiveDateTime, NaiveTime, Timelike};
 use serde::Serialize;
 use std::collections::BTreeMap;
 use tabled::builder::Builder;
-use tabled::settings::object::Columns;
-use tabled::settings::style::{HorizontalLine, Style};
+use tabled::settings::object::{Columns, Rows};
+use tabled::settings::style::{Border, Style};
 use tabled::settings::{Modify, Span, Width};
 
 #[derive(Debug, Clone, Serialize)]
@@ -49,7 +49,17 @@ fn is_overdue(raw: Option<&String>) -> bool {
         None => return false,
     };
     let today = Local::now().date_naive();
-    parsed.base_date < today
+    let compare_date = parsed.base_date_end.unwrap_or(parsed.base_date);
+    if compare_date < today {
+        return true;
+    }
+    if compare_date == today
+        && let Some(et) = parsed.time_end
+    {
+        let now = Local::now().time();
+        return now > et;
+    }
+    false
 }
 
 fn heading_is_eligible(heading: &crate::parser::Heading, valid_states: &[String]) -> bool {
@@ -69,6 +79,7 @@ pub struct TodoOptions {
     pub after: Option<NaiveDateTime>,
     pub before: Option<NaiveDateTime>,
     pub prio: Option<String>,
+    pub line_sep: bool,
 }
 
 fn item_datetimes(item: &TodoItem) -> Vec<NaiveDateTime> {
@@ -271,6 +282,7 @@ pub fn run(config: &Config, ctx: &OutputContext, opts: &TodoOptions) -> Result<(
                 shown,
                 total_before_limit,
                 &today_date,
+                opts.line_sep,
             ),
             OutputFormat::Json => {
                 ctx.print_json(&serde_json::json!({
@@ -304,7 +316,13 @@ pub fn run(config: &Config, ctx: &OutputContext, opts: &TodoOptions) -> Result<(
         let shown = items.len();
 
         match ctx.format {
-            OutputFormat::Text => print_todo_text(&items, shown, total_before_limit, &today_date),
+            OutputFormat::Text => print_todo_text(
+                &items,
+                shown,
+                total_before_limit,
+                &today_date,
+                opts.line_sep,
+            ),
             OutputFormat::Json => {
                 #[derive(Serialize)]
                 struct TodoOutput {
@@ -378,49 +396,101 @@ fn format_display_datetime(raw: &str) -> String {
     match parsed {
         Some(d) => {
             let date_str = d.base_date.format("%Y-%m-%d %a").to_string();
-            if let Some(t) = d.time {
+            let start_line = if let Some(t) = d.time {
                 format!("{} {:02}:{:02}", date_str, t.hour(), t.minute())
             } else {
-                date_str
+                date_str.clone()
+            };
+            if let Some(end_date) = d.base_date_end {
+                let end_date_str = end_date.format("%Y-%m-%d %a").to_string();
+                let end_line = if let Some(et) = d.time_end {
+                    format!("{} {:02}:{:02}", end_date_str, et.hour(), et.minute())
+                } else {
+                    end_date_str
+                };
+                return format!("{}\n{}", start_line, end_line);
             }
+            if let Some(et) = d.time_end {
+                let padding = " ".repeat(date_str.len() + 1);
+                return format!(
+                    "{}\n{}{:02}:{:02}",
+                    start_line,
+                    padding,
+                    et.hour(),
+                    et.minute()
+                );
+            }
+            start_line
         }
         None => raw.to_string(),
     }
 }
 
-fn format_todo_row(item: &TodoItem) -> [String; 6] {
-    let datetime = item
-        .scheduled
-        .as_ref()
-        .map(|s| format_display_datetime(s))
-        .or_else(|| item.deadline.as_ref().map(|d| format_display_datetime(d)))
-        .or_else(|| item.daily_file_date.clone())
-        .unwrap_or_default();
+fn format_todo_rows(item: &TodoItem) -> Vec<[String; 6]> {
     let state = item.todo_state.as_deref().unwrap_or("").to_string();
-    let sched = if item.scheduled_date.is_some() {
-        "SCHED"
-    } else if item.deadline_date.is_some() {
-        "DEADL"
-    } else {
-        ""
-    }
-    .to_string();
     let prio = item
         .priority
         .map(|p| format!("[#{}]", p))
         .unwrap_or_default();
-    [
-        datetime,
-        state,
-        sched,
-        prio,
-        item.title.clone(),
-        item.heading_title.clone(),
-    ]
+    let title = item.title.clone();
+    let heading = item.heading_title.clone();
+    let has_both = item.scheduled.is_some() && item.deadline.is_some();
+    let mut rows = Vec::new();
+
+    if let Some(ref s) = item.scheduled {
+        rows.push([
+            format_display_datetime(s),
+            state.clone(),
+            "SCHED".to_string(),
+            prio.clone(),
+            title.clone(),
+            heading.clone(),
+        ]);
+    }
+
+    if let Some(ref d) = item.deadline {
+        rows.push([
+            format_display_datetime(d),
+            if has_both {
+                String::new()
+            } else {
+                state.clone()
+            },
+            "DEADL".to_string(),
+            if has_both {
+                String::new()
+            } else {
+                prio.clone()
+            },
+            if has_both {
+                String::new()
+            } else {
+                title.clone()
+            },
+            if has_both {
+                String::new()
+            } else {
+                heading.clone()
+            },
+        ]);
+    }
+
+    if rows.is_empty()
+        && let Some(ref dfd) = item.daily_file_date
+    {
+        rows.push([dfd.clone(), state, String::new(), prio, title, heading]);
+    }
+
+    rows
 }
 
-fn push_todo_row(builder: &mut Builder, item: &TodoItem) {
-    builder.push_record(format_todo_row(item));
+fn push_todo_rows(builder: &mut Builder, item: &TodoItem) -> usize {
+    let rows = format_todo_rows(item);
+    let count = rows.len();
+    for row in rows {
+        builder.push_record(row);
+    }
+    count
 }
 
 fn print_todo_text(
@@ -428,6 +498,7 @@ fn print_todo_text(
     shown: usize,
     total: usize,
     _today_date: &chrono::NaiveDate,
+    line_sep: bool,
 ) {
     if items.is_empty() {
         println!("No TODO items found.");
@@ -436,11 +507,15 @@ fn print_todo_text(
 
     let headers = ["Date", "State", "Type", "Prio", "Note", "Heading"];
     let mut max_widths: [usize; 6] = headers.map(|h| h.len());
+    let mut total_rows = 1;
     for item in items {
-        let row = format_todo_row(item);
-        for (i, col) in row.iter().enumerate() {
-            max_widths[i] = max_widths[i].max(col.len());
+        for row in format_todo_rows(item) {
+            for (i, col) in row.iter().enumerate() {
+                let line_w = col.lines().map(|l| l.len()).max().unwrap_or(0);
+                max_widths[i] = max_widths[i].max(line_w);
+            }
         }
+        total_rows += format_todo_rows(item).len();
     }
 
     let fixed_sum = max_widths[0] + max_widths[1] + max_widths[2] + max_widths[3];
@@ -450,11 +525,17 @@ fn print_todo_text(
     builder.push_record(headers);
 
     for item in items {
-        push_todo_row(&mut builder, item);
+        push_todo_rows(&mut builder, item);
     }
 
     let mut table = builder.build();
-    table.with(Style::blank().horizontals([(1, HorizontalLine::new('─').intersection(' '))]));
+    table.with(Style::blank());
+    table.with(Modify::new(Rows::one(1)).with(Border::new().top('─')));
+    if line_sep && total_rows > 2 {
+        for i in 2..total_rows {
+            table.with(Modify::new(Rows::one(i)).with(Border::new().top('─')));
+        }
+    }
     if let Some((note_w, heading_w)) = wrap {
         table.with(Modify::new(Columns::new(4..5)).with(Width::wrap(note_w).keep_words(true)));
         table.with(Modify::new(Columns::new(5..6)).with(Width::wrap(heading_w).keep_words(true)));
@@ -474,6 +555,7 @@ fn print_todo_text_grouped(
     shown: usize,
     total: usize,
     _today_date: &chrono::NaiveDate,
+    line_sep: bool,
 ) {
     if groups.is_empty() || groups.values().all(|g| g.is_empty()) {
         println!("No TODO items found.");
@@ -484,9 +566,11 @@ fn print_todo_text_grouped(
     let mut max_widths: [usize; 6] = headers.map(|h| h.len());
     for group in groups.values() {
         for item in group {
-            let row = format_todo_row(item);
-            for (i, col) in row.iter().enumerate() {
-                max_widths[i] = max_widths[i].max(col.len());
+            for row in format_todo_rows(item) {
+                for (i, col) in row.iter().enumerate() {
+                    let line_w = col.lines().map(|l| l.len()).max().unwrap_or(0);
+                    max_widths[i] = max_widths[i].max(line_w);
+                }
             }
         }
     }
@@ -512,8 +596,7 @@ fn print_todo_text_grouped(
         section_rows.push(row);
         row += 1;
         for item in group {
-            push_todo_row(&mut builder, item);
-            row += 1;
+            row += push_todo_rows(&mut builder, item);
         }
     }
 
@@ -521,7 +604,13 @@ fn print_todo_text_grouped(
     for &sec_row in &section_rows {
         table.with(Modify::new((sec_row, 0)).with(Span::column(6)));
     }
-    table.with(Style::blank().horizontals([(1, HorizontalLine::new('─').intersection(' '))]));
+    table.with(Style::blank());
+    table.with(Modify::new(Rows::one(1)).with(Border::new().top('─')));
+    if line_sep && row > 2 {
+        for i in 2..row {
+            table.with(Modify::new(Rows::one(i)).with(Border::new().top('─')));
+        }
+    }
     if let Some((note_w, heading_w)) = wrap {
         table.with(Modify::new(Columns::new(4..5)).with(Width::wrap(note_w).keep_words(true)));
         table.with(Modify::new(Columns::new(5..6)).with(Width::wrap(heading_w).keep_words(true)));

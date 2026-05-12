@@ -7,6 +7,7 @@ pub struct OrgDate {
     pub has_time: bool,
     pub time: Option<NaiveTime>,
     pub time_end: Option<NaiveTime>,
+    pub base_date_end: Option<NaiveDate>,
     pub inactive: bool,
     pub repeater: Option<String>,
     pub warning: Option<String>,
@@ -15,6 +16,20 @@ pub struct OrgDate {
 
 pub fn parse_org_date(raw: &str) -> Option<OrgDate> {
     let trimmed = raw.trim();
+
+    if let Some(pos) = trimmed.find(">--<") {
+        let first_raw = &trimmed[..pos + 1];
+        let second_raw = &trimmed[pos + 3..];
+        let mut first = parse_org_date(first_raw)?;
+        if let Some(second) = parse_org_date(second_raw) {
+            first.base_date_end = Some(second.base_date);
+            if second.has_time {
+                first.time_end = second.time;
+            }
+            first.raw = raw.to_string();
+        }
+        return Some(first);
+    }
 
     let (inactive, inner) = if trimmed.starts_with('<') && trimmed.ends_with('>') {
         (false, &trimmed[1..trimmed.len() - 1])
@@ -74,6 +89,7 @@ pub fn parse_org_date(raw: &str) -> Option<OrgDate> {
         has_time,
         time,
         time_end,
+        base_date_end: None,
         inactive,
         repeater,
         warning,
@@ -274,5 +290,47 @@ mod tests {
     #[test]
     fn test_no_timestamp() {
         assert!(parse_org_date("No timestamp here").is_none());
+    }
+
+    #[test]
+    fn test_date_range_two_dates() {
+        let d = parse_org_date("<2026-05-13 Wed>--<2026-05-15 Fri>").unwrap();
+        assert_eq!(d.base_date, NaiveDate::from_ymd_opt(2026, 5, 13).unwrap());
+        assert_eq!(
+            d.base_date_end,
+            Some(NaiveDate::from_ymd_opt(2026, 5, 15).unwrap())
+        );
+        assert!(!d.has_time);
+        assert!(d.time.is_none());
+        assert!(d.time_end.is_none());
+    }
+
+    #[test]
+    fn test_date_range_with_times() {
+        let d = parse_org_date("<2026-05-13 Wed 12:00>--<2026-05-15 Fri 14:30>").unwrap();
+        assert_eq!(d.base_date, NaiveDate::from_ymd_opt(2026, 5, 13).unwrap());
+        assert_eq!(
+            d.base_date_end,
+            Some(NaiveDate::from_ymd_opt(2026, 5, 15).unwrap())
+        );
+        assert!(d.has_time);
+        assert_eq!(d.time.unwrap(), NaiveTime::from_hms_opt(12, 0, 0).unwrap());
+        assert_eq!(
+            d.time_end.unwrap(),
+            NaiveTime::from_hms_opt(14, 30, 0).unwrap()
+        );
+    }
+
+    #[test]
+    fn test_date_range_end_without_time() {
+        let d = parse_org_date("<2026-05-13 Wed 12:00>--<2026-05-15 Fri>").unwrap();
+        assert_eq!(d.base_date, NaiveDate::from_ymd_opt(2026, 5, 13).unwrap());
+        assert_eq!(
+            d.base_date_end,
+            Some(NaiveDate::from_ymd_opt(2026, 5, 15).unwrap())
+        );
+        assert!(d.has_time);
+        assert_eq!(d.time.unwrap(), NaiveTime::from_hms_opt(12, 0, 0).unwrap());
+        assert!(d.time_end.is_none());
     }
 }

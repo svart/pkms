@@ -8,8 +8,8 @@ use anyhow::Result;
 use chrono::{Local, NaiveDate, Timelike};
 use serde::Serialize;
 use tabled::builder::Builder;
-use tabled::settings::object::Columns;
-use tabled::settings::style::{HorizontalLine, Style};
+use tabled::settings::object::{Columns, Rows};
+use tabled::settings::style::{Border, Style};
 use tabled::settings::{Modify, Width};
 
 #[derive(Debug, Clone, Serialize)]
@@ -49,7 +49,17 @@ fn is_overdue(raw: Option<&String>) -> bool {
         None => return false,
     };
     let today = Local::now().date_naive();
-    parsed.base_date < today
+    let compare_date = parsed.base_date_end.unwrap_or(parsed.base_date);
+    if compare_date < today {
+        return true;
+    }
+    if compare_date == today
+        && let Some(et) = parsed.time_end
+    {
+        let now = Local::now().time();
+        return now > et;
+    }
+    false
 }
 
 fn heading_is_eligible(
@@ -76,6 +86,7 @@ pub struct AgendaOptions {
     pub limit: Option<usize>,
     pub today: bool,
     pub week: bool,
+    pub line_sep: bool,
 }
 
 pub fn run(config: &Config, ctx: &OutputContext, opts: &AgendaOptions) -> Result<()> {
@@ -144,14 +155,17 @@ pub fn run(config: &Config, ctx: &OutputContext, opts: &AgendaOptions) -> Result
 
             let item_scheduled_date = extract_date(heading.scheduled.as_ref());
             let item_deadline_date = extract_date(heading.deadline.as_ref());
-            let item_is_overdue = is_overdue(heading.deadline.as_ref())
-                || is_overdue(heading.scheduled.as_ref())
-                || (is_daily
-                    && daily_date.as_deref().is_some_and(|d| {
-                        NaiveDate::parse_from_str(d, "%Y-%m-%d")
-                            .ok()
-                            .is_some_and(|dt| dt < today_date)
-                    }));
+            let item_is_overdue = if heading.scheduled.is_some() || heading.deadline.is_some() {
+                is_overdue(heading.deadline.as_ref()) || is_overdue(heading.scheduled.as_ref())
+            } else if is_daily {
+                daily_date.as_deref().is_some_and(|d| {
+                    NaiveDate::parse_from_str(d, "%Y-%m-%d")
+                        .ok()
+                        .is_some_and(|dt| dt < today_date)
+                })
+            } else {
+                false
+            };
 
             if let Some(cutoff) = week_cutoff {
                 let item_date = item_scheduled_date
@@ -231,9 +245,11 @@ pub fn run(config: &Config, ctx: &OutputContext, opts: &AgendaOptions) -> Result
     }
 
     match ctx.format {
-        OutputFormat::Text => {
-            print_agenda_text(&items, opts.today || opts.upcoming || opts.overdue)
-        }
+        OutputFormat::Text => print_agenda_text(
+            &items,
+            opts.today || opts.upcoming || opts.overdue,
+            opts.line_sep,
+        ),
         OutputFormat::Json => {
             #[derive(Serialize)]
             struct AgendaOutput {
@@ -301,48 +317,95 @@ fn format_display_datetime(raw: &str) -> String {
     match parsed {
         Some(d) => {
             let date_str = d.base_date.format("%Y-%m-%d %a").to_string();
-            if let Some(t) = d.time {
+            let start_line = if let Some(t) = d.time {
                 format!("{} {:02}:{:02}", date_str, t.hour(), t.minute())
             } else {
-                date_str
+                date_str.clone()
+            };
+            if let Some(end_date) = d.base_date_end {
+                let end_date_str = end_date.format("%Y-%m-%d %a").to_string();
+                let end_line = if let Some(et) = d.time_end {
+                    format!("{} {:02}:{:02}", end_date_str, et.hour(), et.minute())
+                } else {
+                    end_date_str
+                };
+                return format!("{}\n{}", start_line, end_line);
             }
+            if let Some(et) = d.time_end {
+                let padding = " ".repeat(date_str.len() + 1);
+                return format!(
+                    "{}\n{}{:02}:{:02}",
+                    start_line,
+                    padding,
+                    et.hour(),
+                    et.minute()
+                );
+            }
+            start_line
         }
         None => raw.to_string(),
     }
 }
 
-fn format_agenda_row(item: &AgendaItem) -> [String; 6] {
-    let datetime = item
-        .scheduled
-        .as_ref()
-        .map(|s| format_display_datetime(s))
-        .or_else(|| item.deadline.as_ref().map(|d| format_display_datetime(d)))
-        .or_else(|| item.daily_file_date.clone())
-        .unwrap_or_default();
+fn format_agenda_rows(item: &AgendaItem) -> Vec<[String; 6]> {
     let state = item.todo_state.as_deref().unwrap_or("").to_string();
-    let sched = if item.scheduled_date.is_some() {
-        "SCHED"
-    } else if item.deadline_date.is_some() {
-        "DEADL"
-    } else {
-        ""
-    }
-    .to_string();
     let prio = item
         .priority
         .map(|p| format!("[#{}]", p))
         .unwrap_or_default();
-    [
-        datetime,
-        state,
-        sched,
-        prio,
-        item.title.clone(),
-        item.heading_title.clone(),
-    ]
+    let title = item.title.clone();
+    let heading = item.heading_title.clone();
+    let has_both = item.scheduled.is_some() && item.deadline.is_some();
+    let mut rows = Vec::new();
+
+    if let Some(ref s) = item.scheduled {
+        rows.push([
+            format_display_datetime(s),
+            state.clone(),
+            "SCHED".to_string(),
+            prio.clone(),
+            title.clone(),
+            heading.clone(),
+        ]);
+    }
+
+    if let Some(ref d) = item.deadline {
+        rows.push([
+            format_display_datetime(d),
+            if has_both {
+                String::new()
+            } else {
+                state.clone()
+            },
+            "DEADL".to_string(),
+            if has_both {
+                String::new()
+            } else {
+                prio.clone()
+            },
+            if has_both {
+                String::new()
+            } else {
+                title.clone()
+            },
+            if has_both {
+                String::new()
+            } else {
+                heading.clone()
+            },
+        ]);
+    }
+
+    if rows.is_empty()
+        && let Some(ref dfd) = item.daily_file_date
+    {
+        rows.push([dfd.clone(), state, String::new(), prio, title, heading]);
+    }
+
+    rows
 }
 
-fn print_agenda_text(items: &[AgendaItem], flat: bool) {
+fn print_agenda_text(items: &[AgendaItem], flat: bool, line_sep: bool) {
     if items.is_empty() {
         println!("No planned agenda items found.");
         return;
@@ -350,11 +413,15 @@ fn print_agenda_text(items: &[AgendaItem], flat: bool) {
 
     let headers = ["Date", "State", "Type", "Prio", "Note", "Heading"];
     let mut max_widths: [usize; 6] = headers.map(|h| h.len());
+    let mut total_rows = 1;
     for item in items {
-        let row = format_agenda_row(item);
-        for (i, col) in row.iter().enumerate() {
-            max_widths[i] = max_widths[i].max(col.len());
+        for row in format_agenda_rows(item) {
+            for (i, col) in row.iter().enumerate() {
+                let line_w = col.lines().map(|l| l.len()).max().unwrap_or(0);
+                max_widths[i] = max_widths[i].max(line_w);
+            }
         }
+        total_rows += format_agenda_rows(item).len();
     }
 
     let fixed_sum = max_widths[0] + max_widths[1] + max_widths[2] + max_widths[3];
@@ -405,7 +472,9 @@ fn print_agenda_text(items: &[AgendaItem], flat: bool) {
 
     if flat {
         for item in items {
-            builder.push_record(format_agenda_row(item));
+            for row in format_agenda_rows(item) {
+                builder.push_record(row);
+            }
         }
     } else {
         let mut need_sep = false;
@@ -422,14 +491,22 @@ fn print_agenda_text(items: &[AgendaItem], flat: bool) {
             }
             builder.push_record([label, "", "", "", "", ""]);
             for item in items {
-                builder.push_record(format_agenda_row(item));
+                for row in format_agenda_rows(item) {
+                    builder.push_record(row);
+                }
             }
             need_sep = true;
         }
     }
 
     let mut table = builder.build();
-    table.with(Style::blank().horizontals([(1, HorizontalLine::new('─').intersection(' '))]));
+    table.with(Style::blank());
+    table.with(Modify::new(Rows::one(1)).with(Border::new().top('─')));
+    if line_sep && total_rows > 2 {
+        for i in 2..total_rows {
+            table.with(Modify::new(Rows::one(i)).with(Border::new().top('─')));
+        }
+    }
     if let Some((note_w, heading_w)) = wrap {
         table.with(Modify::new(Columns::new(4..5)).with(Width::wrap(note_w).keep_words(true)));
         table.with(Modify::new(Columns::new(5..6)).with(Width::wrap(heading_w).keep_words(true)));

@@ -257,6 +257,8 @@ pub enum Command {
         week: bool,
         #[arg(long, help = "Show only upcoming items (not overdue or today)")]
         upcoming: bool,
+        #[arg(long, help = "Add line separators between rows")]
+        line_sep: bool,
     },
     #[command(about = "Display TODO items (use --group to group by state/priority/file)")]
     Todo {
@@ -306,6 +308,8 @@ pub enum Command {
         prio: Option<String>,
         #[arg(long, help = "Read UUIDs from NDJSON stdin to use as scope")]
         from_stdin: bool,
+        #[arg(long, help = "Add line separators between rows")]
+        line_sep: bool,
     },
     #[command(name = "path", about = "Find shortest path between two notes")]
     Path {

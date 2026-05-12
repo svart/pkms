@@ -82,10 +82,10 @@ pub(crate) static HEADING_RE: LazyLock<Regex> = LazyLock::new(|| {
 });
 
 pub(crate) static SCHEDULED_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"SCHEDULED:\s*(<[^>]+>)").unwrap());
+    LazyLock::new(|| Regex::new(r"SCHEDULED:\s*(<[^>]+>(?:--<[^>]+>)?)").unwrap());
 
 pub(crate) static DEADLINE_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"DEADLINE:\s*(<[^>]+>)").unwrap());
+    LazyLock::new(|| Regex::new(r"DEADLINE:\s*(<[^>]+>(?:--<[^>]+>)?)").unwrap());
 
 pub(crate) static DAILY_FILE_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"(\d{4}-\d{2}-\d{2})\.org$").unwrap());
