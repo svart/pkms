@@ -2,13 +2,15 @@ use crate::cli::OutputFormat;
 use crate::config::Config;
 use crate::graph::Graph;
 use crate::org_date::parse_org_date;
-use crate::output::OutputContext;
+use crate::output::{OutputContext, adaptive_note_heading_widths};
 use crate::parser::{find_daily_file_date, strip_org_links};
 use anyhow::Result;
 use chrono::{Local, NaiveDate, Timelike};
 use serde::Serialize;
 use tabled::builder::Builder;
+use tabled::settings::object::Columns;
 use tabled::settings::style::{HorizontalLine, Style};
+use tabled::settings::{Modify, Width};
 
 #[derive(Debug, Clone, Serialize)]
 pub struct AgendaItem {
@@ -309,11 +311,54 @@ fn format_display_datetime(raw: &str) -> String {
     }
 }
 
+fn format_agenda_row(item: &AgendaItem) -> [String; 6] {
+    let datetime = item
+        .scheduled
+        .as_ref()
+        .map(|s| format_display_datetime(s))
+        .or_else(|| item.deadline.as_ref().map(|d| format_display_datetime(d)))
+        .or_else(|| item.daily_file_date.clone())
+        .unwrap_or_default();
+    let state = item.todo_state.as_deref().unwrap_or("").to_string();
+    let sched = if item.scheduled_date.is_some() {
+        "SCHED"
+    } else if item.deadline_date.is_some() {
+        "DEADL"
+    } else {
+        ""
+    }
+    .to_string();
+    let prio = item
+        .priority
+        .map(|p| format!("[#{}]", p))
+        .unwrap_or_default();
+    [
+        datetime,
+        state,
+        sched,
+        prio,
+        item.title.clone(),
+        item.heading_title.clone(),
+    ]
+}
+
 fn print_agenda_text(items: &[AgendaItem], flat: bool) {
     if items.is_empty() {
         println!("No planned agenda items found.");
         return;
     }
+
+    let headers = ["Date", "State", "Type", "Prio", "Note", "Heading"];
+    let mut max_widths: [usize; 6] = headers.map(|h| h.len());
+    for item in items {
+        let row = format_agenda_row(item);
+        for (i, col) in row.iter().enumerate() {
+            max_widths[i] = max_widths[i].max(col.len());
+        }
+    }
+
+    let fixed_sum = max_widths[0] + max_widths[1] + max_widths[2] + max_widths[3];
+    let wrap = adaptive_note_heading_widths(max_widths[4], fixed_sum);
 
     let today = Local::now().date_naive();
     let today_str = today.format("%Y-%m-%d").to_string();
@@ -358,40 +403,9 @@ fn print_agenda_text(items: &[AgendaItem], flat: bool) {
     let mut builder = Builder::new();
     builder.push_record(["Date", "State", "Type", "Prio", "Note", "Heading"]);
 
-    let push_item = |builder: &mut Builder, item: &AgendaItem| {
-        let datetime = item
-            .scheduled
-            .as_ref()
-            .map(|s| format_display_datetime(s))
-            .or_else(|| item.deadline.as_ref().map(|d| format_display_datetime(d)))
-            .or_else(|| item.daily_file_date.clone())
-            .unwrap_or_default();
-        let state = item.todo_state.as_deref().unwrap_or("").to_string();
-        let sched = if item.scheduled_date.is_some() {
-            "SCHED"
-        } else if item.deadline_date.is_some() {
-            "DEADL"
-        } else {
-            ""
-        }
-        .to_string();
-        let prio = item
-            .priority
-            .map(|p| format!("[#{}]", p))
-            .unwrap_or_default();
-        builder.push_record([
-            datetime,
-            state,
-            sched,
-            prio,
-            item.title.clone(),
-            item.heading_title.clone(),
-        ]);
-    };
-
     if flat {
         for item in items {
-            push_item(&mut builder, item);
+            builder.push_record(format_agenda_row(item));
         }
     } else {
         let mut need_sep = false;
@@ -408,7 +422,7 @@ fn print_agenda_text(items: &[AgendaItem], flat: bool) {
             }
             builder.push_record([label, "", "", "", "", ""]);
             for item in items {
-                push_item(&mut builder, item);
+                builder.push_record(format_agenda_row(item));
             }
             need_sep = true;
         }
@@ -416,6 +430,10 @@ fn print_agenda_text(items: &[AgendaItem], flat: bool) {
 
     let mut table = builder.build();
     table.with(Style::blank().horizontals([(1, HorizontalLine::new('─').intersection(' '))]));
+    if let Some((note_w, heading_w)) = wrap {
+        table.with(Modify::new(Columns::new(4..5)).with(Width::wrap(note_w).keep_words(true)));
+        table.with(Modify::new(Columns::new(5..6)).with(Width::wrap(heading_w).keep_words(true)));
+    }
     println!("{}", table);
 
     let displayed = items.len();
