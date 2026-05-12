@@ -15,7 +15,7 @@ pub struct OrgDate {
 
 static ORG_DATE_RE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(
-        r"^<(\d{4}-\d{2}-\d{2})(?:\s+[A-Z][a-z]+)?(?:\s+(\d{2}:\d{2}))?(?:\s+((?:\.\+|\+\+|\+)\d+[wdmy]))?(?:\s+(-\d+[wdmy]))?>$",
+        r"^<(\d{4}-\d{2}-\d{2})(?:\s+\S+)?(?:\s+(\d{2}:\d{2}))?(?:\s+((?:\.\+|\+\+|\+)\d+[wdmy]))?(?:\s+(-\d+[wdmy]))?>$",
     )
     .unwrap()
 });
@@ -48,7 +48,7 @@ pub fn extract_timestamp(raw: &str) -> Option<String> {
 
 fn org_timestamp_re() -> &'static Regex {
     static RE: LazyLock<Regex> = LazyLock::new(|| {
-        Regex::new(r"<(\d{4}-\d{2}-\d{2}(?:\s+[A-Z][a-z]+)?(?:\s+\d{2}:\d{2})?(?:\s+[+-]+\.?\d+[wdmy])?(?:\s+-?\d+[wdmy])?)>").unwrap()
+        Regex::new(r"<(\d{4}-\d{2}-\d{2}(?:\s+\S+)?(?:\s+\d{2}:\d{2})?(?:\s+[+-]+\.?\d+[wdmy])?(?:\s+-?\d+[wdmy])?)>").unwrap()
     });
     &RE
 }
@@ -109,6 +109,23 @@ mod tests {
         assert!(parse_org_date("not a date").is_none());
         assert!(parse_org_date("<not-a-date>").is_none());
         assert!(parse_org_date("<2026-13-01>").is_none());
+    }
+
+    #[test]
+    fn test_russian_day_name() {
+        let d = parse_org_date("<2026-05-13 Ср 11:00>").unwrap();
+        assert_eq!(d.base_date, NaiveDate::from_ymd_opt(2026, 5, 13).unwrap());
+        assert!(d.has_time);
+        assert_eq!(d.time.unwrap(), NaiveTime::from_hms_opt(11, 0, 0).unwrap());
+    }
+
+    #[test]
+    fn test_russian_day_name_with_repeater_and_warning() {
+        let d = parse_org_date("<2026-05-11 Пн ++1w -0d>").unwrap();
+        assert_eq!(d.base_date, NaiveDate::from_ymd_opt(2026, 5, 11).unwrap());
+        assert!(!d.has_time);
+        assert_eq!(d.repeater, Some("++1w".to_string()));
+        assert_eq!(d.warning, Some("-0d".to_string()));
     }
 
     #[test]

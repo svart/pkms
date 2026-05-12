@@ -271,10 +271,11 @@ fn format_display_datetime(raw: &str) -> String {
     let parsed = parse_org_date(raw);
     match parsed {
         Some(d) => {
+            let date_str = d.base_date.format("%Y-%m-%d %a").to_string();
             if let Some(t) = d.time {
-                format!("{} {:02}:{:02}", d.base_date, t.hour(), t.minute())
+                format!("{} {:02}:{:02}", date_str, t.hour(), t.minute())
             } else {
-                d.base_date.to_string()
+                date_str
             }
         }
         None => raw.to_string(),
