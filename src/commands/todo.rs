@@ -107,7 +107,8 @@ pub fn run(config: &Config, ctx: &OutputContext, opts: &TodoOptions) -> Result<(
 
             let item_scheduled_date = extract_date(heading.scheduled.as_ref());
             let item_deadline_date = extract_date(heading.deadline.as_ref());
-            let item_is_overdue = is_overdue(heading.deadline.as_ref());
+            let item_is_overdue =
+                is_overdue(heading.deadline.as_ref()) || is_overdue(heading.scheduled.as_ref());
 
             let primary_uuid = parsed.uuids.first().cloned().unwrap_or_default();
             let note_title = strip_org_links(&parsed.title.clone().unwrap_or_else(|| {

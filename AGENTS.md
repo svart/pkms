@@ -1,5 +1,10 @@
 # AGENTS.md — pkms project guide for AI agents
 
+If user reports problems about work of the tool with currently available
+database, always first reproduce the output using binary built from latest
+version of code in this repository. If user gives some example files from the
+notes database always check them first before doing analysis.
+
 ## Build, Lint & Test
 
 After changes, run these commands **in this strict order**:

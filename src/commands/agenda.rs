@@ -130,7 +130,8 @@ pub fn run(config: &Config, ctx: &OutputContext, opts: &AgendaOptions) -> Result
 
             let item_scheduled_date = extract_date(heading.scheduled.as_ref());
             let item_deadline_date = extract_date(heading.deadline.as_ref());
-            let item_is_overdue = is_overdue(heading.deadline.as_ref());
+            let item_is_overdue =
+                is_overdue(heading.deadline.as_ref()) || is_overdue(heading.scheduled.as_ref());
 
             if let Some(filter_date) = date_filter {
                 let matches = item_scheduled_date.as_deref()
@@ -287,6 +288,23 @@ fn print_agenda_text(items: &[AgendaItem]) {
             upcoming.push(item);
         }
     }
+
+    let sort_date = |a: &&AgendaItem, b: &&AgendaItem| {
+        let a_date = a
+            .scheduled_date
+            .as_deref()
+            .or(a.deadline_date.as_deref())
+            .or(a.daily_file_date.as_deref());
+        let b_date = b
+            .scheduled_date
+            .as_deref()
+            .or(b.deadline_date.as_deref())
+            .or(b.daily_file_date.as_deref());
+        a_date.cmp(&b_date)
+    };
+    overdue.sort_by(sort_date);
+    today_items.sort_by(sort_date);
+    upcoming.sort_by(sort_date);
 
     if !overdue.is_empty() {
         println!("=== Overdue (deadline passed) ===");
