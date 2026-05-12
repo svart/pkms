@@ -398,44 +398,52 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
             after,
             before,
             prio,
-        } => commands::todo::run(
-            cfg,
-            ctx,
-            &commands::todo::TodoOptions {
-                include: include
-                    .as_deref()
-                    .map(|s| s.split(',').map(|s| s.trim().to_string()).collect())
-                    .unwrap_or_default(),
-                exclude: exclude
-                    .as_deref()
-                    .map(|s| s.split(',').map(|s| s.trim().to_string()).collect())
-                    .unwrap_or_default(),
-                sort: sort.clone(),
-                limit: *limit,
-                group: group.clone(),
-                scope: scope.clone().unwrap_or_default(),
-                after: after.as_deref().and_then(|d| {
-                    chrono::NaiveDateTime::parse_from_str(d, "%Y-%m-%d %H:%M")
-                        .ok()
-                        .or_else(|| {
-                            chrono::NaiveDate::parse_from_str(d, "%Y-%m-%d")
-                                .ok()
-                                .map(|dt| dt.and_hms_opt(0, 0, 0).unwrap())
-                        })
-                }),
-                before: before.as_deref().and_then(|d| {
-                    chrono::NaiveDateTime::parse_from_str(d, "%Y-%m-%d %H:%M")
-                        .ok()
-                        .or_else(|| {
-                            chrono::NaiveDate::parse_from_str(d, "%Y-%m-%d")
-                                .ok()
-                                .map(|dt| dt.and_hms_opt(0, 0, 0).unwrap())
-                        })
-                }),
-                prio: prio.clone(),
-            },
-        )
-        .map(|()| ExitCode::SUCCESS)?,
+            from_stdin,
+        } => {
+            let resolved_scope = if *from_stdin {
+                read_stdin_ndjson()?
+            } else {
+                scope.clone().unwrap_or_default()
+            };
+            commands::todo::run(
+                cfg,
+                ctx,
+                &commands::todo::TodoOptions {
+                    include: include
+                        .as_deref()
+                        .map(|s| s.split(',').map(|s| s.trim().to_string()).collect())
+                        .unwrap_or_default(),
+                    exclude: exclude
+                        .as_deref()
+                        .map(|s| s.split(',').map(|s| s.trim().to_string()).collect())
+                        .unwrap_or_default(),
+                    sort: sort.clone(),
+                    limit: *limit,
+                    group: group.clone(),
+                    scope: resolved_scope,
+                    after: after.as_deref().and_then(|d| {
+                        chrono::NaiveDateTime::parse_from_str(d, "%Y-%m-%d %H:%M")
+                            .ok()
+                            .or_else(|| {
+                                chrono::NaiveDate::parse_from_str(d, "%Y-%m-%d")
+                                    .ok()
+                                    .map(|dt| dt.and_hms_opt(0, 0, 0).unwrap())
+                            })
+                    }),
+                    before: before.as_deref().and_then(|d| {
+                        chrono::NaiveDateTime::parse_from_str(d, "%Y-%m-%d %H:%M")
+                            .ok()
+                            .or_else(|| {
+                                chrono::NaiveDate::parse_from_str(d, "%Y-%m-%d")
+                                    .ok()
+                                    .map(|dt| dt.and_hms_opt(0, 0, 0).unwrap())
+                            })
+                    }),
+                    prio: prio.clone(),
+                },
+            )
+            .map(|()| ExitCode::SUCCESS)?
+        }
         Command::Agenda {
             include,
             exclude,

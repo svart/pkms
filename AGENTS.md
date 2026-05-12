@@ -116,13 +116,13 @@ pkms resolve --tags "ai" --output-format ndjson | pkms get --links --from-stdin
 pkms stats --hubs --output-format ndjson | pkms get --links --no-content --from-stdin
 ```
 
-Consumer commands (`get`, `suggest`, `validate`, `context`) accept `--from-stdin`
+Consumer commands (`get`, `suggest`, `validate`, `context`, `todo`) accept `--from-stdin`
 to read UUIDs from stdin. They auto-detect piped stdin when no target is given.
 
 NDJSON output emits one JSON object per line (each with a `uuid` field).
 
 - Producers: `resolve`, `query`, `orphans`, `stats --hubs`, `suggest`
-- Consumers: `get`, `suggest`, `validate`, `context`
+- Consumers: `get`, `suggest`, `validate`, `context`, `todo`
 
 ## Related
 

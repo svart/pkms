@@ -200,6 +200,46 @@ fn test_pipe_resolve_to_validate() {
 }
 
 #[test]
+fn test_pipe_resolve_to_todo() {
+    let (_dir, root) = setup_db();
+    let db = root.to_str().unwrap();
+    let (stdout, status) = run_pipe_ndjson(
+        &[
+            "--db",
+            db,
+            "--output-format",
+            "ndjson",
+            "resolve",
+            "--title",
+            "Agenda Item",
+        ],
+        &[
+            "--db",
+            db,
+            "--output-format",
+            "ndjson",
+            "todo",
+            "--from-stdin",
+        ],
+    );
+    assert!(
+        status.success(),
+        "pipe resolve|todo failed:\nstdout: {}\n",
+        stdout
+    );
+    assert!(!stdout.is_empty(), "expected output from pipe");
+    for line in stdout.lines() {
+        let v: serde_json::Value = serde_json::from_str(line)
+            .unwrap_or_else(|e| panic!("Bad JSON line '{}': {}", line, e));
+        assert!(
+            v.get("uuid").is_some(),
+            "expected todo output with uuid, got: {}",
+            line
+        );
+    }
+}
+
+#[test]
 fn test_pipe_suggest_to_get() {
     let (_dir, root) = setup_db();
     let db = root.to_str().unwrap();

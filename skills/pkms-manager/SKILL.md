@@ -280,7 +280,7 @@ Commands can be chained via Unix pipes using NDJSON.
 Producers emit per-item lines with a field; consumers read them from stdin via automatic pipe detection or `--from-stdin`.
 
 **Producers** (emit with `--output-format ndjson`): `resolve`, `query`, `orphans`, `stats --hubs`, `suggest`
-**Consumers** (read via pipe or `--from-stdin`): `get`, `suggest`, `validate`, `context`
+**Consumers** (read via pipe or `--from-stdin`): `get`, `suggest`, `validate`, `context`, `todo`
 
 Always use `--output-format ndjson` for commands that pass data to other commands in pipeline.
 
@@ -306,6 +306,9 @@ pkms resolve --tags "ml,rust" --output-format ndjson | pkms suggest
 
 # Batch validate search results
 pkms query "foo" --output-format ndjson | pkms validate
+
+# Scope TODO list to tagged notes
+pkms resolve --tags "project" --output-format ndjson | pkms todo --from-stdin
 ```
 
 See [Pipelining reference](references/pipelining.md) for the full catalog of examples.

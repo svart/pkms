@@ -304,6 +304,8 @@ pub enum Command {
             help = "Filter by priority: A, B, C, or empty string for no priority"
         )]
         prio: Option<String>,
+        #[arg(long, help = "Read UUIDs from NDJSON stdin to use as scope")]
+        from_stdin: bool,
     },
     #[command(name = "path", about = "Find shortest path between two notes")]
     Path {
