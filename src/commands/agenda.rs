@@ -80,6 +80,7 @@ pub fn run(config: &Config, ctx: &OutputContext, opts: &AgendaOptions) -> Result
         }
     });
 
+    let closed_states = config.closed_todo_states();
     let mut items: Vec<AgendaItem> = Vec::new();
 
     for result in &graph.results {
@@ -95,6 +96,15 @@ pub fn run(config: &Config, ctx: &OutputContext, opts: &AgendaOptions) -> Result
 
         for heading in &parsed.headings {
             if !heading_is_eligible(heading) {
+                continue;
+            }
+
+            if !closed_states.is_empty()
+                && let Some(ref todo_state) = heading.todo_state
+                && closed_states
+                    .iter()
+                    .any(|cs| cs.eq_ignore_ascii_case(todo_state))
+            {
                 continue;
             }
 
@@ -178,7 +188,7 @@ pub fn run(config: &Config, ctx: &OutputContext, opts: &AgendaOptions) -> Result
     }
 
     match ctx.format {
-        OutputFormat::Text => print_agenda_text(&items, total),
+        OutputFormat::Text => print_agenda_text(&items),
         OutputFormat::Json => {
             #[derive(Serialize)]
             struct AgendaOutput {
@@ -249,24 +259,51 @@ fn format_scheduled_deadline(raw: &str) -> String {
     }
 }
 
-fn print_agenda_text(items: &[AgendaItem], total: usize) {
+fn print_agenda_text(items: &[AgendaItem]) {
     if items.is_empty() {
         println!("No planned agenda items found.");
         return;
     }
 
-    let overdue_items: Vec<&AgendaItem> = items.iter().filter(|i| i.is_overdue).collect();
-    let upcoming_items: Vec<&AgendaItem> = items
-        .iter()
-        .filter(|i| {
-            !i.is_overdue
-                && (i.scheduled_date.is_some() || i.deadline_date.is_some() || i.is_daily_file)
-        })
-        .collect();
+    let today = Local::now().date_naive();
+    let today_str = today.format("%Y-%m-%d").to_string();
+    let tomorrow_str = (today + chrono::Duration::days(1))
+        .format("%Y-%m-%d")
+        .to_string();
 
-    if !overdue_items.is_empty() {
+    let mut overdue = Vec::new();
+    let mut today_items = Vec::new();
+    let mut upcoming = Vec::new();
+
+    for item in items {
+        if item.is_overdue {
+            overdue.push(item);
+        } else if item.scheduled_date.as_deref() == Some(today_str.as_str())
+            || item.deadline_date.as_deref() == Some(today_str.as_str())
+            || (item.is_daily_file && item.daily_file_date.as_deref() == Some(today_str.as_str()))
+        {
+            today_items.push(item);
+        } else if item
+            .scheduled_date
+            .as_deref()
+            .is_some_and(|d| d >= tomorrow_str.as_str())
+            || item
+                .deadline_date
+                .as_deref()
+                .is_some_and(|d| d >= tomorrow_str.as_str())
+            || (item.is_daily_file
+                && item
+                    .daily_file_date
+                    .as_deref()
+                    .is_some_and(|d| d >= tomorrow_str.as_str()))
+        {
+            upcoming.push(item);
+        }
+    }
+
+    if !overdue.is_empty() {
         println!("=== Overdue (deadline passed) ===");
-        for item in &overdue_items {
+        for item in &overdue {
             let prio = item
                 .priority
                 .map(|p| format!("[#{}] ", p))
@@ -286,9 +323,9 @@ fn print_agenda_text(items: &[AgendaItem], total: usize) {
         println!();
     }
 
-    if !upcoming_items.is_empty() {
-        println!("=== Upcoming ===");
-        for item in &upcoming_items {
+    if !today_items.is_empty() {
+        println!("=== Today ===");
+        for item in &today_items {
             let date_display = item
                 .scheduled_date
                 .as_deref()
@@ -302,7 +339,7 @@ fn print_agenda_text(items: &[AgendaItem], total: usize) {
                 .unwrap_or_default();
             let todo_display = item.todo_state.as_deref().unwrap_or_default();
             println!(
-                "  {}  {}{}{}  \u{2014} {}{}",
+                "  {}  {}{} {}  \u{2014} {}{}",
                 date_display, prio, todo_display, item.heading_title, item.title, daily_mark
             );
             if let Some(ref s) = item.scheduled {
@@ -315,5 +352,35 @@ fn print_agenda_text(items: &[AgendaItem], total: usize) {
         println!();
     }
 
-    println!("Total: {total} planned item(s)");
+    if !upcoming.is_empty() {
+        println!("=== Upcoming ===");
+        for item in &upcoming {
+            let date_display = item
+                .scheduled_date
+                .as_deref()
+                .or(item.deadline_date.as_deref())
+                .or(item.daily_file_date.as_deref())
+                .unwrap_or("");
+            let daily_mark = if item.is_daily_file { " [daily]" } else { "" };
+            let prio = item
+                .priority
+                .map(|p| format!("[#{}] ", p))
+                .unwrap_or_default();
+            let todo_display = item.todo_state.as_deref().unwrap_or_default();
+            println!(
+                "  {}  {}{} {}  \u{2014} {}{}",
+                date_display, prio, todo_display, item.heading_title, item.title, daily_mark
+            );
+            if let Some(ref s) = item.scheduled {
+                println!("        SCHEDULED: {}", format_scheduled_deadline(s));
+            }
+            if let Some(ref d) = item.deadline {
+                println!("        DEADLINE: {}", format_scheduled_deadline(d));
+            }
+        }
+        println!();
+    }
+
+    let displayed = overdue.len() + today_items.len() + upcoming.len();
+    println!("Total: {displayed} planned item(s)");
 }
