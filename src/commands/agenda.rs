@@ -50,8 +50,18 @@ fn is_overdue(raw: Option<&String>) -> bool {
     parsed.base_date < today
 }
 
-fn heading_is_eligible(heading: &crate::parser::Heading) -> bool {
-    heading.scheduled.is_some() || heading.deadline.is_some()
+fn heading_is_eligible(
+    heading: &crate::parser::Heading,
+    is_daily: bool,
+    valid_states: &[String],
+) -> bool {
+    heading.scheduled.is_some()
+        || heading.deadline.is_some()
+        || (is_daily
+            && heading
+                .todo_state
+                .as_ref()
+                .is_some_and(|s| valid_states.iter().any(|vs| vs.eq_ignore_ascii_case(s))))
 }
 
 pub struct AgendaOptions {
@@ -81,6 +91,7 @@ pub fn run(config: &Config, ctx: &OutputContext, opts: &AgendaOptions) -> Result
         None
     };
 
+    let valid_states = config.todo_states();
     let closed_states = config.closed_todo_states();
     let mut items: Vec<AgendaItem> = Vec::new();
 
@@ -96,7 +107,7 @@ pub fn run(config: &Config, ctx: &OutputContext, opts: &AgendaOptions) -> Result
         let daily_date = find_daily_file_date(path).map(|d| d.format("%Y-%m-%d").to_string());
 
         for heading in &parsed.headings {
-            if !heading_is_eligible(heading) {
+            if !heading_is_eligible(heading, is_daily, &valid_states) {
                 continue;
             }
 
@@ -131,8 +142,14 @@ pub fn run(config: &Config, ctx: &OutputContext, opts: &AgendaOptions) -> Result
 
             let item_scheduled_date = extract_date(heading.scheduled.as_ref());
             let item_deadline_date = extract_date(heading.deadline.as_ref());
-            let item_is_overdue =
-                is_overdue(heading.deadline.as_ref()) || is_overdue(heading.scheduled.as_ref());
+            let item_is_overdue = is_overdue(heading.deadline.as_ref())
+                || is_overdue(heading.scheduled.as_ref())
+                || (is_daily
+                    && daily_date.as_deref().is_some_and(|d| {
+                        NaiveDate::parse_from_str(d, "%Y-%m-%d")
+                            .ok()
+                            .is_some_and(|dt| dt < today_date)
+                    }));
 
             if let Some(cutoff) = week_cutoff {
                 let item_date = item_scheduled_date
@@ -212,7 +229,9 @@ pub fn run(config: &Config, ctx: &OutputContext, opts: &AgendaOptions) -> Result
     }
 
     match ctx.format {
-        OutputFormat::Text => print_agenda_text(&items),
+        OutputFormat::Text => {
+            print_agenda_text(&items, opts.today || opts.upcoming || opts.overdue)
+        }
         OutputFormat::Json => {
             #[derive(Serialize)]
             struct AgendaOutput {
@@ -290,7 +309,7 @@ fn format_display_datetime(raw: &str) -> String {
     }
 }
 
-fn print_agenda_text(items: &[AgendaItem]) {
+fn print_agenda_text(items: &[AgendaItem], flat: bool) {
     if items.is_empty() {
         println!("No planned agenda items found.");
         return;
@@ -370,30 +389,36 @@ fn print_agenda_text(items: &[AgendaItem]) {
         ]);
     };
 
-    let mut need_sep = false;
-    for (items, label) in [
-        (&overdue, "=== Overdue ==="),
-        (&today_items, "=== Today ==="),
-        (&upcoming, "=== Upcoming ==="),
-    ] {
-        if items.is_empty() {
-            continue;
-        }
-        if need_sep {
-            builder.push_record(["", "", "", "", "", ""]);
-        }
-        builder.push_record([label, "", "", "", "", ""]);
+    if flat {
         for item in items {
             push_item(&mut builder, item);
         }
-        need_sep = true;
+    } else {
+        let mut need_sep = false;
+        for (items, label) in [
+            (&overdue, "=== Overdue ==="),
+            (&today_items, "=== Today ==="),
+            (&upcoming, "=== Upcoming ==="),
+        ] {
+            if items.is_empty() {
+                continue;
+            }
+            if need_sep {
+                builder.push_record(["", "", "", "", "", ""]);
+            }
+            builder.push_record([label, "", "", "", "", ""]);
+            for item in items {
+                push_item(&mut builder, item);
+            }
+            need_sep = true;
+        }
     }
 
     let mut table = builder.build();
     table.with(Style::blank().horizontals([(1, HorizontalLine::new('─').intersection(' '))]));
     println!("{}", table);
 
-    let displayed = overdue.len() + today_items.len() + upcoming.len();
+    let displayed = items.len();
     println!();
     println!("Total: {displayed} planned item(s)");
 }
