@@ -270,6 +270,18 @@ pub fn parse_note(content: &str) -> ParsedNote {
     }
 }
 
+pub fn strip_org_links(text: &str) -> String {
+    LINK_RE
+        .replace_all(text, |caps: &regex::Captures| {
+            caps.get(2)
+                .map(|m| m.as_str())
+                .filter(|s| !s.is_empty())
+                .unwrap_or(&caps[1])
+                .to_string()
+        })
+        .to_string()
+}
+
 pub fn find_daily_file_date(path: &std::path::Path) -> Option<NaiveDate> {
     let filename = path.file_name()?.to_str()?;
     let cap = DAILY_FILE_RE.captures(filename)?;

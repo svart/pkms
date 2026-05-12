@@ -3,7 +3,7 @@ use crate::config::Config;
 use crate::graph::Graph;
 use crate::org_date::parse_org_date;
 use crate::output::OutputContext;
-use crate::parser::find_daily_file_date;
+use crate::parser::{find_daily_file_date, strip_org_links};
 use anyhow::Result;
 use chrono::Local;
 use serde::Serialize;
@@ -110,11 +110,11 @@ pub fn run(config: &Config, ctx: &OutputContext, opts: &TodoOptions) -> Result<(
             let item_is_overdue = is_overdue(heading.deadline.as_ref());
 
             let primary_uuid = parsed.uuids.first().cloned().unwrap_or_default();
-            let note_title = parsed.title.clone().unwrap_or_else(|| {
+            let note_title = strip_org_links(&parsed.title.clone().unwrap_or_else(|| {
                 path.file_stem()
                     .map(|s| s.to_string_lossy().to_string())
                     .unwrap_or_default()
-            });
+            }));
 
             items.push(TodoItem {
                 uuid: primary_uuid,
@@ -123,7 +123,7 @@ pub fn run(config: &Config, ctx: &OutputContext, opts: &TodoOptions) -> Result<(
                 filetags: parsed.filetags.clone(),
                 is_daily_file: is_daily,
                 daily_file_date: daily_date.clone(),
-                heading_title: heading.title.clone(),
+                heading_title: strip_org_links(&heading.title),
                 heading_level: heading.level,
                 todo_state: heading.todo_state.clone(),
                 priority: heading.priority,
