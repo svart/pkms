@@ -267,9 +267,6 @@ fn print_agenda_text(items: &[AgendaItem]) {
 
     let today = Local::now().date_naive();
     let today_str = today.format("%Y-%m-%d").to_string();
-    let tomorrow_str = (today + chrono::Duration::days(1))
-        .format("%Y-%m-%d")
-        .to_string();
 
     let mut overdue = Vec::new();
     let mut today_items = Vec::new();
@@ -283,19 +280,9 @@ fn print_agenda_text(items: &[AgendaItem]) {
             || (item.is_daily_file && item.daily_file_date.as_deref() == Some(today_str.as_str()))
         {
             today_items.push(item);
-        } else if item
-            .scheduled_date
-            .as_deref()
-            .is_some_and(|d| d >= tomorrow_str.as_str())
-            || item
-                .deadline_date
-                .as_deref()
-                .is_some_and(|d| d >= tomorrow_str.as_str())
-            || (item.is_daily_file
-                && item
-                    .daily_file_date
-                    .as_deref()
-                    .is_some_and(|d| d >= tomorrow_str.as_str()))
+        } else if item.scheduled_date.is_some()
+            || item.deadline_date.is_some()
+            || item.is_daily_file
         {
             upcoming.push(item);
         }
