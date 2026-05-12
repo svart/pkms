@@ -16,7 +16,7 @@ cargo fmt --check              # 1. Check formatting (fail if unformatted)
 cargo clippy -- -D warnings    # 2. Lint with clippy (deny all warnings)
 cargo build                    # 3. Build the binary
 cargo build --features=embed   # 4. Build the binary
-cargo test                     # 5. Run all unit + integration tests (239+ tests, ~1s)
+cargo test                     # 5. Run all unit + integration tests (250+ tests, ~1s)
 cargo test --test integration  # 6. Integration tests only (mock DB)
 target/debug/pkms --help       # 7. Verify CLI works
 ```

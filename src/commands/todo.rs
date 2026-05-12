@@ -59,6 +59,8 @@ pub struct TodoOptions {
     pub exclude: Vec<String>,
     pub sort: Option<String>,
     pub limit: Option<usize>,
+    pub group: Option<String>,
+    pub scope: Vec<String>,
 }
 
 pub fn run(config: &Config, ctx: &OutputContext, opts: &TodoOptions) -> Result<()> {
@@ -138,31 +140,140 @@ pub fn run(config: &Config, ctx: &OutputContext, opts: &TodoOptions) -> Result<(
         }
     }
 
-    let sort_field = opts.sort.as_deref().unwrap_or("priority");
-    sort_items(&mut items, sort_field);
-
-    let total = items.len();
-
-    if let Some(l) = opts.limit {
-        items.truncate(l);
+    if !opts.scope.is_empty() {
+        let db_root = config.resolved_db_root()?;
+        let mut scope_paths: Vec<std::path::PathBuf> = Vec::new();
+        for s in &opts.scope {
+            if let Some(node) = graph.find_node(s) {
+                scope_paths.push(node.path.clone());
+                continue;
+            }
+            let expanded = if let Some(rest) = s.strip_prefix("~/") {
+                dirs::home_dir().map(|h| h.join(rest))
+            } else {
+                None
+            };
+            let mut matched = false;
+            for candidate in [Some(std::path::Path::new(s)), expanded.as_deref()]
+                .into_iter()
+                .flatten()
+            {
+                for p in [candidate.to_path_buf()]
+                    .into_iter()
+                    .chain(candidate.canonicalize().ok())
+                {
+                    if graph.results.iter().any(|r| r.path == p) {
+                        scope_paths.push(p);
+                        matched = true;
+                        break;
+                    }
+                }
+                if matched {
+                    break;
+                }
+            }
+            if matched {
+                continue;
+            }
+            let joined = db_root.join(s);
+            for p in [joined.clone()]
+                .into_iter()
+                .chain(joined.canonicalize().ok())
+            {
+                if graph.results.iter().any(|r| r.path == p) {
+                    scope_paths.push(p);
+                    break;
+                }
+            }
+        }
+        let item_paths: std::collections::HashSet<String> = scope_paths
+            .iter()
+            .map(|p| p.to_string_lossy().to_string())
+            .collect();
+        items.retain(|item| item_paths.contains(&item.path));
     }
 
-    match ctx.format {
-        OutputFormat::Text => print_todo_text(&items, total, &today_date),
-        OutputFormat::Json => {
-            #[derive(Serialize)]
-            struct TodoOutput {
-                total: usize,
-                items: Vec<TodoItem>,
-            }
-            ctx.print_json(&TodoOutput { total, items })?;
+    let sort_field = opts.sort.as_deref().unwrap_or("priority");
+
+    if let Some(group_field) = &opts.group {
+        let mut groups: std::collections::BTreeMap<String, Vec<TodoItem>> =
+            std::collections::BTreeMap::new();
+        for item in items {
+            let key = get_group_key(&item, group_field);
+            groups.entry(key).or_default().push(item);
         }
-        OutputFormat::Ndjson => {
-            ctx.print_ndjson(&items)?;
+
+        for group_items in groups.values_mut() {
+            sort_items(group_items, sort_field);
+            if let Some(l) = opts.limit {
+                group_items.truncate(l);
+            }
+        }
+
+        let total = groups.values().map(|g| g.len()).sum();
+
+        match ctx.format {
+            OutputFormat::Text => print_todo_text_grouped(&groups, group_field, total, &today_date),
+            OutputFormat::Json => {
+                ctx.print_json(&serde_json::json!({
+                    "total": total,
+                    "group_field": group_field,
+                    "groups": groups,
+                }))?;
+            }
+            OutputFormat::Ndjson => {
+                for (group_key, group_items) in &groups {
+                    for item in group_items {
+                        let mut json_item = serde_json::to_value(item)?;
+                        json_item.as_object_mut().unwrap().insert(
+                            "group".to_string(),
+                            serde_json::Value::String(group_key.clone()),
+                        );
+                        println!("{}", serde_json::to_string(&json_item)?);
+                    }
+                }
+            }
+        }
+    } else {
+        sort_items(&mut items, sort_field);
+
+        let total = items.len();
+
+        if let Some(l) = opts.limit {
+            items.truncate(l);
+        }
+
+        match ctx.format {
+            OutputFormat::Text => print_todo_text(&items, total, &today_date),
+            OutputFormat::Json => {
+                #[derive(Serialize)]
+                struct TodoOutput {
+                    total: usize,
+                    items: Vec<TodoItem>,
+                }
+                ctx.print_json(&TodoOutput { total, items })?;
+            }
+            OutputFormat::Ndjson => {
+                ctx.print_ndjson(&items)?;
+            }
         }
     }
 
     Ok(())
+}
+
+fn get_group_key(item: &TodoItem, group_field: &str) -> String {
+    match group_field {
+        "state" => item.todo_state.as_deref().unwrap_or("NONE").to_string(),
+        "file" => item.title.clone(),
+        "priority" => match item.priority {
+            Some('A') => "Priority A".to_string(),
+            Some('B') => "Priority B".to_string(),
+            Some('C') => "Priority C".to_string(),
+            _ => "No Priority".to_string(),
+        },
+        _ => "Unknown".to_string(),
+    }
 }
 
 fn sort_items(items: &mut [TodoItem], sort_field: &str) {
@@ -233,6 +344,60 @@ fn print_todo_text(items: &[TodoItem], total: usize, _today_date: &chrono::Naive
                 item.title,
                 if item.is_daily_file { " [daily]" } else { "" }
             );
+        }
+        println!();
+    }
+
+    println!("Total: {total} TODO item(s)");
+}
+
+fn print_todo_text_grouped(
+    groups: &std::collections::BTreeMap<String, Vec<TodoItem>>,
+    group_field: &str,
+    total: usize,
+    _today_date: &chrono::NaiveDate,
+) {
+    if groups.is_empty() || groups.values().all(|g| g.is_empty()) {
+        println!("No TODO items found.");
+        return;
+    }
+
+    let show_note_title = group_field != "file";
+
+    for (group_key, group) in groups {
+        if group.is_empty() {
+            continue;
+        }
+        println!("=== {group_key} ({}) ===", group.len());
+        for item in group {
+            let prio = item
+                .priority
+                .map(|p| format!("[#{}] ", p))
+                .unwrap_or_default();
+            let date_info = item
+                .scheduled_date
+                .as_deref()
+                .or(item.deadline_date.as_deref())
+                .map(|d| format!(" ({})", d))
+                .unwrap_or_default();
+            if show_note_title {
+                println!(
+                    "  {}{}{}  \u{2014} {}{}",
+                    prio,
+                    item.heading_title,
+                    date_info,
+                    item.title,
+                    if item.is_daily_file { " [daily]" } else { "" }
+                );
+            } else {
+                println!(
+                    "  {}{}{}{}",
+                    prio,
+                    item.heading_title,
+                    date_info,
+                    if item.is_daily_file { " [daily]" } else { "" }
+                );
+            }
         }
         println!();
     }

@@ -393,6 +393,8 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
             exclude,
             sort,
             limit,
+            group,
+            scope,
         } => commands::todo::run(
             cfg,
             ctx,
@@ -407,6 +409,8 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
                     .unwrap_or_default(),
                 sort: sort.clone(),
                 limit: *limit,
+                group: group.clone(),
+                scope: scope.clone().unwrap_or_default(),
             },
         )
         .map(|()| ExitCode::SUCCESS)?,

@@ -274,6 +274,18 @@ pub enum Command {
         sort: Option<String>,
         #[arg(long, help = "Maximum results")]
         limit: Option<usize>,
+        #[arg(
+            long,
+            help = "Group: priority, state, file (same values as --sort; if combined with --sort, sorting is done within sections)"
+        )]
+        group: Option<String>,
+        #[arg(
+            long,
+            num_args = 1..,
+            value_name = "TARGET",
+            help = "Restrict to scope (UUIDs, file paths, or note titles)"
+        )]
+        scope: Option<Vec<String>>,
     },
     #[command(name = "path", about = "Find shortest path between two notes")]
     Path {
