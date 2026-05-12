@@ -180,7 +180,7 @@ fn test_todo_group_priority() {
         "expected No Priority group"
     );
     assert_eq!(groups["Priority A"].as_array().unwrap().len(), 1);
-    assert_eq!(groups["No Priority"].as_array().unwrap().len(), 5);
+    assert_eq!(groups["No Priority"].as_array().unwrap().len(), 8);
 }
 
 #[test]
@@ -272,8 +272,8 @@ fn test_todo_scope_multiple() {
     let items = v["items"].as_array().unwrap();
     assert_eq!(
         items.len(),
-        2,
-        "expected 2 items from Daily Note + Daily Plan scope"
+        3,
+        "expected 3 items from Daily Note + Daily Plan scope"
     );
 }
 

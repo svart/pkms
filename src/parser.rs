@@ -75,8 +75,10 @@ pub(crate) static LINK_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"\[\[([^\]]+?)(?:\]\[([^\]]*))?\]\]").unwrap());
 
 pub(crate) static HEADING_RE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"^(\*+)\s+(?:([A-Z]+)\s+)?(?:\[#([A-C])\]\s+)?(.*?)(?:\s+:(\w+(?::\w+)*):)?\s*$")
-        .unwrap()
+    Regex::new(
+        r"^(\*+)\s+(?:([A-Z][A-Z-]*)\s+)?(?:\[#([A-C])\]\s+)?(.*?)(?:\s+:(\w+(?::\w+)*):)?\s*$",
+    )
+    .unwrap()
 });
 
 pub(crate) static SCHEDULED_RE: LazyLock<Regex> =
