@@ -258,7 +258,7 @@ pub enum Command {
         #[arg(long, help = "Show only upcoming items (not overdue or today)")]
         upcoming: bool,
     },
-    #[command(about = "Display TODO items grouped by state")]
+    #[command(about = "Display TODO items (use --group to group by state/priority/file)")]
     Todo {
         #[arg(
             long,

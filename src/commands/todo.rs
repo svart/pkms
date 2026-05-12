@@ -429,36 +429,14 @@ fn print_todo_text(
         return;
     }
 
-    let mut by_state: BTreeMap<String, Vec<&TodoItem>> = BTreeMap::new();
-    for item in items {
-        let state = item.todo_state.as_deref().unwrap_or("NONE").to_string();
-        by_state.entry(state).or_default().push(item);
-    }
-
     let mut builder = Builder::new();
     builder.push_record(["Date", "State", "Type", "Prio", "Note", "Heading"]);
 
-    let mut section_rows: Vec<usize> = Vec::new();
-    let mut row = 1;
-    for (state, group) in &by_state {
-        if row > 1 {
-            builder.push_record(["", "", "", "", "", ""]);
-            row += 1;
-        }
-        let label = format!("=== {state} ({}) ===", group.len());
-        builder.push_record([label.as_str(), "", "", "", "", ""]);
-        section_rows.push(row);
-        row += 1;
-        for item in group {
-            push_todo_row(&mut builder, item);
-            row += 1;
-        }
+    for item in items {
+        push_todo_row(&mut builder, item);
     }
 
     let mut table = builder.build();
-    for &sec_row in &section_rows {
-        table.with(Modify::new((sec_row, 0)).with(Span::column(6)));
-    }
     table.with(Style::blank().horizontals([(1, HorizontalLine::new('─').intersection(' '))]));
     println!("{}", table);
     println!();
