@@ -5,8 +5,12 @@ use crate::org_date::parse_org_date;
 use crate::output::OutputContext;
 use crate::parser::{find_daily_file_date, strip_org_links};
 use anyhow::Result;
-use chrono::Local;
+use chrono::{Local, Timelike};
 use serde::Serialize;
+use std::collections::BTreeMap;
+use tabled::builder::Builder;
+use tabled::settings::style::{HorizontalLine, Style};
+use tabled::settings::{Modify, Span};
 
 #[derive(Debug, Clone, Serialize)]
 pub struct TodoItem {
@@ -196,12 +200,13 @@ pub fn run(config: &Config, ctx: &OutputContext, opts: &TodoOptions) -> Result<(
     let sort_field = opts.sort.as_deref().unwrap_or("priority");
 
     if let Some(group_field) = &opts.group {
-        let mut groups: std::collections::BTreeMap<String, Vec<TodoItem>> =
-            std::collections::BTreeMap::new();
+        let mut groups: BTreeMap<String, Vec<TodoItem>> = BTreeMap::new();
         for item in items {
             let key = get_group_key(&item, group_field);
             groups.entry(key).or_default().push(item);
         }
+
+        let total_before_limit: usize = groups.values().map(|g| g.len()).sum();
 
         for group_items in groups.values_mut() {
             sort_items(group_items, sort_field);
@@ -210,13 +215,19 @@ pub fn run(config: &Config, ctx: &OutputContext, opts: &TodoOptions) -> Result<(
             }
         }
 
-        let total = groups.values().map(|g| g.len()).sum();
+        let shown: usize = groups.values().map(|g| g.len()).sum();
 
         match ctx.format {
-            OutputFormat::Text => print_todo_text_grouped(&groups, group_field, total, &today_date),
+            OutputFormat::Text => print_todo_text_grouped(
+                &groups,
+                group_field,
+                shown,
+                total_before_limit,
+                &today_date,
+            ),
             OutputFormat::Json => {
                 ctx.print_json(&serde_json::json!({
-                    "total": total,
+                    "total": shown,
                     "group_field": group_field,
                     "groups": groups,
                 }))?;
@@ -237,21 +248,26 @@ pub fn run(config: &Config, ctx: &OutputContext, opts: &TodoOptions) -> Result<(
     } else {
         sort_items(&mut items, sort_field);
 
-        let total = items.len();
+        let total_before_limit = items.len();
 
         if let Some(l) = opts.limit {
             items.truncate(l);
         }
 
+        let shown = items.len();
+
         match ctx.format {
-            OutputFormat::Text => print_todo_text(&items, total, &today_date),
+            OutputFormat::Text => print_todo_text(&items, shown, total_before_limit, &today_date),
             OutputFormat::Json => {
                 #[derive(Serialize)]
                 struct TodoOutput {
                     total: usize,
                     items: Vec<TodoItem>,
                 }
-                ctx.print_json(&TodoOutput { total, items })?;
+                ctx.print_json(&TodoOutput {
+                    total: shown,
+                    items,
+                })?;
             }
             OutputFormat::Ndjson => {
                 ctx.print_ndjson(&items)?;
@@ -310,50 +326,107 @@ fn priority_value(p: char) -> u8 {
     }
 }
 
-fn print_todo_text(items: &[TodoItem], total: usize, _today_date: &chrono::NaiveDate) {
+fn format_display_datetime(raw: &str) -> String {
+    let parsed = parse_org_date(raw);
+    match parsed {
+        Some(d) => {
+            let date_str = d.base_date.format("%Y-%m-%d %a").to_string();
+            if let Some(t) = d.time {
+                format!("{} {:02}:{:02}", date_str, t.hour(), t.minute())
+            } else {
+                date_str
+            }
+        }
+        None => raw.to_string(),
+    }
+}
+
+fn push_todo_row(builder: &mut Builder, item: &TodoItem) {
+    let datetime = item
+        .scheduled
+        .as_ref()
+        .map(|s| format_display_datetime(s))
+        .or_else(|| item.deadline.as_ref().map(|d| format_display_datetime(d)))
+        .or_else(|| item.daily_file_date.clone())
+        .unwrap_or_default();
+    let state = item.todo_state.as_deref().unwrap_or("").to_string();
+    let sched = if item.scheduled_date.is_some() {
+        "SCHED"
+    } else if item.deadline_date.is_some() {
+        "DEADL"
+    } else {
+        ""
+    }
+    .to_string();
+    let prio = item
+        .priority
+        .map(|p| format!("[#{}]", p))
+        .unwrap_or_default();
+    builder.push_record([
+        datetime,
+        state,
+        sched,
+        prio,
+        item.title.clone(),
+        item.heading_title.clone(),
+    ]);
+}
+
+fn print_todo_text(
+    items: &[TodoItem],
+    shown: usize,
+    total: usize,
+    _today_date: &chrono::NaiveDate,
+) {
     if items.is_empty() {
         println!("No TODO items found.");
         return;
     }
 
-    let mut by_state: std::collections::BTreeMap<String, Vec<&TodoItem>> =
-        std::collections::BTreeMap::new();
+    let mut by_state: BTreeMap<String, Vec<&TodoItem>> = BTreeMap::new();
     for item in items {
         let state = item.todo_state.as_deref().unwrap_or("NONE").to_string();
         by_state.entry(state).or_default().push(item);
     }
 
+    let mut builder = Builder::new();
+    builder.push_record(["Date", "State", "Type", "Prio", "Note", "Heading"]);
+
+    let mut section_rows: Vec<usize> = Vec::new();
+    let mut row = 1;
     for (state, group) in &by_state {
-        println!("=== {state} ({}) ===", group.len());
-        for item in group {
-            let prio = item
-                .priority
-                .map(|p| format!("[#{}] ", p))
-                .unwrap_or_default();
-            let date_info = item
-                .scheduled_date
-                .as_deref()
-                .or(item.deadline_date.as_deref())
-                .map(|d| format!(" ({})", d))
-                .unwrap_or_default();
-            println!(
-                "  {}{}{}  \u{2014} {}{}",
-                prio,
-                item.heading_title,
-                date_info,
-                item.title,
-                if item.is_daily_file { " [daily]" } else { "" }
-            );
+        if row > 1 {
+            builder.push_record(["", "", "", "", "", ""]);
+            row += 1;
         }
-        println!();
+        let label = format!("=== {state} ({}) ===", group.len());
+        builder.push_record([label.as_str(), "", "", "", "", ""]);
+        section_rows.push(row);
+        row += 1;
+        for item in group {
+            push_todo_row(&mut builder, item);
+            row += 1;
+        }
     }
 
-    println!("Total: {total} TODO item(s)");
+    let mut table = builder.build();
+    for &sec_row in &section_rows {
+        table.with(Modify::new((sec_row, 0)).with(Span::column(6)));
+    }
+    table.with(Style::blank().horizontals([(1, HorizontalLine::new('─').intersection(' '))]));
+    println!("{}", table);
+    println!();
+    if shown < total {
+        println!("Shown: {shown}, Total: {total} TODO item(s)");
+    } else {
+        println!("Total: {total} TODO item(s)");
+    }
 }
 
 fn print_todo_text_grouped(
-    groups: &std::collections::BTreeMap<String, Vec<TodoItem>>,
-    group_field: &str,
+    groups: &BTreeMap<String, Vec<TodoItem>>,
+    _group_field: &str,
+    shown: usize,
     total: usize,
     _today_date: &chrono::NaiveDate,
 ) {
@@ -362,45 +435,39 @@ fn print_todo_text_grouped(
         return;
     }
 
-    let show_note_title = group_field != "file";
+    let mut builder = Builder::new();
+    builder.push_record(["Date", "State", "Type", "Prio", "Note", "Heading"]);
 
+    let mut section_rows: Vec<usize> = Vec::new();
+    let mut row = 1;
     for (group_key, group) in groups {
         if group.is_empty() {
             continue;
         }
-        println!("=== {group_key} ({}) ===", group.len());
-        for item in group {
-            let prio = item
-                .priority
-                .map(|p| format!("[#{}] ", p))
-                .unwrap_or_default();
-            let date_info = item
-                .scheduled_date
-                .as_deref()
-                .or(item.deadline_date.as_deref())
-                .map(|d| format!(" ({})", d))
-                .unwrap_or_default();
-            if show_note_title {
-                println!(
-                    "  {}{}{}  \u{2014} {}{}",
-                    prio,
-                    item.heading_title,
-                    date_info,
-                    item.title,
-                    if item.is_daily_file { " [daily]" } else { "" }
-                );
-            } else {
-                println!(
-                    "  {}{}{}{}",
-                    prio,
-                    item.heading_title,
-                    date_info,
-                    if item.is_daily_file { " [daily]" } else { "" }
-                );
-            }
+        if row > 1 {
+            builder.push_record(["", "", "", "", "", ""]);
+            row += 1;
         }
-        println!();
+        let label = format!("=== {group_key} ({}) ===", group.len());
+        builder.push_record([label.as_str(), "", "", "", "", ""]);
+        section_rows.push(row);
+        row += 1;
+        for item in group {
+            push_todo_row(&mut builder, item);
+            row += 1;
+        }
     }
 
-    println!("Total: {total} TODO item(s)");
+    let mut table = builder.build();
+    for &sec_row in &section_rows {
+        table.with(Modify::new((sec_row, 0)).with(Span::column(6)));
+    }
+    table.with(Style::blank().horizontals([(1, HorizontalLine::new('─').intersection(' '))]));
+    println!("{}", table);
+    println!();
+    if shown < total {
+        println!("Shown: {shown}, Total: {total} TODO item(s)");
+    } else {
+        println!("Total: {total} TODO item(s)");
+    }
 }
