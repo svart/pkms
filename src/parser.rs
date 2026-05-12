@@ -216,6 +216,18 @@ pub fn parse_note(content: &str) -> ParsedNote {
                 heading_stack.push(headings.len() - 1);
                 current_heading_idx = Some(headings.len() - 1);
                 just_saw_heading = true;
+
+                for cap in LINK_RE.captures_iter(line) {
+                    let link_target = cap[1].to_string();
+                    if let Some(link) = parse_link(&link_target) {
+                        if let Some(&idx) = heading_stack.last() {
+                            headings[idx].outgoing.push(link);
+                        } else {
+                            outgoing.push(link);
+                        }
+                    }
+                }
+
                 continue;
             }
 
@@ -324,6 +336,9 @@ fn parse_link(target: &str) -> Option<Link> {
     }
     if let Some(rest) = target.strip_prefix("file:") {
         return Some(Link::File(rest.to_string()));
+    }
+    if target.starts_with("org:") {
+        return Some(Link::File(target.to_string()));
     }
     if let Some(rest) = target.strip_prefix("attachment:") {
         return Some(Link::Attachment(rest.to_string()));

@@ -225,19 +225,26 @@ fn validate_one(graph: &Graph, target: &str, db_root: &Path) -> Result<ValidateO
                 broken_internal.push(uuid.clone());
             }
             Link::File(path_str) => {
-                let expanded = if path_str.starts_with('~') {
+                let (inner_path, is_org) = if let Some(rest) = path_str.strip_prefix("org:") {
+                    (rest.to_string(), true)
+                } else {
+                    (path_str.clone(), false)
+                };
+                let expanded = if inner_path.starts_with('~') {
                     if let Some(home) = dirs::home_dir() {
-                        path_str.replacen('~', &home.to_string_lossy(), 1)
+                        inner_path.replacen('~', &home.to_string_lossy(), 1)
                     } else {
-                        path_str.clone()
+                        inner_path.clone()
                     }
                 } else {
-                    path_str.clone()
+                    inner_path.clone()
                 };
                 let clean_path = expanded.split("::").next().unwrap_or(&expanded);
                 let file_path = Path::new(clean_path);
                 let full_path = if file_path.is_absolute() {
                     file_path.to_path_buf()
+                } else if is_org {
+                    db_root.join(file_path)
                 } else {
                     node.path.parent().unwrap_or(db_root).join(file_path)
                 };

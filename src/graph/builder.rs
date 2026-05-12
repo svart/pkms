@@ -218,12 +218,23 @@ impl Graph {
                     .push(primary_uuid.clone());
             }
 
-            let node =
+            // Collect outgoing links from headings without UUIDs into the primary note
+            let heading_orphan_links: Vec<Link> = parsed
+                .headings
+                .iter()
+                .filter(|h| h.uuid.is_none())
+                .flat_map(|h| h.outgoing.clone())
+                .collect();
+
+            let mut node =
                 Node::from_parsed(primary_uuid.clone(), title.clone(), path.clone(), &parsed);
+            node.outgoing.extend(heading_orphan_links.clone());
 
             // Insert primary UUID into nodes
             nodes.insert(primary_uuid.clone(), node.clone());
-            uuid_to_outgoing.insert(primary_uuid.clone(), parsed.outgoing.clone());
+            let mut primary_outgoing = parsed.outgoing.clone();
+            primary_outgoing.extend(heading_orphan_links);
+            uuid_to_outgoing.insert(primary_uuid.clone(), primary_outgoing);
 
             // Check heading UUIDs for uniqueness
             let mut file_heading_uuids_seen = std::collections::HashSet::new();

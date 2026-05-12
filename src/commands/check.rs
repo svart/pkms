@@ -89,19 +89,26 @@ pub struct AgendaIssue {
 }
 
 fn link_target_exists(target: &str, source_path: &Path, db_root: &Path) -> bool {
-    let expanded = if target.starts_with('~') {
+    let (inner_path, is_org) = if let Some(rest) = target.strip_prefix("org:") {
+        (rest, true)
+    } else {
+        (target, false)
+    };
+    let expanded = if inner_path.starts_with('~') {
         if let Some(home) = dirs::home_dir() {
-            target.replacen('~', &home.to_string_lossy(), 1)
+            inner_path.replacen('~', &home.to_string_lossy(), 1)
         } else {
-            target.to_string()
+            inner_path.to_string()
         }
     } else {
-        target.to_string()
+        inner_path.to_string()
     };
     let path_str = expanded.split("::").next().unwrap_or(&expanded);
     let path = Path::new(path_str);
     let full_path = if path.is_absolute() {
         path.to_path_buf()
+    } else if is_org {
+        db_root.join(path)
     } else {
         source_path.parent().unwrap_or(db_root).join(path)
     };
