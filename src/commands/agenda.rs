@@ -413,7 +413,6 @@ fn print_agenda_text(items: &[AgendaItem], flat: bool, line_sep: bool) {
 
     let headers = ["Date", "State", "Type", "Prio", "Note", "Heading"];
     let mut max_widths: [usize; 6] = headers.map(|h| h.len());
-    let mut total_rows = 1;
     for item in items {
         for row in format_agenda_rows(item) {
             for (i, col) in row.iter().enumerate() {
@@ -421,7 +420,6 @@ fn print_agenda_text(items: &[AgendaItem], flat: bool, line_sep: bool) {
                 max_widths[i] = max_widths[i].max(line_w);
             }
         }
-        total_rows += format_agenda_rows(item).len();
     }
 
     let fixed_sum = max_widths[0] + max_widths[1] + max_widths[2] + max_widths[3];
@@ -470,29 +468,46 @@ fn print_agenda_text(items: &[AgendaItem], flat: bool, line_sep: bool) {
     let mut builder = Builder::new();
     builder.push_record(["Date", "State", "Type", "Prio", "Note", "Heading"]);
 
+    let mut row_idx = 1;
+    let mut no_border_rows: Vec<usize> = Vec::new();
+
     if flat {
         for item in items {
-            for row in format_agenda_rows(item) {
-                builder.push_record(row);
+            let rows = format_agenda_rows(item);
+            for (j, row) in rows.iter().enumerate() {
+                if j > 0 {
+                    no_border_rows.push(row_idx);
+                }
+                builder.push_record(row.clone());
+                row_idx += 1;
             }
         }
     } else {
         let mut need_sep = false;
-        for (items, label) in [
+        for (section_items, label) in [
             (&overdue, "=== Overdue ==="),
             (&today_items, "=== Today ==="),
             (&upcoming, "=== Upcoming ==="),
         ] {
-            if items.is_empty() {
+            if section_items.is_empty() {
                 continue;
             }
             if need_sep {
                 builder.push_record(["", "", "", "", "", ""]);
+                no_border_rows.push(row_idx);
+                row_idx += 1;
             }
             builder.push_record([label, "", "", "", "", ""]);
-            for item in items {
-                for row in format_agenda_rows(item) {
-                    builder.push_record(row);
+            no_border_rows.push(row_idx);
+            row_idx += 1;
+            for item in section_items {
+                let rows = format_agenda_rows(item);
+                for (j, row) in rows.iter().enumerate() {
+                    if j > 0 {
+                        no_border_rows.push(row_idx);
+                    }
+                    builder.push_record(row.clone());
+                    row_idx += 1;
                 }
             }
             need_sep = true;
@@ -502,9 +517,11 @@ fn print_agenda_text(items: &[AgendaItem], flat: bool, line_sep: bool) {
     let mut table = builder.build();
     table.with(Style::blank());
     table.with(Modify::new(Rows::one(1)).with(Border::new().top('─')));
-    if line_sep && total_rows > 2 {
-        for i in 2..total_rows {
-            table.with(Modify::new(Rows::one(i)).with(Border::new().top('─')));
+    if line_sep && row_idx > 2 {
+        for i in 2..row_idx {
+            if !no_border_rows.contains(&i) {
+                table.with(Modify::new(Rows::one(i)).with(Border::new().top('─')));
+            }
         }
     }
     if let Some((note_w, heading_w)) = wrap {
