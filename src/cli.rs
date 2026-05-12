@@ -255,6 +255,8 @@ pub enum Command {
         today: bool,
         #[arg(long, help = "Show this week's agenda items")]
         week: bool,
+        #[arg(long, help = "Show only upcoming items (not overdue or today)")]
+        upcoming: bool,
     },
     #[command(about = "Display TODO items grouped by state")]
     Todo {

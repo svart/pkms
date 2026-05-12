@@ -419,6 +419,7 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
             limit,
             today,
             week,
+            upcoming,
         } => commands::agenda::run(
             cfg,
             ctx,
@@ -432,6 +433,7 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
                     .map(|s| s.split(',').map(|s| s.trim().to_string()).collect())
                     .unwrap_or_default(),
                 overdue: *overdue,
+                upcoming: *upcoming,
                 date: date
                     .as_deref()
                     .and_then(|d| chrono::NaiveDate::parse_from_str(d, "%Y-%m-%d").ok()),

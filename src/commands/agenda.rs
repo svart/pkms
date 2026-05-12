@@ -5,8 +5,10 @@ use crate::org_date::parse_org_date;
 use crate::output::OutputContext;
 use crate::parser::{find_daily_file_date, strip_org_links};
 use anyhow::Result;
-use chrono::{Datelike, Local, NaiveDate};
+use chrono::{Datelike, Local, NaiveDate, Timelike};
 use serde::Serialize;
+use tabled::builder::Builder;
+use tabled::settings::style::{HorizontalLine, Style};
 
 #[derive(Debug, Clone, Serialize)]
 pub struct AgendaItem {
@@ -56,6 +58,7 @@ pub struct AgendaOptions {
     pub include: Vec<String>,
     pub exclude: Vec<String>,
     pub overdue: bool,
+    pub upcoming: bool,
     pub date: Option<NaiveDate>,
     pub sort: Option<String>,
     pub limit: Option<usize>,
@@ -179,6 +182,18 @@ pub fn run(config: &Config, ctx: &OutputContext, opts: &AgendaOptions) -> Result
         }
     }
 
+    if opts.upcoming {
+        let today = Local::now().date_naive();
+        let today_str = today.format("%Y-%m-%d").to_string();
+        items.retain(|item| {
+            let is_today = item.scheduled_date.as_deref() == Some(today_str.as_str())
+                || item.deadline_date.as_deref() == Some(today_str.as_str())
+                || (item.is_daily_file
+                    && item.daily_file_date.as_deref() == Some(today_str.as_str()));
+            !item.is_overdue && !is_today
+        });
+    }
+
     let sort_field = opts.sort.as_deref().unwrap_or("priority");
     sort_items(&mut items, sort_field);
 
@@ -252,10 +267,16 @@ fn priority_value(p: char) -> u8 {
     }
 }
 
-fn format_scheduled_deadline(raw: &str) -> String {
+fn format_display_datetime(raw: &str) -> String {
     let parsed = parse_org_date(raw);
     match parsed {
-        Some(d) => d.base_date.format("%Y-%m-%d").to_string(),
+        Some(d) => {
+            if let Some(t) = d.time {
+                format!("{} {:02}:{:02}", d.base_date, t.hour(), t.minute())
+            } else {
+                d.base_date.to_string()
+            }
+        }
         None => raw.to_string(),
     }
 }
@@ -306,86 +327,64 @@ fn print_agenda_text(items: &[AgendaItem]) {
     today_items.sort_by(sort_date);
     upcoming.sort_by(sort_date);
 
-    if !overdue.is_empty() {
-        println!("=== Overdue (deadline passed) ===");
-        for item in &overdue {
-            let prio = item
-                .priority
-                .map(|p| format!("[#{}] ", p))
-                .unwrap_or_default();
-            let todo_display = item.todo_state.as_deref().unwrap_or_default();
-            println!(
-                "  {}  {} {}  \u{2014} {}",
-                prio, todo_display, item.heading_title, item.title
-            );
-            if let Some(ref d) = item.deadline {
-                println!("        DEADLINE: {}", format_scheduled_deadline(d));
-            }
-            if let Some(ref s) = item.scheduled {
-                println!("        SCHEDULED: {}", format_scheduled_deadline(s));
-            }
+    let mut builder = Builder::new();
+    builder.push_record(["Date", "State", "Type", "Prio", "Note", "Heading"]);
+
+    let push_item = |builder: &mut Builder, item: &AgendaItem| {
+        let datetime = item
+            .scheduled
+            .as_ref()
+            .map(|s| format_display_datetime(s))
+            .or_else(|| item.deadline.as_ref().map(|d| format_display_datetime(d)))
+            .or_else(|| item.daily_file_date.clone())
+            .unwrap_or_default();
+        let state = item.todo_state.as_deref().unwrap_or("").to_string();
+        let sched = if item.scheduled_date.is_some() {
+            "SCHED"
+        } else if item.deadline_date.is_some() {
+            "DEADL"
+        } else {
+            ""
         }
-        println!();
+        .to_string();
+        let prio = item
+            .priority
+            .map(|p| format!("[#{}]", p))
+            .unwrap_or_default();
+        builder.push_record([
+            datetime,
+            state,
+            sched,
+            prio,
+            item.title.clone(),
+            item.heading_title.clone(),
+        ]);
+    };
+
+    let mut need_sep = false;
+    for (items, label) in [
+        (&overdue, "=== Overdue ==="),
+        (&today_items, "=== Today ==="),
+        (&upcoming, "=== Upcoming ==="),
+    ] {
+        if items.is_empty() {
+            continue;
+        }
+        if need_sep {
+            builder.push_record(["", "", "", "", "", ""]);
+        }
+        builder.push_record([label, "", "", "", "", ""]);
+        for item in items {
+            push_item(&mut builder, item);
+        }
+        need_sep = true;
     }
 
-    if !today_items.is_empty() {
-        println!("=== Today ===");
-        for item in &today_items {
-            let date_display = item
-                .scheduled_date
-                .as_deref()
-                .or(item.deadline_date.as_deref())
-                .or(item.daily_file_date.as_deref())
-                .unwrap_or("");
-            let daily_mark = if item.is_daily_file { " [daily]" } else { "" };
-            let prio = item
-                .priority
-                .map(|p| format!("[#{}] ", p))
-                .unwrap_or_default();
-            let todo_display = item.todo_state.as_deref().unwrap_or_default();
-            println!(
-                "  {}  {}{} {}  \u{2014} {}{}",
-                date_display, prio, todo_display, item.heading_title, item.title, daily_mark
-            );
-            if let Some(ref s) = item.scheduled {
-                println!("        SCHEDULED: {}", format_scheduled_deadline(s));
-            }
-            if let Some(ref d) = item.deadline {
-                println!("        DEADLINE: {}", format_scheduled_deadline(d));
-            }
-        }
-        println!();
-    }
-
-    if !upcoming.is_empty() {
-        println!("=== Upcoming ===");
-        for item in &upcoming {
-            let date_display = item
-                .scheduled_date
-                .as_deref()
-                .or(item.deadline_date.as_deref())
-                .or(item.daily_file_date.as_deref())
-                .unwrap_or("");
-            let daily_mark = if item.is_daily_file { " [daily]" } else { "" };
-            let prio = item
-                .priority
-                .map(|p| format!("[#{}] ", p))
-                .unwrap_or_default();
-            let todo_display = item.todo_state.as_deref().unwrap_or_default();
-            println!(
-                "  {}  {}{} {}  \u{2014} {}{}",
-                date_display, prio, todo_display, item.heading_title, item.title, daily_mark
-            );
-            if let Some(ref s) = item.scheduled {
-                println!("        SCHEDULED: {}", format_scheduled_deadline(s));
-            }
-            if let Some(ref d) = item.deadline {
-                println!("        DEADLINE: {}", format_scheduled_deadline(d));
-            }
-        }
-        println!();
-    }
+    let mut table = builder.build();
+    table.with(Style::blank().horizontals([(1, HorizontalLine::new('─').intersection(' '))]));
+    println!("{}", table);
 
     let displayed = overdue.len() + today_items.len() + upcoming.len();
+    println!();
     println!("Total: {displayed} planned item(s)");
 }
