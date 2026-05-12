@@ -5,7 +5,7 @@ use crate::org_date::parse_org_date;
 use crate::output::OutputContext;
 use crate::parser::{find_daily_file_date, strip_org_links};
 use anyhow::Result;
-use chrono::{Local, Timelike};
+use chrono::{Local, NaiveDate, NaiveDateTime, NaiveTime, Timelike};
 use serde::Serialize;
 use std::collections::BTreeMap;
 use tabled::builder::Builder;
@@ -65,6 +65,35 @@ pub struct TodoOptions {
     pub limit: Option<usize>,
     pub group: Option<String>,
     pub scope: Vec<String>,
+    pub after: Option<NaiveDateTime>,
+    pub before: Option<NaiveDateTime>,
+    pub prio: Option<String>,
+}
+
+fn item_datetimes(item: &TodoItem) -> Vec<NaiveDateTime> {
+    let mut result = Vec::new();
+    if let Some(ref raw) = item.scheduled
+        && let Some(parsed) = parse_org_date(raw)
+    {
+        let time = parsed
+            .time
+            .unwrap_or(NaiveTime::from_hms_opt(0, 0, 0).unwrap());
+        result.push(parsed.base_date.and_time(time));
+    }
+    if let Some(ref raw) = item.deadline
+        && let Some(parsed) = parse_org_date(raw)
+    {
+        let time = parsed
+            .time
+            .unwrap_or(NaiveTime::from_hms_opt(0, 0, 0).unwrap());
+        result.push(parsed.base_date.and_time(time));
+    }
+    if let Some(ref d) = item.daily_file_date
+        && let Ok(date) = NaiveDate::parse_from_str(d, "%Y-%m-%d")
+    {
+        result.push(date.and_hms_opt(0, 0, 0).unwrap());
+    }
+    result
 }
 
 pub fn run(config: &Config, ctx: &OutputContext, opts: &TodoOptions) -> Result<()> {
@@ -195,6 +224,23 @@ pub fn run(config: &Config, ctx: &OutputContext, opts: &TodoOptions) -> Result<(
             .map(|p| p.to_string_lossy().to_string())
             .collect();
         items.retain(|item| item_paths.contains(&item.path));
+    }
+
+    if let Some(ref prio) = opts.prio {
+        if prio.is_empty() {
+            items.retain(|item| item.priority.is_none());
+        } else if let Some(p) = prio.chars().next() {
+            let target = p.to_ascii_uppercase();
+            items.retain(|item| item.priority == Some(target));
+        }
+    }
+
+    if let Some(ref after_dt) = opts.after {
+        items.retain(|item| item_datetimes(item).iter().any(|dt| dt >= after_dt));
+    }
+
+    if let Some(ref before_dt) = opts.before {
+        items.retain(|item| item_datetimes(item).iter().any(|dt| dt <= before_dt));
     }
 
     let sort_field = opts.sort.as_deref().unwrap_or("priority");

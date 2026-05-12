@@ -319,6 +319,174 @@ fn test_todo_scope_group() {
 }
 
 #[test]
+fn test_todo_after() {
+    let (_dir, root) = setup_db();
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "todo",
+        "--after",
+        "2026-05-10",
+    ]);
+    assert!(status.success());
+    let items = v["items"].as_array().unwrap();
+    // Items with dates >= 2026-05-10: High priority task (SCHEDULED 2026-05-10),
+    // Low priority task (DEADLINE 2026-06-15)
+    assert!(
+        items.len() >= 2,
+        "expected at least 2 items with --after 2026-05-10, got {}",
+        items.len()
+    );
+}
+
+#[test]
+fn test_todo_before() {
+    let (_dir, root) = setup_db();
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "todo",
+        "--before",
+        "2026-05-05",
+    ]);
+    assert!(status.success());
+    let items = v["items"].as_array().unwrap();
+    // Items with dates <= 2026-05-05: Morning routine (SCHEDULED 2026-05-03),
+    // Project work (DEADLINE 2026-05-05)
+    assert!(
+        items.len() >= 2,
+        "expected at least 2 items with --before 2026-05-05, got {}",
+        items.len()
+    );
+}
+
+#[test]
+fn test_todo_after_before_range() {
+    let (_dir, root) = setup_db();
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "todo",
+        "--after",
+        "2026-06-01",
+        "--before",
+        "2026-06-30",
+    ]);
+    assert!(status.success());
+    let items = v["items"].as_array().unwrap();
+    // Only Low priority task has deadline 2026-06-15 within this range
+    assert_eq!(
+        items.len(),
+        1,
+        "expected 1 item in date range, got {}",
+        items.len()
+    );
+    assert_eq!(items[0]["heading_title"], "Low priority task");
+}
+
+#[test]
+fn test_todo_prio_a() {
+    let (_dir, root) = setup_db();
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "todo",
+        "--prio",
+        "A",
+    ]);
+    assert!(status.success());
+    let items = v["items"].as_array().unwrap();
+    assert_eq!(
+        items.len(),
+        1,
+        "expected 1 item with priority A, got {}",
+        items.len()
+    );
+    assert_eq!(items[0]["heading_title"], "High priority task");
+}
+
+#[test]
+fn test_todo_prio_empty() {
+    let (_dir, root) = setup_db();
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "todo",
+        "--prio",
+        "",
+    ]);
+    assert!(status.success());
+    let items = v["items"].as_array().unwrap();
+    // Every item without priority should be included
+    for item in items {
+        assert!(
+            item["priority"].is_null(),
+            "expected no priority for item {:?}, got {:?}",
+            item["heading_title"],
+            item["priority"]
+        );
+    }
+}
+
+#[test]
+fn test_todo_after_datetime() {
+    let (_dir, root) = setup_db();
+    // Add a note with a SCHEDULED timestamp that includes time
+    db_write(
+        &root,
+        "20260101000015-timed_note.org",
+        r#":PROPERTIES:
+:ID:       5555aaaa-5555-4555-8555-555555555555
+:END:
+#+title: Timed Note
+#+filetags: :test:
+
+* TODO Morning task
+SCHEDULED: <2026-05-10 Sun 09:00>
+* TODO Afternoon task
+SCHEDULED: <2026-05-10 Sun 14:00>
+"#,
+    );
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "todo",
+        "--after",
+        "2026-05-10 12:00",
+    ]);
+    assert!(status.success());
+    let items = v["items"].as_array().unwrap();
+    // Only "Afternoon task" (SCHEDULED 2026-05-10 14:00) should match
+    // "Morning task" (SCHEDULED 2026-05-10 09:00) is before 12:00
+    let heading_titles: Vec<&str> = items
+        .iter()
+        .filter_map(|i| i["heading_title"].as_str())
+        .collect();
+    assert!(
+        heading_titles.contains(&"Afternoon task"),
+        "expected Afternoon task in results, got {:?}",
+        heading_titles
+    );
+    assert!(
+        !heading_titles.contains(&"Morning task"),
+        "did not expect Morning task (09:00 < 12:00), got {:?}",
+        heading_titles
+    );
+}
+
+#[test]
 fn test_todo_scope_ndjson() {
     let (_dir, root) = setup_db();
     let uuid = "f3f3f3f3-f3f3-4f3f-f3f3-f3f3f3f3f3f3";

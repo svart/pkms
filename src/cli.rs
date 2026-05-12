@@ -286,6 +286,24 @@ pub enum Command {
             help = "Restrict to scope (UUIDs, file paths, or note titles)"
         )]
         scope: Option<Vec<String>>,
+        #[arg(
+            long,
+            value_name = "DATE",
+            help = "Show items on or after this date (YYYY-MM-DD)"
+        )]
+        after: Option<String>,
+        #[arg(
+            long,
+            value_name = "DATE",
+            help = "Show items on or before this date (YYYY-MM-DD)"
+        )]
+        before: Option<String>,
+        #[arg(
+            long,
+            value_name = "PRIO",
+            help = "Filter by priority: A, B, C, or empty string for no priority"
+        )]
+        prio: Option<String>,
     },
     #[command(name = "path", about = "Find shortest path between two notes")]
     Path {

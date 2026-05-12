@@ -395,6 +395,9 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
             limit,
             group,
             scope,
+            after,
+            before,
+            prio,
         } => commands::todo::run(
             cfg,
             ctx,
@@ -411,6 +414,25 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
                 limit: *limit,
                 group: group.clone(),
                 scope: scope.clone().unwrap_or_default(),
+                after: after.as_deref().and_then(|d| {
+                    chrono::NaiveDateTime::parse_from_str(d, "%Y-%m-%d %H:%M")
+                        .ok()
+                        .or_else(|| {
+                            chrono::NaiveDate::parse_from_str(d, "%Y-%m-%d")
+                                .ok()
+                                .map(|dt| dt.and_hms_opt(0, 0, 0).unwrap())
+                        })
+                }),
+                before: before.as_deref().and_then(|d| {
+                    chrono::NaiveDateTime::parse_from_str(d, "%Y-%m-%d %H:%M")
+                        .ok()
+                        .or_else(|| {
+                            chrono::NaiveDate::parse_from_str(d, "%Y-%m-%d")
+                                .ok()
+                                .map(|dt| dt.and_hms_opt(0, 0, 0).unwrap())
+                        })
+                }),
+                prio: prio.clone(),
             },
         )
         .map(|()| ExitCode::SUCCESS)?,
