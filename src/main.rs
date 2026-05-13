@@ -400,12 +400,22 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
             prio,
             from_stdin,
             line_sep,
+            columns,
         } => {
             let resolved_scope = if *from_stdin {
                 read_stdin_ndjson()?
             } else {
                 scope.clone().unwrap_or_default()
             };
+            let todo_cols = columns
+                .as_deref()
+                .map(|s| {
+                    s.split(',')
+                        .filter_map(|c| output::Column::from_str(c.trim()))
+                        .collect::<Vec<_>>()
+                })
+                .filter(|v| !v.is_empty())
+                .unwrap_or_else(|| output::ALL_COLUMNS.to_vec());
             commands::todo::run(
                 cfg,
                 ctx,
@@ -442,6 +452,7 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
                     }),
                     prio: prio.clone(),
                     line_sep: *line_sep,
+                    columns: todo_cols,
                 },
             )
             .map(|()| ExitCode::SUCCESS)?
@@ -457,31 +468,44 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
             week,
             upcoming,
             line_sep,
-        } => commands::agenda::run(
-            cfg,
-            ctx,
-            &commands::agenda::AgendaOptions {
-                include: include
-                    .as_deref()
-                    .map(|s| s.split(',').map(|s| s.trim().to_string()).collect())
-                    .unwrap_or_default(),
-                exclude: exclude
-                    .as_deref()
-                    .map(|s| s.split(',').map(|s| s.trim().to_string()).collect())
-                    .unwrap_or_default(),
-                overdue: *overdue,
-                upcoming: *upcoming,
-                date: date
-                    .as_deref()
-                    .and_then(|d| chrono::NaiveDate::parse_from_str(d, "%Y-%m-%d").ok()),
-                sort: sort.clone(),
-                limit: *limit,
-                today: *today,
-                week: *week,
-                line_sep: *line_sep,
-            },
-        )
-        .map(|()| ExitCode::SUCCESS)?,
+            columns,
+        } => {
+            let agenda_cols = columns
+                .as_deref()
+                .map(|s| {
+                    s.split(',')
+                        .filter_map(|c| output::Column::from_str(c.trim()))
+                        .collect::<Vec<_>>()
+                })
+                .filter(|v| !v.is_empty())
+                .unwrap_or_else(|| output::ALL_COLUMNS.to_vec());
+            commands::agenda::run(
+                cfg,
+                ctx,
+                &commands::agenda::AgendaOptions {
+                    include: include
+                        .as_deref()
+                        .map(|s| s.split(',').map(|s| s.trim().to_string()).collect())
+                        .unwrap_or_default(),
+                    exclude: exclude
+                        .as_deref()
+                        .map(|s| s.split(',').map(|s| s.trim().to_string()).collect())
+                        .unwrap_or_default(),
+                    overdue: *overdue,
+                    upcoming: *upcoming,
+                    date: date
+                        .as_deref()
+                        .and_then(|d| chrono::NaiveDate::parse_from_str(d, "%Y-%m-%d").ok()),
+                    sort: sort.clone(),
+                    limit: *limit,
+                    today: *today,
+                    week: *week,
+                    line_sep: *line_sep,
+                    columns: agenda_cols,
+                },
+            )
+            .map(|()| ExitCode::SUCCESS)?
+        }
         Command::Path { from, to } => {
             let from = from
                 .clone()

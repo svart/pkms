@@ -259,6 +259,12 @@ pub enum Command {
         upcoming: bool,
         #[arg(long, help = "Add line separators between rows")]
         line_sep: bool,
+        #[arg(
+            long,
+            value_name = "COLS",
+            help = "Comma-separated column names: Date,State,Type,Prio,Tags,Note,Heading"
+        )]
+        columns: Option<String>,
     },
     #[command(about = "Display TODO items (use --group to group by state/priority/file)")]
     Todo {
@@ -310,6 +316,12 @@ pub enum Command {
         from_stdin: bool,
         #[arg(long, help = "Add line separators between rows")]
         line_sep: bool,
+        #[arg(
+            long,
+            value_name = "COLS",
+            help = "Comma-separated column names: Date,State,Type,Prio,Tags,Note,Heading"
+        )]
+        columns: Option<String>,
     },
     #[command(name = "path", about = "Find shortest path between two notes")]
     Path {

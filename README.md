@@ -242,6 +242,34 @@ pkms init-config                   # Generate default config file
 pkms init-config --db ~/Documents/org  # With db_root pre-filled
 ```
 
+### TODO & Agenda
+
+```
+pkms todo                              # Show all TODO items (text table)
+pkms todo --columns Date,Note,Heading   # Custom column selection
+pkms todo --group state                 # Group by TODO state
+pkms todo --sort file                   # Sort by note title
+pkms todo --include DONE                # Show only DONE items
+pkms todo --prio A                      # Filter by priority A
+pkms todo --after 2026-01-01            # Items on or after a date
+pkms todo --line-sep                    # Row separator lines
+
+pkms agenda                            # Show upcoming/overdue items
+pkms agenda --columns State,Date,Note   # Custom column selection
+pkms agenda --today                     # Today's agenda only
+pkms agenda --week                      # This week's agenda
+pkms agenda --overdue                   # Overdue items only
+```
+
+`todo` lists headings in any open TODO state. Use `--columns` to select
+which columns to show and in what order. Available columns:
+`Date`, `State`, `Type`, `Prio`, `Tags`, `Note`, `Heading`
+(default: all seven in that order).
+
+`agenda` shows items with SCHEDULED or DEADLINE timestamps, organized
+into Overdue, Today, and Upcoming sections. Supports `--columns` with
+the same column names as `todo`.
+
 ### All Commands
 
 | Command       | Description                                               |
@@ -250,6 +278,8 @@ pkms init-config --db ~/Documents/org  # With db_root pre-filled
 | `validate`    | Validate a specific note                                  |
 | `stats`       | Comprehensive database statistics (+ --hubs, --tags)      |
 | `orphans`     | List orphan notes (no links, + --with-dailies)            |
+| `todo`        | Display TODO items (+ --columns, --group, --sort)         |
+| `agenda`      | Display agenda items (+ --columns, --today, --week)       |
 | `resolve`     | Fast UUID/title resolution (header-only scan)             |
 | `fix`         | Replace broken UUIDs across all files                     |
 | `suggest`     | Find related notes (+ --embed for semantic similarity)    |

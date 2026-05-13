@@ -2,6 +2,54 @@ use crate::cli::OutputFormat;
 use anyhow::Result;
 use serde::Serialize;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Column {
+    Date,
+    State,
+    Type,
+    Prio,
+    Tags,
+    Note,
+    Heading,
+}
+
+pub const ALL_COLUMNS: &[Column; 7] = &[
+    Column::Date,
+    Column::State,
+    Column::Type,
+    Column::Prio,
+    Column::Tags,
+    Column::Note,
+    Column::Heading,
+];
+
+impl Column {
+    pub fn from_str(s: &str) -> Option<Column> {
+        match s.to_lowercase().as_str() {
+            "date" => Some(Column::Date),
+            "state" => Some(Column::State),
+            "type" => Some(Column::Type),
+            "prio" => Some(Column::Prio),
+            "tags" => Some(Column::Tags),
+            "note" => Some(Column::Note),
+            "heading" => Some(Column::Heading),
+            _ => None,
+        }
+    }
+
+    pub fn name(&self) -> &'static str {
+        match self {
+            Column::Date => "Date",
+            Column::State => "State",
+            Column::Type => "Type",
+            Column::Prio => "Prio",
+            Column::Tags => "Tags",
+            Column::Note => "Note",
+            Column::Heading => "Heading",
+        }
+    }
+}
+
 pub struct OutputContext {
     pub format: OutputFormat,
 }
@@ -36,45 +84,132 @@ pub fn terminal_width() -> Option<usize> {
         .filter(|&w| w > 0)
 }
 
+fn is_fixed_column(col: Column) -> bool {
+    matches!(
+        col,
+        Column::Date | Column::State | Column::Type | Column::Prio
+    )
+}
+
+fn is_wrap_column(col: Column) -> bool {
+    matches!(col, Column::Tags | Column::Note | Column::Heading)
+}
+
+fn wrap_weight(col: Column) -> f64 {
+    match col {
+        Column::Tags => 0.20,
+        Column::Note => 0.35,
+        Column::Heading => 0.45,
+        _ => 0.0,
+    }
+}
+
 pub fn adaptive_column_widths(
-    max_tags: usize,
-    max_note: usize,
-    fixed_width: usize,
-) -> Option<(usize, usize, usize)> {
+    enabled_columns: &[Column],
+    max_widths: &[usize],
+) -> Option<Vec<(Column, usize)>> {
     let term_w = terminal_width()?;
-    let padding = 19;
+    let n_columns = enabled_columns.len();
+    let padding = 5 + 2 * n_columns;
+
+    let fixed_width: usize = enabled_columns
+        .iter()
+        .filter(|c| is_fixed_column(**c))
+        .map(|c| max_widths[*c as usize])
+        .sum();
+
     let available = term_w.saturating_sub(fixed_width + padding);
     let min_col = 15;
 
-    if available < 3 * min_col {
+    let wrap_cols: Vec<Column> = enabled_columns
+        .iter()
+        .copied()
+        .filter(|c| is_wrap_column(*c))
+        .collect();
+
+    let n_wrap = wrap_cols.len();
+
+    if n_wrap == 0 {
+        return Some(
+            enabled_columns
+                .iter()
+                .map(|c| (*c, max_widths[*c as usize]))
+                .collect(),
+        );
+    }
+
+    if available < n_wrap * min_col {
         return None;
     }
 
-    let tags_share = (available as f64 * 0.20).floor() as usize;
-    let note_share = (available as f64 * 0.35).floor() as usize;
+    let has_heading = wrap_cols.contains(&Column::Heading);
 
-    let (mut tags_w, mut note_w) = if available <= max_tags.max(max_note) {
-        (tags_share.max(min_col), note_share.max(min_col))
-    } else {
-        let t = max_tags.min(tags_share).max(min_col);
-        let n = max_note.min(note_share).max(min_col);
-        (t, n)
-    };
+    let mut result: Vec<(Column, usize)> = Vec::new();
+    let mut allocated = 0usize;
 
-    let mut heading_w = available.saturating_sub(tags_w + note_w);
-
-    if heading_w < min_col {
-        let deficit = min_col - heading_w;
-        let from_tags = (tags_w - min_col).min(deficit / 2);
-        let from_note = (note_w - min_col).min(deficit - from_tags);
-        tags_w -= from_tags;
-        note_w -= from_note;
-        heading_w = min_col;
+    for &col in enabled_columns {
+        if is_fixed_column(col) {
+            result.push((col, max_widths[col as usize]));
+        }
     }
 
-    if tags_w < min_col || note_w < min_col || heading_w < min_col {
+    for &col in &wrap_cols {
+        if has_heading && col == Column::Heading {
+            continue;
+        }
+        let max_cw = max_widths[col as usize];
+        let weight = wrap_weight(col);
+        let sibling_weight: f64 = if has_heading {
+            wrap_cols
+                .iter()
+                .filter(|c| **c != Column::Heading)
+                .map(|c| wrap_weight(*c))
+                .sum()
+        } else {
+            wrap_cols.iter().map(|c| wrap_weight(*c)).sum()
+        };
+        let share = if sibling_weight > 0.0 {
+            (available as f64 * weight / sibling_weight).floor() as usize
+        } else {
+            0
+        };
+
+        let w = if available <= max_cw {
+            share.max(min_col)
+        } else {
+            max_cw.min(share).max(min_col)
+        };
+        result.push((col, w));
+        allocated += w;
+    }
+
+    if has_heading {
+        let mut heading_w = available.saturating_sub(allocated);
+        if heading_w < min_col {
+            let deficit = min_col - heading_w;
+            let mut remaining_deficit = deficit;
+            for (col, w) in result.iter_mut() {
+                if remaining_deficit == 0 {
+                    break;
+                }
+                if !is_wrap_column(*col) || *col == Column::Heading {
+                    continue;
+                }
+                let can_take = w.saturating_sub(min_col);
+                let take = can_take.min(remaining_deficit);
+                *w -= take;
+                remaining_deficit -= take;
+            }
+            heading_w = min_col;
+        }
+        result.push((Column::Heading, heading_w));
+    }
+
+    let wrap_min_check: Vec<&(Column, usize)> =
+        result.iter().filter(|(c, _)| is_wrap_column(*c)).collect();
+    if wrap_min_check.iter().any(|(_, w)| *w < min_col) {
         return None;
     }
 
-    Some((tags_w, note_w, heading_w))
+    Some(result)
 }

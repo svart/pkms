@@ -487,6 +487,66 @@ SCHEDULED: <2026-05-10 Sun 14:00>
 }
 
 #[test]
+fn test_todo_columns_subset() {
+    let (_dir, root) = setup_db();
+    let (stdout, _stderr, status) = run(&[
+        "--db",
+        root.to_str().unwrap(),
+        "todo",
+        "--columns",
+        "Date,Note",
+    ]);
+    assert!(status.success(), "todo --columns failed: {stdout}");
+    assert!(stdout.contains("Date"), "expected Date column");
+    assert!(stdout.contains("Note"), "expected Note column");
+    assert!(!stdout.contains("State"), "should not have State column");
+    assert!(!stdout.contains("Prio"), "should not have Prio column");
+}
+
+#[test]
+fn test_todo_columns_single() {
+    let (_dir, root) = setup_db();
+    let (stdout, _stderr, status) = run(&[
+        "--db",
+        root.to_str().unwrap(),
+        "todo",
+        "--columns",
+        "Heading",
+    ]);
+    assert!(status.success());
+    assert!(stdout.contains("Heading"));
+    assert!(!stdout.contains("Date"));
+    assert!(stdout.contains("Total:"));
+}
+
+#[test]
+fn test_todo_columns_json_unaffected() {
+    let (_dir, root) = setup_db();
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "todo",
+        "--columns",
+        "Date,Note",
+    ]);
+    assert!(status.success());
+    assert!(v.get("total").is_some(), "expected total field");
+    assert!(v.get("items").is_some(), "expected items field");
+    assert!(
+        v["items"].as_array().unwrap().len() >= 1,
+        "expected at least 1 todo item"
+    );
+    // JSON should still contain all fields
+    let item = &v["items"].as_array().unwrap()[0];
+    assert!(
+        item.get("todo_state").is_some(),
+        "JSON should have todo_state"
+    );
+}
+
+#[test]
 fn test_todo_scope_ndjson() {
     let (_dir, root) = setup_db();
     let uuid = "f3f3f3f3-f3f3-4f3f-f3f3-f3f3f3f3f3f3";

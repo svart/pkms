@@ -98,6 +98,46 @@ fn test_agenda_exclude() {
 }
 
 #[test]
+fn test_agenda_columns_subset() {
+    let (_dir, root) = setup_db();
+    let (stdout, _stderr, status) = run(&[
+        "--db",
+        root.to_str().unwrap(),
+        "agenda",
+        "--columns",
+        "Date,Type,Heading",
+    ]);
+    assert!(status.success(), "agenda --columns failed: {stdout}");
+    assert!(stdout.contains("Date"), "expected Date column");
+    assert!(stdout.contains("Type"), "expected Type column");
+    assert!(stdout.contains("Heading"), "expected Heading column");
+    assert!(!stdout.contains("State"), "should not have State column");
+    assert!(!stdout.contains("Tags"), "should not have Tags column");
+}
+
+#[test]
+fn test_agenda_columns_json_unaffected() {
+    let (_dir, root) = setup_db();
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "agenda",
+        "--columns",
+        "Date,Note",
+    ]);
+    assert!(status.success());
+    assert!(v.get("total").is_some(), "expected total field");
+    assert!(v.get("items").is_some(), "expected items field");
+    let item = &v["items"].as_array().unwrap()[0];
+    assert!(
+        item.get("todo_state").is_some(),
+        "JSON should have todo_state"
+    );
+}
+
+#[test]
 fn test_agenda_today_and_week() {
     let (_dir, root) = setup_db();
     let (_, _stderr, status) = run(&["--db", root.to_str().unwrap(), "agenda", "--today"]);

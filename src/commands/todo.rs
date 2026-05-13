@@ -2,14 +2,14 @@ use crate::cli::OutputFormat;
 use crate::config::Config;
 use crate::graph::Graph;
 use crate::org_date::parse_org_date;
-use crate::output::{OutputContext, adaptive_column_widths};
+use crate::output::{ALL_COLUMNS, Column, OutputContext, adaptive_column_widths};
 use crate::parser::{find_daily_file_date, strip_org_links};
 use anyhow::Result;
 use chrono::{Local, NaiveDate, NaiveDateTime, NaiveTime, Timelike};
 use serde::Serialize;
 use std::collections::BTreeMap;
 use tabled::builder::Builder;
-use tabled::settings::object::{Columns, Rows};
+use tabled::settings::object::{Columns, Object, Rows};
 use tabled::settings::style::{Border, Style};
 use tabled::settings::{Modify, Span, Width};
 
@@ -91,6 +91,7 @@ pub struct TodoOptions {
     pub before: Option<NaiveDateTime>,
     pub prio: Option<String>,
     pub line_sep: bool,
+    pub columns: Vec<Column>,
 }
 
 fn item_datetimes(item: &TodoItem) -> Vec<NaiveDateTime> {
@@ -294,6 +295,7 @@ pub fn run(config: &Config, ctx: &OutputContext, opts: &TodoOptions) -> Result<(
                 total_before_limit,
                 &today_date,
                 opts.line_sep,
+                &opts.columns,
             ),
             OutputFormat::Json => {
                 ctx.print_json(&serde_json::json!({
@@ -333,6 +335,7 @@ pub fn run(config: &Config, ctx: &OutputContext, opts: &TodoOptions) -> Result<(
                 total_before_limit,
                 &today_date,
                 opts.line_sep,
+                &opts.columns,
             ),
             OutputFormat::Json => {
                 #[derive(Serialize)]
@@ -510,13 +513,8 @@ fn format_todo_rows(item: &TodoItem) -> Vec<[String; 7]> {
     rows
 }
 
-fn push_todo_rows(builder: &mut Builder, item: &TodoItem) -> usize {
-    let rows = format_todo_rows(item);
-    let count = rows.len();
-    for row in rows {
-        builder.push_record(row);
-    }
-    count
+fn filter_row(row: &[String; 7], cols: &[Column]) -> Vec<String> {
+    cols.iter().map(|c| row[*c as usize].clone()).collect()
 }
 
 fn print_todo_text(
@@ -525,14 +523,14 @@ fn print_todo_text(
     total: usize,
     _today_date: &chrono::NaiveDate,
     line_sep: bool,
+    cols: &[Column],
 ) {
     if items.is_empty() {
         println!("No TODO items found.");
         return;
     }
 
-    let headers = ["Date", "State", "Type", "Prio", "Tags", "Note", "Heading"];
-    let mut max_widths: [usize; 7] = headers.map(|h| h.len());
+    let mut max_widths: [usize; 7] = ALL_COLUMNS.map(|c| c.name().len());
     let mut total_rows = 1;
     for item in items {
         for row in format_todo_rows(item) {
@@ -544,14 +542,16 @@ fn print_todo_text(
         total_rows += format_todo_rows(item).len();
     }
 
-    let fixed_sum = max_widths[0] + max_widths[1] + max_widths[2] + max_widths[3];
-    let wrap = adaptive_column_widths(max_widths[4], max_widths[5], fixed_sum);
+    let wrap = adaptive_column_widths(cols, &max_widths);
 
     let mut builder = Builder::new();
+    let headers: Vec<String> = cols.iter().map(|c| c.name().to_string()).collect();
     builder.push_record(headers);
 
     for item in items {
-        push_todo_rows(&mut builder, item);
+        for row in format_todo_rows(item) {
+            builder.push_record(filter_row(&row, cols));
+        }
     }
 
     let mut table = builder.build();
@@ -562,10 +562,13 @@ fn print_todo_text(
             table.with(Modify::new(Rows::one(i)).with(Border::new().top('─')));
         }
     }
-    if let Some((tags_w, note_w, heading_w)) = wrap {
-        table.with(Modify::new(Columns::new(4..5)).with(Width::wrap(tags_w).keep_words(true)));
-        table.with(Modify::new(Columns::new(5..6)).with(Width::wrap(note_w).keep_words(true)));
-        table.with(Modify::new(Columns::new(6..7)).with(Width::wrap(heading_w).keep_words(true)));
+    if let Some(widths) = wrap {
+        for (col, w) in &widths {
+            let idx = cols.iter().position(|c| c == col).unwrap();
+            table.with(
+                Modify::new(Columns::new(idx..idx + 1)).with(Width::wrap(*w).keep_words(true)),
+            );
+        }
     }
     println!("{}", table);
     println!();
@@ -583,14 +586,14 @@ fn print_todo_text_grouped(
     total: usize,
     _today_date: &chrono::NaiveDate,
     line_sep: bool,
+    cols: &[Column],
 ) {
     if groups.is_empty() || groups.values().all(|g| g.is_empty()) {
         println!("No TODO items found.");
         return;
     }
 
-    let headers = ["Date", "State", "Type", "Prio", "Tags", "Note", "Heading"];
-    let mut max_widths: [usize; 7] = headers.map(|h| h.len());
+    let mut max_widths: [usize; 7] = ALL_COLUMNS.map(|c| c.name().len());
     for group in groups.values() {
         for item in group {
             for row in format_todo_rows(item) {
@@ -601,12 +604,14 @@ fn print_todo_text_grouped(
             }
         }
     }
-
-    let fixed_sum = max_widths[0] + max_widths[1] + max_widths[2] + max_widths[3];
-    let wrap = adaptive_column_widths(max_widths[4], max_widths[5], fixed_sum);
+    let wrap = adaptive_column_widths(cols, &max_widths);
 
     let mut builder = Builder::new();
+    let headers: Vec<String> = cols.iter().map(|c| c.name().to_string()).collect();
     builder.push_record(headers);
+
+    let n_cols = cols.len();
+    let empty_row: Vec<String> = std::iter::repeat_n(String::new(), n_cols).collect();
 
     let mut section_rows: Vec<usize> = Vec::new();
     let mut row = 1;
@@ -615,22 +620,24 @@ fn print_todo_text_grouped(
             continue;
         }
         if row > 1 {
-            builder.push_record(["", "", "", "", "", "", ""]);
+            builder.push_record(empty_row.clone());
             row += 1;
         }
         let label = format!("=== {group_key} ({}) ===", group.len());
-        builder.push_record([label.as_str(), "", "", "", "", "", ""]);
+        let mut label_row: Vec<String> = std::iter::repeat_n(String::new(), n_cols).collect();
+        label_row[0] = label;
+        builder.push_record(label_row);
         section_rows.push(row);
         row += 1;
         for item in group {
-            row += push_todo_rows(&mut builder, item);
+            for r in format_todo_rows(item) {
+                builder.push_record(filter_row(&r, cols));
+                row += 1;
+            }
         }
     }
 
     let mut table = builder.build();
-    for &sec_row in &section_rows {
-        table.with(Modify::new((sec_row, 0)).with(Span::column(7)));
-    }
     table.with(Style::blank());
     table.with(Modify::new(Rows::one(1)).with(Border::new().top('─')));
     if line_sep && row > 2 {
@@ -638,10 +645,29 @@ fn print_todo_text_grouped(
             table.with(Modify::new(Rows::one(i)).with(Border::new().top('─')));
         }
     }
-    if let Some((tags_w, note_w, heading_w)) = wrap {
-        table.with(Modify::new(Columns::new(4..5)).with(Width::wrap(tags_w).keep_words(true)));
-        table.with(Modify::new(Columns::new(5..6)).with(Width::wrap(note_w).keep_words(true)));
-        table.with(Modify::new(Columns::new(6..7)).with(Width::wrap(heading_w).keep_words(true)));
+    if let Some(widths) = wrap {
+        for (col, w) in &widths {
+            let idx = cols.iter().position(|c| c == col).unwrap();
+            let mut prev = 1;
+            for &sec in &section_rows {
+                if prev < sec {
+                    table.with(
+                        Modify::new(Rows::new(prev..sec).intersect(Columns::new(idx..idx + 1)))
+                            .with(Width::wrap(*w).keep_words(true)),
+                    );
+                }
+                prev = sec + 1;
+            }
+            if prev < row {
+                table.with(
+                    Modify::new(Rows::new(prev..row).intersect(Columns::new(idx..idx + 1)))
+                        .with(Width::wrap(*w).keep_words(true)),
+                );
+            }
+        }
+    }
+    for &sec_row in &section_rows {
+        table.with(Modify::new((sec_row, 0)).with(Span::column(n_cols as isize)));
     }
     println!("{}", table);
     println!();
