@@ -249,13 +249,21 @@ pkms todo                              # Show all TODO items (text table)
 pkms todo --columns Date,Note,Heading   # Custom column selection
 pkms todo --group state                 # Group by TODO state
 pkms todo --sort file                   # Sort by note title
-pkms todo --include DONE                # Show only DONE items
+pkms todo --state "DONE"                # Show only DONE items
+pkms todo --state "!DONE"               # Exclude DONE items
+pkms todo --tags "agenda,project"       # Filter by tags (AND logic)
+pkms todo --type "SCHED"                # Filter by type (SCHED/DEADL)
 pkms todo --prio A                      # Filter by priority A
 pkms todo --after 2026-01-01            # Items on or after a date
 pkms todo --line-sep                    # Row separator lines
 
 pkms agenda                            # Show upcoming/overdue items
 pkms agenda --columns State,Date,Note   # Custom column selection
+pkms agenda --state "TODO"              # Filter by TODO state
+pkms agenda --tags "!device,agenda"     # Tags with negation
+pkms agenda --type "SCHED,DEADL"        # Both SCHEDULED and DEADLINE
+pkms agenda --prio A                    # Filter by priority
+pkms agenda --sort "date,priority"      # Multi-field sort
 pkms agenda --today                     # Today's agenda only
 pkms agenda --week                      # This week's agenda
 pkms agenda --overdue                   # Overdue items only
@@ -269,6 +277,12 @@ which columns to show and in what order. Available columns:
 `agenda` shows items with SCHEDULED or DEADLINE timestamps, organized
 into Overdue, Today, and Upcoming sections. Supports `--columns` with
 the same column names as `todo`.
+
+Both commands support filtering with comma-separated values using AND
+logic. Prefix a value with `!` for negation. Examples:
+`--state "TODO"`, `--state "!DONE,!CANCELLED"`, `--tags "agenda,project"`,
+`--tags "!private"`, `--type "SCHED,DEADL"`. The `--sort` flag accepts
+multiple fields (e.g. `--sort "date,priority"`) for chained sorting.
 
 ### All Commands
 

@@ -46,7 +46,7 @@ fn test_todo_ndjson() {
 }
 
 #[test]
-fn test_todo_include() {
+fn test_todo_state_include() {
     let (_dir, root) = setup_db();
     let (v, status) = run_json(&[
         "--db",
@@ -54,7 +54,7 @@ fn test_todo_include() {
         "--output-format",
         "json",
         "todo",
-        "--include",
+        "--state",
         "DONE",
     ]);
     assert!(status.success());
@@ -65,7 +65,7 @@ fn test_todo_include() {
         .collect();
     assert!(
         done_items.len() >= 1,
-        "expected DONE items with --include DONE"
+        "expected DONE items with --state DONE"
     );
     for item in items {
         let state = item["todo_state"].as_str().unwrap_or("");
@@ -74,7 +74,7 @@ fn test_todo_include() {
 }
 
 #[test]
-fn test_todo_exclude() {
+fn test_todo_state_exclude() {
     let (_dir, root) = setup_db();
     let (v, status) = run_json(&[
         "--db",
@@ -82,8 +82,8 @@ fn test_todo_exclude() {
         "--output-format",
         "json",
         "todo",
-        "--exclude",
-        "DONE",
+        "--state",
+        "!DONE",
     ]);
     assert!(status.success());
     let items = v["items"].as_array().unwrap();
@@ -93,8 +93,114 @@ fn test_todo_exclude() {
         .collect();
     assert!(
         done_items.is_empty(),
-        "expected no DONE items with --exclude DONE"
+        "expected no DONE items with --state !DONE"
     );
+}
+
+#[test]
+fn test_todo_tags_include() {
+    let (_dir, root) = setup_db();
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "todo",
+        "--tags",
+        "daily",
+    ]);
+    assert!(status.success());
+    let items = v["items"].as_array().unwrap();
+    for item in items {
+        let filetags = item["filetags"].as_array().unwrap();
+        assert!(
+            filetags.iter().any(|t| t.as_str() == Some("daily")),
+            "expected all items to have daily tag"
+        );
+    }
+}
+
+#[test]
+fn test_todo_tags_exclude() {
+    let (_dir, root) = setup_db();
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "todo",
+        "--tags",
+        "!daily",
+    ]);
+    assert!(status.success());
+    let items = v["items"].as_array().unwrap();
+    for item in items {
+        let filetags = item["filetags"].as_array().unwrap();
+        assert!(
+            !filetags.iter().any(|t| t.as_str() == Some("daily")),
+            "expected no items with daily tag"
+        );
+    }
+}
+
+#[test]
+fn test_todo_type_sched() {
+    let (_dir, root) = setup_db();
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "todo",
+        "--type",
+        "SCHED",
+    ]);
+    assert!(status.success());
+    let items = v["items"].as_array().unwrap();
+    for item in items {
+        assert!(
+            item["scheduled"].is_string(),
+            "expected all items with SCHEDULED"
+        );
+    }
+}
+
+#[test]
+fn test_todo_type_deadl() {
+    let (_dir, root) = setup_db();
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "todo",
+        "--type",
+        "DEADL",
+    ]);
+    assert!(status.success());
+    let items = v["items"].as_array().unwrap();
+    for item in items {
+        assert!(
+            item["deadline"].is_string(),
+            "expected all items with DEADLINE"
+        );
+    }
+}
+
+#[test]
+fn test_todo_sort_multi() {
+    let (_dir, root) = setup_db();
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "todo",
+        "--sort",
+        "state,date",
+    ]);
+    assert!(status.success());
+    assert!(v.get("items").is_some(), "expected items field");
 }
 
 #[test]

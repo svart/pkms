@@ -46,7 +46,7 @@ fn test_agenda_ndjson() {
 }
 
 #[test]
-fn test_agenda_include() {
+fn test_agenda_state_include() {
     let (_dir, root) = setup_db();
     let (v, status) = run_json(&[
         "--db",
@@ -54,7 +54,7 @@ fn test_agenda_include() {
         "--output-format",
         "json",
         "agenda",
-        "--include",
+        "--state",
         "TODO",
     ]);
     assert!(status.success());
@@ -65,7 +65,7 @@ fn test_agenda_include() {
         .collect();
     assert!(
         todo_items.len() >= 1,
-        "expected TODO items with --include TODO"
+        "expected TODO items with --state TODO"
     );
     for item in items {
         let state = item["todo_state"].as_str().unwrap_or("");
@@ -74,7 +74,7 @@ fn test_agenda_include() {
 }
 
 #[test]
-fn test_agenda_exclude() {
+fn test_agenda_state_exclude() {
     let (_dir, root) = setup_db();
     let (v, status) = run_json(&[
         "--db",
@@ -82,8 +82,8 @@ fn test_agenda_exclude() {
         "--output-format",
         "json",
         "agenda",
-        "--exclude",
-        "DONE",
+        "--state",
+        "!DONE",
     ]);
     assert!(status.success());
     let items = v["items"].as_array().unwrap();
@@ -93,7 +93,7 @@ fn test_agenda_exclude() {
         .collect();
     assert!(
         done_items.is_empty(),
-        "expected no DONE items with --exclude DONE"
+        "expected no DONE items with --state !DONE"
     );
 }
 
@@ -135,6 +135,135 @@ fn test_agenda_columns_json_unaffected() {
         item.get("todo_state").is_some(),
         "JSON should have todo_state"
     );
+}
+
+#[test]
+fn test_agenda_tags_include() {
+    let (_dir, root) = setup_db();
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "agenda",
+        "--tags",
+        "agenda",
+    ]);
+    assert!(status.success());
+    let items = v["items"].as_array().unwrap();
+    for item in items {
+        let filetags = item["filetags"].as_array().unwrap();
+        assert!(
+            filetags.iter().any(|t| t.as_str() == Some("agenda")),
+            "expected all items to have agenda tag"
+        );
+    }
+}
+
+#[test]
+fn test_agenda_tags_exclude() {
+    let (_dir, root) = setup_db();
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "agenda",
+        "--tags",
+        "!agenda",
+    ]);
+    assert!(status.success());
+    let items = v["items"].as_array().unwrap();
+    for item in items {
+        let filetags = item["filetags"].as_array().unwrap();
+        assert!(
+            !filetags.iter().any(|t| t.as_str() == Some("agenda")),
+            "expected no items with agenda tag"
+        );
+    }
+}
+
+#[test]
+fn test_agenda_type_sched() {
+    let (_dir, root) = setup_db();
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "agenda",
+        "--type",
+        "SCHED",
+    ]);
+    assert!(status.success());
+    let items = v["items"].as_array().unwrap();
+    for item in items {
+        assert!(
+            item["scheduled"].is_string(),
+            "expected all items with SCHEDULED"
+        );
+    }
+}
+
+#[test]
+fn test_agenda_type_deadl() {
+    let (_dir, root) = setup_db();
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "agenda",
+        "--type",
+        "DEADL",
+    ]);
+    assert!(status.success());
+    let items = v["items"].as_array().unwrap();
+    for item in items {
+        assert!(
+            item["deadline"].is_string(),
+            "expected all items with DEADLINE"
+        );
+    }
+}
+
+#[test]
+fn test_agenda_prio_a() {
+    let (_dir, root) = setup_db();
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "agenda",
+        "--prio",
+        "A",
+    ]);
+    assert!(status.success());
+    let items = v["items"].as_array().unwrap();
+    for item in items {
+        assert_eq!(
+            item["priority"].as_str(),
+            Some("A"),
+            "expected all items with priority A"
+        );
+    }
+}
+
+#[test]
+fn test_agenda_sort_multi() {
+    let (_dir, root) = setup_db();
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "agenda",
+        "--sort",
+        "date,priority",
+    ]);
+    assert!(status.success());
+    assert!(v.get("items").is_some(), "expected items field");
 }
 
 #[test]

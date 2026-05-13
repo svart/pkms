@@ -232,21 +232,36 @@ pub enum Command {
     Agenda {
         #[arg(
             long,
-            help = "Include only these TODO states (comma-separated, no filtering by default)"
+            value_name = "STATE",
+            help = "Filter by TODO states (comma-separated, ! for negation, applied as AND)"
         )]
-        include: Option<String>,
+        state: Option<String>,
         #[arg(
             long,
-            help = "Exclude these TODO states (comma-separated, no filtering by default)"
+            value_name = "TAGS",
+            help = "Filter by tags (comma-separated, ! for negation, applied as AND)"
         )]
-        exclude: Option<String>,
+        tags: Option<String>,
+        #[arg(
+            long,
+            value_name = "TYPE",
+            help = "Filter by type: SCHED/DEADL (comma-separated, ! for negation, applied as AND)"
+        )]
+        type_: Option<String>,
+        #[arg(
+            long,
+            value_name = "PRIO",
+            help = "Filter by priority: A, B, C, or empty string for no priority"
+        )]
+        prio: Option<String>,
         #[arg(long, help = "Only show overdue items (deadline in the past)")]
         overdue: bool,
         #[arg(long, help = "Show items scheduled or due on a specific date")]
         date: Option<String>,
         #[arg(
             long,
-            help = "Sort: priority, scheduled, deadline, file (default: priority)"
+            value_name = "SORT",
+            help = "Comma-separated sort fields: priority, scheduled, deadline, file, date (default: priority)"
         )]
         sort: Option<String>,
         #[arg(long, help = "Maximum results")]
@@ -270,15 +285,27 @@ pub enum Command {
     Todo {
         #[arg(
             long,
-            help = "Include only these TODO states (comma-separated, no filtering by default)"
+            value_name = "STATE",
+            help = "Filter by TODO states (comma-separated, ! for negation, applied as AND)"
         )]
-        include: Option<String>,
+        state: Option<String>,
         #[arg(
             long,
-            help = "Exclude these TODO states (comma-separated, no filtering by default)"
+            value_name = "TAGS",
+            help = "Filter by tags (comma-separated, ! for negation, applied as AND)"
         )]
-        exclude: Option<String>,
-        #[arg(long, help = "Sort: priority, state, file (default: priority)")]
+        tags: Option<String>,
+        #[arg(
+            long,
+            value_name = "TYPE",
+            help = "Filter by type: SCHED/DEADL (comma-separated, ! for negation, applied as AND)"
+        )]
+        type_: Option<String>,
+        #[arg(
+            long,
+            value_name = "SORT",
+            help = "Comma-separated sort fields: priority, state, file, date (default: priority)"
+        )]
         sort: Option<String>,
         #[arg(long, help = "Maximum results")]
         limit: Option<usize>,

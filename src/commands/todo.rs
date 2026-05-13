@@ -73,6 +73,92 @@ fn is_overdue(raw: Option<&String>) -> bool {
     false
 }
 
+enum Filter {
+    Include(String),
+    Exclude(String),
+}
+
+fn parse_filters(s: Option<&str>) -> Vec<Filter> {
+    match s {
+        Some(s) => s
+            .split(',')
+            .map(|s| {
+                let s = s.trim().to_string();
+                if let Some(rest) = s.strip_prefix('!') {
+                    Filter::Exclude(rest.to_string())
+                } else {
+                    Filter::Include(s)
+                }
+            })
+            .collect(),
+        None => Vec::new(),
+    }
+}
+
+fn apply_state_filter(state: Option<&str>, filters: &[Filter]) -> bool {
+    for filter in filters {
+        match filter {
+            Filter::Include(v) => {
+                if !state.is_some_and(|s| s.eq_ignore_ascii_case(v)) {
+                    return false;
+                }
+            }
+            Filter::Exclude(v) => {
+                if state.is_some_and(|s| s.eq_ignore_ascii_case(v)) {
+                    return false;
+                }
+            }
+        }
+    }
+    true
+}
+
+fn apply_tags_filter(tags: &[String], filters: &[Filter]) -> bool {
+    for filter in filters {
+        match filter {
+            Filter::Include(v) => {
+                if !tags.iter().any(|t| t == v) {
+                    return false;
+                }
+            }
+            Filter::Exclude(v) => {
+                if tags.iter().any(|t| t == v) {
+                    return false;
+                }
+            }
+        }
+    }
+    true
+}
+
+fn apply_type_filter(has_scheduled: bool, has_deadline: bool, filters: &[Filter]) -> bool {
+    for filter in filters {
+        match filter {
+            Filter::Include(v) => {
+                let cond = match v.as_str() {
+                    "SCHED" => has_scheduled,
+                    "DEADL" => has_deadline,
+                    _ => false,
+                };
+                if !cond {
+                    return false;
+                }
+            }
+            Filter::Exclude(v) => {
+                let cond = match v.as_str() {
+                    "SCHED" => has_scheduled,
+                    "DEADL" => has_deadline,
+                    _ => false,
+                };
+                if cond {
+                    return false;
+                }
+            }
+        }
+    }
+    true
+}
+
 fn heading_is_eligible(heading: &crate::parser::Heading, valid_states: &[String]) -> bool {
     heading
         .todo_state
@@ -81,8 +167,9 @@ fn heading_is_eligible(heading: &crate::parser::Heading, valid_states: &[String]
 }
 
 pub struct TodoOptions {
-    pub include: Vec<String>,
-    pub exclude: Vec<String>,
+    pub state: Option<String>,
+    pub tags: Option<String>,
+    pub type_: Option<String>,
     pub sort: Option<String>,
     pub limit: Option<usize>,
     pub group: Option<String>,
@@ -124,6 +211,9 @@ pub fn run(config: &Config, ctx: &OutputContext, opts: &TodoOptions) -> Result<(
     let graph = Graph::load(config)?;
 
     let valid_states = config.todo_states();
+    let state_filters = parse_filters(opts.state.as_deref());
+    let tags_filters = parse_filters(opts.tags.as_deref());
+    let type_filters = parse_filters(opts.type_.as_deref());
 
     let today_date = Local::now().date_naive();
 
@@ -144,23 +234,30 @@ pub fn run(config: &Config, ctx: &OutputContext, opts: &TodoOptions) -> Result<(
                 continue;
             }
 
-            if !opts.include.is_empty() {
-                let state_matches = heading
-                    .todo_state
-                    .as_ref()
-                    .is_some_and(|s| opts.include.iter().any(|is| is.eq_ignore_ascii_case(s)));
-                if !state_matches {
-                    continue;
-                }
+            if !apply_state_filter(heading.todo_state.as_deref(), &state_filters) {
+                continue;
             }
 
-            if !opts.exclude.is_empty()
-                && let Some(ref todo_state) = heading.todo_state
-                && opts
-                    .exclude
-                    .iter()
-                    .any(|es| es.eq_ignore_ascii_case(todo_state))
-            {
+            let combined_tags: Vec<String> = {
+                let mut seen = std::collections::HashSet::new();
+                let mut result = Vec::new();
+                for tag in parsed.filetags.iter().chain(heading.tags.iter()) {
+                    if seen.insert(tag.clone()) {
+                        result.push(tag.clone());
+                    }
+                }
+                result
+            };
+
+            if !apply_tags_filter(&combined_tags, &tags_filters) {
+                continue;
+            }
+
+            if !apply_type_filter(
+                heading.scheduled.is_some(),
+                heading.deadline.is_some(),
+                &type_filters,
+            ) {
                 continue;
             }
 
@@ -267,7 +364,11 @@ pub fn run(config: &Config, ctx: &OutputContext, opts: &TodoOptions) -> Result<(
         items.retain(|item| item_datetimes(item).iter().any(|dt| dt <= before_dt));
     }
 
-    let sort_field = opts.sort.as_deref().unwrap_or("priority");
+    let sort_fields: Vec<&str> = opts
+        .sort
+        .as_deref()
+        .map(|s| s.split(',').map(|s| s.trim()).collect())
+        .unwrap_or_else(|| vec!["priority"]);
 
     if let Some(group_field) = &opts.group {
         let mut groups: BTreeMap<String, Vec<TodoItem>> = BTreeMap::new();
@@ -279,7 +380,7 @@ pub fn run(config: &Config, ctx: &OutputContext, opts: &TodoOptions) -> Result<(
         let total_before_limit: usize = groups.values().map(|g| g.len()).sum();
 
         for group_items in groups.values_mut() {
-            sort_items(group_items, sort_field);
+            sort_items(group_items, &sort_fields);
             if let Some(l) = opts.limit {
                 group_items.truncate(l);
             }
@@ -318,7 +419,7 @@ pub fn run(config: &Config, ctx: &OutputContext, opts: &TodoOptions) -> Result<(
             }
         }
     } else {
-        sort_items(&mut items, sort_field);
+        sort_items(&mut items, &sort_fields);
 
         let total_before_limit = items.len();
 
@@ -371,29 +472,38 @@ fn get_group_key(item: &TodoItem, group_field: &str) -> String {
     }
 }
 
-fn sort_items(items: &mut [TodoItem], sort_field: &str) {
-    match sort_field {
-        "state" => {
-            items.sort_by(|a, b| {
-                a.todo_state
-                    .as_deref()
-                    .cmp(&b.todo_state.as_deref())
-                    .then_with(|| a.title.cmp(&b.title))
-            });
+fn sort_items(items: &mut [TodoItem], sort_fields: &[&str]) {
+    items.sort_by(|a, b| {
+        for field in sort_fields {
+            let ord = match *field {
+                "state" => a.todo_state.as_deref().cmp(&b.todo_state.as_deref()),
+                "file" => a.title.cmp(&b.title),
+                "priority" => {
+                    let a_p = a.priority.map(priority_value).unwrap_or(3);
+                    let b_p = b.priority.map(priority_value).unwrap_or(3);
+                    a_p.cmp(&b_p)
+                }
+                "date" => {
+                    let a_date = a
+                        .scheduled_date
+                        .as_deref()
+                        .or(a.deadline_date.as_deref())
+                        .or(a.daily_file_date.as_deref());
+                    let b_date = b
+                        .scheduled_date
+                        .as_deref()
+                        .or(b.deadline_date.as_deref())
+                        .or(b.daily_file_date.as_deref());
+                    a_date.cmp(&b_date)
+                }
+                _ => std::cmp::Ordering::Equal,
+            };
+            if ord != std::cmp::Ordering::Equal {
+                return ord;
+            }
         }
-        "file" => {
-            items.sort_by(|a, b| a.title.cmp(&b.title));
-        }
-        _ => {
-            items.sort_by(|a, b| {
-                let a_priority = a.priority.map(priority_value).unwrap_or(3);
-                let b_priority = b.priority.map(priority_value).unwrap_or(3);
-                a_priority
-                    .cmp(&b_priority)
-                    .then_with(|| a.title.cmp(&b.title))
-            });
-        }
-    }
+        std::cmp::Ordering::Equal
+    });
 }
 
 fn priority_value(p: char) -> u8 {

@@ -389,8 +389,9 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
         )
         .map(|()| ExitCode::SUCCESS)?,
         Command::Todo {
-            include,
-            exclude,
+            state,
+            tags,
+            type_,
             sort,
             limit,
             group,
@@ -420,14 +421,9 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
                 cfg,
                 ctx,
                 &commands::todo::TodoOptions {
-                    include: include
-                        .as_deref()
-                        .map(|s| s.split(',').map(|s| s.trim().to_string()).collect())
-                        .unwrap_or_default(),
-                    exclude: exclude
-                        .as_deref()
-                        .map(|s| s.split(',').map(|s| s.trim().to_string()).collect())
-                        .unwrap_or_default(),
+                    state: state.clone(),
+                    tags: tags.clone(),
+                    type_: type_.clone(),
                     sort: sort.clone(),
                     limit: *limit,
                     group: group.clone(),
@@ -458,8 +454,10 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
             .map(|()| ExitCode::SUCCESS)?
         }
         Command::Agenda {
-            include,
-            exclude,
+            state,
+            tags,
+            type_,
+            prio,
             overdue,
             date,
             sort,
@@ -483,14 +481,10 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
                 cfg,
                 ctx,
                 &commands::agenda::AgendaOptions {
-                    include: include
-                        .as_deref()
-                        .map(|s| s.split(',').map(|s| s.trim().to_string()).collect())
-                        .unwrap_or_default(),
-                    exclude: exclude
-                        .as_deref()
-                        .map(|s| s.split(',').map(|s| s.trim().to_string()).collect())
-                        .unwrap_or_default(),
+                    state: state.clone(),
+                    tags: tags.clone(),
+                    type_: type_.clone(),
+                    prio: prio.clone(),
                     overdue: *overdue,
                     upcoming: *upcoming,
                     date: date
