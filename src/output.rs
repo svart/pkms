@@ -36,39 +36,45 @@ pub fn terminal_width() -> Option<usize> {
         .filter(|&w| w > 0)
 }
 
-pub fn adaptive_note_heading_widths(max_note: usize, fixed_width: usize) -> Option<(usize, usize)> {
+pub fn adaptive_column_widths(
+    max_tags: usize,
+    max_note: usize,
+    fixed_width: usize,
+) -> Option<(usize, usize, usize)> {
     let term_w = terminal_width()?;
-    let padding = 17;
+    let padding = 19;
     let available = term_w.saturating_sub(fixed_width + padding);
     let min_col = 15;
 
-    if available < 2 * min_col {
+    if available < 3 * min_col {
         return None;
     }
 
-    let thirty_five = (available as f64 * 0.35).floor() as usize;
+    let tags_share = (available as f64 * 0.20).floor() as usize;
+    let note_share = (available as f64 * 0.35).floor() as usize;
 
-    let (mut note_w, mut heading_w) = if available <= max_note {
-        let n = thirty_five.max(min_col);
-        (n, available.saturating_sub(n))
-    } else if max_note <= thirty_five {
-        (max_note, available - max_note)
+    let (mut tags_w, mut note_w) = if available <= max_tags.max(max_note) {
+        (tags_share.max(min_col), note_share.max(min_col))
     } else {
-        (thirty_five, available - thirty_five)
+        let t = max_tags.min(tags_share).max(min_col);
+        let n = max_note.min(note_share).max(min_col);
+        (t, n)
     };
 
-    if note_w < min_col {
-        heading_w = heading_w.saturating_sub(min_col - note_w);
-        note_w = min_col;
-    }
+    let mut heading_w = available.saturating_sub(tags_w + note_w);
+
     if heading_w < min_col {
-        note_w = note_w.saturating_sub(min_col - heading_w);
+        let deficit = min_col - heading_w;
+        let from_tags = (tags_w - min_col).min(deficit / 2);
+        let from_note = (note_w - min_col).min(deficit - from_tags);
+        tags_w -= from_tags;
+        note_w -= from_note;
         heading_w = min_col;
     }
 
-    if note_w < min_col || heading_w < min_col {
+    if tags_w < min_col || note_w < min_col || heading_w < min_col {
         return None;
     }
 
-    Some((note_w, heading_w))
+    Some((tags_w, note_w, heading_w))
 }

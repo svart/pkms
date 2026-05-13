@@ -2,7 +2,7 @@ use crate::cli::OutputFormat;
 use crate::config::Config;
 use crate::graph::Graph;
 use crate::org_date::parse_org_date;
-use crate::output::{OutputContext, adaptive_note_heading_widths};
+use crate::output::{OutputContext, adaptive_column_widths};
 use crate::parser::{find_daily_file_date, strip_org_links};
 use anyhow::Result;
 use chrono::{Local, NaiveDate, NaiveDateTime, NaiveTime, Timelike};
@@ -31,6 +31,17 @@ pub struct TodoItem {
     pub deadline_date: Option<String>,
     pub is_overdue: bool,
     pub heading_tags: Vec<String>,
+}
+
+fn combine_tags(filetags: &[String], heading_tags: &[String]) -> String {
+    let mut seen = std::collections::HashSet::new();
+    let mut result = Vec::new();
+    for tag in filetags.iter().chain(heading_tags.iter()) {
+        if seen.insert(tag.clone()) {
+            result.push(tag.clone());
+        }
+    }
+    result.join(", ")
 }
 
 fn extract_date(raw: Option<&String>) -> Option<String> {
@@ -426,7 +437,7 @@ fn format_display_datetime(raw: &str) -> String {
     }
 }
 
-fn format_todo_rows(item: &TodoItem) -> Vec<[String; 6]> {
+fn format_todo_rows(item: &TodoItem) -> Vec<[String; 7]> {
     let state = item.todo_state.as_deref().unwrap_or("").to_string();
     let prio = item
         .priority
@@ -434,6 +445,7 @@ fn format_todo_rows(item: &TodoItem) -> Vec<[String; 6]> {
         .unwrap_or_default();
     let title = item.title.clone();
     let heading = item.heading_title.clone();
+    let tags = combine_tags(&item.filetags, &item.heading_tags);
     let has_both = item.scheduled.is_some() && item.deadline.is_some();
     let mut rows = Vec::new();
 
@@ -443,6 +455,7 @@ fn format_todo_rows(item: &TodoItem) -> Vec<[String; 6]> {
             state.clone(),
             "SCHED".to_string(),
             prio.clone(),
+            tags.clone(),
             title.clone(),
             heading.clone(),
         ]);
@@ -465,6 +478,11 @@ fn format_todo_rows(item: &TodoItem) -> Vec<[String; 6]> {
             if has_both {
                 String::new()
             } else {
+                tags.clone()
+            },
+            if has_both {
+                String::new()
+            } else {
                 title.clone()
             },
             if has_both {
@@ -478,7 +496,15 @@ fn format_todo_rows(item: &TodoItem) -> Vec<[String; 6]> {
     if rows.is_empty()
         && let Some(ref dfd) = item.daily_file_date
     {
-        rows.push([dfd.clone(), state, String::new(), prio, title, heading]);
+        rows.push([
+            dfd.clone(),
+            state,
+            String::new(),
+            prio,
+            tags,
+            title,
+            heading,
+        ]);
     }
 
     rows
@@ -505,8 +531,8 @@ fn print_todo_text(
         return;
     }
 
-    let headers = ["Date", "State", "Type", "Prio", "Note", "Heading"];
-    let mut max_widths: [usize; 6] = headers.map(|h| h.len());
+    let headers = ["Date", "State", "Type", "Prio", "Tags", "Note", "Heading"];
+    let mut max_widths: [usize; 7] = headers.map(|h| h.len());
     let mut total_rows = 1;
     for item in items {
         for row in format_todo_rows(item) {
@@ -519,7 +545,7 @@ fn print_todo_text(
     }
 
     let fixed_sum = max_widths[0] + max_widths[1] + max_widths[2] + max_widths[3];
-    let wrap = adaptive_note_heading_widths(max_widths[4], fixed_sum);
+    let wrap = adaptive_column_widths(max_widths[4], max_widths[5], fixed_sum);
 
     let mut builder = Builder::new();
     builder.push_record(headers);
@@ -536,9 +562,10 @@ fn print_todo_text(
             table.with(Modify::new(Rows::one(i)).with(Border::new().top('─')));
         }
     }
-    if let Some((note_w, heading_w)) = wrap {
-        table.with(Modify::new(Columns::new(4..5)).with(Width::wrap(note_w).keep_words(true)));
-        table.with(Modify::new(Columns::new(5..6)).with(Width::wrap(heading_w).keep_words(true)));
+    if let Some((tags_w, note_w, heading_w)) = wrap {
+        table.with(Modify::new(Columns::new(4..5)).with(Width::wrap(tags_w).keep_words(true)));
+        table.with(Modify::new(Columns::new(5..6)).with(Width::wrap(note_w).keep_words(true)));
+        table.with(Modify::new(Columns::new(6..7)).with(Width::wrap(heading_w).keep_words(true)));
     }
     println!("{}", table);
     println!();
@@ -562,8 +589,8 @@ fn print_todo_text_grouped(
         return;
     }
 
-    let headers = ["Date", "State", "Type", "Prio", "Note", "Heading"];
-    let mut max_widths: [usize; 6] = headers.map(|h| h.len());
+    let headers = ["Date", "State", "Type", "Prio", "Tags", "Note", "Heading"];
+    let mut max_widths: [usize; 7] = headers.map(|h| h.len());
     for group in groups.values() {
         for item in group {
             for row in format_todo_rows(item) {
@@ -576,7 +603,7 @@ fn print_todo_text_grouped(
     }
 
     let fixed_sum = max_widths[0] + max_widths[1] + max_widths[2] + max_widths[3];
-    let wrap = adaptive_note_heading_widths(max_widths[4], fixed_sum);
+    let wrap = adaptive_column_widths(max_widths[4], max_widths[5], fixed_sum);
 
     let mut builder = Builder::new();
     builder.push_record(headers);
@@ -588,11 +615,11 @@ fn print_todo_text_grouped(
             continue;
         }
         if row > 1 {
-            builder.push_record(["", "", "", "", "", ""]);
+            builder.push_record(["", "", "", "", "", "", ""]);
             row += 1;
         }
         let label = format!("=== {group_key} ({}) ===", group.len());
-        builder.push_record([label.as_str(), "", "", "", "", ""]);
+        builder.push_record([label.as_str(), "", "", "", "", "", ""]);
         section_rows.push(row);
         row += 1;
         for item in group {
@@ -602,7 +629,7 @@ fn print_todo_text_grouped(
 
     let mut table = builder.build();
     for &sec_row in &section_rows {
-        table.with(Modify::new((sec_row, 0)).with(Span::column(6)));
+        table.with(Modify::new((sec_row, 0)).with(Span::column(7)));
     }
     table.with(Style::blank());
     table.with(Modify::new(Rows::one(1)).with(Border::new().top('─')));
@@ -611,9 +638,10 @@ fn print_todo_text_grouped(
             table.with(Modify::new(Rows::one(i)).with(Border::new().top('─')));
         }
     }
-    if let Some((note_w, heading_w)) = wrap {
-        table.with(Modify::new(Columns::new(4..5)).with(Width::wrap(note_w).keep_words(true)));
-        table.with(Modify::new(Columns::new(5..6)).with(Width::wrap(heading_w).keep_words(true)));
+    if let Some((tags_w, note_w, heading_w)) = wrap {
+        table.with(Modify::new(Columns::new(4..5)).with(Width::wrap(tags_w).keep_words(true)));
+        table.with(Modify::new(Columns::new(5..6)).with(Width::wrap(note_w).keep_words(true)));
+        table.with(Modify::new(Columns::new(6..7)).with(Width::wrap(heading_w).keep_words(true)));
     }
     println!("{}", table);
     println!();
