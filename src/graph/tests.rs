@@ -36,6 +36,7 @@ fn make_note_with_headings(
             scheduled: None,
             deadline: None,
             priority: None,
+            line_number: 1,
             outgoing: vec![],
         })
         .collect();

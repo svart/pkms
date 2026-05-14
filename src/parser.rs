@@ -63,6 +63,7 @@ pub struct Heading {
     pub scheduled: Option<String>,
     pub deadline: Option<String>,
     pub priority: Option<char>,
+    pub line_number: usize,
     pub outgoing: Vec<Link>,
 }
 
@@ -111,7 +112,7 @@ pub fn parse_note(content: &str) -> ParsedNote {
     let mut just_saw_heading = false;
     let mut heading_stack: Vec<usize> = Vec::new();
 
-    for line in content.lines() {
+    for (line_idx, line) in content.lines().enumerate() {
         let trimmed = line.trim();
 
         if trimmed.starts_with("#+begin_src") {
@@ -213,6 +214,7 @@ pub fn parse_note(content: &str) -> ParsedNote {
                     scheduled: None,
                     deadline: None,
                     priority,
+                    line_number: line_idx + 1,
                     outgoing: vec![],
                 });
                 heading_stack.push(headings.len() - 1);

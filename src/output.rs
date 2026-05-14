@@ -4,6 +4,7 @@ use serde::Serialize;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Column {
+    Id,
     Date,
     State,
     Type,
@@ -13,7 +14,8 @@ pub enum Column {
     Heading,
 }
 
-pub const ALL_COLUMNS: &[Column; 7] = &[
+pub const ALL_COLUMNS: &[Column; 8] = &[
+    Column::Id,
     Column::Date,
     Column::State,
     Column::Type,
@@ -26,6 +28,7 @@ pub const ALL_COLUMNS: &[Column; 7] = &[
 impl Column {
     pub fn from_str(s: &str) -> Option<Column> {
         match s.to_lowercase().as_str() {
+            "id" => Some(Column::Id),
             "date" => Some(Column::Date),
             "state" => Some(Column::State),
             "type" => Some(Column::Type),
@@ -39,6 +42,7 @@ impl Column {
 
     pub fn name(&self) -> &'static str {
         match self {
+            Column::Id => "Id",
             Column::Date => "Date",
             Column::State => "State",
             Column::Type => "Type",
@@ -87,7 +91,7 @@ pub fn terminal_width() -> Option<usize> {
 fn is_fixed_column(col: Column) -> bool {
     matches!(
         col,
-        Column::Date | Column::State | Column::Type | Column::Prio
+        Column::Id | Column::Date | Column::State | Column::Type | Column::Prio
     )
 }
 

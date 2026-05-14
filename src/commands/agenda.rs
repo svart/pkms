@@ -14,6 +14,7 @@ use tabled::settings::{Modify, Span, Width};
 
 #[derive(Debug, Clone, Serialize)]
 pub struct AgendaItem {
+    pub id: usize,
     pub uuid: String,
     pub title: String,
     pub path: String,
@@ -23,6 +24,7 @@ pub struct AgendaItem {
     pub daily_file_date: Option<String>,
     pub heading_title: String,
     pub heading_level: usize,
+    pub line_number: usize,
     pub todo_state: Option<String>,
     pub priority: Option<char>,
     pub scheduled: Option<String>,
@@ -187,6 +189,7 @@ pub struct AgendaOptions {
     pub week: bool,
     pub line_sep: bool,
     pub columns: Vec<Column>,
+    pub open: Option<usize>,
 }
 
 pub fn run(config: &Config, ctx: &OutputContext, opts: &AgendaOptions) -> Result<()> {
@@ -312,6 +315,7 @@ pub fn run(config: &Config, ctx: &OutputContext, opts: &AgendaOptions) -> Result
             }));
 
             items.push(AgendaItem {
+                id: 0,
                 uuid: primary_uuid,
                 title: note_title,
                 path: path.to_string_lossy().to_string(),
@@ -321,6 +325,7 @@ pub fn run(config: &Config, ctx: &OutputContext, opts: &AgendaOptions) -> Result
                 daily_file_date: daily_date.clone(),
                 heading_title: strip_org_links(&heading.title),
                 heading_level: heading.level,
+                line_number: heading.line_number,
                 todo_state: heading.todo_state.clone(),
                 priority: heading.priority,
                 scheduled: heading.scheduled.clone(),
@@ -332,6 +337,8 @@ pub fn run(config: &Config, ctx: &OutputContext, opts: &AgendaOptions) -> Result
             });
         }
     }
+
+    assign_canonical_ids(&mut items);
 
     if opts.upcoming {
         let today = Local::now().date_naive();
@@ -351,6 +358,32 @@ pub fn run(config: &Config, ctx: &OutputContext, opts: &AgendaOptions) -> Result
         } else if let Some(p) = prio.chars().next() {
             let target = p.to_ascii_uppercase();
             items.retain(|item| item.priority == Some(target));
+        }
+    }
+
+    if let Some(open_id) = opts.open {
+        let target = items.iter().find(|item| item.id == open_id);
+        match target {
+            Some(item) => {
+                let path = &item.path;
+                let line = item.line_number;
+                println!(
+                    "Opening #{}: {} / {}",
+                    item.id, item.title, item.heading_title
+                );
+                let status = std::process::Command::new("emacsclient")
+                    .args(["-n", &format!("+{line}"), path])
+                    .status();
+                match status {
+                    Ok(s) if s.success() => {}
+                    Ok(s) => eprintln!("emacsclient exited with error: {s}"),
+                    Err(e) => eprintln!("Failed to run emacsclient: {e}"),
+                }
+                return Ok(());
+            }
+            None => {
+                anyhow::bail!("No task with ID {open_id} matching current filters");
+            }
         }
     }
 
@@ -428,6 +461,19 @@ fn sort_items(items: &mut [AgendaItem], sort_fields: &[&str]) {
     });
 }
 
+fn assign_canonical_ids(items: &mut [AgendaItem]) {
+    items.sort_by(|a, b| {
+        let a_p = a.priority.map(priority_value).unwrap_or(3);
+        let b_p = b.priority.map(priority_value).unwrap_or(3);
+        a_p.cmp(&b_p)
+            .then(a.path.cmp(&b.path))
+            .then(a.line_number.cmp(&b.line_number))
+    });
+    for (i, item) in items.iter_mut().enumerate() {
+        item.id = i + 1;
+    }
+}
+
 fn priority_value(p: char) -> u8 {
     match p {
         'A' => 0,
@@ -472,7 +518,12 @@ fn format_display_datetime(raw: &str) -> String {
     }
 }
 
-fn format_agenda_rows(item: &AgendaItem) -> Vec<[String; 7]> {
+fn format_agenda_rows(item: &AgendaItem) -> Vec<[String; 8]> {
+    let id = if item.id > 0 {
+        item.id.to_string()
+    } else {
+        String::new()
+    };
     let state = item.todo_state.as_deref().unwrap_or("").to_string();
     let prio = item
         .priority
@@ -486,6 +537,7 @@ fn format_agenda_rows(item: &AgendaItem) -> Vec<[String; 7]> {
 
     if let Some(ref s) = item.scheduled {
         rows.push([
+            id.clone(),
             format_display_datetime(s),
             state.clone(),
             "SCHED".to_string(),
@@ -498,6 +550,7 @@ fn format_agenda_rows(item: &AgendaItem) -> Vec<[String; 7]> {
 
     if let Some(ref d) = item.deadline {
         rows.push([
+            String::new(),
             format_display_datetime(d),
             if has_both {
                 String::new()
@@ -532,6 +585,7 @@ fn format_agenda_rows(item: &AgendaItem) -> Vec<[String; 7]> {
         && let Some(ref dfd) = item.daily_file_date
     {
         rows.push([
+            id,
             dfd.clone(),
             state,
             String::new(),
@@ -545,7 +599,7 @@ fn format_agenda_rows(item: &AgendaItem) -> Vec<[String; 7]> {
     rows
 }
 
-fn filter_agenda_row(row: &[String; 7], cols: &[Column]) -> Vec<String> {
+fn filter_agenda_row(row: &[String; 8], cols: &[Column]) -> Vec<String> {
     cols.iter().map(|c| row[*c as usize].clone()).collect()
 }
 
@@ -555,7 +609,7 @@ fn print_agenda_text(items: &[AgendaItem], flat: bool, line_sep: bool, cols: &[C
         return;
     }
 
-    let mut max_widths: [usize; 7] = ALL_COLUMNS.map(|c| c.name().len());
+    let mut max_widths: [usize; 8] = ALL_COLUMNS.map(|c| c.name().len());
     for item in items {
         for row in format_agenda_rows(item) {
             for (i, col) in row.iter().enumerate() {

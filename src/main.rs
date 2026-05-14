@@ -402,6 +402,7 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
             from_stdin,
             line_sep,
             columns,
+            open,
         } => {
             let resolved_scope = if *from_stdin {
                 read_stdin_ndjson()?
@@ -449,6 +450,7 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
                     prio: prio.clone(),
                     line_sep: *line_sep,
                     columns: todo_cols,
+                    open: *open,
                 },
             )
             .map(|()| ExitCode::SUCCESS)?
@@ -467,6 +469,7 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
             upcoming,
             line_sep,
             columns,
+            open,
         } => {
             let agenda_cols = columns
                 .as_deref()
@@ -496,6 +499,7 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
                     week: *week,
                     line_sep: *line_sep,
                     columns: agenda_cols,
+                    open: *open,
                 },
             )
             .map(|()| ExitCode::SUCCESS)?

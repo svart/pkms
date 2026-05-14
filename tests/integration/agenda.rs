@@ -275,3 +275,21 @@ fn test_agenda_today_and_week() {
     let (_, _stderr2, status2) = run(&["--db", root.to_str().unwrap(), "agenda", "--week"]);
     assert!(status2.success());
 }
+
+#[test]
+fn test_agenda_open_valid_id() {
+    let (_dir, root) = setup_db();
+    let (stdout, stderr, status) = run(&["--db", root.to_str().unwrap(), "agenda", "--open", "1"]);
+    assert!(status.success(), "agenda --open 1 failed: stderr={stderr}");
+    assert!(stdout.contains("Opening #1"), "stdout: {stdout}");
+}
+
+#[test]
+fn test_agenda_open_invalid_id() {
+    let (_dir, root) = setup_db();
+    let (stdout, stderr, status) =
+        run(&["--db", root.to_str().unwrap(), "agenda", "--open", "9999"]);
+    assert!(!status.success(), "expected failure for invalid ID");
+    assert!(stderr.contains("No task with ID 9999"), "stderr: {stderr}");
+    let _ = stdout;
+}

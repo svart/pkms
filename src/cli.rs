@@ -277,9 +277,15 @@ pub enum Command {
         #[arg(
             long,
             value_name = "COLS",
-            help = "Comma-separated column names: Date,State,Type,Prio,Tags,Note,Heading"
+            help = "Comma-separated column names: Id,Date,State,Type,Prio,Tags,Note,Heading"
         )]
         columns: Option<String>,
+        #[arg(
+            long,
+            value_name = "ID",
+            help = "Open task with canonical ID in Emacs (emacsclient)"
+        )]
+        open: Option<usize>,
     },
     #[command(about = "Display TODO items (use --group to group by state/priority/file)")]
     Todo {
@@ -346,9 +352,15 @@ pub enum Command {
         #[arg(
             long,
             value_name = "COLS",
-            help = "Comma-separated column names: Date,State,Type,Prio,Tags,Note,Heading"
+            help = "Comma-separated column names: Id,Date,State,Type,Prio,Tags,Note,Heading"
         )]
         columns: Option<String>,
+        #[arg(
+            long,
+            value_name = "ID",
+            help = "Open task with canonical ID in Emacs (emacsclient)"
+        )]
+        open: Option<usize>,
     },
     #[command(name = "path", about = "Find shortest path between two notes")]
     Path {
