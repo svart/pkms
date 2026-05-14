@@ -14,7 +14,7 @@ mod util;
 use anyhow::Result;
 use clap::Parser;
 use cli::{Cli, Command, OutputFormat};
-use output::OutputContext;
+use output::{ALL_COLUMNS, Column, OutputContext};
 use std::process::ExitCode;
 
 fn main() -> ExitCode {
@@ -409,15 +409,7 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
             } else {
                 scope.clone().unwrap_or_default()
             };
-            let todo_cols = columns
-                .as_deref()
-                .map(|s| {
-                    s.split(',')
-                        .filter_map(|c| output::Column::from_str(c.trim()))
-                        .collect::<Vec<_>>()
-                })
-                .filter(|v| !v.is_empty())
-                .unwrap_or_else(|| output::ALL_COLUMNS.to_vec());
+            let todo_cols = resolve_columns(columns.as_deref(), &cfg.columns);
             commands::todo::run(
                 cfg,
                 ctx,
@@ -471,15 +463,7 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
             columns,
             open,
         } => {
-            let agenda_cols = columns
-                .as_deref()
-                .map(|s| {
-                    s.split(',')
-                        .filter_map(|c| output::Column::from_str(c.trim()))
-                        .collect::<Vec<_>>()
-                })
-                .filter(|v| !v.is_empty())
-                .unwrap_or_else(|| output::ALL_COLUMNS.to_vec());
+            let agenda_cols = resolve_columns(columns.as_deref(), &cfg.columns);
             commands::agenda::run(
                 cfg,
                 ctx,
@@ -515,6 +499,25 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
                 .map(|()| ExitCode::SUCCESS)?
         }
     })
+}
+
+fn resolve_columns(cli_cols: Option<&str>, config_cols: &Option<Vec<String>>) -> Vec<Column> {
+    if let Some(s) = cli_cols {
+        let cols: Vec<Column> = s
+            .split(',')
+            .filter_map(|c| Column::from_str(c.trim()))
+            .collect();
+        if !cols.is_empty() {
+            return cols;
+        }
+    }
+    if let Some(names) = config_cols {
+        let cols: Vec<Column> = names.iter().filter_map(|c| Column::from_str(c)).collect();
+        if !cols.is_empty() {
+            return cols;
+        }
+    }
+    ALL_COLUMNS.to_vec()
 }
 
 fn init_config(db: Option<&std::path::Path>, ctx: &OutputContext) -> Result<ExitCode> {

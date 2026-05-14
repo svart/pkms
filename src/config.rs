@@ -8,6 +8,7 @@ pub struct Config {
     pub db_root: Option<PathBuf>,
     pub new_notes_dir: Option<PathBuf>,
     pub ignore_patterns: Option<Vec<String>>,
+    pub columns: Option<Vec<String>>,
     pub agenda: Option<AgendaConfig>,
 }
 
@@ -43,6 +44,7 @@ impl Config {
                 db_root: None,
                 new_notes_dir: None,
                 ignore_patterns: None,
+                columns: None,
                 agenda: None,
             })
         }
@@ -135,6 +137,10 @@ pub fn generate_default_config(db_root: Option<&std::path::Path>) -> String {
 # Glob patterns to ignore during file discovery
 # ignore_patterns = [".attach", "*.bak"]
 
+# Default columns for todo and agenda commands (overridable by --columns flag)
+# Available: Id, Date, State, Type, Prio, Tags, Note, Heading
+# columns = ["Id", "Date", "State", "Type", "Prio", "Tags", "Note", "Heading"]
+
 # Agenda section: configure TODO state keyword lists
 # [agenda]
 # open_todo_states = ["TODO"]
@@ -160,6 +166,7 @@ mod tests {
             db_root: None,
             new_notes_dir: None,
             ignore_patterns: None,
+            columns: None,
             agenda: None,
         };
         let db_root = Path::new("/test/root");
@@ -175,6 +182,7 @@ mod tests {
             db_root: None,
             new_notes_dir: Some(PathBuf::from("/abs/path")),
             ignore_patterns: None,
+            columns: None,
             agenda: None,
         };
         let db_root = Path::new("/test/root");
@@ -190,6 +198,7 @@ mod tests {
             db_root: None,
             new_notes_dir: Some(PathBuf::from("subdir")),
             ignore_patterns: None,
+            columns: None,
             agenda: None,
         };
         let db_root = Path::new("/test/root");
@@ -205,6 +214,7 @@ mod tests {
             db_root: None,
             new_notes_dir: None,
             ignore_patterns: Some(vec!["*.bak".to_string(), ".attach".to_string()]),
+            columns: None,
             agenda: None,
         };
         let patterns = config.resolve_ignore_patterns();
@@ -218,6 +228,7 @@ mod tests {
             db_root: None,
             new_notes_dir: None,
             ignore_patterns: None,
+            columns: None,
             agenda: None,
         };
         let patterns = config.resolve_ignore_patterns();
@@ -255,6 +266,7 @@ mod tests {
             db_root: Some(PathBuf::from("/db")),
             new_notes_dir: None,
             ignore_patterns: Some(vec!["*.tmp".to_string()]),
+            columns: None,
             agenda: None,
         };
         let info = config.resolved_info(Path::new("/actual/db"), Path::new("/notes/dir"));
