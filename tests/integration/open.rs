@@ -13,7 +13,10 @@ fn test_open_invalid_id() {
     let (_dir, root) = setup_db();
     let (stdout, stderr, status) = run(&["--db", root.to_str().unwrap(), "open", "9999"]);
     assert!(!status.success(), "expected failure for invalid ID");
-    assert!(stderr.contains("No task with ID 9999"), "stderr: {stderr}");
+    assert!(
+        stderr.contains("No task with canonical ID 9999"),
+        "stderr: {stderr}"
+    );
     let _ = stdout;
 }
 
