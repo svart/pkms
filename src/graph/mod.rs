@@ -314,11 +314,12 @@ impl Graph {
                 continue;
             }
             for heading in &result.parsed.headings {
-                let eligible = heading
+                let is_todo = heading
                     .todo_state
                     .as_ref()
                     .is_some_and(|s| valid_states.iter().any(|vs| vs.eq_ignore_ascii_case(s)));
-                if !eligible {
+                let has_dates = heading.scheduled.is_some() || heading.deadline.is_some();
+                if !is_todo && !has_dates {
                     continue;
                 }
                 items.push((
