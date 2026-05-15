@@ -402,7 +402,6 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
             from_stdin,
             line_sep,
             columns,
-            open,
         } => {
             let resolved_scope = if *from_stdin {
                 read_stdin_ndjson()?
@@ -442,7 +441,6 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
                     prio: prio.clone(),
                     line_sep: *line_sep,
                     columns: todo_cols,
-                    open: *open,
                 },
             )
             .map(|()| ExitCode::SUCCESS)?
@@ -461,7 +459,6 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
             upcoming,
             line_sep,
             columns,
-            open,
         } => {
             let agenda_cols = resolve_columns(columns.as_deref(), &cfg.columns);
             commands::agenda::run(
@@ -483,7 +480,6 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
                     week: *week,
                     line_sep: *line_sep,
                     columns: agenda_cols,
-                    open: *open,
                 },
             )
             .map(|()| ExitCode::SUCCESS)?
@@ -497,6 +493,33 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
                 .ok_or_else(|| anyhow::anyhow!("No target specified. Provide --to"))?;
             commands::path::run(cfg, ctx, &commands::path::PathOptions { from, to })
                 .map(|()| ExitCode::SUCCESS)?
+        }
+        Command::Open {
+            target,
+            editor,
+            line,
+            from_stdin,
+        } => {
+            let targets = if *from_stdin || (target.is_none() && is_stdin_piped()) {
+                read_stdin_ndjson()?
+            } else if let Some(t) = target {
+                vec![t.clone()]
+            } else {
+                anyhow::bail!(
+                    "No target specified and no stdin pipe detected. \
+                     Provide a target or use --from-stdin."
+                );
+            };
+            commands::open::run(
+                cfg,
+                ctx,
+                &commands::open::OpenOptions {
+                    targets,
+                    editor: editor.clone(),
+                    line: *line,
+                },
+            )
+            .map(|()| ExitCode::SUCCESS)?
         }
         Command::Show {
             target,

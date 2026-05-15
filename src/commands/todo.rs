@@ -181,7 +181,6 @@ pub struct TodoOptions {
     pub prio: Option<String>,
     pub line_sep: bool,
     pub columns: Vec<Column>,
-    pub open: Option<usize>,
 }
 
 fn item_datetimes(item: &TodoItem) -> Vec<NaiveDateTime> {
@@ -369,32 +368,6 @@ pub fn run(config: &Config, ctx: &OutputContext, opts: &TodoOptions) -> Result<(
 
     if let Some(ref before_dt) = opts.before {
         items.retain(|item| item_datetimes(item).iter().any(|dt| dt <= before_dt));
-    }
-
-    if let Some(open_id) = opts.open {
-        let target = items.iter().find(|item| item.id == open_id);
-        match target {
-            Some(item) => {
-                let path = &item.path;
-                let line = item.line_number;
-                println!(
-                    "Opening #{}: {} / {}",
-                    item.id, item.title, item.heading_title
-                );
-                let status = std::process::Command::new("emacsclient")
-                    .args(["-n", &format!("+{line}"), path])
-                    .status();
-                match status {
-                    Ok(s) if s.success() => {}
-                    Ok(s) => eprintln!("emacsclient exited with error: {s}"),
-                    Err(e) => eprintln!("Failed to run emacsclient: {e}"),
-                }
-                return Ok(());
-            }
-            None => {
-                anyhow::bail!("No task with ID {open_id} matching current filters");
-            }
-        }
     }
 
     let sort_fields: Vec<&str> = opts

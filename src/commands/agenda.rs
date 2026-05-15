@@ -189,7 +189,6 @@ pub struct AgendaOptions {
     pub week: bool,
     pub line_sep: bool,
     pub columns: Vec<Column>,
-    pub open: Option<usize>,
 }
 
 pub fn run(config: &Config, ctx: &OutputContext, opts: &AgendaOptions) -> Result<()> {
@@ -358,32 +357,6 @@ pub fn run(config: &Config, ctx: &OutputContext, opts: &AgendaOptions) -> Result
         } else if let Some(p) = prio.chars().next() {
             let target = p.to_ascii_uppercase();
             items.retain(|item| item.priority == Some(target));
-        }
-    }
-
-    if let Some(open_id) = opts.open {
-        let target = items.iter().find(|item| item.id == open_id);
-        match target {
-            Some(item) => {
-                let path = &item.path;
-                let line = item.line_number;
-                println!(
-                    "Opening #{}: {} / {}",
-                    item.id, item.title, item.heading_title
-                );
-                let status = std::process::Command::new("emacsclient")
-                    .args(["-n", &format!("+{line}"), path])
-                    .status();
-                match status {
-                    Ok(s) if s.success() => {}
-                    Ok(s) => eprintln!("emacsclient exited with error: {s}"),
-                    Err(e) => eprintln!("Failed to run emacsclient: {e}"),
-                }
-                return Ok(());
-            }
-            None => {
-                anyhow::bail!("No task with ID {open_id} matching current filters");
-            }
         }
     }
 

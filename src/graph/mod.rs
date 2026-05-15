@@ -278,6 +278,60 @@ impl Graph {
         self.find_node(target)
             .ok_or_else(|| anyhow::anyhow!("Note not found: {target}"))
     }
+
+    pub fn resolve_canonical_task_id(
+        &self,
+        config: &Config,
+        id: usize,
+    ) -> anyhow::Result<(String, usize)> {
+        let valid_states = config.todo_states();
+        let mut items: Vec<(String, usize, Option<char>)> = Vec::new();
+
+        for result in &self.results {
+            if result.parse_error.is_some() {
+                continue;
+            }
+            for heading in &result.parsed.headings {
+                let eligible = heading
+                    .todo_state
+                    .as_ref()
+                    .is_some_and(|s| valid_states.iter().any(|vs| vs.eq_ignore_ascii_case(s)));
+                if !eligible {
+                    continue;
+                }
+                items.push((
+                    result.path.to_string_lossy().to_string(),
+                    heading.line_number,
+                    heading.priority,
+                ));
+            }
+        }
+
+        items.sort_by(|a, b| {
+            let a_p = a.2.map(canonical_priority_value).unwrap_or(3);
+            let b_p = b.2.map(canonical_priority_value).unwrap_or(3);
+            a_p.cmp(&b_p).then(a.0.cmp(&b.0)).then(a.1.cmp(&b.1))
+        });
+
+        if id == 0 || id > items.len() {
+            anyhow::bail!(
+                "No task with canonical ID {}. Valid range is 1–{}",
+                id,
+                items.len()
+            );
+        }
+        let (path, line, _) = &items[id - 1];
+        Ok((path.clone(), *line))
+    }
+}
+
+fn canonical_priority_value(p: char) -> u8 {
+    match p {
+        'A' => 0,
+        'B' => 1,
+        'C' => 2,
+        _ => 3,
+    }
 }
 
 #[derive(Debug, Clone, Default)]

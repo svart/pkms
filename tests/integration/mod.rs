@@ -7,6 +7,7 @@ mod fix;
 mod get;
 mod info;
 mod new;
+mod open;
 mod orphans;
 mod path;
 mod pipe;

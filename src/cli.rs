@@ -280,12 +280,6 @@ pub enum Command {
             help = "Comma-separated column names: Id,Date,State,Type,Prio,Tags,Note,Heading"
         )]
         columns: Option<String>,
-        #[arg(
-            long,
-            value_name = "ID",
-            help = "Open task with canonical ID in Emacs (emacsclient)"
-        )]
-        open: Option<usize>,
     },
     #[command(about = "Display TODO items (use --group to group by state/priority/file)")]
     Todo {
@@ -355,12 +349,6 @@ pub enum Command {
             help = "Comma-separated column names: Id,Date,State,Type,Prio,Tags,Note,Heading"
         )]
         columns: Option<String>,
-        #[arg(
-            long,
-            value_name = "ID",
-            help = "Open task with canonical ID in Emacs (emacsclient)"
-        )]
-        open: Option<usize>,
     },
     #[command(name = "path", about = "Find shortest path between two notes")]
     Path {
@@ -381,6 +369,21 @@ pub enum Command {
             help = "Explicit note UUID, file path, or title (bypasses canonical ID detection)"
         )]
         uuid: Option<String>,
+        #[arg(long, help = "Read targets from NDJSON stdin")]
+        from_stdin: bool,
+    },
+    #[command(about = "Open a task or note in an editor")]
+    Open {
+        #[arg(help = "Canonical task ID (from todo/agenda), or UUID/path/title")]
+        target: Option<String>,
+        #[arg(
+            long,
+            default_value = "emacsclient -n",
+            help = "Editor command (default: emacsclient -n)"
+        )]
+        editor: String,
+        #[arg(short, long, value_name = "LINE", help = "Line number to open at")]
+        line: Option<usize>,
         #[arg(long, help = "Read targets from NDJSON stdin")]
         from_stdin: bool,
     },
