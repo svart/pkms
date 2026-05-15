@@ -628,7 +628,7 @@ fn format_todo_rows(item: &TodoItem) -> Vec<[String; 8]> {
 
     if let Some(ref d) = item.deadline {
         rows.push([
-            String::new(),
+            if has_both { String::new() } else { id.clone() },
             format_display_datetime(d),
             if has_both {
                 String::new()
