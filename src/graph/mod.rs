@@ -279,11 +279,33 @@ impl Graph {
             .ok_or_else(|| anyhow::anyhow!("Note not found: {target}"))
     }
 
+    pub fn all_task_entries(&self, config: &Config) -> Vec<(usize, String, usize)> {
+        let entries = self.sorted_task_entries(config);
+        entries
+            .into_iter()
+            .enumerate()
+            .map(|(i, (p, l, _))| (i + 1, p, l))
+            .collect()
+    }
+
     pub fn resolve_canonical_task_id(
         &self,
         config: &Config,
         id: usize,
     ) -> anyhow::Result<(String, usize)> {
+        let entries = self.sorted_task_entries(config);
+        if id == 0 || id > entries.len() {
+            anyhow::bail!(
+                "No task with canonical ID {}. Valid range is 1–{}",
+                id,
+                entries.len()
+            );
+        }
+        let (path, line, _) = &entries[id - 1];
+        Ok((path.clone(), *line))
+    }
+
+    fn sorted_task_entries(&self, config: &Config) -> Vec<(String, usize, Option<char>)> {
         let valid_states = config.todo_states();
         let mut items: Vec<(String, usize, Option<char>)> = Vec::new();
 
@@ -313,15 +335,7 @@ impl Graph {
             a_p.cmp(&b_p).then(a.0.cmp(&b.0)).then(a.1.cmp(&b.1))
         });
 
-        if id == 0 || id > items.len() {
-            anyhow::bail!(
-                "No task with canonical ID {}. Valid range is 1–{}",
-                id,
-                items.len()
-            );
-        }
-        let (path, line, _) = &items[id - 1];
-        Ok((path.clone(), *line))
+        items
     }
 }
 

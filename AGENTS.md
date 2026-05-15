@@ -82,7 +82,7 @@ If performance optimization is needed, optimize reading from scratch on every ru
 
 ### Canonical task IDs
 
-`todo` and `agenda` commands assign canonical IDs (1-based) to every item using a deterministic sort of `(priority, path, line_number)` **before** user filtering. IDs remain stable across invocations as long as no files change. The `open <ID>` command opens the corresponding file in Emacs at the heading's line via `emacsclient -n +<LINE> <FILE>`.
+All TODO headings in the database are assigned a global 1-based ID using a deterministic sort of `(priority, path, line_number)`. `todo`, `agenda`, and `open` all use this same global ID space, so ID 5 always refers to the same heading regardless of which command you use. IDs remain stable across invocations as long as no files change. The `open <ID>` command opens the corresponding file in Emacs at the heading's line via `emacsclient -n +<LINE> <FILE>`. Note that `todo` and `agenda` may show non-contiguous IDs when their filters exclude items.
 
 ### Heading nodes
 
@@ -102,7 +102,7 @@ Every command's `run()` follows the same pattern:
 - **Integration tests** in `tests/integration/` spawn the actual binary with a temp mock DB (one file per subcommand).
 - **Property-based tests** in `graph.rs` and `parser.rs` use `proptest` (random Graph::Build fuzzing, slug roundtrip, UUID format, panic fuzzing)
 - **JSON output testing**: All commands are tested with `--output-format json` via `test_all_commands_json`, verifying valid JSON output for every command.
-- **`open <ID>` testing**: `open` command resolves canonical IDs using agenda-style filtering (items with SCHEDULED/DEADLINE dates). Tests verify both valid and invalid IDs.
+- **`open <ID>` testing**: `open` command resolves canonical IDs using the global TODO-heading enumeration. Tests verify both valid and invalid IDs.
 - Mock DB helper in `tests/integration/mod.rs::setup_db()` creates a 15+ note graph with duplicate UUIDs, broken links, filetags, aliases, headings, and nested TODO trees.
 
 ## Feature flags

@@ -298,7 +298,17 @@ pub fn run(config: &Config, ctx: &OutputContext, opts: &TodoOptions) -> Result<(
         }
     }
 
-    assign_canonical_ids(&mut items);
+    let global_ids: std::collections::HashMap<(String, usize), usize> = graph
+        .all_task_entries(config)
+        .into_iter()
+        .map(|(id, path, line)| ((path, line), id))
+        .collect();
+    for item in &mut items {
+        item.id = global_ids
+            .get(&(item.path.clone(), item.line_number))
+            .copied()
+            .unwrap_or(0);
+    }
 
     if !opts.scope.is_empty() {
         let db_root = config.resolved_db_root()?;
@@ -510,19 +520,6 @@ fn sort_items(items: &mut [TodoItem], sort_fields: &[&str]) {
         }
         std::cmp::Ordering::Equal
     });
-}
-
-fn assign_canonical_ids(items: &mut [TodoItem]) {
-    items.sort_by(|a, b| {
-        let a_p = a.priority.map(priority_value).unwrap_or(3);
-        let b_p = b.priority.map(priority_value).unwrap_or(3);
-        a_p.cmp(&b_p)
-            .then(a.path.cmp(&b.path))
-            .then(a.line_number.cmp(&b.line_number))
-    });
-    for (i, item) in items.iter_mut().enumerate() {
-        item.id = i + 1;
-    }
 }
 
 fn priority_value(p: char) -> u8 {
