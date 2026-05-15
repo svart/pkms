@@ -284,7 +284,7 @@ impl Graph {
         entries
             .into_iter()
             .enumerate()
-            .map(|(i, (p, l, _))| (i + 1, p, l))
+            .map(|(i, (p, l, _, _))| (i + 1, p, l))
             .collect()
     }
 
@@ -301,13 +301,15 @@ impl Graph {
                 entries.len()
             );
         }
-        let (path, line, _) = &entries[id - 1];
+        let (path, line, _, _) = &entries[id - 1];
         Ok((path.clone(), *line))
     }
 
-    fn sorted_task_entries(&self, config: &Config) -> Vec<(String, usize, Option<char>)> {
+    fn sorted_task_entries(&self, config: &Config) -> Vec<(String, usize, Option<char>, bool)> {
         let valid_states = config.todo_states();
-        let mut items: Vec<(String, usize, Option<char>)> = Vec::new();
+        let open_states = config.open_todo_states();
+        let closed_states = config.closed_todo_states();
+        let mut items: Vec<(String, usize, Option<char>, bool)> = Vec::new();
 
         for result in &self.results {
             if result.parse_error.is_some() {
@@ -322,18 +324,29 @@ impl Graph {
                 if !is_todo && !has_dates {
                     continue;
                 }
+                let is_open = match &heading.todo_state {
+                    Some(s) if open_states.iter().any(|os| os.eq_ignore_ascii_case(s)) => true,
+                    Some(s) if closed_states.iter().any(|cs| cs.eq_ignore_ascii_case(s)) => false,
+                    _ => true,
+                };
                 items.push((
                     result.path.to_string_lossy().to_string(),
                     heading.line_number,
                     heading.priority,
+                    is_open,
                 ));
             }
         }
 
         items.sort_by(|a, b| {
-            let a_p = a.2.map(canonical_priority_value).unwrap_or(3);
-            let b_p = b.2.map(canonical_priority_value).unwrap_or(3);
-            a_p.cmp(&b_p).then(a.0.cmp(&b.0)).then(a.1.cmp(&b.1))
+            b.3.cmp(&a.3)
+                .then_with(|| {
+                    let a_p = a.2.map(canonical_priority_value).unwrap_or(3);
+                    let b_p = b.2.map(canonical_priority_value).unwrap_or(3);
+                    a_p.cmp(&b_p)
+                })
+                .then(a.0.cmp(&b.0))
+                .then(a.1.cmp(&b.1))
         });
 
         items

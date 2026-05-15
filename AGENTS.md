@@ -82,7 +82,7 @@ If performance optimization is needed, optimize reading from scratch on every ru
 
 ### Canonical task IDs
 
-All TODO headings in the database are assigned a global 1-based ID using a deterministic sort of `(priority, path, line_number)`. `todo`, `agenda`, and `open` all use this same global ID space, so ID 5 always refers to the same heading regardless of which command you use. IDs remain stable across invocations as long as no files change. The `open <ID>` command opens the corresponding file in Emacs at the heading's line via `emacsclient -n +<LINE> <FILE>`. Note that `todo` and `agenda` may show non-contiguous IDs when their filters exclude items.
+All TODO headings in the database are assigned a global 1-based ID using a deterministic sort: open items (TODO, etc.) first, then closed items (DONE, etc.), then within each group by `(priority, path, line_number)`. `todo`, `agenda`, and `open` all use this same global ID space, so ID 5 always refers to the same heading regardless of which command you use. IDs remain stable across invocations as long as no files change. The `open <ID>` command opens the corresponding file in Emacs at the heading's line via `emacsclient -n +<LINE> <FILE>`. Note that `todo` and `agenda` may show non-contiguous IDs when their filters exclude items.
 
 ### Heading nodes
 
