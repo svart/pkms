@@ -228,6 +228,18 @@ fn test_all_commands_json() {
             ],
             false,
         ),
+        (
+            vec![
+                "--db".into(),
+                db.clone(),
+                "--output-format".into(),
+                "json".into(),
+                "show".into(),
+                "--uuid".into(),
+                "h5h5h5h5-h5h5-4h5h-h5h5-h5h5h5h5h5h5".into(),
+            ],
+            true,
+        ),
     ];
     for (args, expect_success) in &cases {
         let args_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();

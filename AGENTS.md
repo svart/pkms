@@ -103,7 +103,7 @@ Every command's `run()` follows the same pattern:
 - **Property-based tests** in `graph.rs` and `parser.rs` use `proptest` (random Graph::Build fuzzing, slug roundtrip, UUID format, panic fuzzing)
 - **JSON output testing**: All commands are tested with `--output-format json` via `test_all_commands_json`, verifying valid JSON output for every command.
 - **`--open <ID>` testing**: `todo` and `agenda` commands support `--open <ID>` for opening a task in Emacs with `emacsclient`. Tests verify both valid and invalid IDs.
-- Mock DB helper in `tests/integration/mod.rs::setup_db()` creates a 12+ note graph with duplicate UUIDs, broken links, filetags, aliases, and headings.
+- Mock DB helper in `tests/integration/mod.rs::setup_db()` creates a 15+ note graph with duplicate UUIDs, broken links, filetags, aliases, headings, and nested TODO trees.
 
 ## Feature flags
 
@@ -121,13 +121,13 @@ pkms resolve --tags "ai" --output-format ndjson | pkms get --links --from-stdin
 pkms stats --hubs --output-format ndjson | pkms get --links --no-content --from-stdin
 ```
 
-Consumer commands (`get`, `suggest`, `validate`, `context`, `todo`) accept `--from-stdin`
+Consumer commands (`get`, `suggest`, `validate`, `context`, `todo`, `show`) accept `--from-stdin`
 to read UUIDs from stdin. They auto-detect piped stdin when no target is given.
 
 NDJSON output emits one JSON object per line (each with a `uuid` field).
 
 - Producers: `resolve`, `query`, `orphans`, `stats --hubs`, `suggest`
-- Consumers: `get`, `suggest`, `validate`, `context`, `todo`
+- Consumers: `get`, `suggest`, `validate`, `context`, `todo`, `show`
 
 ## Related
 

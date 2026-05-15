@@ -369,4 +369,19 @@ pub enum Command {
         #[arg(help = "Target note (UUID, path, or title)")]
         to: Option<String>,
     },
+    #[command(about = "Show detailed task information for a heading")]
+    Show {
+        #[arg(
+            help = "Canonical task ID (from todo/agenda), or UUID/path/title. If numeric, treated as ID."
+        )]
+        target: Option<String>,
+        #[arg(
+            long,
+            value_name = "UUID",
+            help = "Explicit note UUID, file path, or title (bypasses canonical ID detection)"
+        )]
+        uuid: Option<String>,
+        #[arg(long, help = "Read targets from NDJSON stdin")]
+        from_stdin: bool,
+    },
 }

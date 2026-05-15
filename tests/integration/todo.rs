@@ -232,8 +232,8 @@ fn test_todo_group_state() {
     let groups = v["groups"].as_object().unwrap();
     assert!(groups.contains_key("TODO"), "expected TODO group");
     assert!(groups.contains_key("DONE"), "expected DONE group");
-    assert_eq!(groups["TODO"].as_array().unwrap().len(), 5);
-    assert_eq!(groups["DONE"].as_array().unwrap().len(), 1);
+    assert_eq!(groups["TODO"].as_array().unwrap().len(), 9);
+    assert_eq!(groups["DONE"].as_array().unwrap().len(), 2);
 }
 
 #[test]
@@ -286,7 +286,7 @@ fn test_todo_group_priority() {
         "expected No Priority group"
     );
     assert_eq!(groups["Priority A"].as_array().unwrap().len(), 1);
-    assert_eq!(groups["No Priority"].as_array().unwrap().len(), 8);
+    assert_eq!(groups["No Priority"].as_array().unwrap().len(), 13);
 }
 
 #[test]
@@ -486,14 +486,12 @@ fn test_todo_after_before_range() {
     ]);
     assert!(status.success());
     let items = v["items"].as_array().unwrap();
-    // Only Low priority task has deadline 2026-06-15 within this range
     assert_eq!(
         items.len(),
-        1,
-        "expected 1 item in date range, got {}",
+        3,
+        "expected 3 items in date range, got {}",
         items.len()
     );
-    assert_eq!(items[0]["heading_title"], "Low priority task");
 }
 
 #[test]

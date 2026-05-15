@@ -12,6 +12,7 @@ mod path;
 mod pipe;
 mod query;
 mod resolve;
+mod show;
 mod snapshot;
 mod stats;
 mod suggest;
@@ -334,6 +335,28 @@ DEADLINE: <2026-06-15 Mon>
 SCHEDULED: <2026-05-10 Sun>
 * WAITING Review
 * IDEA Something
+"#,
+    )
+    .unwrap();
+
+    // Nested TODO note -- has parent-child TODO structure
+    fs::write(
+        common.join("20220101000015-nested-todo.org"),
+        r#":PROPERTIES:
+:ID:       h5h5h5h5-h5h5-4h5h-h5h5-h5h5h5h5h5h5
+:END:
+#+title: Nested Todo Note
+#+filetags: :project:
+
+* TODO Parent task
+SCHEDULED: <2026-06-01 Mon>
+Some parent content.
+** TODO Child task A
+DEADLINE: <2026-06-10 Wed>
+Child content.
+** TODO Child task B
+*** DONE Grandchild
+* TODO Another top task
 "#,
     )
     .unwrap();

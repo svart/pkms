@@ -9,6 +9,7 @@ pub mod orphans;
 pub mod path;
 pub mod query;
 pub mod resolve;
+pub mod show;
 pub mod stats;
 pub mod suggest;
 pub mod todo;

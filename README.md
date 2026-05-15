@@ -302,6 +302,7 @@ multiple fields (e.g. `--sort "date,priority"`) for chained sorting.
 | `path`        | Shortest path between two notes                           |
 | `query`       | Fuzzy search titles and content (+ --embed for semantic)  |
 | `new`         | Generate filename/UUID for a new note                     |
+| `show`        | Detailed task view: parent/children, block content, links |
 | `info`        | Show current configuration                                |
 | `init-config` | Generate default config file                              |
 

@@ -498,6 +498,29 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
             commands::path::run(cfg, ctx, &commands::path::PathOptions { from, to })
                 .map(|()| ExitCode::SUCCESS)?
         }
+        Command::Show {
+            target,
+            uuid,
+            from_stdin,
+        } => {
+            let targets = if *from_stdin {
+                commands::show::read_stdin_targets()?
+            } else if let Some(t) = target {
+                vec![commands::show::HeadingTarget::from_arg(t.clone())?]
+            } else if let Some(u) = uuid {
+                vec![commands::show::HeadingTarget {
+                    note_target: u.clone(),
+                    canonical_id: None,
+                }]
+            } else {
+                anyhow::bail!(
+                    "No target specified and no stdin pipe detected. \
+                     Provide a target or use --from-stdin."
+                );
+            };
+            commands::show::run(cfg, ctx, &commands::show::ShowOptions { targets })
+                .map(|()| ExitCode::SUCCESS)?
+        }
     })
 }
 
