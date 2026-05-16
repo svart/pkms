@@ -91,7 +91,6 @@ pub struct AgendaIssue {
     pub issue: String,
 }
 
-#[allow(clippy::too_many_arguments)]
 pub struct CheckOptions {
     pub stats: bool,
     pub file_links: bool,

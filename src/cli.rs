@@ -200,6 +200,12 @@ pub enum Command {
         no_content: bool,
         #[arg(long, help = "Read UUIDs from NDJSON stdin")]
         from_stdin: bool,
+        #[arg(
+            long,
+            default_value = "cl100k_base",
+            help = "Token encoding: cl100k_base (GPT-4) or o200k_base (GPT-4o)"
+        )]
+        encoding: String,
     },
     #[command(
         about = "Fuzzy search across note titles and content. Match sources: title, alias, ref, tag, content"

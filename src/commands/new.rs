@@ -42,7 +42,6 @@ fn find_note_by_title(
     None
 }
 
-#[allow(clippy::too_many_arguments)]
 pub struct NewOptions {
     pub title: String,
     pub create: bool,

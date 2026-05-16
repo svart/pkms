@@ -34,7 +34,6 @@ pub struct ContextLine {
     pub text: String,
 }
 
-#[allow(clippy::too_many_arguments)]
 pub struct QueryOptions {
     pub terms: String,
     pub limit: Option<usize>,

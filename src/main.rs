@@ -259,6 +259,7 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
             headings,
             no_content,
             from_stdin,
+            encoding,
         } => {
             let targets = resolve_targets(target, from_stdin)?;
             commands::get::run(
@@ -269,6 +270,8 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
                     show_links: *links,
                     show_headings: *headings,
                     no_content: *no_content,
+                    encoding: tokens::Encoding::from_str(encoding)
+                        .ok_or_else(|| anyhow::anyhow!("Unknown encoding: {encoding}"))?,
                 },
             )
             .map(|()| ExitCode::SUCCESS)?

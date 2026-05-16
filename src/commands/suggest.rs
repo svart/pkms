@@ -552,7 +552,6 @@ fn compute_suggestions_for_node(
     Ok((node, suggestions, total, showed, heading_context))
 }
 
-#[allow(clippy::too_many_arguments)]
 pub struct SuggestOptions {
     pub targets: Vec<String>,
     pub limit: Option<usize>,

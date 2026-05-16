@@ -96,6 +96,7 @@ pub struct GetOptions {
     pub show_links: bool,
     pub show_headings: bool,
     pub no_content: bool,
+    pub encoding: tokens::Encoding,
 }
 
 fn get_neighbor_map(graph: &Graph, uuid: &str) -> HashMap<u32, NeighborOutput> {
@@ -122,6 +123,7 @@ fn process_one_get(
     show_links: bool,
     show_headings: bool,
     no_content: bool,
+    encoding: tokens::Encoding,
 ) -> Result<GetOutput> {
     let node = graph.resolve_target(target)?.clone();
     let neighbors = if show_links {
@@ -149,7 +151,7 @@ fn process_one_get(
     let full_content = std::fs::read_to_string(&node.path).ok();
     let estimated_tokens = full_content
         .as_deref()
-        .map(|c| tokens::count_tokens(c, tokens::Encoding::Cl100kBase));
+        .map(|c| tokens::count_tokens(c, encoding));
 
     Ok(GetOutput {
         node: node_json,
@@ -164,6 +166,7 @@ fn print_one_get_text(
     show_links: bool,
     show_headings: bool,
     no_content: bool,
+    encoding: tokens::Encoding,
 ) -> Result<()> {
     let node = graph.resolve_target(target)?.clone();
     let neighbors = if show_links {
@@ -175,7 +178,7 @@ fn print_one_get_text(
     let full_content = std::fs::read_to_string(&node.path).ok();
     let content_tokens = full_content
         .as_deref()
-        .map(|c| tokens::count_tokens(c, tokens::Encoding::Cl100kBase));
+        .map(|c| tokens::count_tokens(c, encoding));
 
     let node_content = if no_content {
         None
@@ -257,6 +260,7 @@ pub fn run(config: &Config, ctx: &OutputContext, opts: &GetOptions) -> Result<()
                     opts.show_links,
                     opts.show_headings,
                     opts.no_content,
+                    opts.encoding,
                 )?;
                 if opts.targets.len() > 1 {
                     println!();
@@ -272,6 +276,7 @@ pub fn run(config: &Config, ctx: &OutputContext, opts: &GetOptions) -> Result<()
                     opts.show_links,
                     opts.show_headings,
                     opts.no_content,
+                    opts.encoding,
                 )?);
             }
             if all_outputs.len() == 1 {
@@ -288,6 +293,7 @@ pub fn run(config: &Config, ctx: &OutputContext, opts: &GetOptions) -> Result<()
                     opts.show_links,
                     opts.show_headings,
                     opts.no_content,
+                    opts.encoding,
                 )?;
                 println!("{}", serde_json::to_string(&output)?);
             }
