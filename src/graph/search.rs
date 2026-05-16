@@ -111,18 +111,29 @@ impl Graph {
             if !seen_paths.insert(node.path.clone()) {
                 continue;
             }
-            if let Ok(content) = std::fs::read_to_string(&node.path) {
-                let content_lower = content.to_lowercase();
-                if content_lower.contains(&query) {
-                    let mut context_lines = Vec::new();
-                    for (i, line) in content.lines().enumerate() {
-                        if line.to_lowercase().contains(&query) {
-                            context_lines.push(format!("{}: {}", i + 1, line.trim()));
-                        }
-                    }
-                    results.push((node.uuid.clone(), node.title.clone(), context_lines));
+            let content = self
+                .results
+                .iter()
+                .find(|r| r.path == node.path)
+                .and_then(|r| r.raw_content.clone())
+                .or_else(|| std::fs::read_to_string(&node.path).ok());
+            let Some(content) = content else {
+                continue;
+            };
+            if !content.to_lowercase().contains(&query) {
+                continue;
+            }
+            let mut context_lines = Vec::new();
+            for (i, line) in content.lines().enumerate() {
+                if line.to_lowercase().contains(&query) {
+                    context_lines.push(format!("{}: {}", i + 1, line.trim()));
                 }
             }
+            results.push((
+                node.uuid.clone(),
+                node.title.clone(),
+                context_lines,
+            ));
         }
 
         results
