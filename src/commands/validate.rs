@@ -1,22 +1,12 @@
 use crate::cli::OutputFormat;
 use crate::config::Config;
-use crate::graph::{Graph, resolve_file_link_path};
+use crate::graph::{Graph, file_link_target_exists, resolve_file_link_path};
 use crate::output::OutputContext;
-use crate::parser::{Link, validate_filetags_format};
+use crate::parser::{ID_PROPERTY_RE, Link, UUID_FORMAT_RE, validate_filetags_format};
 use anyhow::Result;
-use regex::Regex;
 use serde::Serialize;
 use std::collections::HashMap;
 use std::path::Path;
-use std::sync::LazyLock;
-
-static VALIDATE_UUID_RE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r":ID:\s+([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})").unwrap()
-});
-
-static UUID_RE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$").unwrap()
-});
 
 #[derive(Serialize)]
 pub struct ValidateOutput {
@@ -185,7 +175,7 @@ fn validate_one(graph: &Graph, target: &str, db_root: &Path) -> Result<ValidateO
     }
 
     // Check for duplicate UUIDs (note-level vs heading-level)
-    let all_ids: Vec<String> = VALIDATE_UUID_RE
+    let all_ids: Vec<String> = ID_PROPERTY_RE
         .captures_iter(&content)
         .filter_map(|c| c.get(1))
         .map(|m| m.as_str().to_string())
@@ -217,52 +207,15 @@ fn validate_one(graph: &Graph, target: &str, db_root: &Path) -> Result<ValidateO
 
     let mut broken_internal = Vec::new();
     let mut broken_files = Vec::new();
-    let target_is_uuid = UUID_RE.is_match(target);
+    let target_is_uuid = UUID_FORMAT_RE.is_match(target);
 
     for link in &node.outgoing {
         match link {
             Link::Internal(uuid) if !graph.nodes.contains_key(uuid) => {
                 broken_internal.push(uuid.clone());
             }
-            Link::File(path_str) => {
-                let (inner_path, is_org) = if let Some(rest) = path_str.strip_prefix("org:") {
-                    (rest.to_string(), true)
-                } else {
-                    (path_str.clone(), false)
-                };
-                let expanded = if inner_path.starts_with('~') {
-                    if let Some(home) = dirs::home_dir() {
-                        inner_path.replacen('~', &home.to_string_lossy(), 1)
-                    } else {
-                        inner_path.clone()
-                    }
-                } else {
-                    inner_path.clone()
-                };
-                let clean_path = expanded.split("::").next().unwrap_or(&expanded);
-                let file_path = Path::new(clean_path);
-                let full_path = if file_path.is_absolute() {
-                    file_path.to_path_buf()
-                } else if is_org {
-                    db_root.join(file_path)
-                } else {
-                    node.path.parent().unwrap_or(db_root).join(file_path)
-                };
-                if !full_path.exists() {
-                    broken_files.push(path_str.clone());
-                    continue;
-                }
-                if let Some(line_spec) = expanded.split_once("::").map(|x| x.1)
-                    && !line_spec.is_empty()
-                {
-                    if let Ok(content) = std::fs::read_to_string(&full_path) {
-                        if !content.lines().any(|l| l.contains(line_spec)) {
-                            broken_files.push(path_str.clone());
-                        }
-                    } else {
-                        broken_files.push(path_str.clone());
-                    }
-                }
+            Link::File(path_str) if !file_link_target_exists(path_str, &node.path, db_root) => {
+                broken_files.push(path_str.clone());
             }
             _ => {}
         }

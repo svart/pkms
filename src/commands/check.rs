@@ -1,5 +1,7 @@
 use crate::config::Config;
-use crate::graph::{DuplicateInfo, Graph, GraphStats, OverlinkEntry, SelfLinkEntry};
+use crate::graph::{
+    DuplicateInfo, Graph, GraphStats, OverlinkEntry, SelfLinkEntry, file_link_target_exists,
+};
 use crate::output::OutputContext;
 use crate::parser::{Link, parse_note, validate_filetags_format};
 use crate::util;
@@ -89,45 +91,6 @@ pub struct AgendaIssue {
     pub issue: String,
 }
 
-fn link_target_exists(target: &str, source_path: &Path, db_root: &Path) -> bool {
-    let (inner_path, is_org) = if let Some(rest) = target.strip_prefix("org:") {
-        (rest, true)
-    } else {
-        (target, false)
-    };
-    let expanded = if inner_path.starts_with('~') {
-        if let Some(home) = dirs::home_dir() {
-            inner_path.replacen('~', &home.to_string_lossy(), 1)
-        } else {
-            inner_path.to_string()
-        }
-    } else {
-        inner_path.to_string()
-    };
-    let path_str = expanded.split("::").next().unwrap_or(&expanded);
-    let path = Path::new(path_str);
-    let full_path = if path.is_absolute() {
-        path.to_path_buf()
-    } else if is_org {
-        db_root.join(path)
-    } else {
-        source_path.parent().unwrap_or(db_root).join(path)
-    };
-    if !full_path.exists() {
-        return false;
-    }
-    if let Some(line_spec) = expanded.split_once("::").map(|x| x.1) {
-        if line_spec.is_empty() {
-            return true;
-        }
-        if let Ok(content) = std::fs::read_to_string(&full_path) {
-            return content.lines().any(|l| l.contains(line_spec));
-        }
-        return false;
-    }
-    true
-}
-
 #[allow(clippy::too_many_arguments)]
 pub struct CheckOptions {
     pub stats: bool,
@@ -171,7 +134,7 @@ pub fn run(config: &Config, ctx: &OutputContext, opts: &CheckOptions) -> Result<
         for node in graph.nodes.values() {
             for link in &node.outgoing {
                 if let Link::File(target) = link
-                    && !link_target_exists(target, &node.path, db_root)
+                    && !file_link_target_exists(target, &node.path, db_root)
                 {
                     broken_file.push(BrokenFileLinkEntry {
                         source_uuid: node.uuid.clone(),

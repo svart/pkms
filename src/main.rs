@@ -16,6 +16,7 @@ use clap::Parser;
 use cli::{Cli, Command, OutputFormat};
 use output::{ALL_COLUMNS, Column, OutputContext};
 use std::process::ExitCode;
+use util::read_stdin_ndjson;
 
 fn main() -> ExitCode {
     let cli = Cli::parse();
@@ -79,8 +80,6 @@ fn main() -> ExitCode {
 }
 
 fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<ExitCode> {
-    use util::{is_stdin_piped, read_stdin_ndjson};
-
     Ok(match &cli.command {
         Command::Check {
             stats,
@@ -108,16 +107,7 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
             },
         )?,
         Command::Validate { target, from_stdin } => {
-            let targets = if *from_stdin || (target.is_none() && is_stdin_piped()) {
-                read_stdin_ndjson()?
-            } else if let Some(t) = target {
-                vec![t.clone()]
-            } else {
-                anyhow::bail!(
-                    "No target specified and no stdin pipe detected. \
-                     Provide a target or use --from-stdin."
-                );
-            };
+            let targets = resolve_targets(target, from_stdin)?;
             commands::validate::run(cfg, ctx, &commands::validate::ValidateOptions { targets })
                 .map(|()| ExitCode::SUCCESS)?
         }
@@ -158,16 +148,7 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
             encoding,
             from_stdin,
         } => {
-            let targets = if *from_stdin || (target.is_none() && is_stdin_piped()) {
-                read_stdin_ndjson()?
-            } else if let Some(t) = target {
-                vec![t.clone()]
-            } else {
-                anyhow::bail!(
-                    "No target specified and no stdin pipe detected. \
-                     Provide a target or use --from-stdin."
-                );
-            };
+            let targets = resolve_targets(target, from_stdin)?;
             commands::context::run(
                 cfg,
                 ctx,
@@ -235,16 +216,7 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
             from_stdin,
             embed,
         } => {
-            let targets = if *from_stdin || (target.is_none() && is_stdin_piped()) {
-                read_stdin_ndjson()?
-            } else if let Some(t) = target {
-                vec![t.clone()]
-            } else {
-                anyhow::bail!(
-                    "No target specified and no stdin pipe detected. \
-                     Provide a target or use --from-stdin."
-                );
-            };
+            let targets = resolve_targets(target, from_stdin)?;
             commands::suggest::run(
                 cfg,
                 ctx,
@@ -265,16 +237,7 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
             from_stdin,
             ..
         } => {
-            let targets = if *from_stdin || (target.is_none() && is_stdin_piped()) {
-                read_stdin_ndjson()?
-            } else if let Some(t) = target {
-                vec![t.clone()]
-            } else {
-                anyhow::bail!(
-                    "No target specified and no stdin pipe detected. \
-                     Provide a target or use --from-stdin."
-                );
-            };
+            let targets = resolve_targets(target, from_stdin)?;
             commands::suggest::run(
                 cfg,
                 ctx,
@@ -316,16 +279,7 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
             no_content,
             from_stdin,
         } => {
-            let targets = if *from_stdin || (target.is_none() && is_stdin_piped()) {
-                read_stdin_ndjson()?
-            } else if let Some(t) = target {
-                vec![t.clone()]
-            } else {
-                anyhow::bail!(
-                    "No target specified and no stdin pipe detected. \
-                     Provide a target or use --from-stdin."
-                );
-            };
+            let targets = resolve_targets(target, from_stdin)?;
             commands::get::run(
                 cfg,
                 ctx,
@@ -347,22 +301,25 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
             content,
             todos,
             embed,
-        } => commands::query::run(
-            cfg,
-            ctx,
-            &commands::query::QueryOptions {
-                terms: terms
-                    .clone()
-                    .ok_or_else(|| anyhow::anyhow!("No search terms specified. Provide terms"))?,
-                limit: *limit,
-                tags: *tags,
-                title: *title,
-                content: *content,
-                todos: *todos,
-                embed: *embed,
-            },
-        )
-        .map(|()| ExitCode::SUCCESS)?,
+        } => {
+            let terms = terms
+                .clone()
+                .ok_or_else(|| anyhow::anyhow!("No search terms specified. Provide terms"))?;
+            commands::query::run(
+                cfg,
+                ctx,
+                &commands::query::QueryOptions {
+                    terms,
+                    limit: *limit,
+                    tags: *tags,
+                    title: *title,
+                    content: *content,
+                    todos: *todos,
+                    embed: *embed,
+                },
+            )
+            .map(|()| ExitCode::SUCCESS)?
+        }
         #[cfg(not(feature = "embed"))]
         Command::Query {
             terms,
@@ -372,22 +329,25 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
             content,
             todos,
             ..
-        } => commands::query::run(
-            cfg,
-            ctx,
-            &commands::query::QueryOptions {
-                terms: terms
-                    .clone()
-                    .ok_or_else(|| anyhow::anyhow!("No search terms specified. Provide terms"))?,
-                limit: *limit,
-                tags: *tags,
-                title: *title,
-                content: *content,
-                todos: *todos,
-                embed: false,
-            },
-        )
-        .map(|()| ExitCode::SUCCESS)?,
+        } => {
+            let terms = terms
+                .clone()
+                .ok_or_else(|| anyhow::anyhow!("No search terms specified. Provide terms"))?;
+            commands::query::run(
+                cfg,
+                ctx,
+                &commands::query::QueryOptions {
+                    terms,
+                    limit: *limit,
+                    tags: *tags,
+                    title: *title,
+                    content: *content,
+                    todos: *todos,
+                    embed: false,
+                },
+            )
+            .map(|()| ExitCode::SUCCESS)?
+        }
         Command::Todo {
             state,
             tags,
@@ -500,16 +460,7 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
             line,
             from_stdin,
         } => {
-            let targets = if *from_stdin || (target.is_none() && is_stdin_piped()) {
-                read_stdin_ndjson()?
-            } else if let Some(t) = target {
-                vec![t.clone()]
-            } else {
-                anyhow::bail!(
-                    "No target specified and no stdin pipe detected. \
-                     Provide a target or use --from-stdin."
-                );
-            };
+            let targets = resolve_targets(target, from_stdin)?;
             commands::open::run(
                 cfg,
                 ctx,
@@ -545,6 +496,20 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
                 .map(|()| ExitCode::SUCCESS)?
         }
     })
+}
+
+fn resolve_targets(target: &Option<String>, from_stdin: &bool) -> Result<Vec<String>> {
+    use util::{is_stdin_piped, read_stdin_ndjson};
+    if *from_stdin || (target.is_none() && is_stdin_piped()) {
+        read_stdin_ndjson()
+    } else if let Some(t) = target {
+        Ok(vec![t.clone()])
+    } else {
+        anyhow::bail!(
+            "No target specified and no stdin pipe detected. \
+             Provide a target or use --from-stdin."
+        )
+    }
 }
 
 fn resolve_columns(cli_cols: Option<&str>, config_cols: &Option<Vec<String>>) -> Vec<Column> {

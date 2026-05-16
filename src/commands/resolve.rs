@@ -2,7 +2,7 @@ use crate::cli::OutputFormat;
 use crate::config::Config;
 use crate::discovery;
 use crate::output::OutputContext;
-use crate::parser::{FILETAGS_RE, TITLE_RE, parse_note};
+use crate::parser::{FILETAGS_RE, ID_PROPERTY_RE, TITLE_RE, parse_note};
 use anyhow::Result;
 use regex::Regex;
 use serde::Serialize;
@@ -32,10 +32,6 @@ pub struct ResolveOutput {
     pub results: Vec<ResolvedNote>,
 }
 
-static UUID_RE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r":ID:\s+([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})").unwrap()
-});
-
 static CATEGORY_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r":CATEGORY:\s+(.+)").unwrap());
 
 static ALIASES_RE: LazyLock<Regex> =
@@ -59,7 +55,7 @@ fn scan_files(
         };
 
         if do_full_scan {
-            let all_uuids: Vec<String> = UUID_RE
+            let all_uuids: Vec<String> = ID_PROPERTY_RE
                 .captures_iter(&content)
                 .filter_map(|c| c.get(1))
                 .map(|m| m.as_str().to_string())
@@ -83,7 +79,7 @@ fn scan_files(
         } else {
             let header: Vec<&str> = content.lines().take(100).collect();
             let header_str = header.join("\n");
-            let uuid = UUID_RE
+            let uuid = ID_PROPERTY_RE
                 .captures_iter(&header_str)
                 .next()
                 .and_then(|c| c.get(1))

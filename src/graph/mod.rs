@@ -124,6 +124,23 @@ pub fn resolve_file_link_path(target_path: &str, source_path: &Path, db_root: &P
     }
 }
 
+/// Check whether a file link target exists on disk and optionally matches a line spec.
+pub fn file_link_target_exists(target: &str, source_path: &Path, db_root: &Path) -> bool {
+    let resolved = resolve_file_link_path(target, source_path, db_root);
+    if !resolved.exists() {
+        return false;
+    }
+    if let Some(line_spec) = target.split("::").nth(1) {
+        if line_spec.is_empty() {
+            return true;
+        }
+        std::fs::read_to_string(&resolved)
+            .is_ok_and(|content| content.lines().any(|l| l.contains(line_spec)))
+    } else {
+        true
+    }
+}
+
 impl Graph {
     pub fn detect_self_links(&self, db_root: &Path) -> Vec<SelfLinkEntry> {
         let mut results = Vec::new();

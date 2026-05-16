@@ -1,5 +1,6 @@
 use crate::config::Config;
 use crate::output::OutputContext;
+use crate::parser::ID_PROPERTY_RE;
 use anyhow::{Context, Result};
 use serde::Serialize;
 use std::fmt::Write;
@@ -156,9 +157,6 @@ pub fn run(config: &Config, ctx: &OutputContext, opts: &NewOptions) -> Result<()
 
 fn insert_heading_uuid(content: &str, heading_title: &str, path: &PathBuf) -> Result<String> {
     let heading_re = regex::Regex::new(r"^(\*+)\s+(.*?)(?:\s+:\w+(?::\w+)*:)?\s*$").unwrap();
-    let uuid_re =
-        regex::Regex::new(r":ID:\s+([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})")
-            .unwrap();
 
     let lines: Vec<&str> = content.lines().collect();
     let mut heading_indices = Vec::new();
@@ -202,7 +200,7 @@ fn insert_heading_uuid(content: &str, heading_title: &str, path: &PathBuf) -> Re
             .copied()
             .collect();
         let props_text = props_section.join("\n");
-        if let Some(cap) = uuid_re.captures(&props_text) {
+        if let Some(cap) = ID_PROPERTY_RE.captures(&props_text) {
             return Ok(cap[1].to_string());
         }
     }

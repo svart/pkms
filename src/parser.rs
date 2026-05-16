@@ -97,6 +97,14 @@ pub(crate) static TITLE_RE: LazyLock<Regex> =
 pub(crate) static FILETAGS_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"(?m)^#\+filetags:\s*(.+)$").unwrap());
 
+pub(crate) static ID_PROPERTY_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r":ID:\s+([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})").unwrap()
+});
+
+pub(crate) static UUID_FORMAT_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$").unwrap()
+});
+
 pub fn parse_note(content: &str) -> ParsedNote {
     let mut uuids = Vec::new();
     let mut title = None;
