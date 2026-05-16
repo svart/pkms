@@ -165,8 +165,10 @@ pub fn run(config: &Config, ctx: &OutputContext, opts: &CheckOptions) -> Result<
     let mut filetags_issues = Vec::new();
     if show_filetags {
         for node in graph.nodes.values() {
-            if let Ok(content) = std::fs::read_to_string(&node.path) {
-                for (raw, reason) in validate_filetags_format(&content) {
+            if let Some(result) = graph.results.iter().find(|r| r.path == node.path)
+                && let Some(ref content) = result.raw_content
+            {
+                for (raw, reason) in validate_filetags_format(content) {
                     filetags_issues.push(FiletagsIssue {
                         path: node.path.display().to_string(),
                         title: node.title.clone(),
@@ -183,8 +185,10 @@ pub fn run(config: &Config, ctx: &OutputContext, opts: &CheckOptions) -> Result<
             if node.filetags.iter().any(|t| t == "agenda") {
                 continue;
             }
-            if let Ok(content) = std::fs::read_to_string(&node.path) {
-                let parsed = parse_note(&content);
+            if let Some(result) = graph.results.iter().find(|r| r.path == node.path)
+                && let Some(ref content) = result.raw_content
+            {
+                let parsed = parse_note(content);
                 let planned_count = parsed
                     .headings
                     .iter()

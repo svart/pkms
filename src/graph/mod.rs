@@ -58,6 +58,7 @@ impl Node {
 pub struct FileScanResult {
     pub path: PathBuf,
     pub parsed: ParsedNote,
+    pub raw_content: Option<String>,
     pub parse_error: Option<String>,
 }
 
@@ -168,12 +169,14 @@ impl Graph {
                         FileScanResult {
                             path,
                             parsed,
+                            raw_content: Some(content),
                             parse_error: None,
                         }
                     }
                     Err(e) => FileScanResult {
                         path,
                         parsed: ParsedNote::empty(),
+                        raw_content: None,
                         parse_error: Some(format!("IO error: {e}")),
                     },
                 }

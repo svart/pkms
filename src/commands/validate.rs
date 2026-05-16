@@ -306,7 +306,13 @@ fn validate_one(graph: &Graph, target: &str, db_root: &Path) -> Result<ValidateO
     let mut issues = Vec::new();
     let target_is_uuid = UUID_FORMAT_RE.is_match(target);
 
-    let content = std::fs::read_to_string(&node.path).unwrap_or_default();
+    let content = graph
+        .results
+        .iter()
+        .find(|r| r.path == node.path)
+        .and_then(|r| r.raw_content.as_deref())
+        .map(std::string::ToString::to_string)
+        .unwrap_or_default();
 
     check_uuid_format(&node, &mut issues);
     check_title_presence(&content, &mut issues);

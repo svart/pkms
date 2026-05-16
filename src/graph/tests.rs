@@ -15,6 +15,7 @@ fn make_note(uuid: &str, title: &str, outgoing: Vec<Link>) -> FileScanResult {
             outgoing,
             headings: vec![],
         },
+        raw_content: None,
         parse_error: None,
     }
 }
@@ -53,6 +54,7 @@ fn make_note_with_headings(
             outgoing,
             headings,
         },
+        raw_content: None,
         parse_error: None,
     }
 }
@@ -76,6 +78,7 @@ fn make_note_full(
             outgoing,
             headings: vec![],
         },
+        raw_content: None,
         parse_error: None,
     }
 }
@@ -84,6 +87,7 @@ fn make_parse_error(_uuid: &str, path: &str) -> FileScanResult {
     FileScanResult {
         path: PathBuf::from(path),
         parsed: ParsedNote::empty(),
+        raw_content: None,
         parse_error: Some("mock error".to_string()),
     }
 }
@@ -151,6 +155,7 @@ fn test_duplicate_uuid_detection() {
                 outgoing: vec![],
                 headings: vec![],
             },
+            raw_content: None,
             parse_error: None,
         },
         FileScanResult {
@@ -165,6 +170,7 @@ fn test_duplicate_uuid_detection() {
                 outgoing: vec![],
                 headings: vec![],
             },
+            raw_content: None,
             parse_error: None,
         },
     ];
@@ -217,6 +223,7 @@ fn test_missing_title() {
             outgoing: vec![],
             headings: vec![],
         },
+        raw_content: None,
         parse_error: None,
     }];
     let graph = Graph::build(results);
@@ -806,6 +813,7 @@ This is the content with a unique-searchable-keyword here.
             outgoing: vec![],
             headings: vec![],
         },
+        raw_content: None,
         parse_error: None,
     }];
     let graph = Graph::build(results);
@@ -940,7 +948,8 @@ proptest::proptest! {
             FileScanResult {
                 path: PathBuf::from(format!("{}.org", uuid)),
                 parsed,
-                parse_error: None,
+                raw_content: None,
+            parse_error: None,
             }
         }).collect();
         let _graph = Graph::build(results);
