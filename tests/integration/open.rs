@@ -3,7 +3,8 @@ use super::*;
 #[test]
 fn test_open_valid_id() {
     let (_dir, root) = setup_db();
-    let (stdout, stderr, status) = run(&["--db", root.to_str().unwrap(), "open", "1"]);
+    let (stdout, stderr, status) =
+        run(&["--db", root.to_str().unwrap(), "open", "--editor", "true", "1"]);
     assert!(status.success(), "open 1 failed: stderr={stderr}");
     assert!(stdout.contains("Opening:"), "stdout: {stdout}");
 }
@@ -27,6 +28,8 @@ fn test_open_by_uuid() {
         "--db",
         root.to_str().unwrap(),
         "open",
+        "--editor",
+        "true",
         "h5h5h5h5-h5h5-4h5h-h5h5-h5h5h5h5h5h5",
     ]);
     assert!(status.success(), "open by UUID failed: stderr={stderr}");

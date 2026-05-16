@@ -83,7 +83,7 @@ fn test_show_canonical_id_json() {
 #[test]
 fn test_show_no_todo_heading() {
     let (_dir, root) = setup_db();
-    let (stdout, stderr, status) = run(&["--db", root.to_str().unwrap(), "show", "Note A"]);
+    let (_stdout, stderr, status) = run(&["--db", root.to_str().unwrap(), "show", "Note A"]);
     assert!(!status.success());
     assert!(stderr.contains("No TODO heading"));
 }
@@ -91,7 +91,7 @@ fn test_show_no_todo_heading() {
 #[test]
 fn test_show_note_not_found() {
     let (_dir, root) = setup_db();
-    let (stdout, stderr, status) =
+    let (_stdout, stderr, status) =
         run(&["--db", root.to_str().unwrap(), "show", "NonExistentNote"]);
     assert!(!status.success());
     assert!(stderr.contains("not found") || stderr.contains("NonExistentNote"));
@@ -118,7 +118,7 @@ fn test_show_ndjson() {
 #[test]
 fn test_show_invalid_canonical_id() {
     let (_dir, root) = setup_db();
-    let (stdout, stderr, status) = run(&["--db", root.to_str().unwrap(), "show", "99999"]);
+    let (_stdout, stderr, status) = run(&["--db", root.to_str().unwrap(), "show", "99999"]);
     assert!(!status.success());
     assert!(stderr.contains("No task with canonical ID"));
 }
