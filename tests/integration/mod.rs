@@ -96,9 +96,35 @@ pub fn setup_db() -> (tempfile::TempDir, PathBuf) {
     fs::create_dir_all(&common).unwrap();
     fs::create_dir_all(&personal).unwrap();
 
-    // Note A -- internal link to Note B
-    fs::write(
-        common.join("20220101000000-note_a.org"),
+    write_linked_chain(&common);
+    write_orphan(&personal);
+    write_broken_link(&common);
+    write_tagged(&common);
+    write_aliased(&common);
+    write_headings(&personal);
+    write_file_links(&common);
+    write_attachment_links(&common);
+    write_duplicate_uuid(&personal);
+    write_categorized(&common);
+    write_bad_filetags(&personal);
+    write_daily_note(&personal);
+    write_daily_plan(&personal);
+    write_agenda(&common);
+    write_missing_agenda_tag(&common);
+    write_nested_todos(&common);
+    write_no_id_file(&root);
+
+    (dir, root)
+}
+
+fn write_file(dir: &std::path::Path, name: &str, content: &str) {
+    fs::write(dir.join(name), content).unwrap();
+}
+
+fn write_linked_chain(common: &std::path::Path) {
+    write_file(
+        common,
+        "20220101000000-note_a.org",
         r#":PROPERTIES:
 :ID:       aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa
 :END:
@@ -106,12 +132,10 @@ pub fn setup_db() -> (tempfile::TempDir, PathBuf) {
 
 [[id:bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb][Note B]]
 "#,
-    )
-    .unwrap();
-
-    // Note B -- internal link to Note C
-    fs::write(
-        common.join("20220101000001-note_b.org"),
+    );
+    write_file(
+        common,
+        "20220101000001-note_b.org",
         r#":PROPERTIES:
 :ID:       bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb
 :END:
@@ -119,12 +143,10 @@ pub fn setup_db() -> (tempfile::TempDir, PathBuf) {
 
 [[id:cccccccc-cccc-4ccc-cccc-cccccccccccc][Note C]]
 "#,
-    )
-    .unwrap();
-
-    // Note C -- no outgoing links
-    fs::write(
-        common.join("20220101000002-note_c.org"),
+    );
+    write_file(
+        common,
+        "20220101000002-note_c.org",
         r#":PROPERTIES:
 :ID:       cccccccc-cccc-4ccc-cccc-cccccccccccc
 :END:
@@ -132,12 +154,13 @@ pub fn setup_db() -> (tempfile::TempDir, PathBuf) {
 
 Content here.
 "#,
-    )
-    .unwrap();
+    );
+}
 
-    // Orphan note -- no links in or out
-    fs::write(
-        personal.join("20220101000003-orphan.org"),
+fn write_orphan(personal: &std::path::Path) {
+    write_file(
+        personal,
+        "20220101000003-orphan.org",
         r#":PROPERTIES:
 :ID:       dddddddd-dddd-4ddd-dddd-dddddddddddd
 :END:
@@ -145,12 +168,13 @@ Content here.
 
 Alone.
 "#,
-    )
-    .unwrap();
+    );
+}
 
-    // Broken Note -- links to nonexistent UUID
-    fs::write(
-        common.join("20220101000004-broken.org"),
+fn write_broken_link(common: &std::path::Path) {
+    write_file(
+        common,
+        "20220101000004-broken.org",
         r#":PROPERTIES:
 :ID:       eeeeeeee-eeee-4eee-eeee-eeeeeeeeeeee
 :END:
@@ -158,12 +182,13 @@ Alone.
 
 [[id:ffffffff-ffff-4fff-ffff-ffffffffffff][Missing]]
 "#,
-    )
-    .unwrap();
+    );
+}
 
-    // Tagged Note -- has filetags
-    fs::write(
-        common.join("20220101000005-tagged.org"),
+fn write_tagged(common: &std::path::Path) {
+    write_file(
+        common,
+        "20220101000005-tagged.org",
         r#":PROPERTIES:
 :ID:       55555555-5555-4555-5555-555555555555
 :END:
@@ -172,12 +197,13 @@ Alone.
 
 Content with tags.
 "#,
-    )
-    .unwrap();
+    );
+}
 
-    // Aliased Note -- has roam aliases
-    fs::write(
-        common.join("20220101000006-aliased.org"),
+fn write_aliased(common: &std::path::Path) {
+    write_file(
+        common,
+        "20220101000006-aliased.org",
         r#":PROPERTIES:
 :ID:       66666666-6666-4666-6666-666666666666
 :ROAM_ALIASES: "AliasOne" "AliasTwo"
@@ -186,12 +212,13 @@ Content with tags.
 
 Aliased content.
 "#,
-    )
-    .unwrap();
+    );
+}
 
-    // Headings Note -- has org headings
-    fs::write(
-        personal.join("20220101000007-headings.org"),
+fn write_headings(personal: &std::path::Path) {
+    write_file(
+        personal,
+        "20220101000007-headings.org",
         r#":PROPERTIES:
 :ID:       77777777-7777-4777-7777-777777777777
 :END:
@@ -204,12 +231,13 @@ More text.
 * Section 2
 Final section.
 "#,
-    )
-    .unwrap();
+    );
+}
 
-    // File Link Note -- has file: links
-    fs::write(
-        common.join("20220101000008-filelink.org"),
+fn write_file_links(common: &std::path::Path) {
+    write_file(
+        common,
+        "20220101000008-filelink.org",
         r#":PROPERTIES:
 :ID:       88888888-8888-4888-8888-888888888888
 :END:
@@ -218,12 +246,13 @@ Final section.
 [[file:~/docs/reference.pdf][Reference]]
 [[file:relative/path.org][Relative]]
 "#,
-    )
-    .unwrap();
+    );
+}
 
-    // Attachment Link Note -- has attachment: links
-    fs::write(
-        common.join("20220101000010-attachment.org"),
+fn write_attachment_links(common: &std::path::Path) {
+    write_file(
+        common,
+        "20220101000010-attachment.org",
         r#":PROPERTIES:
 :ID:       aaaaaaaa-aaaa-4aaa-aaaa-bbbbbbbbbbbb
 :END:
@@ -232,12 +261,13 @@ Final section.
 [[attachment:image.png][Image]]
 [[attachment:data/file.txt][Data File]]
 "#,
-    )
-    .unwrap();
+    );
+}
 
-    // Duplicate UUID note -- same UUID as Note A
-    fs::write(
-        personal.join("20220101000009-duplicate.org"),
+fn write_duplicate_uuid(personal: &std::path::Path) {
+    write_file(
+        personal,
+        "20220101000009-duplicate.org",
         r#":PROPERTIES:
 :ID:       aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa
 :END:
@@ -245,12 +275,13 @@ Final section.
 
 This has same UUID as Note A.
 "#,
-    )
-    .unwrap();
+    );
+}
 
-    // Categorized Note -- has CATEGORY property
-    fs::write(
-        common.join("20220101000011-categorized.org"),
+fn write_categorized(common: &std::path::Path) {
+    write_file(
+        common,
+        "20220101000011-categorized.org",
         r#":PROPERTIES:
 :ID:       99999999-9999-4999-9999-999999999999
 :CATEGORY: example
@@ -259,12 +290,13 @@ This has same UUID as Note A.
 
 Content with a category.
 "#,
-    )
-    .unwrap();
+    );
+}
 
-    // Bad filetags note -- invalid format
-    fs::write(
-        personal.join("20220101000012-badfiletags.org"),
+fn write_bad_filetags(personal: &std::path::Path) {
+    write_file(
+        personal,
+        "20220101000012-badfiletags.org",
         r#":PROPERTIES:
 :ID:       baadf00d-baad-4baa-dbaa-dbaadbaadbaa
 :END:
@@ -272,12 +304,13 @@ Content with a category.
 #+filetags: :bad: :filetags:
 #+filetags: :also::bad:
 "#,
-    )
-    .unwrap();
+    );
+}
 
-    // Daily note -- orphan (no incoming/outgoing links), filename matches YYYY-MM-DD
-    fs::write(
-        personal.join("2024-06-15.org"),
+fn write_daily_note(personal: &std::path::Path) {
+    write_file(
+        personal,
+        "2024-06-15.org",
         r#":PROPERTIES:
 :ID:       d1a1y1d1-d1a1-41d1-a1d1-d1a1d1a1d1a1
 :END:
@@ -287,12 +320,13 @@ Content with a category.
 * TODO Daily task
 Some content
 "#,
-    )
-    .unwrap();
+    );
+}
 
-    // Daily note with explicit SCHEDULED
-    fs::write(
-        personal.join("2026-05-03.org"),
+fn write_daily_plan(personal: &std::path::Path) {
+    write_file(
+        personal,
+        "2026-05-03.org",
         r#":PROPERTIES:
 :ID:       e2e2e2e2-e2e2-4e2e-e2e2-e2e2e2e2e2e2
 :END:
@@ -303,12 +337,13 @@ SCHEDULED: <2026-05-03 Sun>
 * IN-PROGRESS Project work
 DEADLINE: <2026-05-05 Tue>
 "#,
-    )
-    .unwrap();
+    );
+}
 
-    // Agenda tagged note with TODOs
-    fs::write(
-        common.join("20220101000013-agenda.org"),
+fn write_agenda(common: &std::path::Path) {
+    write_file(
+        common,
+        "20220101000013-agenda.org",
         r#":PROPERTIES:
 :ID:       f3f3f3f3-f3f3-4f3f-f3f3-f3f3f3f3f3f3
 :END:
@@ -321,12 +356,13 @@ SCHEDULED: <2026-05-10 Sun>
 DEADLINE: <2026-06-15 Mon>
 * DONE Completed task
 "#,
-    )
-    .unwrap();
+    );
+}
 
-    // No-agenda note with TODOs (missing :agenda: tag)
-    fs::write(
-        common.join("20220101000014-noagenda.org"),
+fn write_missing_agenda_tag(common: &std::path::Path) {
+    write_file(
+        common,
+        "20220101000014-noagenda.org",
         r#":PROPERTIES:
 :ID:       g4g4g4g4-g4g4-4g4g-g4g4-g4g4g4g4g4g4
 :END:
@@ -337,12 +373,13 @@ SCHEDULED: <2026-05-10 Sun>
 * WAITING Review
 * IDEA Something
 "#,
-    )
-    .unwrap();
+    );
+}
 
-    // Nested TODO note -- has parent-child TODO structure
-    fs::write(
-        common.join("20220101000015-nested-todo.org"),
+fn write_nested_todos(common: &std::path::Path) {
+    write_file(
+        common,
+        "20220101000015-nested-todo.org",
         r#":PROPERTIES:
 :ID:       h5h5h5h5-h5h5-4h5h-h5h5-h5h5h5h5h5h5
 :END:
@@ -359,13 +396,11 @@ Child content.
 *** DONE Grandchild
 * TODO Another top task
 "#,
-    )
-    .unwrap();
+    );
+}
 
-    // Malformed file -- no UUID
-    fs::write(root.join("no_id.org"), "#+title: No ID\n").unwrap();
-
-    (dir, root)
+fn write_no_id_file(root: &std::path::Path) {
+    write_file(root, "no_id.org", "#+title: No ID\n");
 }
 
 pub fn setup_empty_db() -> (tempfile::TempDir, PathBuf) {
