@@ -84,3 +84,24 @@ impl Graph {
         items
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::canonical_priority_value;
+
+    #[test]
+    fn test_canonical_priority_ordering() {
+        assert!(canonical_priority_value('A') < canonical_priority_value('B'));
+        assert!(canonical_priority_value('B') < canonical_priority_value('C'));
+        assert!(canonical_priority_value('C') < canonical_priority_value('D'));
+    }
+
+    #[test]
+    fn test_canonical_priority_values() {
+        assert_eq!(canonical_priority_value('A'), 0);
+        assert_eq!(canonical_priority_value('B'), 1);
+        assert_eq!(canonical_priority_value('C'), 2);
+        assert_eq!(canonical_priority_value('Z'), 3);
+        assert_eq!(canonical_priority_value('X'), 3);
+    }
+}

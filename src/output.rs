@@ -120,6 +120,14 @@ pub fn adaptive_column_widths(
     max_widths: &[usize],
 ) -> Option<Vec<(Column, usize)>> {
     let term_w = terminal_width()?;
+    compute_widths(enabled_columns, max_widths, term_w)
+}
+
+fn compute_widths(
+    enabled_columns: &[Column],
+    max_widths: &[usize],
+    term_w: usize,
+) -> Option<Vec<(Column, usize)>> {
     let n_columns = enabled_columns.len();
     let padding = BASE_PADDING + COL_PADDING * n_columns;
 
@@ -223,4 +231,66 @@ pub fn adaptive_column_widths(
     }
 
     Some(result)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_adaptive_column_widths_only_fixed() {
+        let cols = [Column::Id, Column::State];
+        let max_widths = [5, 0, 10, 0, 0, 0, 0, 0];
+        let result = compute_widths(&cols, &max_widths, 120);
+        assert!(result.is_some());
+        let widths = result.unwrap();
+        assert_eq!(widths.len(), 2);
+        assert_eq!(widths[0], (Column::Id, 5));
+        assert_eq!(widths[1], (Column::State, 10));
+    }
+
+    #[test]
+    fn test_adaptive_column_widths_term_too_small() {
+        let cols = [Column::Id, Column::State, Column::Tags, Column::Heading];
+        let max_widths = [5, 0, 10, 0, 0, 30, 0, 50];
+        let result = compute_widths(&cols, &max_widths, 20);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_adaptive_column_widths_wide_terminal() {
+        let cols = [
+            Column::Id,
+            Column::State,
+            Column::Prio,
+            Column::Note,
+            Column::Heading,
+        ];
+        let max_widths = [5, 0, 10, 0, 6, 0, 60, 60];
+        let result = compute_widths(&cols, &max_widths, 200);
+        assert!(result.is_some());
+        let widths = result.unwrap();
+        assert!(widths.len() >= 5);
+    }
+
+    #[test]
+    fn test_column_from_str_valid() {
+        assert_eq!(Column::from_str("id"), Some(Column::Id));
+        assert_eq!(Column::from_str("DATE"), Some(Column::Date));
+        assert_eq!(Column::from_str("Tags"), Some(Column::Tags));
+        assert_eq!(Column::from_str("heading"), Some(Column::Heading));
+    }
+
+    #[test]
+    fn test_column_from_str_invalid() {
+        assert_eq!(Column::from_str("invalid"), None);
+        assert_eq!(Column::from_str(""), None);
+    }
+
+    #[test]
+    fn test_column_name() {
+        assert_eq!(Column::Id.name(), "Id");
+        assert_eq!(Column::Date.name(), "Date");
+        assert_eq!(Column::Heading.name(), "Heading");
+    }
 }
