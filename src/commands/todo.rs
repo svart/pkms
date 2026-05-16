@@ -176,7 +176,7 @@ fn collect_todo_items(
             let primary_uuid = parsed.uuids.first().cloned().unwrap_or_default();
             let note_title = strip_org_links(&parsed.title.clone().unwrap_or_else(|| {
                 path.file_stem()
-                    .map(|s| s.to_string_lossy().to_string())
+                    .map(|s| s.display().to_string())
                     .unwrap_or_default()
             }));
 
@@ -184,7 +184,7 @@ fn collect_todo_items(
                 id: 0,
                 uuid: primary_uuid,
                 title: note_title,
-                path: path.to_string_lossy().to_string(),
+                path: path.display().to_string(),
                 filetags: parsed.filetags.clone(),
                 is_daily_file: is_daily,
                 daily_file_date: daily_date.clone(),
@@ -256,7 +256,7 @@ fn resolve_scope_paths(
     }
     scope_paths
         .iter()
-        .map(|p| p.to_string_lossy().to_string())
+        .map(|p| p.display().to_string())
         .collect()
 }
 

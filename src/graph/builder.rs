@@ -190,7 +190,7 @@ impl BuildContext {
                     self.seen_uuids[primary_uuid.as_str()]
                         .to_string_lossy()
                         .to_string(),
-                    path.to_string_lossy().to_string(),
+                    path.display().to_string(),
                 ],
             });
             return;
@@ -201,10 +201,7 @@ impl BuildContext {
         {
             self.duplicate_uuids.push(DuplicateEntry {
                 value: primary_uuid.clone(),
-                paths: vec![
-                    existing.to_string_lossy().to_string(),
-                    path.to_string_lossy().to_string(),
-                ],
+                paths: vec![existing.display().to_string(), path.display().to_string()],
             });
         }
 
@@ -217,17 +214,14 @@ impl BuildContext {
         } else {
             self.missing_titles.push(path.clone());
             path.file_stem()
-                .map(|s| s.to_string_lossy().to_string())
+                .map(|s| s.display().to_string())
                 .unwrap_or_default()
         };
 
         if let Some(existing) = self.seen_titles.get(&title) {
             self.duplicate_titles.push(DuplicateEntry {
                 value: title.clone(),
-                paths: vec![
-                    existing.to_string_lossy().to_string(),
-                    path.to_string_lossy().to_string(),
-                ],
+                paths: vec![existing.display().to_string(), path.display().to_string()],
             });
         } else {
             self.seen_titles.insert(title.clone(), path.clone());
@@ -280,20 +274,14 @@ impl BuildContext {
             if heading_uuid == primary_uuid {
                 self.duplicate_uuids.push(DuplicateEntry {
                     value: heading_uuid.clone(),
-                    paths: vec![
-                        path.to_string_lossy().to_string(),
-                        path.to_string_lossy().to_string(),
-                    ],
+                    paths: vec![path.display().to_string(), path.display().to_string()],
                 });
                 continue;
             }
             if !file_heading_uuids_seen.insert(heading_uuid.clone()) {
                 self.duplicate_uuids.push(DuplicateEntry {
                     value: heading_uuid.clone(),
-                    paths: vec![
-                        path.to_string_lossy().to_string(),
-                        path.to_string_lossy().to_string(),
-                    ],
+                    paths: vec![path.display().to_string(), path.display().to_string()],
                 });
                 continue;
             }
@@ -302,10 +290,7 @@ impl BuildContext {
             {
                 self.duplicate_uuids.push(DuplicateEntry {
                     value: heading_uuid.clone(),
-                    paths: vec![
-                        existing.to_string_lossy().to_string(),
-                        path.to_string_lossy().to_string(),
-                    ],
+                    paths: vec![existing.display().to_string(), path.display().to_string()],
                 });
             }
             self.all_uuids_seen
@@ -331,7 +316,7 @@ impl BuildContext {
                 missing_titles: self
                     .missing_titles
                     .iter()
-                    .map(|p| p.to_string_lossy().to_string())
+                    .map(|p| p.display().to_string())
                     .collect(),
             },
             heading_uuid_to_primary: self.heading_uuid_to_primary,

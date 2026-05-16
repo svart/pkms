@@ -35,7 +35,7 @@ fn open_target(
         graph.resolve_canonical_task_id(config, id)?
     } else {
         let node = graph.resolve_target(target)?;
-        let path = node.path.to_string_lossy().to_string();
+        let path = node.path.display().to_string();
         let line = line.unwrap_or_else(|| find_line_for_node(graph, &node.path));
         (path, line)
     };
@@ -52,7 +52,7 @@ fn open_target(
         .unwrap_or_else(|| {
             path_ref
                 .file_stem()
-                .map(|s| s.to_string_lossy().to_string())
+                .map(|s| s.display().to_string())
                 .unwrap_or_default()
         });
     println!("Opening: {} (line {})", title, actual_line);

@@ -216,7 +216,7 @@ pub fn run(config: &Config, ctx: &OutputContext, opts: &AgendaOptions) -> Result
             let primary_uuid = parsed.uuids.first().cloned().unwrap_or_default();
             let note_title = strip_org_links(&parsed.title.clone().unwrap_or_else(|| {
                 path.file_stem()
-                    .map(|s| s.to_string_lossy().to_string())
+                    .map(|s| s.display().to_string())
                     .unwrap_or_default()
             }));
 
@@ -224,7 +224,7 @@ pub fn run(config: &Config, ctx: &OutputContext, opts: &AgendaOptions) -> Result
                 id: 0,
                 uuid: primary_uuid,
                 title: note_title,
-                path: path.to_string_lossy().to_string(),
+                path: path.display().to_string(),
                 filetags: parsed.filetags.clone(),
                 has_agenda_tag: has_agenda,
                 is_daily_file: is_daily,

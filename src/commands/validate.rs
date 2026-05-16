@@ -47,7 +47,7 @@ fn build_validate_output(
     ValidateOutput {
         uuid: node.uuid.clone(),
         title: node.title.clone(),
-        path: node.path.to_string_lossy().to_string(),
+        path: node.path.display().to_string(),
         filetags: node.filetags.clone(),
         categories: node.categories.clone(),
         aliases: node.aliases.clone(),

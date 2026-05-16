@@ -539,7 +539,7 @@ fn compute_suggestions_for_node(
         .map(|(n, s, r, fs)| Suggestion {
             uuid: n.uuid.clone(),
             title: n.title.clone(),
-            path: n.path.to_string_lossy().to_string(),
+            path: n.path.display().to_string(),
             score: *s,
             reasons: r.clone(),
             filetags: n.filetags.clone(),
@@ -700,7 +700,7 @@ fn suggest_by_embedding(
                     Suggestion {
                         uuid: n.uuid.clone(),
                         title: n.title.clone(),
-                        path: n.path.to_string_lossy().to_string(),
+                        path: n.path.display().to_string(),
                         score: *score,
                         reasons: vec!["semantic similarity".to_string()],
                         filetags: n.filetags.clone(),

@@ -138,7 +138,7 @@ fn scan_one_note(
     ResolvedNote {
         uuid,
         title,
-        path: path.to_string_lossy().to_string(),
+        path: path.display().to_string(),
         filetags,
         categories,
         aliases,

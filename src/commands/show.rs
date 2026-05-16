@@ -228,7 +228,7 @@ fn show_heading_by_line(
         filetags: filetags.to_vec(),
         scheduled: heading.scheduled.clone(),
         deadline: heading.deadline.clone(),
-        path: path.to_string_lossy().to_string(),
+        path: path.display().to_string(),
         note_title: note_title.to_string(),
         note_uuid: note_uuid.to_string(),
         heading_uuid: heading.uuid.clone(),
@@ -304,7 +304,7 @@ fn process_one_show(graph: &Graph, config: &Config, target: &HeadingTarget) -> R
                         result
                             .path
                             .file_stem()
-                            .map(|s| s.to_string_lossy().to_string())
+                            .map(|s| s.display().to_string())
                             .unwrap_or_default()
                     }));
                 let first_todo = headings.iter().find(|h| h.todo_state.is_some());
@@ -348,7 +348,7 @@ fn process_one_show(graph: &Graph, config: &Config, target: &HeadingTarget) -> R
     let note_title = strip_org_links(&parsed.title.clone().unwrap_or_else(|| {
         path_ref
             .file_stem()
-            .map(|s| s.to_string_lossy().to_string())
+            .map(|s| s.display().to_string())
             .unwrap_or_default()
     }));
 

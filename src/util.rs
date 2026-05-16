@@ -3,7 +3,7 @@ use std::io::{self, BufRead, IsTerminal};
 use std::path::{Path, PathBuf};
 
 pub fn path_string(path: &Path) -> String {
-    path.to_string_lossy().to_string()
+    path.display().to_string()
 }
 
 pub fn resolve_attachment_path(db_root: &Path, uuid: &str, target: &str) -> PathBuf {

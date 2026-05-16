@@ -169,7 +169,7 @@ pub fn run(config: &Config, ctx: &OutputContext, opts: &CheckOptions) -> Result<
             if let Ok(content) = std::fs::read_to_string(&node.path) {
                 for (raw, reason) in validate_filetags_format(&content) {
                     filetags_issues.push(FiletagsIssue {
-                        path: node.path.to_string_lossy().to_string(),
+                        path: node.path.display().to_string(),
                         title: node.title.clone(),
                         issue: format!("tag '{raw}' — {reason}"),
                     });
@@ -195,7 +195,7 @@ pub fn run(config: &Config, ctx: &OutputContext, opts: &CheckOptions) -> Result<
                     .count();
                 if planned_count > 0 {
                     agenda_issues.push(AgendaIssue {
-                        path: node.path.to_string_lossy().to_string(),
+                        path: node.path.display().to_string(),
                         title: node.title.clone(),
                         uuid: node.uuid.clone(),
                         todo_count: planned_count,
@@ -344,7 +344,7 @@ fn print_check_json(
             .parse_errors
             .iter()
             .map(|(path, err)| FailedFileEntry {
-                path: path.to_string_lossy().to_string(),
+                path: path.display().to_string(),
                 error: err.clone(),
             })
             .collect()
@@ -364,7 +364,7 @@ fn print_check_json(
         && data.overlink_entries.is_empty();
 
     let output = CheckOutput {
-        db_root: data.db_root.to_string_lossy().to_string(),
+        db_root: data.db_root.display().to_string(),
         stats: if opts.show_stats {
             Some(stats.clone())
         } else {

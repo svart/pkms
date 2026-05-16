@@ -103,7 +103,7 @@ fn search_by_text(
             combined.push(QueryResultEntry {
                 uuid: node.uuid.clone(),
                 title: node.title.clone(),
-                path: node.path.to_string_lossy().to_string(),
+                path: node.path.display().to_string(),
                 filetags: node.filetags.clone(),
                 score,
                 matches,
@@ -165,7 +165,7 @@ fn search_by_embedding(graph: &Graph, query: &str) -> Result<Vec<QueryResultEntr
         entries.push(QueryResultEntry {
             uuid: node.uuid.clone(),
             title: node.title.clone(),
-            path: node.path.to_string_lossy().to_string(),
+            path: node.path.display().to_string(),
             filetags: node.filetags.clone(),
             score: 0.0,
             matches: vec!["semantic".to_string()],

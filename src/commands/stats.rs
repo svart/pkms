@@ -280,7 +280,7 @@ fn print_stats(
 
     if ctx.is_json() {
         let output = StatsOutput {
-            db_root: db_root.to_string_lossy().to_string(),
+            db_root: db_root.display().to_string(),
             total_notes: stats.total_notes,
             total_links: stats.total_links,
             internal_links: stats.total_internal_links,
@@ -304,7 +304,7 @@ fn print_stats(
                     .map(|n| RecentNote {
                         uuid: n.uuid.clone(),
                         title: n.title.clone(),
-                        path: n.path.to_string_lossy().to_string(),
+                        path: n.path.display().to_string(),
                     })
                     .collect()
             }),

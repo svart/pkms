@@ -40,7 +40,7 @@ impl Graph {
             let rel = node.path.strip_prefix(db_root).unwrap_or(&node.path);
             let dir = rel
                 .parent()
-                .map(|p| p.to_string_lossy().to_string())
+                .map(|p| p.display().to_string())
                 .unwrap_or_default();
             *dirs.entry(dir).or_default() += 1;
         }

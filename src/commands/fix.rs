@@ -75,7 +75,7 @@ fn find_and_replace_links(
 
         let count = re.find_iter(&content).count();
         if count > 0 {
-            files_affected.push(path.to_string_lossy().to_string());
+            files_affected.push(path.display().to_string());
             total_replacements += count;
 
             if apply {

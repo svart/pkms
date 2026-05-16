@@ -355,7 +355,7 @@ impl Graph {
                     _ => true,
                 };
                 items.push((
-                    result.path.to_string_lossy().to_string(),
+                    result.path.display().to_string(),
                     heading.line_number,
                     heading.priority,
                     is_open,
