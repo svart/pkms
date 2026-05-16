@@ -52,7 +52,7 @@ fn heading_is_eligible(
 pub struct AgendaOptions {
     pub state: Option<String>,
     pub tags: Option<String>,
-    pub type_: Option<String>,
+    pub kind: Option<String>,
     pub prio: Option<String>,
     pub overdue: bool,
     pub upcoming: bool,
@@ -84,7 +84,7 @@ pub fn run(config: &Config, ctx: &OutputContext, opts: &AgendaOptions) -> Result
     let closed_states = config.closed_todo_states();
     let state_filters = parse_filters(opts.state.as_deref());
     let tags_filters = parse_filters(opts.tags.as_deref());
-    let type_filters = parse_filters(opts.type_.as_deref());
+    let type_filters = parse_filters(opts.kind.as_deref());
     let mut items: Vec<AgendaItem> = Vec::new();
 
     for result in &graph.results {

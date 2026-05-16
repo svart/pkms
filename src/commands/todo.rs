@@ -47,7 +47,7 @@ fn heading_is_eligible(heading: &crate::parser::Heading, valid_states: &[String]
 pub struct TodoOptions {
     pub state: Option<String>,
     pub tags: Option<String>,
-    pub type_: Option<String>,
+    pub kind: Option<String>,
     pub sort: Option<String>,
     pub limit: Option<usize>,
     pub group: Option<String>,
@@ -80,7 +80,7 @@ fn item_datetimes(item: &TodoItem) -> Vec<NaiveDateTime> {
     if let Some(ref d) = item.daily_file_date
         && let Ok(date) = NaiveDate::parse_from_str(d, "%Y-%m-%d")
     {
-        result.push(date.and_hms_opt(0, 0, 0).unwrap());
+        result.push(date.and_hms_opt(0, 0, 0).expect("midnight is valid"));
     }
     result
 }
@@ -233,7 +233,7 @@ pub fn run(config: &Config, ctx: &OutputContext, opts: &TodoOptions) -> Result<(
     let valid_states = config.todo_states();
     let state_filters = parse_filters(opts.state.as_deref());
     let tags_filters = parse_filters(opts.tags.as_deref());
-    let type_filters = parse_filters(opts.type_.as_deref());
+    let type_filters = parse_filters(opts.kind.as_deref());
 
     let today_date = Local::now().date_naive();
 

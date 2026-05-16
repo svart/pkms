@@ -1,3 +1,11 @@
+//! In-memory knowledge graph of org-roam notes.
+//!
+//! [`Graph`] is the central data structure, built from [`FileScanResult`]s produced by
+//! scanning `.org` files. Each file is parsed into a [`ParsedNote`](crate::parser::ParsedNote)
+//! (UUIDs, title, tags, aliases, links, headings). The builder promotes the primary UUID of
+//! each file into a [`Node`] and creates separate heading-nodes for headings with their own
+//! `:ID:` property. The graph resolves internal links into backlinks and detects broken links.
+
 pub mod analytics;
 pub mod builder;
 pub mod search;
@@ -34,7 +42,7 @@ impl Node {
             path,
             filetags: parsed.filetags.clone(),
             categories: parsed.categories.clone(),
-            aliases: parsed.roam_aliases.clone(),
+            aliases: parsed.aliases.clone(),
             refs: parsed.roam_refs.clone(),
             outgoing: parsed.outgoing.clone(),
             headings_count: parsed.headings.len(),

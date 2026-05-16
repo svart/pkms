@@ -351,7 +351,7 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
         Command::Todo {
             state,
             tags,
-            type_,
+            kind,
             sort,
             limit,
             group,
@@ -375,7 +375,7 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
                 &commands::todo::TodoOptions {
                     state: state.clone(),
                     tags: tags.clone(),
-                    type_: type_.clone(),
+                    kind: kind.clone(),
                     sort: sort.clone(),
                     limit: *limit,
                     group: group.clone(),
@@ -386,7 +386,7 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
                             .or_else(|| {
                                 chrono::NaiveDate::parse_from_str(d, "%Y-%m-%d")
                                     .ok()
-                                    .map(|dt| dt.and_hms_opt(0, 0, 0).unwrap())
+                                    .map(|dt| dt.and_hms_opt(0, 0, 0).expect("midnight is valid"))
                             })
                     }),
                     before: before.as_deref().and_then(|d| {
@@ -395,7 +395,7 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
                             .or_else(|| {
                                 chrono::NaiveDate::parse_from_str(d, "%Y-%m-%d")
                                     .ok()
-                                    .map(|dt| dt.and_hms_opt(0, 0, 0).unwrap())
+                                    .map(|dt| dt.and_hms_opt(0, 0, 0).expect("midnight is valid"))
                             })
                     }),
                     prio: prio.clone(),
@@ -408,7 +408,7 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
         Command::Agenda {
             state,
             tags,
-            type_,
+            kind,
             prio,
             overdue,
             date,
@@ -427,7 +427,7 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
                 &commands::agenda::AgendaOptions {
                     state: state.clone(),
                     tags: tags.clone(),
-                    type_: type_.clone(),
+                    kind: kind.clone(),
                     prio: prio.clone(),
                     overdue: *overdue,
                     upcoming: *upcoming,

@@ -243,11 +243,11 @@ pub enum Command {
         )]
         tags: Option<String>,
         #[arg(
-            long,
+            long = "type",
             value_name = "TYPE",
             help = "Filter by type: SCHED/DEADL (comma-separated, ! for negation, applied as AND)"
         )]
-        type_: Option<String>,
+        kind: Option<String>,
         #[arg(
             long,
             value_name = "PRIO",
@@ -296,11 +296,11 @@ pub enum Command {
         )]
         tags: Option<String>,
         #[arg(
-            long,
+            long = "type",
             value_name = "TYPE",
             help = "Filter by type: SCHED/DEADL (comma-separated, ! for negation, applied as AND)"
         )]
-        type_: Option<String>,
+        kind: Option<String>,
         #[arg(
             long,
             value_name = "SORT",

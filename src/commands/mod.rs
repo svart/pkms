@@ -1,3 +1,10 @@
+//! CLI subcommand implementations.
+//!
+//! Each subcommand in [`Command`](crate::cli::Command) has a corresponding module here
+//! with a `pub fn run(config, ctx, opts) -> Result<()>` entry point. Commands are
+//! stateless — they load the graph from disk on every invocation, compute results, and
+//! dispatch output via [`OutputContext`](crate::output::OutputContext).
+
 pub mod agenda;
 pub mod check;
 pub mod context;

@@ -227,3 +227,16 @@ pub fn title_to_slug(title: &str) -> String {
         .replace_all(&s, "-");
     s.trim_matches('-').to_string()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_title_to_slug_basic() {
+        assert_eq!(title_to_slug("Hello World"), "hello_world");
+        assert_eq!(title_to_slug("hello-world"), "hello_world");
+        assert_eq!(title_to_slug("-"), "_");
+        assert_eq!(title_to_slug("a@b"), "a-b");
+    }
+}

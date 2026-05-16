@@ -128,19 +128,6 @@ impl Graph {
         results
     }
 
-    #[allow(dead_code)]
-    pub fn all_categories(&self) -> Vec<(String, usize)> {
-        let mut cat_counts: HashMap<String, usize> = HashMap::new();
-        for node in self.nodes.values() {
-            for cat in &node.categories {
-                *cat_counts.entry(cat.clone()).or_default() += 1;
-            }
-        }
-        let mut cats: Vec<(String, usize)> = cat_counts.into_iter().collect();
-        cats.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
-        cats
-    }
-
     pub fn all_tags(&self) -> Vec<(String, usize)> {
         let mut tag_counts: HashMap<String, usize> = HashMap::new();
         for node in self.nodes.values() {

@@ -14,14 +14,23 @@ pub struct OrgDate {
     pub raw: String,
 }
 
+const MAX_PARSE_DEPTH: u32 = 32;
+
 pub fn parse_org_date(raw: &str) -> Option<OrgDate> {
+    parse_org_date_depth(raw, 0)
+}
+
+fn parse_org_date_depth(raw: &str, depth: u32) -> Option<OrgDate> {
+    if depth > MAX_PARSE_DEPTH {
+        return None;
+    }
     let trimmed = raw.trim();
 
     if let Some(pos) = trimmed.find(">--<") {
         let first_raw = &trimmed[..pos + 1];
         let second_raw = &trimmed[pos + 3..];
-        let mut first = parse_org_date(first_raw)?;
-        if let Some(second) = parse_org_date(second_raw) {
+        let mut first = parse_org_date_depth(first_raw, depth + 1)?;
+        if let Some(second) = parse_org_date_depth(second_raw, depth + 1) {
             first.base_date_end = Some(second.base_date);
             if second.has_time {
                 first.time_end = second.time;

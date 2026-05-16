@@ -1,3 +1,10 @@
+//! Org-mode note parser.
+//!
+//! [`ParsedNote`] is the result of parsing a single `.org` file. It extracts UUIDs (from
+//! `:ID:` properties), `#+title`, `#+filetags`, `ROAM_ALIASES`, `ROAM_REFS`, `CATEGORY`,
+//! SCHEDULED/DEADLINE timestamps, org-mode links (`[[id:...]]`, `[[file:...]]`, `[[url:...]]`),
+//! and headings with their TODO states, priorities, tags, and line numbers.
+
 use chrono::NaiveDate;
 use regex::Regex;
 use serde::Serialize;
@@ -9,7 +16,7 @@ pub struct ParsedNote {
     pub title: Option<String>,
     pub filetags: Vec<String>,
     pub categories: Vec<String>,
-    pub roam_aliases: Vec<String>,
+    pub aliases: Vec<String>,
     pub roam_refs: Vec<String>,
     pub outgoing: Vec<Link>,
     pub headings: Vec<Heading>,
@@ -22,7 +29,7 @@ impl ParsedNote {
             title: None,
             filetags: vec![],
             categories: vec![],
-            roam_aliases: vec![],
+            aliases: vec![],
             roam_refs: vec![],
             outgoing: vec![],
             headings: vec![],
@@ -110,7 +117,7 @@ struct ParseContext {
     title: Option<String>,
     filetags: Vec<String>,
     categories: Vec<String>,
-    roam_aliases: Vec<String>,
+    aliases: Vec<String>,
     roam_refs: Vec<String>,
     outgoing: Vec<Link>,
     headings: Vec<Heading>,
@@ -128,7 +135,7 @@ impl ParseContext {
             title: None,
             filetags: Vec::new(),
             categories: Vec::new(),
-            roam_aliases: Vec::new(),
+            aliases: Vec::new(),
             roam_refs: Vec::new(),
             outgoing: Vec::new(),
             headings: Vec::new(),
@@ -146,7 +153,7 @@ impl ParseContext {
             title: self.title,
             filetags: self.filetags,
             categories: self.categories,
-            roam_aliases: self.roam_aliases,
+            aliases: self.aliases,
             roam_refs: self.roam_refs,
             outgoing: self.outgoing,
             headings: self.headings,
@@ -198,7 +205,7 @@ impl ParseContext {
             }
             PROP_CATEGORY => self.categories.push(value.to_string()),
             PROP_ROAM_ALIASES => {
-                self.roam_aliases = value
+                self.aliases = value
                     .split_whitespace()
                     .map(std::string::ToString::to_string)
                     .collect();
@@ -352,7 +359,8 @@ pub fn strip_org_links(text: &str) -> String {
             caps.get(2)
                 .map(|m| m.as_str())
                 .filter(|s| !s.is_empty())
-                .unwrap_or(&caps[1])
+                .or_else(|| caps.get(1).map(|m| m.as_str()))
+                .unwrap_or("")
                 .to_string()
         })
         .to_string()
@@ -477,7 +485,7 @@ Some content here."#;
 "#;
         let note = parse_note(content);
         assert_eq!(note.filetags, vec!["book", "tech"]);
-        assert_eq!(note.roam_aliases, vec!["Test", "Alias"]);
+        assert_eq!(note.aliases, vec!["Test", "Alias"]);
         assert_eq!(note.roam_refs, vec!["https://example.com"]);
         assert_eq!(note.outgoing.len(), 4);
         assert!(matches!(note.outgoing[0], Link::Internal(_)));
@@ -772,13 +780,6 @@ SCHEDULED: <2026-05-10 Sun>"#;
     }
 
     proptest! {
-        #[test]
-        fn test_title_to_slug_roundtrip(title in "[a-zA-Z0-9 _-]{1,50}") {
-            let slug = super::super::commands::new::title_to_slug(&title);
-            prop_assert!(!slug.is_empty());
-            prop_assert!(slug.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-'));
-        }
-
         #[test]
         fn test_uuid_format(uuid_str in "[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}") {
             let content = format!(":PROPERTIES:\n:ID:       {}\n:END:\n#+title: test", uuid_str);

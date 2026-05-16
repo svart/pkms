@@ -109,7 +109,7 @@ pub fn run(config: &Config, ctx: &OutputContext, opts: &StatsOptions) -> Result<
         return print_todo_stats(ctx, &graph);
     }
 
-    print_stats(config, ctx, opts.days, &graph, db_root)
+    print_stats(ctx, opts.days, &graph, db_root)
 }
 
 fn print_hubs(ctx: &OutputContext, graph: &Graph, limit: usize) -> Result<()> {
@@ -262,7 +262,6 @@ fn print_todo_stats(ctx: &OutputContext, graph: &Graph) -> Result<()> {
 
 #[allow(clippy::cast_precision_loss)]
 fn print_stats(
-    _config: &Config,
     ctx: &OutputContext,
     days: Option<u32>,
     graph: &Graph,

@@ -46,7 +46,7 @@ impl BuildContext {
         let headings = &parsed.headings;
         let filetags = &parsed.filetags;
         let categories = &parsed.categories;
-        let aliases = &parsed.roam_aliases;
+        let aliases = &parsed.aliases;
         let refs = &parsed.roam_refs;
 
         let mut stack: Vec<(usize, String, Vec<String>)> = Vec::new();
@@ -233,7 +233,7 @@ impl BuildContext {
             self.seen_titles.insert(title.clone(), path.clone());
         }
 
-        for alias in &parsed.roam_aliases {
+        for alias in &parsed.aliases {
             self.alias_to_uuid
                 .entry(alias.clone())
                 .or_default()

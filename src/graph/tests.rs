@@ -10,7 +10,7 @@ fn make_note(uuid: &str, title: &str, outgoing: Vec<Link>) -> FileScanResult {
             title: Some(title.to_string()),
             filetags: vec![],
             categories: vec![],
-            roam_aliases: vec![],
+            aliases: vec![],
             roam_refs: vec![],
             outgoing,
             headings: vec![],
@@ -47,7 +47,7 @@ fn make_note_with_headings(
             title: Some(title.to_string()),
             filetags: vec![],
             categories: vec![],
-            roam_aliases: vec![],
+            aliases: vec![],
             roam_refs: vec![],
             outgoing,
             headings,
@@ -70,7 +70,7 @@ fn make_note_full(
             title: Some(title.to_string()),
             filetags,
             categories: vec![],
-            roam_aliases: aliases,
+            aliases: aliases,
             roam_refs: vec![],
             outgoing,
             headings: vec![],
@@ -145,7 +145,7 @@ fn test_duplicate_uuid_detection() {
                 title: Some("First".to_string()),
                 filetags: vec![],
                 categories: vec![],
-                roam_aliases: vec![],
+                aliases: vec![],
                 roam_refs: vec![],
                 outgoing: vec![],
                 headings: vec![],
@@ -159,7 +159,7 @@ fn test_duplicate_uuid_detection() {
                 title: Some("Second".to_string()),
                 filetags: vec![],
                 categories: vec![],
-                roam_aliases: vec![],
+                aliases: vec![],
                 roam_refs: vec![],
                 outgoing: vec![],
                 headings: vec![],
@@ -211,7 +211,7 @@ fn test_missing_title() {
             title: None,
             filetags: vec![],
             categories: vec![],
-            roam_aliases: vec![],
+            aliases: vec![],
             roam_refs: vec![],
             outgoing: vec![],
             headings: vec![],
@@ -800,7 +800,7 @@ This is the content with a unique-searchable-keyword here.
             title: Some("Content Test".to_string()),
             filetags: vec![],
             categories: vec![],
-            roam_aliases: vec![],
+            aliases: vec![],
             roam_refs: vec![],
             outgoing: vec![],
             headings: vec![],
@@ -820,20 +820,6 @@ fn test_search_content_not_found() {
     let graph = Graph::build(results);
     let content_results = graph.search_content("nonexistent");
     assert!(content_results.is_empty());
-}
-
-#[test]
-fn test_all_categories() {
-    let results = vec![make_note_full("a", "A", vec![], vec![], vec![])];
-    let mut graph = Graph::build(results);
-    if let Some(node) = graph.nodes.get_mut("a") {
-        node.categories.push("cat1".to_string());
-        node.categories.push("cat2".to_string());
-    }
-    let cats = graph.all_categories();
-    assert_eq!(cats.len(), 2);
-    assert!(cats.iter().any(|(c, _)| c == "cat1"));
-    assert!(cats.iter().any(|(c, _)| c == "cat2"));
 }
 
 #[test]
@@ -945,7 +931,7 @@ proptest::proptest! {
                 title: Some("test".to_string()),
                 filetags: vec![],
                 categories: vec![],
-                roam_aliases: vec![],
+                aliases: vec![],
                 roam_refs: vec![],
                 outgoing: vec![],
                 headings: vec![],
