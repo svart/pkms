@@ -2,6 +2,10 @@ use std::collections::{HashMap, HashSet};
 
 use super::Graph;
 
+const TITLE_MATCH_WEIGHT: f64 = 10.0;
+const REF_MATCH_WEIGHT: f64 = 6.0;
+const TAG_MATCH_WEIGHT: f64 = 5.0;
+
 pub struct SearchFields {
     pub title: bool,
     pub alias: bool,
@@ -42,7 +46,7 @@ impl Graph {
                 let words_in_title: usize =
                     words.iter().filter(|w| title_lower.contains(*w)).count();
                 if words_in_title > 0 {
-                    score += words_in_title as f64 * 10.0;
+                    score += words_in_title as f64 * TITLE_MATCH_WEIGHT;
                     sources.insert("title");
                 }
             }
@@ -53,7 +57,7 @@ impl Graph {
                     let words_in_alias: usize =
                         words.iter().filter(|w| alias_lower.contains(*w)).count();
                     if words_in_alias > 0 {
-                        score += words_in_alias as f64 * 10.0;
+                        score += words_in_alias as f64 * TITLE_MATCH_WEIGHT;
                         sources.insert("alias");
                     }
                 }
@@ -63,7 +67,7 @@ impl Graph {
                 for ref_ in &node.refs {
                     let ref_lower = ref_.to_lowercase();
                     if words.iter().any(|w| ref_lower.contains(*w)) {
-                        score += 6.0;
+                        score += REF_MATCH_WEIGHT;
                         sources.insert("ref");
                     }
                 }
@@ -72,7 +76,7 @@ impl Graph {
             if fields.tag {
                 for tag in &node.filetags {
                     if words.iter().any(|w| tag.contains(*w)) {
-                        score += 5.0;
+                        score += TAG_MATCH_WEIGHT;
                         sources.insert("tag");
                     }
                 }
@@ -81,7 +85,7 @@ impl Graph {
             if fields.category {
                 for cat in &node.categories {
                     if words.iter().any(|w| cat.contains(*w)) {
-                        score += 5.0;
+                        score += TAG_MATCH_WEIGHT;
                         sources.insert("category");
                     }
                 }
@@ -101,8 +105,12 @@ impl Graph {
     pub fn search_content(&self, terms: &str) -> Vec<(String, String, Vec<String>)> {
         let query = terms.to_lowercase();
         let mut results = Vec::new();
+        let mut seen_paths = HashSet::new();
 
         for node in self.nodes.values() {
+            if !seen_paths.insert(node.path.clone()) {
+                continue;
+            }
             if let Ok(content) = std::fs::read_to_string(&node.path) {
                 let content_lower = content.to_lowercase();
                 if content_lower.contains(&query) {

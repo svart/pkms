@@ -255,51 +255,32 @@ pub fn run(config: &Config, ctx: &OutputContext, opts: &CheckOptions) -> Result<
         && self_link_entries.is_empty()
         && overlink_entries.is_empty();
 
+    let check_data = CheckData {
+        graph: &graph,
+        db_root,
+        broken_file: &broken_file,
+        broken_attachment: &broken_attachment,
+        filetags_issues: &filetags_issues,
+        agenda_issues: &agenda_issues,
+        self_link_entries: &self_link_entries,
+        overlink_entries: &overlink_entries,
+        cross_link_result: &cross_link_result,
+    };
+    let display_opts = CheckDisplayOptions {
+        show_stats,
+        show_id,
+        show_file,
+        show_attach,
+        show_filetags,
+        show_agenda,
+        show_self_links,
+        show_overlinks,
+    };
+
     if ctx.is_json() {
-        print_check_json(
-            ctx,
-            &graph,
-            db_root,
-            &broken_file,
-            &broken_attachment,
-            &filetags_issues,
-            &agenda_issues,
-            &self_link_entries,
-            &overlink_entries,
-            &cross_link_result,
-            &CheckDisplayOptions {
-                show_stats,
-                show_id,
-                show_file,
-                show_attach,
-                show_filetags,
-                show_agenda,
-                show_self_links,
-                show_overlinks,
-            },
-        )?;
+        print_check_json(ctx, &check_data, &display_opts)?;
     } else {
-        print_check_text(
-            &graph,
-            db_root,
-            &broken_file,
-            &broken_attachment,
-            &filetags_issues,
-            &agenda_issues,
-            &self_link_entries,
-            &overlink_entries,
-            &cross_link_result,
-            &CheckDisplayOptions {
-                show_stats,
-                show_id,
-                show_file,
-                show_attach,
-                show_filetags,
-                show_agenda,
-                show_self_links,
-                show_overlinks,
-            },
-        );
+        print_check_text(&check_data, &display_opts);
     }
 
     if healthy {
@@ -320,29 +301,33 @@ struct CheckDisplayOptions {
     show_overlinks: bool,
 }
 
-#[allow(clippy::too_many_arguments)]
+struct CheckData<'a> {
+    graph: &'a Graph,
+    db_root: &'a Path,
+    broken_file: &'a [BrokenFileLinkEntry],
+    broken_attachment: &'a [BrokenAttachmentLinkEntry],
+    filetags_issues: &'a [FiletagsIssue],
+    agenda_issues: &'a [AgendaIssue],
+    self_link_entries: &'a [SelfLinkEntry],
+    overlink_entries: &'a [OverlinkEntry],
+    cross_link_result: &'a Option<CrossLinkResult>,
+}
+
 fn print_check_json(
     ctx: &OutputContext,
-    graph: &Graph,
-    db_root: &Path,
-    broken_file: &[BrokenFileLinkEntry],
-    broken_attachment: &[BrokenAttachmentLinkEntry],
-    filetags_issues: &[FiletagsIssue],
-    agenda_issues: &[AgendaIssue],
-    self_link_entries: &[SelfLinkEntry],
-    overlink_entries: &[OverlinkEntry],
-    cross_link_result: &Option<CrossLinkResult>,
+    data: &CheckData,
     opts: &CheckDisplayOptions,
 ) -> Result<()> {
-    let stats = graph.stats();
+    let stats = data.graph.stats();
 
     let broken = if opts.show_id {
-        graph
+        data.graph
             .broken_links
             .iter()
             .map(|(src, tgt)| BrokenLinkEntry {
                 source_uuid: src.clone(),
-                source_title: graph
+                source_title: data
+                    .graph
                     .nodes
                     .get(src)
                     .map(|n| n.title.clone())
@@ -355,7 +340,7 @@ fn print_check_json(
     };
 
     let failed = if opts.show_id {
-        graph
+        data.graph
             .parse_errors
             .iter()
             .map(|(path, err)| FailedFileEntry {
@@ -367,90 +352,78 @@ fn print_check_json(
         vec![]
     };
 
-    let has_filetags_issues = !filetags_issues.is_empty();
+    let has_filetags_issues = !data.filetags_issues.is_empty();
     let healthy = stats.broken_link_count == 0
         && stats.parse_error_count == 0
         && stats.duplicate_uuid_count == 0
-        && broken_file.is_empty()
-        && broken_attachment.is_empty()
+        && data.broken_file.is_empty()
+        && data.broken_attachment.is_empty()
         && !has_filetags_issues
-        && (!opts.show_agenda || agenda_issues.is_empty())
-        && self_link_entries.is_empty()
-        && overlink_entries.is_empty();
+        && (!opts.show_agenda || data.agenda_issues.is_empty())
+        && data.self_link_entries.is_empty()
+        && data.overlink_entries.is_empty();
 
     let output = CheckOutput {
-        db_root: db_root.to_string_lossy().to_string(),
+        db_root: data.db_root.to_string_lossy().to_string(),
         stats: if opts.show_stats {
             Some(stats.clone())
         } else {
             None
         },
         duplicates: if opts.show_id {
-            Some(graph.duplicates.clone())
+            Some(data.graph.duplicates.clone())
         } else {
             None
         },
         broken_links: if opts.show_id { Some(broken) } else { None },
         broken_file_links: if opts.show_file {
-            Some(broken_file.to_vec())
+            Some(data.broken_file.to_vec())
         } else {
             None
         },
         broken_attachment_links: if opts.show_attach {
-            Some(broken_attachment.to_vec())
+            Some(data.broken_attachment.to_vec())
         } else {
             None
         },
         failed_files: if opts.show_id { Some(failed) } else { None },
         filetags_issues: if opts.show_filetags {
-            Some(filetags_issues.to_vec())
+            Some(data.filetags_issues.to_vec())
         } else {
             None
         },
         agenda_issues: if opts.show_agenda {
-            Some(agenda_issues.to_vec())
+            Some(data.agenda_issues.to_vec())
         } else {
             None
         },
         self_links: if opts.show_self_links {
-            Some(self_link_entries.to_vec())
+            Some(data.self_link_entries.to_vec())
         } else {
             None
         },
         overlinks: if opts.show_overlinks {
-            Some(overlink_entries.to_vec())
+            Some(data.overlink_entries.to_vec())
         } else {
             None
         },
-        cross_links: cross_link_result.clone(),
+        cross_links: data.cross_link_result.clone(),
         healthy,
     };
     ctx.print_json(&output)
 }
 
-#[allow(clippy::too_many_arguments)]
-fn print_check_text(
-    graph: &Graph,
-    db_root: &Path,
-    broken_file: &[BrokenFileLinkEntry],
-    broken_attachment: &[BrokenAttachmentLinkEntry],
-    filetags_issues: &[FiletagsIssue],
-    agenda_issues: &[AgendaIssue],
-    self_link_entries: &[SelfLinkEntry],
-    overlink_entries: &[OverlinkEntry],
-    cross_link_result: &Option<CrossLinkResult>,
-    opts: &CheckDisplayOptions,
-) {
-    let stats = graph.stats();
+fn print_check_text(data: &CheckData, opts: &CheckDisplayOptions) {
+    let stats = data.graph.stats();
     let healthy = stats.broken_link_count == 0
         && stats.parse_error_count == 0
         && stats.duplicate_uuid_count == 0
-        && broken_file.is_empty()
-        && broken_attachment.is_empty()
-        && filetags_issues.is_empty()
-        && (!opts.show_agenda || agenda_issues.is_empty())
-        && self_link_entries.is_empty()
-        && overlink_entries.is_empty();
+        && data.broken_file.is_empty()
+        && data.broken_attachment.is_empty()
+        && data.filetags_issues.is_empty()
+        && (!opts.show_agenda || data.agenda_issues.is_empty())
+        && data.self_link_entries.is_empty()
+        && data.overlink_entries.is_empty();
 
     let has_any_output = opts.show_stats
         || opts.show_file
@@ -460,10 +433,10 @@ fn print_check_text(
         || opts.show_agenda
         || opts.show_self_links
         || opts.show_overlinks
-        || cross_link_result.is_some();
+        || data.cross_link_result.is_some();
 
     if has_any_output {
-        println!("Database: {}", db_root.display());
+        println!("Database: {}", data.db_root.display());
     }
 
     if opts.show_stats {
@@ -485,97 +458,100 @@ fn print_check_text(
     }
 
     if opts.show_file {
-        println!("  Broken files:   {}", broken_file.len());
+        println!("  Broken files:   {}", data.broken_file.len());
     }
     if opts.show_attach {
-        println!("  Broken attach:  {}", broken_attachment.len());
+        println!("  Broken attach:  {}", data.broken_attachment.len());
     }
     if opts.show_filetags {
-        println!("  Filetags issues: {}", filetags_issues.len());
+        println!("  Filetags issues: {}", data.filetags_issues.len());
     }
     if opts.show_overlinks {
-        println!("  Overlinks:      {}", overlink_entries.len());
+        println!("  Overlinks:      {}", data.overlink_entries.len());
     }
 
     if opts.show_id {
-        if !graph.duplicates.duplicate_uuids.is_empty() {
+        if !data.graph.duplicates.duplicate_uuids.is_empty() {
             println!();
             println!(
                 "Duplicate UUIDs ({}):",
-                graph.duplicates.duplicate_uuids.len()
+                data.graph.duplicates.duplicate_uuids.len()
             );
-            for d in &graph.duplicates.duplicate_uuids {
+            for d in &data.graph.duplicates.duplicate_uuids {
                 for p in &d.paths {
                     println!("  {} -> {}", d.value, p);
                 }
             }
         }
 
-        if !graph.duplicates.duplicate_titles.is_empty() {
+        if !data.graph.duplicates.duplicate_titles.is_empty() {
             println!();
             println!(
                 "Duplicate titles ({}):",
-                graph.duplicates.duplicate_titles.len()
+                data.graph.duplicates.duplicate_titles.len()
             );
-            for d in &graph.duplicates.duplicate_titles {
+            for d in &data.graph.duplicates.duplicate_titles {
                 for p in &d.paths {
                     println!("  \"{}\" -> {}", d.value, p);
                 }
             }
         }
 
-        if !graph.duplicates.missing_titles.is_empty() {
+        if !data.graph.duplicates.missing_titles.is_empty() {
             println!();
             println!(
                 "Missing #+title ({}):",
-                graph.duplicates.missing_titles.len()
+                data.graph.duplicates.missing_titles.len()
             );
-            for p in &graph.duplicates.missing_titles {
+            for p in &data.graph.duplicates.missing_titles {
                 println!("  {p}");
             }
         }
     }
 
-    if opts.show_id && !graph.broken_links.is_empty() {
+    if opts.show_id && !data.graph.broken_links.is_empty() {
         println!();
-        println!("Broken links ({}):", graph.broken_links.len());
-        for (src, tgt) in &graph.broken_links {
-            let title = graph.nodes.get(src).map_or("?", |n| n.title.as_str());
+        println!("Broken links ({}):", data.graph.broken_links.len());
+        for (src, tgt) in &data.graph.broken_links {
+            let title = data.graph.nodes.get(src).map_or("?", |n| n.title.as_str());
             println!("  {title} -> {tgt}");
         }
     }
 
-    if !broken_file.is_empty() {
+    if !data.broken_file.is_empty() {
         println!();
-        println!("Broken file links ({}):", broken_file.len());
-        for entry in broken_file {
+        println!("Broken file links ({}):", data.broken_file.len());
+        for entry in data.broken_file {
             println!("  {} -> {}", entry.source_title, entry.target_path);
         }
     }
 
-    if !broken_attachment.is_empty() {
+    if !data.broken_attachment.is_empty() {
         println!();
-        println!("Broken attachment links ({}):", broken_attachment.len());
-        for entry in broken_attachment {
+        println!(
+            "Broken attachment links ({}):",
+            data.broken_attachment.len()
+        );
+        for entry in data.broken_attachment {
             println!("  {} -> {}", entry.source_title, entry.target_path);
         }
     }
 
-    if !filetags_issues.is_empty() {
+    if !data.filetags_issues.is_empty() {
         println!();
-        println!("Invalid filetags format ({}):", filetags_issues.len());
-        for entry in filetags_issues {
+        println!("Invalid filetags format ({}):", data.filetags_issues.len());
+        for entry in data.filetags_issues {
             println!("  {} ({}): {}", entry.title, entry.path, entry.issue);
         }
     }
 
-    if !agenda_issues.is_empty() {
+    if !data.agenda_issues.is_empty() {
         println!();
         println!(
             "Missing :agenda: tag (files with TODOs but no agenda tag) ({}):",
-            agenda_issues.len()
+            data.agenda_issues.len()
         );
-        for entry in agenda_issues {
+        for entry in data.agenda_issues {
             let short_uuid = if entry.uuid.len() >= 8 {
                 &entry.uuid[..8]
             } else {
@@ -588,10 +564,10 @@ fn print_check_text(
         }
     }
 
-    if !self_link_entries.is_empty() {
+    if !data.self_link_entries.is_empty() {
         println!();
-        println!("Self-referencing links ({}):", self_link_entries.len());
-        for entry in self_link_entries {
+        println!("Self-referencing links ({}):", data.self_link_entries.len());
+        for entry in data.self_link_entries {
             match entry.suggestion.as_ref() {
                 Some(suggestion) => println!(
                     "  {} — {} link to self: {} ({})",
@@ -605,13 +581,13 @@ fn print_check_text(
         }
     }
 
-    if !overlink_entries.is_empty() {
+    if !data.overlink_entries.is_empty() {
         println!();
         println!(
             "Overlinking (2+ links to the same note) ({}):",
-            overlink_entries.len()
+            data.overlink_entries.len()
         );
-        for entry in overlink_entries {
+        for entry in data.overlink_entries {
             println!(
                 "  \"{}\" -> \"{}\" ({}x)",
                 entry.source_title, entry.target_title, entry.count
@@ -619,7 +595,7 @@ fn print_check_text(
         }
     }
 
-    if let Some(cr) = cross_link_result {
+    if let Some(cr) = data.cross_link_result {
         println!();
         println!(
             "Cross-links between \"{}\" and \"{}\":",

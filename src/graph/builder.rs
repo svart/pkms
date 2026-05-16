@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::path::Path;
 
-use crate::parser::{Heading, Link};
+use crate::parser::Link;
 
 use super::{DuplicateEntry, DuplicateInfo, FileScanResult, Graph, Node};
 
@@ -36,91 +36,93 @@ fn build_links(
     (backlinks, broken_links)
 }
 
-#[allow(clippy::too_many_arguments)]
-fn process_headings(
-    headings: &[Heading],
-    primary_uuid: &str,
-    filetags: &[String],
-    categories: &[String],
-    aliases: &[String],
-    refs: &[String],
-    path: &Path,
-    nodes: &mut HashMap<String, Node>,
-    uuid_to_outgoing: &mut HashMap<String, Vec<Link>>,
-    heading_uuid_to_primary: &mut HashMap<String, String>,
-) {
-    let mut stack: Vec<(usize, String, Vec<String>)> = Vec::new();
+impl BuildContext {
+    fn process_headings(
+        &mut self,
+        primary_uuid: &str,
+        parsed: &crate::parser::ParsedNote,
+        path: &Path,
+    ) {
+        let headings = &parsed.headings;
+        let filetags = &parsed.filetags;
+        let categories = &parsed.categories;
+        let aliases = &parsed.roam_aliases;
+        let refs = &parsed.roam_refs;
 
-    for (i, heading) in headings.iter().enumerate() {
-        while let Some(&(top_idx, _, _)) = stack.last() {
-            if headings[top_idx].level >= heading.level {
-                let (_, uuid, children) = stack.pop().unwrap();
-                if let Some(node) = nodes.get_mut(&uuid) {
-                    node.heading_uuids = children;
-                    node.headings_count = node.heading_uuids.len();
+        let mut stack: Vec<(usize, String, Vec<String>)> = Vec::new();
+
+        for (i, heading) in headings.iter().enumerate() {
+            while let Some(&(top_idx, _, _)) = stack.last() {
+                if headings[top_idx].level >= heading.level {
+                    let (_, uuid, children) = stack.pop().unwrap();
+                    if let Some(node) = self.nodes.get_mut(&uuid) {
+                        node.heading_uuids = children;
+                        node.headings_count = node.heading_uuids.len();
+                    }
+                } else {
+                    break;
                 }
-            } else {
-                break;
             }
-        }
 
-        if let Some(uuid) = &heading.uuid {
-            let parent_uuid = stack
-                .last()
-                .map(|(_, u, _)| u.clone())
-                .unwrap_or_else(|| primary_uuid.to_string());
+            if let Some(uuid) = &heading.uuid {
+                let parent_uuid = stack
+                    .last()
+                    .map(|(_, u, _)| u.clone())
+                    .unwrap_or_else(|| primary_uuid.to_string());
 
-            let mut heading_node = Node {
-                uuid: uuid.clone(),
-                title: heading.title.clone(),
-                path: path.to_path_buf(),
-                filetags: {
-                    let mut ft = filetags.to_vec();
-                    ft.extend(heading.tags.clone());
-                    ft
-                },
-                categories: categories.to_vec(),
-                aliases: aliases.to_vec(),
-                refs: refs.to_vec(),
-                outgoing: {
+                let mut heading_node = Node {
+                    uuid: uuid.clone(),
+                    title: heading.title.clone(),
+                    path: path.to_path_buf(),
+                    filetags: {
+                        let mut ft = filetags.to_vec();
+                        ft.extend(heading.tags.clone());
+                        ft
+                    },
+                    categories: categories.to_vec(),
+                    aliases: aliases.to_vec(),
+                    refs: refs.to_vec(),
+                    outgoing: {
+                        let mut o = heading.outgoing.clone();
+                        o.push(Link::Internal(parent_uuid.clone()));
+                        o
+                    },
+                    headings_count: 0,
+                    heading_uuids: vec![],
+                    has_todos: heading.todo_state.is_some(),
+                };
+
+                self.uuid_to_outgoing.insert(uuid.clone(), {
                     let mut o = heading.outgoing.clone();
                     o.push(Link::Internal(parent_uuid.clone()));
                     o
-                },
-                headings_count: 0,
-                heading_uuids: vec![],
-                has_todos: heading.todo_state.is_some(),
-            };
+                });
 
-            uuid_to_outgoing.insert(uuid.clone(), {
-                let mut o = heading.outgoing.clone();
-                o.push(Link::Internal(parent_uuid.clone()));
-                o
-            });
+                self.uuid_to_outgoing
+                    .entry(parent_uuid.clone())
+                    .or_default()
+                    .push(Link::Internal(uuid.clone()));
 
-            uuid_to_outgoing
-                .entry(parent_uuid.clone())
-                .or_default()
-                .push(Link::Internal(uuid.clone()));
+                heading_node.outgoing = self.uuid_to_outgoing[&uuid.clone()].clone();
 
-            heading_node.outgoing = uuid_to_outgoing[&uuid.clone()].clone();
+                self.heading_uuid_to_primary
+                    .insert(uuid.clone(), primary_uuid.to_string());
 
-            heading_uuid_to_primary.insert(uuid.clone(), primary_uuid.to_string());
+                self.nodes.insert(uuid.clone(), heading_node);
 
-            nodes.insert(uuid.clone(), heading_node);
+                if let Some((_, _, children)) = stack.last_mut() {
+                    children.push(uuid.clone());
+                }
 
-            if let Some((_, _, children)) = stack.last_mut() {
-                children.push(uuid.clone());
+                stack.push((i, uuid.clone(), vec![]));
             }
-
-            stack.push((i, uuid.clone(), vec![]));
         }
-    }
 
-    while let Some((_, uuid, children)) = stack.pop() {
-        if let Some(node) = nodes.get_mut(&uuid) {
-            node.heading_uuids = children;
-            node.headings_count = node.heading_uuids.len();
+        while let Some((_, uuid, children)) = stack.pop() {
+            if let Some(node) = self.nodes.get_mut(&uuid) {
+                node.heading_uuids = children;
+                node.headings_count = node.heading_uuids.len();
+            }
         }
     }
 }
@@ -257,18 +259,7 @@ impl BuildContext {
 
         self.check_heading_uuids(&parsed, primary_uuid, &path);
 
-        process_headings(
-            &parsed.headings,
-            primary_uuid,
-            &parsed.filetags,
-            &parsed.categories,
-            &parsed.roam_aliases,
-            &parsed.roam_refs,
-            &path,
-            &mut self.nodes,
-            &mut self.uuid_to_outgoing,
-            &mut self.heading_uuid_to_primary,
-        );
+        self.process_headings(primary_uuid, &parsed, &path);
 
         self.path_to_uuid.insert(path, primary_uuid.clone());
         self.title_to_uuid

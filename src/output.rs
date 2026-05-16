@@ -88,6 +88,13 @@ pub fn terminal_width() -> Option<usize> {
         .filter(|&w| w > 0)
 }
 
+const BASE_PADDING: usize = 5;
+const COL_PADDING: usize = 2;
+const MIN_COLUMN_WIDTH: usize = 15;
+const TAG_WEIGHT: f64 = 0.20;
+const NOTE_WEIGHT: f64 = 0.35;
+const HEADING_WEIGHT: f64 = 0.45;
+
 fn is_fixed_column(col: Column) -> bool {
     matches!(
         col,
@@ -101,9 +108,9 @@ fn is_wrap_column(col: Column) -> bool {
 
 fn wrap_weight(col: Column) -> f64 {
     match col {
-        Column::Tags => 0.20,
-        Column::Note => 0.35,
-        Column::Heading => 0.45,
+        Column::Tags => TAG_WEIGHT,
+        Column::Note => NOTE_WEIGHT,
+        Column::Heading => HEADING_WEIGHT,
         _ => 0.0,
     }
 }
@@ -114,7 +121,7 @@ pub fn adaptive_column_widths(
 ) -> Option<Vec<(Column, usize)>> {
     let term_w = terminal_width()?;
     let n_columns = enabled_columns.len();
-    let padding = 5 + 2 * n_columns;
+    let padding = BASE_PADDING + COL_PADDING * n_columns;
 
     let fixed_width: usize = enabled_columns
         .iter()
@@ -123,7 +130,7 @@ pub fn adaptive_column_widths(
         .sum();
 
     let available = term_w.saturating_sub(fixed_width + padding);
-    let min_col = 15;
+    let min_col = MIN_COLUMN_WIDTH;
 
     let wrap_cols: Vec<Column> = enabled_columns
         .iter()

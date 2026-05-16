@@ -9,6 +9,16 @@ use anyhow::Result;
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
 
+const TITLE_OVERLAP_WEIGHT: f64 = 20.0;
+const CONTENT_MATCH_WEIGHT: f64 = 5.0;
+const TAG_OVERLAP_WEIGHT: f64 = 25.0;
+const CATEGORY_OVERLAP_WEIGHT: f64 = 25.0;
+const BACKLINK_OVERLAP_WEIGHT: f64 = 15.0;
+const OUTGOING_OVERLAP_WEIGHT: f64 = 12.0;
+const DIRECTORY_PROXIMITY_WEIGHT: f64 = 5.0;
+const NEIGHBOR_BOOST_DENOM: f64 = 100.0;
+const MAX_CONTENT_KEYWORDS: usize = 50;
+
 type SuggestResult = (Node, Vec<Suggestion>, usize, Option<usize>, Option<String>);
 
 fn find_heading_title_for_uuid(content: &str, heading_uuid: &str) -> Option<String> {
@@ -105,7 +115,7 @@ fn neighbor_relevance(
         .filter(|w| ctx.target_keywords.iter().any(|kw| kw.as_str() == **w))
         .count();
     if title_overlap > 0 {
-        score += title_overlap as f64 * 20.0;
+        score += title_overlap as f64 * TITLE_OVERLAP_WEIGHT;
     }
 
     if !ctx.content_keywords.is_empty()
@@ -118,7 +128,7 @@ fn neighbor_relevance(
             .filter(|kw| ncl.contains(kw.as_str()))
             .count();
         if cm > 0 {
-            score += cm as f64 * 5.0;
+            score += cm as f64 * CONTENT_MATCH_WEIGHT;
         }
     }
 
@@ -128,7 +138,7 @@ fn neighbor_relevance(
         .filter(|t| ctx.target_tags.contains(t.as_str()))
         .count();
     if tag_overlap > 0 {
-        score += tag_overlap as f64 * 25.0;
+        score += tag_overlap as f64 * TAG_OVERLAP_WEIGHT;
     }
 
     let cat_overlap = neighbor
@@ -137,7 +147,7 @@ fn neighbor_relevance(
         .filter(|c| ctx.target_tags.contains(c.as_str()))
         .count();
     if cat_overlap > 0 {
-        score += cat_overlap as f64 * 25.0;
+        score += cat_overlap as f64 * CATEGORY_OVERLAP_WEIGHT;
     }
 
     let shared_backlinks = graph
@@ -150,7 +160,7 @@ fn neighbor_relevance(
         })
         .unwrap_or(0);
     if shared_backlinks > 0 {
-        score += shared_backlinks as f64 * 15.0;
+        score += shared_backlinks as f64 * BACKLINK_OVERLAP_WEIGHT;
     }
 
     let shared_outgoing = neighbor
@@ -166,7 +176,7 @@ fn neighbor_relevance(
         .filter(|u| ctx.target_outgoing.contains(u))
         .count();
     if shared_outgoing > 0 {
-        score += shared_outgoing as f64 * 12.0;
+        score += shared_outgoing as f64 * OUTGOING_OVERLAP_WEIGHT;
     }
 
     score
@@ -194,7 +204,7 @@ fn score_title_overlap(
         .count();
     if overlap > 0 {
         reasons.push(format!("shared title: \"{}\"", other.title));
-        overlap as f64 * 20.0
+        overlap as f64 * TITLE_OVERLAP_WEIGHT
     } else {
         0.0
     }
@@ -222,7 +232,7 @@ fn score_content_match(
         if !title_overlap {
             reasons.push(format!("{count} content keyword matches"));
         }
-        count as f64 * 5.0
+        count as f64 * CONTENT_MATCH_WEIGHT
     } else {
         0.0
     }
@@ -246,7 +256,7 @@ fn score_tag_overlap(
     let total = tag_overlap + cat_overlap;
     if total > 0 {
         reasons.push("shared tags".to_string());
-        total as f64 * 25.0
+        total as f64 * TAG_OVERLAP_WEIGHT
     } else {
         0.0
     }
@@ -266,7 +276,7 @@ fn score_backlink_overlap(
     let shared: usize = ctx.target_backlinks.intersection(&other_backlinks).count();
     if shared > 0 {
         reasons.push(format!("{shared} shared backlinks"));
-        shared as f64 * 15.0
+        shared as f64 * BACKLINK_OVERLAP_WEIGHT
     } else {
         0.0
     }
@@ -291,7 +301,7 @@ fn score_outgoing_overlap(
     let shared: usize = ctx.target_outgoing.intersection(&other_outgoing).count();
     if shared > 0 {
         reasons.push(format!("{shared} shared outgoing"));
-        shared as f64 * 12.0
+        shared as f64 * OUTGOING_OVERLAP_WEIGHT
     } else {
         0.0
     }
@@ -301,7 +311,7 @@ fn score_directory_proximity(node: &crate::graph::Node, other: &crate::graph::No
     if let (Some(tp), Some(op)) = (node.path.parent(), other.path.parent())
         && tp == op
     {
-        5.0
+        DIRECTORY_PROXIMITY_WEIGHT
     } else {
         0.0
     }
@@ -337,7 +347,7 @@ fn score_neighborhood(
     }
 
     let avg = total_neighbor_score / neighbor_count as f64;
-    let boost = ((avg / 100.0) - 0.3).clamp(-0.5, 1.0);
+    let boost = ((avg / NEIGHBOR_BOOST_DENOM) - 0.3).clamp(-0.5, 1.0);
     if boost.abs() <= 0.01 {
         return 0.0;
     }
@@ -470,7 +480,7 @@ fn compute_suggestions_for_node(
                 && !clean.starts_with("file")
             {
                 content_keywords.insert(clean);
-                if content_keywords.len() >= 50 {
+                if content_keywords.len() >= MAX_CONTENT_KEYWORDS {
                     break;
                 }
             }

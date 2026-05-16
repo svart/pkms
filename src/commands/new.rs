@@ -219,16 +219,11 @@ fn insert_heading_uuid(content: &str, heading_title: &str, path: &PathBuf) -> Re
 }
 
 pub fn title_to_slug(title: &str) -> String {
-    title
-        .to_lowercase()
-        .chars()
-        .map(|c| match c {
-            'a'..='z' | '0'..='9' => c,
-            '_' | '-' => '_',
-            _ if c.is_whitespace() => '_',
-            _ => '-',
-        })
-        .collect::<String>()
-        .trim_matches('-')
-        .to_string()
+    let s = title.to_lowercase();
+    let s = regex::Regex::new(r"\s+").unwrap().replace_all(&s, "_");
+    let s = s.replace('-', "_");
+    let s = regex::Regex::new(r"[^a-z0-9_]")
+        .unwrap()
+        .replace_all(&s, "-");
+    s.trim_matches('-').to_string()
 }

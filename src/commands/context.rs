@@ -4,10 +4,11 @@ use crate::graph::Graph;
 use crate::output::OutputContext;
 use crate::tokens;
 use anyhow::Result;
+use handlebars::Handlebars;
 use serde::Serialize;
 use std::fmt::Write;
 
-const DEFAULT_TEMPLATE: &str = "# {{title}}\nUUID: {{uuid}}\nPath: {{path}}\n{{#tags}}Tags: {{tags}}\n{{/tags}}{{#categories}}Categories: {{categories}}\n{{/categories}}{{#aliases}}Aliases: {{aliases}}\n{{/aliases}}\n--- Content ---\n{{content}}--- End Content ---\n\n{{neighbors}}{{backlinks}}";
+const DEFAULT_TEMPLATE: &str = "# {{title}}\nUUID: {{uuid}}\nPath: {{path}}\n{{#if tags}}Tags: {{tags}}\n{{/if}}{{#if categories}}Categories: {{categories}}\n{{/if}}{{#if aliases}}Aliases: {{aliases}}\n{{/if}}\n--- Content ---\n{{content}}--- End Content ---\n\n{{neighbors}}{{backlinks}}";
 
 #[derive(Serialize)]
 pub struct ContextOutput {
@@ -154,6 +155,7 @@ pub fn run(config: &Config, ctx: &OutputContext, opts: &ContextOptions) -> Resul
     Ok(())
 }
 
+#[derive(Serialize)]
 struct ContextVars<'a> {
     title: &'a str,
     uuid: &'a str,
@@ -167,49 +169,12 @@ struct ContextVars<'a> {
 }
 
 fn render_template(template: &str, vars: &ContextVars) -> String {
-    let mut result = template.to_string();
-
-    let conditionals = [
-        ("tags", vars.tags),
-        ("categories", vars.categories),
-        ("aliases", vars.aliases),
-        ("neighbors", vars.neighbors),
-        ("backlinks", vars.backlinks),
-    ];
-    for (key, val) in &conditionals {
-        let start_tag = format!("{{{{#{key}}}}}");
-        let end_tag = format!("{{{{/{key}}}}}");
-        if val.is_empty() {
-            while let Some(start) = result.find(&start_tag) {
-                if let Some(end) = result[start..].find(&end_tag) {
-                    let end = start + end + end_tag.len();
-                    result.replace_range(start..end, "");
-                } else {
-                    break;
-                }
-            }
-        } else {
-            result = result.replace(&start_tag, "");
-            result = result.replace(&end_tag, "");
-        }
-    }
-
-    let replacements = [
-        ("title", vars.title),
-        ("uuid", vars.uuid),
-        ("path", vars.path),
-        ("tags", vars.tags),
-        ("categories", vars.categories),
-        ("aliases", vars.aliases),
-        ("content", vars.content),
-        ("neighbors", vars.neighbors),
-        ("backlinks", vars.backlinks),
-    ];
-    for (key, val) in &replacements {
-        result = result.replace(&format!("{{{{{key}}}}}"), val);
-    }
-
-    result
+    let mut reg = Handlebars::new();
+    reg.register_escape_fn(handlebars::no_escape);
+    reg.render_template(template, vars).unwrap_or_else(|e| {
+        eprintln!("Template error: {e}");
+        template.to_string()
+    })
 }
 
 fn read_content(path: &std::path::Path) -> String {
@@ -259,7 +224,7 @@ mod tests {
             neighbors: "",
             backlinks: "",
         };
-        let result = render_template("{{#tags}}Tags: {{tags}}{{/tags}}", &vars);
+        let result = render_template("{{#if tags}}Tags: {{tags}}{{/if}}", &vars);
         assert_eq!(result, "Tags: mytag");
     }
 
@@ -276,7 +241,7 @@ mod tests {
             neighbors: "",
             backlinks: "",
         };
-        let result = render_template("before{{#tags}}Tags: {{tags}}{{/tags}}after", &vars);
+        let result = render_template("before{{#if tags}}Tags: {{tags}}{{/if}}after", &vars);
         assert_eq!(result, "beforeafter");
     }
 
