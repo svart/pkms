@@ -325,16 +325,16 @@ fn validate_node(
         .map(std::string::ToString::to_string)
         .unwrap_or_default();
 
-    check_uuid_format(&node, &mut issues);
+    check_uuid_format(node, &mut issues);
     check_title_presence(&content, &mut issues);
     check_filetags_formatting(&content, &mut issues);
     check_agenda_tag(&content, &node.filetags, &mut issues);
-    check_duplicate_uuids(&content, graph, &node, &mut issues);
+    check_duplicate_uuids(&content, graph, node, &mut issues);
 
-    let (broken_internal, broken_files) = check_broken_links(&node, graph, db_root);
+    let (broken_internal, broken_files) = check_broken_links(node, graph, db_root);
 
     check_self_links(
-        &node,
+        node,
         target,
         target_is_uuid,
         is_heading_node,
@@ -342,7 +342,7 @@ fn validate_node(
         db_root,
         &mut issues,
     );
-    check_overlinking(&node, graph, &mut issues);
+    check_overlinking(node, graph, &mut issues);
 
     let incoming = graph.backlinks.get(&node.uuid).cloned().unwrap_or_default();
 
@@ -364,7 +364,7 @@ fn validate_node(
     }
 
     Ok(build_validate_output(
-        &node,
+        node,
         &incoming,
         broken_internal,
         broken_files,

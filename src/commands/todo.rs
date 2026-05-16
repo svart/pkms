@@ -3,18 +3,13 @@ use crate::commands::task_common::*;
 use crate::config::Config;
 use crate::graph::Graph;
 use crate::org_date::parse_org_date;
-use crate::output::{ALL_COLUMNS, Column, OutputContext, adaptive_column_widths};
+use crate::output::{Column, OutputContext};
 use crate::parser::{find_daily_file_date, strip_org_links};
-use crate::util::priority_value;
 use anyhow::Result;
-use chrono::{Local, NaiveDate, NaiveDateTime, NaiveTime};
+use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
 use serde::Serialize;
 use std::collections::BTreeMap;
 use std::path::Path;
-use tabled::builder::Builder;
-use tabled::settings::object::{Columns, Object, Rows};
-use tabled::settings::style::{Border, Style};
-use tabled::settings::{Modify, Span, Width};
 
 impl RowItem for TodoItem {
     fn id(&self) -> usize {
@@ -46,6 +41,12 @@ impl RowItem for TodoItem {
     }
     fn daily_file_date(&self) -> Option<&str> {
         self.daily_file_date.as_deref()
+    }
+    fn scheduled_date_str(&self) -> Option<&str> {
+        self.scheduled_date.as_deref()
+    }
+    fn deadline_date_str(&self) -> Option<&str> {
+        self.deadline_date.as_deref()
     }
 }
 
@@ -269,8 +270,6 @@ pub fn run(config: &Config, ctx: &OutputContext, opts: &TodoOptions) -> Result<(
     let tags_filters = parse_filters(opts.tags.as_deref());
     let type_filters = parse_filters(opts.kind.as_deref());
 
-    let today_date = Local::now().date_naive();
-
     let mut items = collect_todo_items(
         &graph,
         &valid_states,
@@ -337,17 +336,21 @@ pub fn run(config: &Config, ctx: &OutputContext, opts: &TodoOptions) -> Result<(
         }
 
         let shown: usize = groups.values().map(|g| g.len()).sum();
+        let footer = format_footer(shown, total_before_limit, "TODO");
+        let section_labels: Vec<String> = groups
+            .iter()
+            .map(|(k, v)| format!("=== {k} ({}) ===", v.len()))
+            .collect();
 
         match ctx.format {
-            OutputFormat::Text => print_todo_text_grouped(
-                &groups,
-                group_field,
-                shown,
-                total_before_limit,
-                &today_date,
-                opts.line_sep,
-                &opts.columns,
-            ),
+            OutputFormat::Text => {
+                let sections: Vec<(&str, &[TodoItem])> = section_labels
+                    .iter()
+                    .zip(groups.values())
+                    .map(|(l, v)| (l.as_str(), v.as_slice()))
+                    .collect();
+                print_table(&sections, &opts.columns, opts.line_sep, &footer);
+            }
             OutputFormat::Json => {
                 ctx.print_json(&serde_json::json!({
                     "total": shown,
@@ -378,16 +381,13 @@ pub fn run(config: &Config, ctx: &OutputContext, opts: &TodoOptions) -> Result<(
         }
 
         let shown = items.len();
+        let footer = format_footer(shown, total_before_limit, "TODO");
 
         match ctx.format {
-            OutputFormat::Text => print_todo_text(
-                &items,
-                shown,
-                total_before_limit,
-                &today_date,
-                opts.line_sep,
-                &opts.columns,
-            ),
+            OutputFormat::Text => {
+                let sections = [("", items.as_slice())];
+                print_table(&sections, &opts.columns, opts.line_sep, &footer);
+            }
             OutputFormat::Json => {
                 #[derive(Serialize)]
                 struct TodoOutput {
@@ -408,6 +408,14 @@ pub fn run(config: &Config, ctx: &OutputContext, opts: &TodoOptions) -> Result<(
     Ok(())
 }
 
+fn format_footer(shown: usize, total: usize, label: &str) -> String {
+    if shown < total {
+        format!("Shown: {shown}, Total: {total} {label} item(s)")
+    } else {
+        format!("Total: {total} {label} item(s)")
+    }
+}
+
 fn get_group_key(item: &TodoItem, group_field: &str) -> String {
     match group_field {
         "state" => item.todo_state.as_deref().unwrap_or("NONE").to_string(),
@@ -419,200 +427,5 @@ fn get_group_key(item: &TodoItem, group_field: &str) -> String {
             _ => "No Priority".to_string(),
         },
         _ => "Unknown".to_string(),
-    }
-}
-
-fn sort_items(items: &mut [TodoItem], sort_fields: &[&str]) {
-    items.sort_by(|a, b| {
-        for field in sort_fields {
-            let ord = match *field {
-                "state" => a.todo_state.as_deref().cmp(&b.todo_state.as_deref()),
-                "file" => a.title.cmp(&b.title),
-                "priority" => {
-                    let a_p = a.priority.map(priority_value).unwrap_or(3);
-                    let b_p = b.priority.map(priority_value).unwrap_or(3);
-                    a_p.cmp(&b_p)
-                }
-                "date" => {
-                    let a_date = a
-                        .scheduled_date
-                        .as_deref()
-                        .or(a.deadline_date.as_deref())
-                        .or(a.daily_file_date.as_deref());
-                    let b_date = b
-                        .scheduled_date
-                        .as_deref()
-                        .or(b.deadline_date.as_deref())
-                        .or(b.daily_file_date.as_deref());
-                    a_date.cmp(&b_date)
-                }
-                _ => std::cmp::Ordering::Equal,
-            };
-            if ord != std::cmp::Ordering::Equal {
-                return ord;
-            }
-        }
-        std::cmp::Ordering::Equal
-    });
-}
-
-fn print_todo_text(
-    items: &[TodoItem],
-    shown: usize,
-    total: usize,
-    _today_date: &chrono::NaiveDate,
-    line_sep: bool,
-    cols: &[Column],
-) {
-    if items.is_empty() {
-        println!("No TODO items found.");
-        return;
-    }
-
-    let mut max_widths: [usize; 8] = ALL_COLUMNS.map(|c| c.name().len());
-    let mut total_rows = 1;
-    for item in items {
-        for row in format_rows(item) {
-            for (i, col) in row.iter().enumerate() {
-                let line_w = col.lines().map(|l| l.len()).max().unwrap_or(0);
-                max_widths[i] = max_widths[i].max(line_w);
-            }
-        }
-        total_rows += format_rows(item).len();
-    }
-
-    let wrap = adaptive_column_widths(cols, &max_widths);
-
-    let mut builder = Builder::new();
-    let headers: Vec<String> = cols.iter().map(|c| c.name().to_string()).collect();
-    builder.push_record(headers);
-
-    for item in items {
-        for row in format_rows(item) {
-            builder.push_record(filter_row(&row, cols));
-        }
-    }
-
-    let mut table = builder.build();
-    table.with(Style::blank());
-    table.with(Modify::new(Rows::one(1)).with(Border::new().top('─')));
-    if line_sep && total_rows > 2 {
-        for i in 2..total_rows {
-            table.with(Modify::new(Rows::one(i)).with(Border::new().top('─')));
-        }
-    }
-    if let Some(widths) = wrap {
-        for (col, w) in &widths {
-            let idx = cols.iter().position(|c| c == col).unwrap();
-            table.with(
-                Modify::new(Columns::new(idx..idx + 1)).with(Width::wrap(*w).keep_words(true)),
-            );
-        }
-    }
-    println!("{}", table);
-    println!();
-    if shown < total {
-        println!("Shown: {shown}, Total: {total} TODO item(s)");
-    } else {
-        println!("Total: {total} TODO item(s)");
-    }
-}
-
-fn print_todo_text_grouped(
-    groups: &BTreeMap<String, Vec<TodoItem>>,
-    _group_field: &str,
-    shown: usize,
-    total: usize,
-    _today_date: &chrono::NaiveDate,
-    line_sep: bool,
-    cols: &[Column],
-) {
-    if groups.is_empty() || groups.values().all(|g| g.is_empty()) {
-        println!("No TODO items found.");
-        return;
-    }
-
-    let mut max_widths: [usize; 8] = ALL_COLUMNS.map(|c| c.name().len());
-    for group in groups.values() {
-        for item in group {
-            for row in format_rows(item) {
-                for (i, col) in row.iter().enumerate() {
-                    let line_w = col.lines().map(|l| l.len()).max().unwrap_or(0);
-                    max_widths[i] = max_widths[i].max(line_w);
-                }
-            }
-        }
-    }
-    let wrap = adaptive_column_widths(cols, &max_widths);
-
-    let mut builder = Builder::new();
-    let headers: Vec<String> = cols.iter().map(|c| c.name().to_string()).collect();
-    builder.push_record(headers);
-
-    let n_cols = cols.len();
-    let empty_row: Vec<String> = std::iter::repeat_n(String::new(), n_cols).collect();
-
-    let mut section_rows: Vec<usize> = Vec::new();
-    let mut row = 1;
-    for (group_key, group) in groups {
-        if group.is_empty() {
-            continue;
-        }
-        if row > 1 {
-            builder.push_record(empty_row.clone());
-            row += 1;
-        }
-        let label = format!("=== {group_key} ({}) ===", group.len());
-        let mut label_row: Vec<String> = std::iter::repeat_n(String::new(), n_cols).collect();
-        label_row[0] = label;
-        builder.push_record(label_row);
-        section_rows.push(row);
-        row += 1;
-        for item in group {
-            for r in format_rows(item) {
-                builder.push_record(filter_row(&r, cols));
-                row += 1;
-            }
-        }
-    }
-
-    let mut table = builder.build();
-    table.with(Style::blank());
-    table.with(Modify::new(Rows::one(1)).with(Border::new().top('─')));
-    if line_sep && row > 2 {
-        for i in 2..row {
-            table.with(Modify::new(Rows::one(i)).with(Border::new().top('─')));
-        }
-    }
-    if let Some(widths) = wrap {
-        for (col, w) in &widths {
-            let idx = cols.iter().position(|c| c == col).unwrap();
-            let mut prev = 1;
-            for &sec in &section_rows {
-                if prev < sec {
-                    table.with(
-                        Modify::new(Rows::new(prev..sec).intersect(Columns::new(idx..idx + 1)))
-                            .with(Width::wrap(*w).keep_words(true)),
-                    );
-                }
-                prev = sec + 1;
-            }
-            if prev < row {
-                table.with(
-                    Modify::new(Rows::new(prev..row).intersect(Columns::new(idx..idx + 1)))
-                        .with(Width::wrap(*w).keep_words(true)),
-                );
-            }
-        }
-    }
-    for &sec_row in &section_rows {
-        table.with(Modify::new((sec_row, 0)).with(Span::column(n_cols as isize)));
-    }
-    println!("{}", table);
-    println!();
-    if shown < total {
-        println!("Shown: {shown}, Total: {total} TODO item(s)");
-    } else {
-        println!("Total: {total} TODO item(s)");
     }
 }

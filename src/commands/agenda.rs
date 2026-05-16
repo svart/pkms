@@ -2,16 +2,11 @@ use crate::cli::OutputFormat;
 use crate::commands::task_common::*;
 use crate::config::Config;
 use crate::graph::Graph;
-use crate::output::{ALL_COLUMNS, Column, OutputContext, adaptive_column_widths};
+use crate::output::{Column, OutputContext};
 use crate::parser::{find_daily_file_date, strip_org_links};
-use crate::util::priority_value;
 use anyhow::Result;
 use chrono::{Local, NaiveDate};
 use serde::Serialize;
-use tabled::builder::Builder;
-use tabled::settings::object::{Columns, Object, Rows};
-use tabled::settings::style::{Border, Style};
-use tabled::settings::{Modify, Span, Width};
 
 impl RowItem for AgendaItem {
     fn id(&self) -> usize {
@@ -43,6 +38,12 @@ impl RowItem for AgendaItem {
     }
     fn daily_file_date(&self) -> Option<&str> {
         self.daily_file_date.as_deref()
+    }
+    fn scheduled_date_str(&self) -> Option<&str> {
+        self.scheduled_date.as_deref()
+    }
+    fn deadline_date_str(&self) -> Option<&str> {
+        self.deadline_date.as_deref()
     }
 }
 
@@ -291,13 +292,52 @@ pub fn run(config: &Config, ctx: &OutputContext, opts: &AgendaOptions) -> Result
         items.truncate(l);
     }
 
+    let flat = opts.today || opts.upcoming || opts.overdue;
+
     match ctx.format {
-        OutputFormat::Text => print_agenda_text(
-            &items,
-            opts.today || opts.upcoming || opts.overdue,
-            opts.line_sep,
-            &opts.columns,
-        ),
+        OutputFormat::Text => {
+            if flat {
+                let sections = [("", items.as_slice())];
+                let footer = format!("Total: {} planned item(s)", items.len());
+                print_table(&sections, &opts.columns, opts.line_sep, &footer);
+            } else {
+                let today = Local::now().date_naive();
+                let today_str = today.format("%Y-%m-%d").to_string();
+
+                let mut overdue = Vec::new();
+                let mut today_items = Vec::new();
+                let mut upcoming = Vec::new();
+
+                for item in &items {
+                    if item.is_overdue {
+                        overdue.push(item.clone());
+                    } else if item.scheduled_date.as_deref() == Some(today_str.as_str())
+                        || item.deadline_date.as_deref() == Some(today_str.as_str())
+                        || (item.is_daily_file
+                            && item.daily_file_date.as_deref() == Some(today_str.as_str()))
+                    {
+                        today_items.push(item.clone());
+                    } else if item.scheduled_date.is_some()
+                        || item.deadline_date.is_some()
+                        || item.is_daily_file
+                    {
+                        upcoming.push(item.clone());
+                    }
+                }
+
+                overdue.sort_by(|a, b| a.effective_date().cmp(&b.effective_date()));
+                today_items.sort_by(|a, b| a.effective_date().cmp(&b.effective_date()));
+                upcoming.sort_by(|a, b| a.effective_date().cmp(&b.effective_date()));
+
+                let sections: [(&str, &[AgendaItem]); 3] = [
+                    ("=== Overdue ===", &overdue),
+                    ("=== Today ===", &today_items),
+                    ("=== Upcoming ===", &upcoming),
+                ];
+                let footer = format!("Total: {} planned item(s)", items.len());
+                print_table(&sections, &opts.columns, opts.line_sep, &footer);
+            }
+        }
         OutputFormat::Json => {
             #[derive(Serialize)]
             struct AgendaOutput {
@@ -312,197 +352,4 @@ pub fn run(config: &Config, ctx: &OutputContext, opts: &AgendaOptions) -> Result
     }
 
     Ok(())
-}
-
-fn sort_items(items: &mut [AgendaItem], sort_fields: &[&str]) {
-    items.sort_by(|a, b| {
-        for field in sort_fields {
-            let ord = match *field {
-                "scheduled" => a
-                    .scheduled_date
-                    .as_deref()
-                    .cmp(&b.scheduled_date.as_deref()),
-                "deadline" => a.deadline_date.as_deref().cmp(&b.deadline_date.as_deref()),
-                "priority" => {
-                    let a_p = a.priority.map(priority_value).unwrap_or(3);
-                    let b_p = b.priority.map(priority_value).unwrap_or(3);
-                    a_p.cmp(&b_p)
-                }
-                "file" => a.title.cmp(&b.title),
-                "date" => {
-                    let a_date = a
-                        .scheduled_date
-                        .as_deref()
-                        .or(a.deadline_date.as_deref())
-                        .or(a.daily_file_date.as_deref());
-                    let b_date = b
-                        .scheduled_date
-                        .as_deref()
-                        .or(b.deadline_date.as_deref())
-                        .or(b.daily_file_date.as_deref());
-                    a_date.cmp(&b_date)
-                }
-                _ => std::cmp::Ordering::Equal,
-            };
-            if ord != std::cmp::Ordering::Equal {
-                return ord;
-            }
-        }
-        std::cmp::Ordering::Equal
-    });
-}
-
-fn print_agenda_text(items: &[AgendaItem], flat: bool, line_sep: bool, cols: &[Column]) {
-    if items.is_empty() {
-        println!("No planned agenda items found.");
-        return;
-    }
-
-    let mut max_widths: [usize; 8] = ALL_COLUMNS.map(|c| c.name().len());
-    for item in items {
-        for row in format_rows(item) {
-            for (i, col) in row.iter().enumerate() {
-                let line_w = col.lines().map(|l| l.len()).max().unwrap_or(0);
-                max_widths[i] = max_widths[i].max(line_w);
-            }
-        }
-    }
-    let wrap = adaptive_column_widths(cols, &max_widths);
-
-    let today = Local::now().date_naive();
-    let today_str = today.format("%Y-%m-%d").to_string();
-
-    let mut overdue = Vec::new();
-    let mut today_items = Vec::new();
-    let mut upcoming = Vec::new();
-
-    for item in items {
-        if item.is_overdue {
-            overdue.push(item);
-        } else if item.scheduled_date.as_deref() == Some(today_str.as_str())
-            || item.deadline_date.as_deref() == Some(today_str.as_str())
-            || (item.is_daily_file && item.daily_file_date.as_deref() == Some(today_str.as_str()))
-        {
-            today_items.push(item);
-        } else if item.scheduled_date.is_some()
-            || item.deadline_date.is_some()
-            || item.is_daily_file
-        {
-            upcoming.push(item);
-        }
-    }
-
-    let sort_date = |a: &&AgendaItem, b: &&AgendaItem| {
-        let a_date = a
-            .scheduled_date
-            .as_deref()
-            .or(a.deadline_date.as_deref())
-            .or(a.daily_file_date.as_deref());
-        let b_date = b
-            .scheduled_date
-            .as_deref()
-            .or(b.deadline_date.as_deref())
-            .or(b.daily_file_date.as_deref());
-        a_date.cmp(&b_date)
-    };
-    overdue.sort_by(sort_date);
-    today_items.sort_by(sort_date);
-    upcoming.sort_by(sort_date);
-
-    let n_cols = cols.len();
-    let empty_row: Vec<String> = std::iter::repeat_n(String::new(), n_cols).collect();
-
-    let mut builder = Builder::new();
-    let headers: Vec<String> = cols.iter().map(|c| c.name().to_string()).collect();
-    builder.push_record(headers);
-
-    let mut row_idx = 1;
-    let mut no_border_rows: Vec<usize> = Vec::new();
-    let mut section_rows: Vec<usize> = Vec::new();
-
-    if flat {
-        for item in items {
-            let rows = format_rows(item);
-            for (j, row) in rows.iter().enumerate() {
-                if j > 0 {
-                    no_border_rows.push(row_idx);
-                }
-                builder.push_record(filter_row(row, cols));
-                row_idx += 1;
-            }
-        }
-    } else {
-        let mut need_sep = false;
-        for (section_items, label) in [
-            (&overdue, "=== Overdue ==="),
-            (&today_items, "=== Today ==="),
-            (&upcoming, "=== Upcoming ==="),
-        ] {
-            if section_items.is_empty() {
-                continue;
-            }
-            if need_sep {
-                builder.push_record(empty_row.clone());
-                no_border_rows.push(row_idx);
-                row_idx += 1;
-            }
-            let mut label_row: Vec<String> = std::iter::repeat_n(String::new(), n_cols).collect();
-            label_row[0] = label.to_string();
-            builder.push_record(label_row);
-            section_rows.push(row_idx);
-            no_border_rows.push(row_idx);
-            row_idx += 1;
-            for item in section_items {
-                let rows = format_rows(*item);
-                for (j, row) in rows.iter().enumerate() {
-                    if j > 0 {
-                        no_border_rows.push(row_idx);
-                    }
-                    builder.push_record(filter_row(row, cols));
-                    row_idx += 1;
-                }
-            }
-            need_sep = true;
-        }
-    }
-
-    let mut table = builder.build();
-    table.with(Style::blank());
-    table.with(Modify::new(Rows::one(1)).with(Border::new().top('─')));
-    if line_sep && row_idx > 2 {
-        for i in 2..row_idx {
-            if !no_border_rows.contains(&i) {
-                table.with(Modify::new(Rows::one(i)).with(Border::new().top('─')));
-            }
-        }
-    }
-    if let Some(widths) = wrap {
-        for (col, w) in &widths {
-            let idx = cols.iter().position(|c| c == col).unwrap();
-            let mut prev = 1;
-            for &sec in &section_rows {
-                if prev < sec {
-                    table.with(
-                        Modify::new(Rows::new(prev..sec).intersect(Columns::new(idx..idx + 1)))
-                            .with(Width::wrap(*w).keep_words(true)),
-                    );
-                }
-                prev = sec + 1;
-            }
-            if prev < row_idx {
-                table.with(
-                    Modify::new(Rows::new(prev..row_idx).intersect(Columns::new(idx..idx + 1)))
-                        .with(Width::wrap(*w).keep_words(true)),
-                );
-            }
-        }
-    }
-    for &sec_row in &section_rows {
-        table.with(Modify::new((sec_row, 0)).with(Span::column(n_cols as isize)));
-    }
-    println!("{}", table);
-
-    let displayed = items.len();
-    println!();
-    println!("Total: {displayed} planned item(s)");
 }
