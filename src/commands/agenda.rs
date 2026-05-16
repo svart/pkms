@@ -12,6 +12,39 @@ use tabled::settings::object::{Columns, Object, Rows};
 use tabled::settings::style::{Border, Style};
 use tabled::settings::{Modify, Span, Width};
 
+impl RowItem for AgendaItem {
+    fn id(&self) -> usize {
+        self.id
+    }
+    fn todo_state(&self) -> Option<&str> {
+        self.todo_state.as_deref()
+    }
+    fn priority(&self) -> Option<char> {
+        self.priority
+    }
+    fn title(&self) -> &str {
+        &self.title
+    }
+    fn heading_title(&self) -> &str {
+        &self.heading_title
+    }
+    fn filetags(&self) -> &[String] {
+        &self.filetags
+    }
+    fn heading_tags(&self) -> &[String] {
+        &self.heading_tags
+    }
+    fn scheduled(&self) -> Option<&str> {
+        self.scheduled.as_deref()
+    }
+    fn deadline(&self) -> Option<&str> {
+        self.deadline.as_deref()
+    }
+    fn daily_file_date(&self) -> Option<&str> {
+        self.daily_file_date.as_deref()
+    }
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct AgendaItem {
     pub id: usize,
@@ -318,91 +351,6 @@ fn sort_items(items: &mut [AgendaItem], sort_fields: &[&str]) {
     });
 }
 
-fn format_agenda_rows(item: &AgendaItem) -> Vec<[String; 8]> {
-    let id = if item.id > 0 {
-        item.id.to_string()
-    } else {
-        String::new()
-    };
-    let state = item.todo_state.as_deref().unwrap_or("").to_string();
-    let prio = item
-        .priority
-        .map(|p| format!("[#{}]", p))
-        .unwrap_or_default();
-    let title = item.title.clone();
-    let heading = item.heading_title.clone();
-    let tags = combine_tags(&item.filetags, &item.heading_tags);
-    let has_both = item.scheduled.is_some() && item.deadline.is_some();
-    let mut rows = Vec::new();
-
-    if let Some(ref s) = item.scheduled {
-        rows.push([
-            id.clone(),
-            format_display_datetime(s),
-            state.clone(),
-            "SCHED".to_string(),
-            prio.clone(),
-            tags.clone(),
-            title.clone(),
-            heading.clone(),
-        ]);
-    }
-
-    if let Some(ref d) = item.deadline {
-        rows.push([
-            if has_both { String::new() } else { id.clone() },
-            format_display_datetime(d),
-            if has_both {
-                String::new()
-            } else {
-                state.clone()
-            },
-            "DEADL".to_string(),
-            if has_both {
-                String::new()
-            } else {
-                prio.clone()
-            },
-            if has_both {
-                String::new()
-            } else {
-                tags.clone()
-            },
-            if has_both {
-                String::new()
-            } else {
-                title.clone()
-            },
-            if has_both {
-                String::new()
-            } else {
-                heading.clone()
-            },
-        ]);
-    }
-
-    if rows.is_empty()
-        && let Some(ref dfd) = item.daily_file_date
-    {
-        rows.push([
-            id,
-            dfd.clone(),
-            state,
-            String::new(),
-            prio,
-            tags,
-            title,
-            heading,
-        ]);
-    }
-
-    rows
-}
-
-fn filter_agenda_row(row: &[String; 8], cols: &[Column]) -> Vec<String> {
-    cols.iter().map(|c| row[*c as usize].clone()).collect()
-}
-
 fn print_agenda_text(items: &[AgendaItem], flat: bool, line_sep: bool, cols: &[Column]) {
     if items.is_empty() {
         println!("No planned agenda items found.");
@@ -411,7 +359,7 @@ fn print_agenda_text(items: &[AgendaItem], flat: bool, line_sep: bool, cols: &[C
 
     let mut max_widths: [usize; 8] = ALL_COLUMNS.map(|c| c.name().len());
     for item in items {
-        for row in format_agenda_rows(item) {
+        for row in format_rows(item) {
             for (i, col) in row.iter().enumerate() {
                 let line_w = col.lines().map(|l| l.len()).max().unwrap_or(0);
                 max_widths[i] = max_widths[i].max(line_w);
@@ -473,12 +421,12 @@ fn print_agenda_text(items: &[AgendaItem], flat: bool, line_sep: bool, cols: &[C
 
     if flat {
         for item in items {
-            let rows = format_agenda_rows(item);
+            let rows = format_rows(item);
             for (j, row) in rows.iter().enumerate() {
                 if j > 0 {
                     no_border_rows.push(row_idx);
                 }
-                builder.push_record(filter_agenda_row(row, cols));
+                builder.push_record(filter_row(row, cols));
                 row_idx += 1;
             }
         }
@@ -504,12 +452,12 @@ fn print_agenda_text(items: &[AgendaItem], flat: bool, line_sep: bool, cols: &[C
             no_border_rows.push(row_idx);
             row_idx += 1;
             for item in section_items {
-                let rows = format_agenda_rows(item);
+                let rows = format_rows(*item);
                 for (j, row) in rows.iter().enumerate() {
                     if j > 0 {
                         no_border_rows.push(row_idx);
                     }
-                    builder.push_record(filter_agenda_row(row, cols));
+                    builder.push_record(filter_row(row, cols));
                     row_idx += 1;
                 }
             }

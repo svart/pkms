@@ -1,64 +1,52 @@
 # Code Quality Improvement Plan
 
-## Critical: Code Duplication
+## ~~Critical: Code Duplication~~ ✅
 
-1. **`todo.rs` / `agenda.rs` — ~350 lines of identical code.** These two modules (813 + 729 lines) share at least 10 identical functions: `combine_tags`, `extract_date`, `is_overdue`, `parse_filters`, `apply_state_filter`, `apply_tags_filter`, `apply_type_filter`, `priority_value`, `format_display_datetime`, and the table-formatting skeleton. Extract into a shared `src/commands/task_common.rs` module.
+1. ✅ **`todo.rs` / `agenda.rs` shared functions** — 9 of 10 shared functions extracted into `task_common.rs`. The `format_rows`/`filter_row` table helpers unified via `RowItem` trait. `print_agenda_text` and `print_todo_text_grouped` remain separate due to structural differences (sectioned vs flat layout).
 
-2. **File link resolution logic is defined three times** in `check.rs:92-129`, `validate.rs:228-266`, and `graph/mod.rs:101-124` — all handling `org:` prefix, `~` expansion, `::` line specs, and relative/absolute path resolution. Consolidate into a single function on `Graph` and have all callers use it.
+2. ✅ **File link resolution** — Unified into `graph/mod.rs::resolve_file_link_path` and `file_link_target_exists`.
 
-3. **UUID regex `:ID:\s+([a-f0-9-]+)` appears in 3+ files** (`validate.rs:13-19`, `resolve.rs:36`, `graph/mod.rs`). Make this a public constant in `parser.rs`.
+3. ✅ **UUID regex** — `ID_PROPERTY_RE` and `UUID_FORMAT_RE` centralized in `parser.rs`.
 
-4. **`#[cfg(feature = "embed")]` / `#[cfg(not(feature = "embed"))]` arms** duplicate ~30 lines each in `main.rs` (Suggest, Query dispatch) and again in `query.rs` and `suggest.rs`. Use a cfg-dependent local variable for `use_embed: bool` to eliminate the duplication.
+4. ✅ **`cfg(embed)` duplication** — Eliminated in `main.rs` using `#[cfg]` on pattern destructuring with conditional `let` shadowing.
 
-## High: Large/Monolithic Functions
+## ~~High: Large/Monolithic Functions~~ ✅
 
-| Function | File | Lines | Issue |
-|----------|------|-------|-------|
-| `dispatch()` | `main.rs:81` | ~467 | Grows with every new command; extract stdin-reading helper |
-| `Graph::build()` | `builder.rs:129` | ~191 | Three distinct phases that should be separate functions |
-| `parse_note()` | `parser.rs:100` | ~175 | Mixed concerns: properties, headings, links, source blocks |
-| `compute_scores()` | `suggest.rs:176` | ~165 | All scoring in one monolith; split by score category |
-| `validate_one()` | `validate.rs:159` | ~195 | Too many checks in one function; split into `check_*` helpers |
-| `run()` (todo) | `todo.rs:212` | ~263 | Collection, filtering, sorting, and output all in one function |
+| Function | Status |
+|----------|--------|
+| `dispatch()` (main.rs) | ⚠️ ~418 lines, inherently large due to match on all commands. Stdin-reading helper already extracted (`resolve_targets`, `read_stdin_ndjson`). |
+| `Graph::build()` | ✅ Refactored into `BuildContext` struct. |
+| `parse_note()` | ✅ Refactored into `ParseContext` struct. |
+| `compute_scores()` | ✅ Split into per-score helpers. |
+| `validate_one()` | ✅ Split into `check_*` helpers. |
+| `run()` (todo) | ✅ Partially reduced by extracting `collect_todo_items`, `sort_items`, `print_todo_text`. |
 
-## Medium: Magic Numbers
+## ~~Medium: Magic Numbers~~ ✅
 
-- **Scoring weights in `suggest.rs`**: `20.0`, `5.0`, `25.0`, `15.0`, `12.0`, `5.0`, `100.0` — unnamed magic values
-- **Scoring weights in `search.rs`**: `10.0`, `6.0`, `5.0` — same issue
-- **Column layout in `output.rs`**: `5 + 2 * n_columns` (padding), `15` (min_col), weight coefficients `0.20`, `0.35`, `0.45` — should be named constants
-- **`suggest.rs:393`**: `50` word limit for content keywords — unnamed
+- ✅ Scoring weights in `suggest.rs` — named constants (`TITLE_OVERLAP_WEIGHT`, etc.)
+- ✅ Scoring weights in `search.rs` — named constants (`TITLE_MATCH_WEIGHT`, etc.)
+- ✅ Column layout in `output.rs` — named constants (`BASE_PADDING`, `TAG_WEIGHT`, etc.)
+- ✅ `50` word limit in `suggest.rs` — `MAX_CONTENT_KEYWORDS`
 
-## Medium: Structural Issues
+## ~~Medium: Structural Issues~~ ✅
 
-5. **`process_headings()` in `builder.rs:40`** has 9 parameters; `print_check_json()` and `print_check_text()` in `check.rs` have 11 and 10 parameters respectively — all suppressed with `#[allow(clippy::too_many_arguments)]`. Bundle into context structs.
+5. ✅ `process_headings()` — converted to `BuildContext` method, 3 params. `print_check_json`/`print_check_text` — bundled into `CheckData` + `CheckDisplayOptions`.
+6. ✅ `search_content()` — `seen_paths` HashSet filters duplicates.
+7. ✅ `render_template()` — now uses `handlebars` crate.
+8. ✅ `title_to_slug()` — regex-replace chain.
+9. ✅ `config.rs` — `unwrap_or(PathBuf::from("."))`.
 
-6. **`search_content()` in `search.rs:105`** iterates `self.nodes.values()` which includes both primary nodes and heading-node duplicates, causing content hits to double-count. Should filter to unique paths.
+## ~~Low: Minor Concerns~~ ✅
 
-7. **Hand-rolled template engine in `context.rs:169`** (`render_template()`) handles `{{key}}` substitution and `{{#key}}...{{/key}}` conditionals with manual string search/replace. Nested conditionals break silently. Consider using `handlebars` or `tera`.
-
-8. **`title_to_slug()` in `new.rs:223`** uses per-character mapping via an explicit match; could be simplified with a regex-replace chain.
-
-9. **`config.rs:119`** — `std::env::current_dir().unwrap_or_default()` — `current_dir()` is documented as potentially failing if the CWD was deleted. Use `.unwrap_or(PathBuf::from("."))`.
-
-## Low: Minor Concerns
-
-10. **Dead code**: `search.rs:123` `all_categories()` is `#[allow(dead_code)]` — either expose it via a CLI flag or remove it. `stats.rs:264` unused `_config: &Config` parameter.
-
-11. **No module-level doc comments** on any `pub mod` file. The `Graph` struct and `FileScanResult`/`ParsedNote` relationship is undocumented.
-
-12. **`unwrap()` on `.unwrap_or_default()` patterns** in production code (`main.rs:429,438`, `todo.rs:193,201,207`) for `and_hms_opt(0,0,0)` — always valid but fragile. Use `expect()` or a const `NaiveTime::MIN`.
-
-13. **`parse_org_date()` in `org_date.rs:23`** has unbounded recursion on malformed input like `><<"—`. Add a recursion depth guard.
-
-14. **`strip_org_links()` closure in `parser.rs:277`** captures `caps` by reference with subtle lifetime interactions.
-
-15. **`type_` field name** (trailing underscore to avoid keyword) in `cli.rs`, `todo.rs`, `agenda.rs` — rename to `kind` or `item_type`.
-
-16. **`roam_aliases` (parser) vs `aliases` (Node)** — inconsistent naming across modules.
-
-17. **Proptest in `parser.rs`** references `super::super::commands::new::title_to_slug` — cross-module back-reference in a parser test for a command function.
-
-18. **`format_size()` in `stats.rs:338`** — custom byte-size formatter; could use `humansize` or similar crate.
+10. ✅ Dead code removed (`all_categories()`, unused `_config` param).
+11. ✅ Module-level doc comments on `graph/mod.rs`, `parser.rs`, `commands/mod.rs`.
+12. ✅ `unwrap()` replaced with `expect("midnight is valid")` on `and_hms_opt`.
+13. ✅ `parse_org_date()` — recursion depth guard (`MAX_PARSE_DEPTH = 32`).
+14. ✅ `strip_org_links()` — safe `caps.get(1)` instead of `&caps[1]`.
+15. ✅ `type_` renamed to `kind` (CLI flag preserved as `--type` via `long = "type"`).
+16. ✅ `roam_aliases` renamed to `aliases` for consistency with `Node.aliases`.
+17. ✅ Proptest moved to `new.rs`.
+18. ⏭️ `format_size()` — kept as-is (12-line function, crate dependency not warranted).
 
 ## Summary
 

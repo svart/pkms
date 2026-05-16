@@ -1,4 +1,5 @@
 use crate::org_date::parse_org_date;
+use crate::output::Column;
 use chrono::{Local, Timelike};
 use std::collections::HashSet;
 
@@ -135,6 +136,104 @@ pub fn priority_value(p: char) -> u8 {
         'C' => 2,
         _ => 3,
     }
+}
+
+pub trait RowItem {
+    fn id(&self) -> usize;
+    fn todo_state(&self) -> Option<&str>;
+    fn priority(&self) -> Option<char>;
+    fn title(&self) -> &str;
+    fn heading_title(&self) -> &str;
+    fn filetags(&self) -> &[String];
+    fn heading_tags(&self) -> &[String];
+    fn scheduled(&self) -> Option<&str>;
+    fn deadline(&self) -> Option<&str>;
+    fn daily_file_date(&self) -> Option<&str>;
+}
+
+pub fn format_rows<T: RowItem>(item: &T) -> Vec<[String; 8]> {
+    let id = if item.id() > 0 {
+        item.id().to_string()
+    } else {
+        String::new()
+    };
+    let state = item.todo_state().unwrap_or("").to_string();
+    let prio = item
+        .priority()
+        .map(|p| format!("[#{}]", p))
+        .unwrap_or_default();
+    let title = item.title().to_string();
+    let heading = item.heading_title().to_string();
+    let tags = combine_tags(item.filetags(), item.heading_tags());
+    let has_both = item.scheduled().is_some() && item.deadline().is_some();
+    let mut rows = Vec::new();
+
+    if let Some(s) = item.scheduled() {
+        rows.push([
+            id.clone(),
+            format_display_datetime(s),
+            state.clone(),
+            "SCHED".to_string(),
+            prio.clone(),
+            tags.clone(),
+            title.clone(),
+            heading.clone(),
+        ]);
+    }
+
+    if let Some(d) = item.deadline() {
+        rows.push([
+            if has_both { String::new() } else { id.clone() },
+            format_display_datetime(d),
+            if has_both {
+                String::new()
+            } else {
+                state.clone()
+            },
+            "DEADL".to_string(),
+            if has_both {
+                String::new()
+            } else {
+                prio.clone()
+            },
+            if has_both {
+                String::new()
+            } else {
+                tags.clone()
+            },
+            if has_both {
+                String::new()
+            } else {
+                title.clone()
+            },
+            if has_both {
+                String::new()
+            } else {
+                heading.clone()
+            },
+        ]);
+    }
+
+    if rows.is_empty()
+        && let Some(dfd) = item.daily_file_date()
+    {
+        rows.push([
+            id,
+            dfd.to_string(),
+            state,
+            String::new(),
+            prio,
+            tags,
+            title,
+            heading,
+        ]);
+    }
+
+    rows
+}
+
+pub fn filter_row(row: &[String; 8], cols: &[Column]) -> Vec<String> {
+    cols.iter().map(|c| row[*c as usize].clone()).collect()
 }
 
 pub fn format_display_datetime(raw: &str) -> String {

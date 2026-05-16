@@ -208,14 +208,16 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
             )
             .map(|()| ExitCode::SUCCESS)?
         }
-        #[cfg(feature = "embed")]
         Command::Suggest {
             target,
             limit,
             exclude_orphans,
             from_stdin,
+            #[cfg(feature = "embed")]
             embed,
         } => {
+            #[cfg(not(feature = "embed"))]
+            let embed = &false;
             let targets = resolve_targets(target, from_stdin)?;
             commands::suggest::run(
                 cfg,
@@ -225,27 +227,6 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
                     limit: *limit,
                     exclude_orphans: *exclude_orphans,
                     use_embed: *embed,
-                },
-            )
-            .map(|()| ExitCode::SUCCESS)?
-        }
-        #[cfg(not(feature = "embed"))]
-        Command::Suggest {
-            target,
-            limit,
-            exclude_orphans,
-            from_stdin,
-            ..
-        } => {
-            let targets = resolve_targets(target, from_stdin)?;
-            commands::suggest::run(
-                cfg,
-                ctx,
-                &commands::suggest::SuggestOptions {
-                    targets,
-                    limit: *limit,
-                    exclude_orphans: *exclude_orphans,
-                    use_embed: false,
                 },
             )
             .map(|()| ExitCode::SUCCESS)?
@@ -292,7 +273,6 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
             )
             .map(|()| ExitCode::SUCCESS)?
         }
-        #[cfg(feature = "embed")]
         Command::Query {
             terms,
             limit,
@@ -300,8 +280,11 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
             title,
             content,
             todos,
+            #[cfg(feature = "embed")]
             embed,
         } => {
+            #[cfg(not(feature = "embed"))]
+            let embed = &false;
             let terms = terms
                 .clone()
                 .ok_or_else(|| anyhow::anyhow!("No search terms specified. Provide terms"))?;
@@ -316,34 +299,6 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
                     content: *content,
                     todos: *todos,
                     embed: *embed,
-                },
-            )
-            .map(|()| ExitCode::SUCCESS)?
-        }
-        #[cfg(not(feature = "embed"))]
-        Command::Query {
-            terms,
-            limit,
-            tags,
-            title,
-            content,
-            todos,
-            ..
-        } => {
-            let terms = terms
-                .clone()
-                .ok_or_else(|| anyhow::anyhow!("No search terms specified. Provide terms"))?;
-            commands::query::run(
-                cfg,
-                ctx,
-                &commands::query::QueryOptions {
-                    terms,
-                    limit: *limit,
-                    tags: *tags,
-                    title: *title,
-                    content: *content,
-                    todos: *todos,
-                    embed: false,
                 },
             )
             .map(|()| ExitCode::SUCCESS)?
