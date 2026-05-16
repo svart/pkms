@@ -14,8 +14,8 @@ pub fn is_stdin_piped() -> bool {
     !io::stdin().is_terminal()
 }
 
-pub fn read_stdin_ndjson() -> Result<Vec<String>> {
-    let mut uuids = Vec::new();
+pub fn read_stdin_ndjson_raw() -> Result<Vec<serde_json::Value>> {
+    let mut values = Vec::new();
     for line in io::stdin().lock().lines() {
         let line = line?;
         let trimmed = line.trim();
@@ -23,10 +23,17 @@ pub fn read_stdin_ndjson() -> Result<Vec<String>> {
             continue;
         }
         let value: serde_json::Value = serde_json::from_str(trimmed)?;
-        if let Some(uuid) = value.get("uuid").and_then(|v| v.as_str()) {
-            uuids.push(uuid.to_string());
-        }
+        values.push(value);
     }
+    Ok(values)
+}
+
+pub fn read_stdin_ndjson() -> Result<Vec<String>> {
+    let values = read_stdin_ndjson_raw()?;
+    let uuids: Vec<String> = values
+        .iter()
+        .filter_map(|v| v.get("uuid").and_then(|v| v.as_str()).map(String::from))
+        .collect();
     if uuids.is_empty() {
         anyhow::bail!("No valid NDJSON lines with 'uuid' field found on stdin");
     }

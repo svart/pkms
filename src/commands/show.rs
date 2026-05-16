@@ -5,7 +5,6 @@ use crate::output::OutputContext;
 use crate::parser::{Link, strip_org_links};
 use anyhow::Result;
 use serde::Serialize;
-use std::io::{self, BufRead};
 
 #[derive(Debug, Clone, Serialize)]
 pub struct TaskParent {
@@ -367,14 +366,9 @@ fn process_one_show(graph: &Graph, config: &Config, target: &HeadingTarget) -> R
 }
 
 pub fn read_stdin_targets() -> Result<Vec<HeadingTarget>> {
+    let values = crate::util::read_stdin_ndjson_raw()?;
     let mut targets = Vec::new();
-    for line in io::stdin().lock().lines() {
-        let line = line?;
-        let trimmed = line.trim();
-        if trimmed.is_empty() {
-            continue;
-        }
-        let value: serde_json::Value = serde_json::from_str(trimmed)?;
+    for value in &values {
         let uuid = value
             .get("uuid")
             .and_then(|v| v.as_str())
@@ -383,10 +377,10 @@ pub fn read_stdin_targets() -> Result<Vec<HeadingTarget>> {
             .get("path")
             .and_then(|v| v.as_str())
             .map(|s| s.to_string());
-
-        // Try uuid from stdin as canonical ID if it's numeric
-        let target_str = uuid.clone().or_else(|| path.clone()).unwrap_or_default();
-        targets.push(HeadingTarget::from_arg(target_str)?);
+        let target_str = uuid.or(path).unwrap_or_default();
+        if !target_str.is_empty() {
+            targets.push(HeadingTarget::from_arg(target_str)?);
+        }
     }
     if targets.is_empty() {
         anyhow::bail!("No valid NDJSON lines with 'uuid' or 'path' field found on stdin");
