@@ -68,6 +68,16 @@ pub struct RecentNote {
     pub path: String,
 }
 
+impl From<&crate::graph::Node> for RecentNote {
+    fn from(n: &crate::graph::Node) -> Self {
+        RecentNote {
+            uuid: n.uuid.clone(),
+            title: n.title.clone(),
+            path: n.path.display().to_string(),
+        }
+    }
+}
+
 #[derive(Serialize)]
 pub struct TagsOutput {
     pub tags: Vec<TagEntry>,
@@ -302,11 +312,7 @@ fn print_stats(
                 graph
                     .notes_since(d)
                     .into_iter()
-                    .map(|n| RecentNote {
-                        uuid: n.uuid.clone(),
-                        title: n.title.clone(),
-                        path: n.path.display().to_string(),
-                    })
+                    .map(RecentNote::from)
                     .collect()
             }),
             todo_stats: None,

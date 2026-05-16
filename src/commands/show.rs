@@ -477,21 +477,20 @@ pub fn run(config: &Config, ctx: &OutputContext, opts: &ShowOptions) -> Result<(
             }
         }
         OutputFormat::Json => {
-            let mut all_outputs = Vec::new();
-            for target in &opts.targets {
-                all_outputs.push(process_one_show(&graph, config, target)?);
-            }
-            if all_outputs.len() == 1 {
-                ctx.print_json(&all_outputs[0])?;
-            } else {
-                ctx.print_json(&all_outputs)?;
-            }
+            let all_outputs: Vec<ShowOutput> = opts
+                .targets
+                .iter()
+                .map(|target| process_one_show(&graph, config, target))
+                .collect::<Result<Vec<_>>>()?;
+            ctx.print_json_adaptive(&all_outputs)?;
         }
         OutputFormat::Ndjson => {
-            for target in &opts.targets {
-                let output = process_one_show(&graph, config, target)?;
-                println!("{}", serde_json::to_string(&output)?);
-            }
+            let all_outputs: Vec<ShowOutput> = opts
+                .targets
+                .iter()
+                .map(|target| process_one_show(&graph, config, target))
+                .collect::<Result<Vec<_>>>()?;
+            ctx.print_ndjson(&all_outputs)?;
         }
     }
 

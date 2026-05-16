@@ -128,28 +128,20 @@ pub fn run(config: &Config, ctx: &OutputContext, opts: &ContextOptions) -> Resul
             }
         }
         OutputFormat::Json => {
-            let mut all_outputs = Vec::new();
-            for t in &opts.targets {
-                all_outputs.push(build_context_output(
-                    &graph,
-                    t,
-                    opts.depth,
-                    opts.max_tokens,
-                    opts.encoding,
-                )?);
-            }
-            if all_outputs.len() == 1 {
-                ctx.print_json(&all_outputs[0])?;
-            } else {
-                ctx.print_json(&all_outputs)?;
-            }
+            let all_outputs: Vec<ContextOutput> = opts
+                .targets
+                .iter()
+                .map(|t| build_context_output(&graph, t, opts.depth, opts.max_tokens, opts.encoding))
+                .collect::<Result<Vec<_>>>()?;
+            ctx.print_json_adaptive(&all_outputs)?;
         }
         OutputFormat::Ndjson => {
-            for t in &opts.targets {
-                let output =
-                    build_context_output(&graph, t, opts.depth, opts.max_tokens, opts.encoding)?;
-                println!("{}", serde_json::to_string(&output)?);
-            }
+            let all_outputs: Vec<ContextOutput> = opts
+                .targets
+                .iter()
+                .map(|t| build_context_output(&graph, t, opts.depth, opts.max_tokens, opts.encoding))
+                .collect::<Result<Vec<_>>>()?;
+            ctx.print_ndjson(&all_outputs)?;
         }
     }
 

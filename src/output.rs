@@ -63,7 +63,7 @@ impl OutputContext {
         matches!(self.format, OutputFormat::Json | OutputFormat::Ndjson)
     }
 
-    pub fn print_json<T: Serialize>(&self, output: &T) -> Result<()> {
+    pub fn print_json<T: Serialize + ?Sized>(&self, output: &T) -> Result<()> {
         let _ = self;
         println!("{}", serde_json::to_string_pretty(output)?);
         Ok(())
@@ -75,6 +75,14 @@ impl OutputContext {
             println!("{}", serde_json::to_string(item)?);
         }
         Ok(())
+    }
+
+    pub fn print_json_adaptive<T: Serialize>(&self, items: &[T]) -> Result<()> {
+        if items.len() == 1 {
+            self.print_json(&items[0])
+        } else {
+            self.print_json(items)
+        }
     }
 }
 

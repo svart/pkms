@@ -35,6 +35,15 @@ pub struct BacklinkEntry {
     pub title: String,
 }
 
+impl From<&crate::graph::Node> for BacklinkEntry {
+    fn from(n: &crate::graph::Node) -> Self {
+        BacklinkEntry {
+            uuid: n.uuid.clone(),
+            title: n.title.clone(),
+        }
+    }
+}
+
 fn build_validate_output(
     node: &crate::graph::Node,
     incoming: &[String],
@@ -348,12 +357,7 @@ fn validate_node(
 
     let backlink_entries: Vec<BacklinkEntry> = incoming
         .iter()
-        .filter_map(|uuid| {
-            graph.nodes.get(uuid).map(|n| BacklinkEntry {
-                uuid: n.uuid.clone(),
-                title: n.title.clone(),
-            })
-        })
+        .filter_map(|uuid| graph.nodes.get(uuid).map(BacklinkEntry::from))
         .collect();
 
     if !broken_internal.is_empty() {
@@ -404,21 +408,20 @@ pub fn run(config: &Config, ctx: &OutputContext, opts: &ValidateOptions) -> Resu
             }
         }
         OutputFormat::Json => {
-            let mut all_outputs = Vec::new();
-            for t in &opts.targets {
-                all_outputs.push(validate_one(&graph, t, db_root)?);
-            }
-            if all_outputs.len() == 1 {
-                ctx.print_json(&all_outputs[0])?;
-            } else {
-                ctx.print_json(&all_outputs)?;
-            }
+            let all_outputs: Vec<ValidateOutput> = opts
+                .targets
+                .iter()
+                .map(|t| validate_one(&graph, t, db_root))
+                .collect::<Result<Vec<_>>>()?;
+            ctx.print_json_adaptive(&all_outputs)?;
         }
         OutputFormat::Ndjson => {
-            for t in &opts.targets {
-                let output = validate_one(&graph, t, db_root)?;
-                println!("{}", serde_json::to_string(&output)?);
-            }
+            let all_outputs: Vec<ValidateOutput> = opts
+                .targets
+                .iter()
+                .map(|t| validate_one(&graph, t, db_root))
+                .collect::<Result<Vec<_>>>()?;
+            ctx.print_ndjson(&all_outputs)?;
         }
     }
 
