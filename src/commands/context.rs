@@ -7,6 +7,7 @@ use anyhow::Result;
 use handlebars::Handlebars;
 use serde::Serialize;
 use std::fmt::Write;
+use std::sync::LazyLock;
 
 const DEFAULT_TEMPLATE: &str = "# {{title}}\nUUID: {{uuid}}\nPath: {{path}}\n{{#if tags}}Tags: {{tags}}\n{{/if}}{{#if categories}}Categories: {{categories}}\n{{/if}}{{#if aliases}}Aliases: {{aliases}}\n{{/if}}\n--- Content ---\n{{content}}--- End Content ---\n\n{{neighbors}}{{backlinks}}";
 
@@ -168,13 +169,19 @@ struct ContextVars<'a> {
     backlinks: &'a str,
 }
 
-fn render_template(template: &str, vars: &ContextVars) -> String {
+static HANDLEBARS: LazyLock<Handlebars> = LazyLock::new(|| {
     let mut reg = Handlebars::new();
     reg.register_escape_fn(handlebars::no_escape);
-    reg.render_template(template, vars).unwrap_or_else(|e| {
-        eprintln!("Template error: {e}");
-        template.to_string()
-    })
+    reg
+});
+
+fn render_template(template: &str, vars: &ContextVars) -> String {
+    HANDLEBARS
+        .render_template(template, vars)
+        .unwrap_or_else(|e| {
+            eprintln!("Template error: {e}");
+            template.to_string()
+        })
 }
 
 fn read_content(path: &std::path::Path) -> String {

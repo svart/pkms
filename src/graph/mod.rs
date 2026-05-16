@@ -114,8 +114,12 @@ pub fn resolve_file_link_path(target_path: &str, source_path: &Path, db_root: &P
     };
     let expanded = if inner_path.starts_with('~') {
         if let Some(home) = dirs::home_dir() {
-            inner_path.replacen('~', &home.to_string_lossy(), 1)
+            inner_path.replacen('~', &home.display().to_string(), 1)
         } else {
+            eprintln!(
+                "Warning: Could not resolve home directory for path '{}'",
+                inner_path
+            );
             inner_path.to_string()
         }
     } else {

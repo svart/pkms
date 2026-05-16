@@ -74,8 +74,11 @@ impl Config {
     }
 
     pub fn todo_states(&self) -> Vec<String> {
-        let mut states = self.open_todo_states();
-        states.extend(self.closed_todo_states());
+        let open = self.open_todo_states();
+        let closed = self.closed_todo_states();
+        let mut states = Vec::with_capacity(open.len() + closed.len());
+        states.extend(open);
+        states.extend(closed);
         states
     }
 
