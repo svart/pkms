@@ -129,15 +129,6 @@ pub fn is_overdue(raw: Option<&String>) -> bool {
     false
 }
 
-pub fn priority_value(p: char) -> u8 {
-    match p {
-        'A' => 0,
-        'B' => 1,
-        'C' => 2,
-        _ => 3,
-    }
-}
-
 pub trait RowItem {
     fn id(&self) -> usize;
     fn todo_state(&self) -> Option<&str>;

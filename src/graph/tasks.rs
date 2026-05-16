@@ -1,14 +1,6 @@
 use super::Graph;
 use crate::config::Config;
-
-fn canonical_priority_value(p: char) -> u8 {
-    match p {
-        'A' => 0,
-        'B' => 1,
-        'C' => 2,
-        _ => 3,
-    }
-}
+use crate::util::priority_value;
 
 impl Graph {
     pub fn all_task_entries(&self, config: &Config) -> Vec<(usize, String, usize)> {
@@ -73,8 +65,8 @@ impl Graph {
         items.sort_by(|a, b| {
             b.3.cmp(&a.3)
                 .then_with(|| {
-                    let a_p = a.2.map(canonical_priority_value).unwrap_or(3);
-                    let b_p = b.2.map(canonical_priority_value).unwrap_or(3);
+                    let a_p = a.2.map(priority_value).unwrap_or(3);
+                    let b_p = b.2.map(priority_value).unwrap_or(3);
                     a_p.cmp(&b_p)
                 })
                 .then(a.0.cmp(&b.0))
@@ -87,21 +79,21 @@ impl Graph {
 
 #[cfg(test)]
 mod tests {
-    use super::canonical_priority_value;
+    use crate::util::priority_value;
 
     #[test]
     fn test_canonical_priority_ordering() {
-        assert!(canonical_priority_value('A') < canonical_priority_value('B'));
-        assert!(canonical_priority_value('B') < canonical_priority_value('C'));
-        assert!(canonical_priority_value('C') < canonical_priority_value('D'));
+        assert!(priority_value('A') < priority_value('B'));
+        assert!(priority_value('B') < priority_value('C'));
+        assert!(priority_value('C') < priority_value('D'));
     }
 
     #[test]
     fn test_canonical_priority_values() {
-        assert_eq!(canonical_priority_value('A'), 0);
-        assert_eq!(canonical_priority_value('B'), 1);
-        assert_eq!(canonical_priority_value('C'), 2);
-        assert_eq!(canonical_priority_value('Z'), 3);
-        assert_eq!(canonical_priority_value('X'), 3);
+        assert_eq!(priority_value('A'), 0);
+        assert_eq!(priority_value('B'), 1);
+        assert_eq!(priority_value('C'), 2);
+        assert_eq!(priority_value('Z'), 3);
+        assert_eq!(priority_value('X'), 3);
     }
 }

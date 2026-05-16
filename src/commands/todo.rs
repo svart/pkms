@@ -5,6 +5,7 @@ use crate::graph::Graph;
 use crate::org_date::parse_org_date;
 use crate::output::{ALL_COLUMNS, Column, OutputContext, adaptive_column_widths};
 use crate::parser::{find_daily_file_date, strip_org_links};
+use crate::util::priority_value;
 use anyhow::Result;
 use chrono::{Local, NaiveDate, NaiveDateTime, NaiveTime};
 use serde::Serialize;

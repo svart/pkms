@@ -241,15 +241,17 @@ impl BuildContext {
             .flat_map(|h| h.outgoing.clone())
             .collect();
 
-        let mut node =
-            Node::from_parsed(primary_uuid.clone(), title.clone(), path.clone(), &parsed);
-        node.outgoing.extend(heading_orphan_links.clone());
-
-        self.nodes.insert(primary_uuid.clone(), node);
         let mut primary_outgoing = parsed.outgoing.clone();
         primary_outgoing.extend(heading_orphan_links);
+
         self.uuid_to_outgoing
             .insert(primary_uuid.clone(), primary_outgoing);
+
+        let mut node =
+            Node::from_parsed(primary_uuid.clone(), title.clone(), path.clone(), &parsed);
+        node.outgoing = self.uuid_to_outgoing[primary_uuid].clone();
+
+        self.nodes.insert(primary_uuid.clone(), node);
 
         self.check_heading_uuids(&parsed, primary_uuid, &path);
 
