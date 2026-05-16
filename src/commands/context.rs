@@ -131,7 +131,9 @@ pub fn run(config: &Config, ctx: &OutputContext, opts: &ContextOptions) -> Resul
             let all_outputs: Vec<ContextOutput> = opts
                 .targets
                 .iter()
-                .map(|t| build_context_output(&graph, t, opts.depth, opts.max_tokens, opts.encoding))
+                .map(|t| {
+                    build_context_output(&graph, t, opts.depth, opts.max_tokens, opts.encoding)
+                })
                 .collect::<Result<Vec<_>>>()?;
             ctx.print_json_adaptive(&all_outputs)?;
         }
@@ -139,7 +141,9 @@ pub fn run(config: &Config, ctx: &OutputContext, opts: &ContextOptions) -> Resul
             let all_outputs: Vec<ContextOutput> = opts
                 .targets
                 .iter()
-                .map(|t| build_context_output(&graph, t, opts.depth, opts.max_tokens, opts.encoding))
+                .map(|t| {
+                    build_context_output(&graph, t, opts.depth, opts.max_tokens, opts.encoding)
+                })
                 .collect::<Result<Vec<_>>>()?;
             ctx.print_ndjson(&all_outputs)?;
         }

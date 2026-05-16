@@ -313,7 +313,14 @@ fn validate_one(graph: &Graph, target: &str, db_root: &Path) -> Result<ValidateO
     let node = graph.resolve_target(target)?.clone();
     let is_heading_node = graph.heading_uuid_to_primary.contains_key(&node.uuid);
     let target_is_uuid = UUID_FORMAT_RE.is_match(target);
-    validate_node(graph, &node, target, target_is_uuid, is_heading_node, db_root)
+    validate_node(
+        graph,
+        &node,
+        target,
+        target_is_uuid,
+        is_heading_node,
+        db_root,
+    )
 }
 
 fn validate_node(
@@ -392,9 +399,8 @@ pub fn run(config: &Config, ctx: &OutputContext, opts: &ValidateOptions) -> Resu
                 let is_heading_node = graph.heading_uuid_to_primary.contains_key(&node.uuid);
                 let target_is_uuid = UUID_FORMAT_RE.is_match(t);
                 let incoming = graph.backlinks.get(&node.uuid).cloned().unwrap_or_default();
-                let output = validate_node(
-                    &graph, &node, t, target_is_uuid, is_heading_node, db_root,
-                )?;
+                let output =
+                    validate_node(&graph, &node, t, target_is_uuid, is_heading_node, db_root)?;
                 print_validate_text(
                     &node,
                     &output.broken_internal,

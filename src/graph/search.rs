@@ -129,11 +129,7 @@ impl Graph {
                     context_lines.push(format!("{}: {}", i + 1, line.trim()));
                 }
             }
-            results.push((
-                node.uuid.clone(),
-                node.title.clone(),
-                context_lines,
-            ));
+            results.push((node.uuid.clone(), node.title.clone(), context_lines));
         }
 
         results

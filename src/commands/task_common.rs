@@ -158,16 +158,18 @@ pub trait RowItem {
             "state" => self.todo_state().cmp(&other.todo_state()),
             "file" => self.title().cmp(other.title()),
             "priority" => {
-                let a_p = self.priority().map(crate::util::priority_value).unwrap_or(3);
-                let b_p = other.priority().map(crate::util::priority_value).unwrap_or(3);
+                let a_p = self
+                    .priority()
+                    .map(crate::util::priority_value)
+                    .unwrap_or(3);
+                let b_p = other
+                    .priority()
+                    .map(crate::util::priority_value)
+                    .unwrap_or(3);
                 a_p.cmp(&b_p)
             }
-            "scheduled" => self
-                .scheduled_date_str()
-                .cmp(&other.scheduled_date_str()),
-            "deadline" => self
-                .deadline_date_str()
-                .cmp(&other.deadline_date_str()),
+            "scheduled" => self.scheduled_date_str().cmp(&other.scheduled_date_str()),
+            "deadline" => self.deadline_date_str().cmp(&other.deadline_date_str()),
             "date" => self.effective_date().cmp(&other.effective_date()),
             _ => std::cmp::Ordering::Equal,
         }
@@ -316,8 +318,7 @@ pub fn print_table<T: RowItem>(
             row_idx += 1;
         }
         if !label.is_empty() {
-            let mut label_row: Vec<String> =
-                std::iter::repeat_n(String::new(), n_cols).collect();
+            let mut label_row: Vec<String> = std::iter::repeat_n(String::new(), n_cols).collect();
             label_row[0] = label.to_string();
             builder.push_record(label_row);
             section_rows.push(row_idx);
