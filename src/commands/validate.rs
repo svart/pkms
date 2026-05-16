@@ -146,37 +146,44 @@ fn print_validate_text(
     }
 }
 
-fn validate_one(graph: &Graph, target: &str, db_root: &Path) -> Result<ValidateOutput> {
-    let node = graph.resolve_target(target)?.clone();
-    let is_heading_node = graph.heading_uuid_to_primary.contains_key(&node.uuid);
-    let mut issues = Vec::new();
-
+fn check_uuid_format(node: &crate::graph::Node, issues: &mut Vec<String>) {
     let uuid_parts: Vec<&str> = node.uuid.split('-').collect();
     if uuid_parts.len() != 5 {
         issues.push(format!("Invalid UUID format: {}", node.uuid));
     }
+}
 
-    let content = std::fs::read_to_string(&node.path).unwrap_or_default();
+fn check_title_presence(content: &str, issues: &mut Vec<String>) {
     if !content.contains("#+title:") {
         issues.push("Missing #+title: property".to_string());
     }
+}
 
-    for (raw, reason) in validate_filetags_format(&content) {
+fn check_filetags_formatting(content: &str, issues: &mut Vec<String>) {
+    for (raw, reason) in validate_filetags_format(content) {
         issues.push(format!("Invalid filetags format '{}': {}", raw, reason));
     }
+}
 
-    let parsed = crate::parser::parse_note(&content);
+fn check_agenda_tag(content: &str, filetags: &[String], issues: &mut Vec<String>) {
+    let parsed = crate::parser::parse_note(content);
     let has_planned_todos = parsed
         .headings
         .iter()
         .any(|h| h.todo_state.is_some() && (h.scheduled.is_some() || h.deadline.is_some()));
-    if has_planned_todos && !node.filetags.iter().any(|t| t == "agenda") {
+    if has_planned_todos && !filetags.iter().any(|t| t == "agenda") {
         issues.push("Issue: File has planned TODO headings (SCHEDULED/DEADLINE) but missing :agenda: filetag".to_string());
     }
+}
 
-    // Check for duplicate UUIDs (note-level vs heading-level)
+fn check_duplicate_uuids(
+    content: &str,
+    graph: &Graph,
+    node: &crate::graph::Node,
+    issues: &mut Vec<String>,
+) {
     let all_ids: Vec<String> = ID_PROPERTY_RE
-        .captures_iter(&content)
+        .captures_iter(content)
         .filter_map(|c| c.get(1))
         .map(|m| m.as_str().to_string())
         .collect();
@@ -204,11 +211,15 @@ fn validate_one(graph: &Graph, target: &str, db_root: &Path) -> Result<ValidateO
             }
         }
     }
+}
 
+fn check_broken_links(
+    node: &crate::graph::Node,
+    graph: &Graph,
+    db_root: &Path,
+) -> (Vec<String>, Vec<String>) {
     let mut broken_internal = Vec::new();
     let mut broken_files = Vec::new();
-    let target_is_uuid = UUID_FORMAT_RE.is_match(target);
-
     for link in &node.outgoing {
         match link {
             Link::Internal(uuid) if !graph.nodes.contains_key(uuid) => {
@@ -220,8 +231,18 @@ fn validate_one(graph: &Graph, target: &str, db_root: &Path) -> Result<ValidateO
             _ => {}
         }
     }
+    (broken_internal, broken_files)
+}
 
-    // Self-link check
+fn check_self_links(
+    node: &crate::graph::Node,
+    target: &str,
+    target_is_uuid: bool,
+    is_heading_node: bool,
+    graph: &Graph,
+    db_root: &Path,
+    issues: &mut Vec<String>,
+) {
     for link in &node.outgoing {
         match link {
             Link::Internal(uuid) if uuid == target || (!target_is_uuid && uuid == &node.uuid) => {
@@ -255,8 +276,9 @@ fn validate_one(graph: &Graph, target: &str, db_root: &Path) -> Result<ValidateO
             _ => {}
         }
     }
+}
 
-    // Overlinking check (2+ internal links to the same target note)
+fn check_overlinking(node: &crate::graph::Node, graph: &Graph, issues: &mut Vec<String>) {
     let mut target_counts: HashMap<String, usize> = HashMap::new();
     for link in &node.outgoing {
         if let Link::Internal(uuid) = link {
@@ -276,6 +298,34 @@ fn validate_one(graph: &Graph, target: &str, db_root: &Path) -> Result<ValidateO
             ));
         }
     }
+}
+
+fn validate_one(graph: &Graph, target: &str, db_root: &Path) -> Result<ValidateOutput> {
+    let node = graph.resolve_target(target)?.clone();
+    let is_heading_node = graph.heading_uuid_to_primary.contains_key(&node.uuid);
+    let mut issues = Vec::new();
+    let target_is_uuid = UUID_FORMAT_RE.is_match(target);
+
+    let content = std::fs::read_to_string(&node.path).unwrap_or_default();
+
+    check_uuid_format(&node, &mut issues);
+    check_title_presence(&content, &mut issues);
+    check_filetags_formatting(&content, &mut issues);
+    check_agenda_tag(&content, &node.filetags, &mut issues);
+    check_duplicate_uuids(&content, graph, &node, &mut issues);
+
+    let (broken_internal, broken_files) = check_broken_links(&node, graph, db_root);
+
+    check_self_links(
+        &node,
+        target,
+        target_is_uuid,
+        is_heading_node,
+        graph,
+        db_root,
+        &mut issues,
+    );
+    check_overlinking(&node, graph, &mut issues);
 
     let incoming = graph.backlinks.get(&node.uuid).cloned().unwrap_or_default();
 

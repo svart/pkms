@@ -172,6 +172,183 @@ fn neighbor_relevance(
     score
 }
 
+fn is_orphan(node: &crate::graph::Node, graph: &Graph) -> bool {
+    let has_outgoing = node.outgoing.iter().any(|l| matches!(l, Link::Internal(_)));
+    let has_incoming = graph
+        .backlinks
+        .get(&node.uuid)
+        .is_some_and(|b| !b.is_empty());
+    !has_outgoing && !has_incoming
+}
+
+fn score_title_overlap(
+    other: &crate::graph::Node,
+    ctx: &SuggestionContext,
+    reasons: &mut Vec<String>,
+) -> f64 {
+    let other_lower = other.title.to_lowercase();
+    let other_words: Vec<&str> = other_lower.split_whitespace().collect();
+    let overlap: usize = other_words
+        .iter()
+        .filter(|w| ctx.target_keywords.iter().any(|kw| kw.as_str() == **w))
+        .count();
+    if overlap > 0 {
+        reasons.push(format!("shared title: \"{}\"", other.title));
+        overlap as f64 * 20.0
+    } else {
+        0.0
+    }
+}
+
+fn score_content_match(
+    other: &crate::graph::Node,
+    ctx: &SuggestionContext,
+    title_overlap: bool,
+    reasons: &mut Vec<String>,
+) -> f64 {
+    if ctx.content_keywords.is_empty() {
+        return 0.0;
+    }
+    let Ok(other_content) = std::fs::read_to_string(&other.path) else {
+        return 0.0;
+    };
+    let other_lc = other_content.to_lowercase();
+    let count: usize = ctx
+        .content_keywords
+        .iter()
+        .filter(|kw| other_lc.contains(kw.as_str()))
+        .count();
+    if count > 0 {
+        if !title_overlap {
+            reasons.push(format!("{count} content keyword matches"));
+        }
+        count as f64 * 5.0
+    } else {
+        0.0
+    }
+}
+
+fn score_tag_overlap(
+    other: &crate::graph::Node,
+    ctx: &SuggestionContext,
+    reasons: &mut Vec<String>,
+) -> f64 {
+    let tag_overlap: usize = other
+        .filetags
+        .iter()
+        .filter(|t| ctx.target_tags.contains(t.as_str()))
+        .count();
+    let cat_overlap: usize = other
+        .categories
+        .iter()
+        .filter(|c| ctx.target_tags.contains(c.as_str()))
+        .count();
+    let total = tag_overlap + cat_overlap;
+    if total > 0 {
+        reasons.push("shared tags".to_string());
+        total as f64 * 25.0
+    } else {
+        0.0
+    }
+}
+
+fn score_backlink_overlap(
+    other: &crate::graph::Node,
+    graph: &Graph,
+    ctx: &SuggestionContext,
+    reasons: &mut Vec<String>,
+) -> f64 {
+    let other_backlinks: HashSet<&str> = graph
+        .backlinks
+        .get(&other.uuid)
+        .map(|v| v.iter().map(std::string::String::as_str).collect())
+        .unwrap_or_default();
+    let shared: usize = ctx.target_backlinks.intersection(&other_backlinks).count();
+    if shared > 0 {
+        reasons.push(format!("{shared} shared backlinks"));
+        shared as f64 * 15.0
+    } else {
+        0.0
+    }
+}
+
+fn score_outgoing_overlap(
+    other: &crate::graph::Node,
+    ctx: &SuggestionContext,
+    reasons: &mut Vec<String>,
+) -> f64 {
+    let other_outgoing: HashSet<&str> = other
+        .outgoing
+        .iter()
+        .filter_map(|l| {
+            if let Link::Internal(u) = l {
+                Some(u.as_str())
+            } else {
+                None
+            }
+        })
+        .collect();
+    let shared: usize = ctx.target_outgoing.intersection(&other_outgoing).count();
+    if shared > 0 {
+        reasons.push(format!("{shared} shared outgoing"));
+        shared as f64 * 12.0
+    } else {
+        0.0
+    }
+}
+
+fn score_directory_proximity(node: &crate::graph::Node, other: &crate::graph::Node) -> f64 {
+    if let (Some(tp), Some(op)) = (node.path.parent(), other.path.parent())
+        && tp == op
+    {
+        5.0
+    } else {
+        0.0
+    }
+}
+
+#[allow(clippy::cast_precision_loss)]
+fn score_neighborhood(
+    other: &crate::graph::Node,
+    graph: &Graph,
+    node: &crate::graph::Node,
+    ctx: &SuggestionContext,
+    reasons: &mut Vec<String>,
+) -> f64 {
+    let mut total_neighbor_score = 0.0;
+    let mut neighbor_count = 0;
+
+    for link in &other.outgoing {
+        if let Link::Internal(uuid) = link {
+            total_neighbor_score += neighbor_relevance(uuid, graph, node, ctx);
+            neighbor_count += 1;
+        }
+    }
+
+    if let Some(incoming) = graph.backlinks.get(&other.uuid) {
+        for uuid in incoming {
+            total_neighbor_score += neighbor_relevance(uuid, graph, node, ctx);
+            neighbor_count += 1;
+        }
+    }
+
+    if neighbor_count == 0 {
+        return 0.0;
+    }
+
+    let avg = total_neighbor_score / neighbor_count as f64;
+    let boost = ((avg / 100.0) - 0.3).clamp(-0.5, 1.0);
+    if boost.abs() <= 0.01 {
+        return 0.0;
+    }
+    if boost > 0.0 {
+        reasons.push("relevant neighborhood".to_string());
+    } else {
+        reasons.push("unrelated neighborhood".to_string());
+    }
+    boost
+}
+
 #[allow(clippy::cast_precision_loss)]
 fn compute_scores<'a>(
     node: &'a crate::graph::Node,
@@ -185,151 +362,54 @@ fn compute_scores<'a>(
         if other.uuid == node.uuid {
             continue;
         }
-        if exclude_orphans {
-            let has_outgoing = other
-                .outgoing
-                .iter()
-                .any(|l| matches!(l, Link::Internal(_)));
-            let has_incoming = graph
-                .backlinks
-                .get(&other.uuid)
-                .is_some_and(|b| !b.is_empty());
-            if !has_outgoing && !has_incoming {
-                continue;
-            }
+        if exclude_orphans && is_orphan(other, graph) {
+            continue;
         }
 
         let mut score = 0.0;
         let mut reasons = Vec::new();
         let mut factor_scores: HashMap<String, f64> = HashMap::new();
 
-        let other_lower = other.title.to_lowercase();
-        let other_words: Vec<&str> = other_lower.split_whitespace().collect();
-        let title_overlap: usize = other_words
-            .iter()
-            .filter(|w| ctx.target_keywords.iter().any(|kw| kw.as_str() == **w))
-            .count();
-        if title_overlap > 0 {
-            let s = title_overlap as f64 * 20.0;
-            score += s;
-            factor_scores.insert("title".to_string(), s);
-            reasons.push(format!("shared title: \"{}\"", other.title));
+        let title_s = score_title_overlap(other, ctx, &mut reasons);
+        if title_s > 0.0 {
+            score += title_s;
+            factor_scores.insert("title".to_string(), title_s);
         }
 
-        if !ctx.content_keywords.is_empty()
-            && let Ok(other_content) = std::fs::read_to_string(&other.path)
-        {
-            let other_lc = other_content.to_lowercase();
-            let content_match_count: usize = ctx
-                .content_keywords
-                .iter()
-                .filter(|kw| other_lc.contains(kw.as_str()))
-                .count();
-            if content_match_count > 0 {
-                let s = content_match_count as f64 * 5.0;
-                score += s;
-                *factor_scores.entry("content".to_string()).or_insert(0.0) += s;
-                if title_overlap == 0 {
-                    reasons.push(format!("{content_match_count} content keyword matches"));
-                }
-            }
+        let content_s = score_content_match(other, ctx, title_s > 0.0, &mut reasons);
+        if content_s > 0.0 {
+            score += content_s;
+            *factor_scores.entry("content".to_string()).or_insert(0.0) += content_s;
         }
 
-        let tag_overlap: usize = other
-            .filetags
-            .iter()
-            .filter(|t| ctx.target_tags.contains(t.as_str()))
-            .count();
-        if tag_overlap > 0 {
-            let s = tag_overlap as f64 * 25.0;
-            score += s;
-            factor_scores.insert("tags".to_string(), s);
-            reasons.push("shared tags".to_string());
+        let tag_s = score_tag_overlap(other, ctx, &mut reasons);
+        if tag_s > 0.0 {
+            score += tag_s;
+            factor_scores.insert("tags".to_string(), tag_s);
         }
 
-        let cat_overlap: usize = other
-            .categories
-            .iter()
-            .filter(|c| ctx.target_tags.contains(c.as_str()))
-            .count();
-        if cat_overlap > 0 {
-            let s = cat_overlap as f64 * 25.0;
-            score += s;
-            factor_scores.insert("categories".to_string(), s);
-            reasons.push("shared categories".to_string());
+        let backlink_s = score_backlink_overlap(other, graph, ctx, &mut reasons);
+        if backlink_s > 0.0 {
+            score += backlink_s;
+            *factor_scores.entry("backlinks".to_string()).or_insert(0.0) += backlink_s;
         }
 
-        let other_backlinks: HashSet<&str> = graph
-            .backlinks
-            .get(&other.uuid)
-            .map(|v| v.iter().map(std::string::String::as_str).collect())
-            .unwrap_or_default();
-        let shared_backlinks: usize = ctx.target_backlinks.intersection(&other_backlinks).count();
-        if shared_backlinks > 0 {
-            let s = shared_backlinks as f64 * 15.0;
-            score += s;
-            *factor_scores.entry("backlinks".to_string()).or_insert(0.0) += s;
-            reasons.push(format!("{shared_backlinks} shared backlinks"));
+        let outgoing_s = score_outgoing_overlap(other, ctx, &mut reasons);
+        if outgoing_s > 0.0 {
+            score += outgoing_s;
+            *factor_scores.entry("outgoing".to_string()).or_insert(0.0) += outgoing_s;
         }
 
-        let other_outgoing: HashSet<&str> = other
-            .outgoing
-            .iter()
-            .filter_map(|l| {
-                if let Link::Internal(u) = l {
-                    Some(u.as_str())
-                } else {
-                    None
-                }
-            })
-            .collect();
-        let shared_outgoing: usize = ctx.target_outgoing.intersection(&other_outgoing).count();
-        if shared_outgoing > 0 {
-            let s = shared_outgoing as f64 * 12.0;
-            score += s;
-            *factor_scores.entry("outgoing".to_string()).or_insert(0.0) += s;
-            reasons.push(format!("{shared_outgoing} shared outgoing"));
+        let dir_s = score_directory_proximity(node, other);
+        if dir_s > 0.0 {
+            score += dir_s;
+            *factor_scores.entry("directory".to_string()).or_insert(0.0) += dir_s;
         }
 
-        if let (Some(tp), Some(op)) = (node.path.parent(), other.path.parent())
-            && tp == op
-            && score > 0.0
-        {
-            let s = 5.0;
-            score += s;
-            *factor_scores.entry("directory".to_string()).or_insert(0.0) += s;
-        }
-
-        // Neighborhood relevance boost
-        let mut total_neighbor_score = 0.0;
-        let mut neighbor_count = 0;
-
-        for link in &other.outgoing {
-            if let Link::Internal(uuid) = link {
-                total_neighbor_score += neighbor_relevance(uuid, graph, node, ctx);
-                neighbor_count += 1;
-            }
-        }
-
-        if let Some(incoming) = graph.backlinks.get(&other.uuid) {
-            for uuid in incoming {
-                total_neighbor_score += neighbor_relevance(uuid, graph, node, ctx);
-                neighbor_count += 1;
-            }
-        }
-
-        if neighbor_count > 0 {
-            let avg = total_neighbor_score / neighbor_count as f64;
-            let boost = ((avg / 100.0) - 0.3).clamp(-0.5, 1.0);
-            if boost.abs() > 0.01 {
-                factor_scores.insert("neighborhood".to_string(), boost);
-                if boost > 0.0 {
-                    reasons.push("relevant neighborhood".to_string());
-                } else {
-                    reasons.push("unrelated neighborhood".to_string());
-                }
-            }
-            score *= 1.0 + boost;
+        let neighborhood_boost = score_neighborhood(other, graph, node, ctx, &mut reasons);
+        if neighborhood_boost != 0.0 {
+            factor_scores.insert("neighborhood".to_string(), neighborhood_boost);
+            score *= 1.0 + neighborhood_boost;
         }
 
         if score > 0.0 {

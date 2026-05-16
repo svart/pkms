@@ -9,6 +9,7 @@ use anyhow::Result;
 use chrono::{Local, NaiveDate, NaiveDateTime, NaiveTime};
 use serde::Serialize;
 use std::collections::BTreeMap;
+use std::path::Path;
 use tabled::builder::Builder;
 use tabled::settings::object::{Columns, Object, Rows};
 use tabled::settings::style::{Border, Style};
@@ -84,18 +85,14 @@ fn item_datetimes(item: &TodoItem) -> Vec<NaiveDateTime> {
     result
 }
 
-pub fn run(config: &Config, ctx: &OutputContext, opts: &TodoOptions) -> Result<()> {
-    let graph = Graph::load(config)?;
-
-    let valid_states = config.todo_states();
-    let state_filters = parse_filters(opts.state.as_deref());
-    let tags_filters = parse_filters(opts.tags.as_deref());
-    let type_filters = parse_filters(opts.type_.as_deref());
-
-    let today_date = Local::now().date_naive();
-
-    let mut items: Vec<TodoItem> = Vec::new();
-
+fn collect_todo_items(
+    graph: &Graph,
+    valid_states: &[String],
+    state_filters: &[Filter],
+    tags_filters: &[Filter],
+    type_filters: &[Filter],
+) -> Vec<TodoItem> {
+    let mut items = Vec::new();
     for result in &graph.results {
         if result.parse_error.is_some() {
             continue;
@@ -107,11 +104,11 @@ pub fn run(config: &Config, ctx: &OutputContext, opts: &TodoOptions) -> Result<(
         let daily_date = find_daily_file_date(path).map(|d| d.format("%Y-%m-%d").to_string());
 
         for heading in &parsed.headings {
-            if !heading_is_eligible(heading, &valid_states) {
+            if !heading_is_eligible(heading, valid_states) {
                 continue;
             }
 
-            if !apply_state_filter(heading.todo_state.as_deref(), &state_filters) {
+            if !apply_state_filter(heading.todo_state.as_deref(), state_filters) {
                 continue;
             }
 
@@ -126,14 +123,14 @@ pub fn run(config: &Config, ctx: &OutputContext, opts: &TodoOptions) -> Result<(
                 result
             };
 
-            if !apply_tags_filter(&combined_tags, &tags_filters) {
+            if !apply_tags_filter(&combined_tags, tags_filters) {
                 continue;
             }
 
             if !apply_type_filter(
                 heading.scheduled.is_some(),
                 heading.deadline.is_some(),
-                &type_filters,
+                type_filters,
             ) {
                 continue;
             }
@@ -172,6 +169,81 @@ pub fn run(config: &Config, ctx: &OutputContext, opts: &TodoOptions) -> Result<(
             });
         }
     }
+    items
+}
+
+fn resolve_scope_paths(
+    graph: &Graph,
+    scope: &[String],
+    db_root: &Path,
+) -> std::collections::HashSet<String> {
+    let mut scope_paths: Vec<std::path::PathBuf> = Vec::new();
+    for s in scope {
+        if let Some(node) = graph.find_node(s) {
+            scope_paths.push(node.path.clone());
+            continue;
+        }
+        let expanded = if let Some(rest) = s.strip_prefix("~/") {
+            dirs::home_dir().map(|h| h.join(rest))
+        } else {
+            None
+        };
+        let mut matched = false;
+        for candidate in [Some(std::path::Path::new(s)), expanded.as_deref()]
+            .into_iter()
+            .flatten()
+        {
+            for p in [candidate.to_path_buf()]
+                .into_iter()
+                .chain(candidate.canonicalize().ok())
+            {
+                if graph.results.iter().any(|r| r.path == p) {
+                    scope_paths.push(p);
+                    matched = true;
+                    break;
+                }
+            }
+            if matched {
+                break;
+            }
+        }
+        if matched {
+            continue;
+        }
+        let joined = db_root.join(s);
+        for p in [joined.clone()]
+            .into_iter()
+            .chain(joined.canonicalize().ok())
+        {
+            if graph.results.iter().any(|r| r.path == p) {
+                scope_paths.push(p);
+                break;
+            }
+        }
+    }
+    scope_paths
+        .iter()
+        .map(|p| p.to_string_lossy().to_string())
+        .collect()
+}
+
+pub fn run(config: &Config, ctx: &OutputContext, opts: &TodoOptions) -> Result<()> {
+    let graph = Graph::load(config)?;
+
+    let valid_states = config.todo_states();
+    let state_filters = parse_filters(opts.state.as_deref());
+    let tags_filters = parse_filters(opts.tags.as_deref());
+    let type_filters = parse_filters(opts.type_.as_deref());
+
+    let today_date = Local::now().date_naive();
+
+    let mut items = collect_todo_items(
+        &graph,
+        &valid_states,
+        &state_filters,
+        &tags_filters,
+        &type_filters,
+    );
 
     let global_ids: std::collections::HashMap<(String, usize), usize> = graph
         .all_task_entries(config)
@@ -187,54 +259,7 @@ pub fn run(config: &Config, ctx: &OutputContext, opts: &TodoOptions) -> Result<(
 
     if !opts.scope.is_empty() {
         let db_root = config.resolved_db_root()?;
-        let mut scope_paths: Vec<std::path::PathBuf> = Vec::new();
-        for s in &opts.scope {
-            if let Some(node) = graph.find_node(s) {
-                scope_paths.push(node.path.clone());
-                continue;
-            }
-            let expanded = if let Some(rest) = s.strip_prefix("~/") {
-                dirs::home_dir().map(|h| h.join(rest))
-            } else {
-                None
-            };
-            let mut matched = false;
-            for candidate in [Some(std::path::Path::new(s)), expanded.as_deref()]
-                .into_iter()
-                .flatten()
-            {
-                for p in [candidate.to_path_buf()]
-                    .into_iter()
-                    .chain(candidate.canonicalize().ok())
-                {
-                    if graph.results.iter().any(|r| r.path == p) {
-                        scope_paths.push(p);
-                        matched = true;
-                        break;
-                    }
-                }
-                if matched {
-                    break;
-                }
-            }
-            if matched {
-                continue;
-            }
-            let joined = db_root.join(s);
-            for p in [joined.clone()]
-                .into_iter()
-                .chain(joined.canonicalize().ok())
-            {
-                if graph.results.iter().any(|r| r.path == p) {
-                    scope_paths.push(p);
-                    break;
-                }
-            }
-        }
-        let item_paths: std::collections::HashSet<String> = scope_paths
-            .iter()
-            .map(|p| p.to_string_lossy().to_string())
-            .collect();
+        let item_paths = resolve_scope_paths(&graph, &opts.scope, db_root);
         items.retain(|item| item_paths.contains(&item.path));
     }
 

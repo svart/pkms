@@ -105,181 +105,245 @@ pub(crate) static UUID_FORMAT_RE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$").unwrap()
 });
 
-pub fn parse_note(content: &str) -> ParsedNote {
-    let mut uuids = Vec::new();
-    let mut title = None;
-    let mut filetags = Vec::new();
-    let mut categories = Vec::new();
-    let mut roam_aliases = Vec::new();
-    let mut roam_refs = Vec::new();
-    let mut outgoing = Vec::new();
-    let mut headings: Vec<Heading> = Vec::new();
-    let mut in_properties = false;
-    let mut in_src_block = false;
-    let mut current_heading_idx: Option<usize> = None;
-    let mut just_saw_heading = false;
-    let mut heading_stack: Vec<usize> = Vec::new();
+struct ParseContext {
+    uuids: Vec<String>,
+    title: Option<String>,
+    filetags: Vec<String>,
+    categories: Vec<String>,
+    roam_aliases: Vec<String>,
+    roam_refs: Vec<String>,
+    outgoing: Vec<Link>,
+    headings: Vec<Heading>,
+    in_properties: bool,
+    in_src_block: bool,
+    current_heading_idx: Option<usize>,
+    just_saw_heading: bool,
+    heading_stack: Vec<usize>,
+}
 
-    for (line_idx, line) in content.lines().enumerate() {
+impl ParseContext {
+    fn new() -> Self {
+        ParseContext {
+            uuids: Vec::new(),
+            title: None,
+            filetags: Vec::new(),
+            categories: Vec::new(),
+            roam_aliases: Vec::new(),
+            roam_refs: Vec::new(),
+            outgoing: Vec::new(),
+            headings: Vec::new(),
+            in_properties: false,
+            in_src_block: false,
+            current_heading_idx: None,
+            just_saw_heading: false,
+            heading_stack: Vec::new(),
+        }
+    }
+
+    fn finalize(self) -> ParsedNote {
+        ParsedNote {
+            uuids: self.uuids,
+            title: self.title,
+            filetags: self.filetags,
+            categories: self.categories,
+            roam_aliases: self.roam_aliases,
+            roam_refs: self.roam_refs,
+            outgoing: self.outgoing,
+            headings: self.headings,
+        }
+    }
+
+    fn process_line(&mut self, line_idx: usize, line: &str) {
         let trimmed = line.trim();
 
+        if self.in_src_block {
+            if trimmed == "#+end_src" {
+                self.in_src_block = false;
+            }
+            return;
+        }
+
         if trimmed.starts_with("#+begin_src") {
-            in_src_block = true;
-            continue;
-        }
-        if trimmed == "#+end_src" {
-            in_src_block = false;
-            continue;
-        }
-        if in_src_block {
-            continue;
+            self.in_src_block = true;
+            return;
         }
 
         if trimmed == ":PROPERTIES:" {
-            in_properties = true;
-            continue;
+            self.in_properties = true;
+            return;
         }
         if trimmed == ":END:" {
-            in_properties = false;
-            continue;
+            self.in_properties = false;
+            return;
         }
 
-        if in_properties {
-            if let Some((key, value)) = parse_property(trimmed) {
-                match key {
-                    PROP_ID => {
-                        if let Some(idx) = current_heading_idx {
-                            headings[idx].uuid = Some(value.to_string());
-                        } else {
-                            uuids.push(value.to_string());
-                        }
-                    }
-                    PROP_CATEGORY => categories.push(value.to_string()),
-                    PROP_ROAM_ALIASES => {
-                        roam_aliases = value
-                            .split_whitespace()
-                            .map(std::string::ToString::to_string)
-                            .collect();
-                    }
-                    PROP_ROAM_REFS => {
-                        roam_refs = value
-                            .split_whitespace()
-                            .map(std::string::ToString::to_string)
-                            .collect();
-                    }
-                    _ => {}
-                }
-            }
+        if self.in_properties {
+            self.handle_property_line(trimmed);
         } else {
-            if let Some(cap) = TITLE_RE.captures(line)
-                && title.is_none()
-            {
-                title = Some(cap[1].trim().to_string());
-            }
+            self.handle_body_line(line_idx, line, trimmed);
+        }
+    }
 
-            if let Some(cap) = FILETAGS_RE.captures(line) {
-                let tags_str = cap.get(1).map_or("", |m| m.as_str());
-                for tag in tags_str.split(':') {
-                    let tag = tag.trim();
-                    if !tag.is_empty() {
-                        filetags.push(tag.to_string());
-                    }
+    fn handle_property_line(&mut self, trimmed: &str) {
+        let Some((key, value)) = parse_property(trimmed) else {
+            return;
+        };
+        match key {
+            PROP_ID => {
+                if let Some(idx) = self.current_heading_idx {
+                    self.headings[idx].uuid = Some(value.to_string());
+                } else {
+                    self.uuids.push(value.to_string());
                 }
             }
-
-            if let Some(cap) = HEADING_RE.captures(line)
-                && (cap[1].len() > 1 || cap.get(4).is_some_and(|m| !m.as_str().is_empty()))
-            {
-                let level = cap[1].len();
-
-                while let Some(&top_idx) = heading_stack.last() {
-                    if headings[top_idx].level >= level {
-                        heading_stack.pop();
-                    } else {
-                        break;
-                    }
-                }
-
-                let todo_state = cap.get(2).map(|m| m.as_str().to_string());
-                let priority = cap.get(3).and_then(|m| m.as_str().chars().next());
-                let heading_title = cap.get(4).map_or("", |m| m.as_str()).to_string();
-                let tags = cap
-                    .get(5)
-                    .map(|m| {
-                        m.as_str()
-                            .split(':')
-                            .filter(|t| !t.is_empty())
-                            .map(std::string::ToString::to_string)
-                            .collect()
-                    })
-                    .unwrap_or_default();
-                headings.push(Heading {
-                    level,
-                    title: heading_title,
-                    todo_state,
-                    tags,
-                    uuid: None,
-                    scheduled: None,
-                    deadline: None,
-                    priority,
-                    line_number: line_idx + 1,
-                    outgoing: vec![],
-                });
-                heading_stack.push(headings.len() - 1);
-                current_heading_idx = Some(headings.len() - 1);
-                just_saw_heading = true;
-
-                for cap in LINK_RE.captures_iter(line) {
-                    let link_target = cap[1].to_string();
-                    if let Some(link) = parse_link(&link_target) {
-                        if let Some(&idx) = heading_stack.last() {
-                            headings[idx].outgoing.push(link);
-                        } else {
-                            outgoing.push(link);
-                        }
-                    }
-                }
-
-                continue;
+            PROP_CATEGORY => self.categories.push(value.to_string()),
+            PROP_ROAM_ALIASES => {
+                self.roam_aliases = value
+                    .split_whitespace()
+                    .map(std::string::ToString::to_string)
+                    .collect();
             }
-
-            if just_saw_heading && !trimmed.is_empty() {
-                if let Some(cap) = SCHEDULED_RE.captures(line)
-                    && let Some(idx) = current_heading_idx
-                {
-                    headings[idx].scheduled = cap.get(1).map(|m| m.as_str().to_string());
-                }
-                if let Some(cap) = DEADLINE_RE.captures(line)
-                    && let Some(idx) = current_heading_idx
-                {
-                    headings[idx].deadline = cap.get(1).map(|m| m.as_str().to_string());
-                }
-                just_saw_heading = false;
+            PROP_ROAM_REFS => {
+                self.roam_refs = value
+                    .split_whitespace()
+                    .map(std::string::ToString::to_string)
+                    .collect();
             }
+            _ => {}
+        }
+    }
 
-            for cap in LINK_RE.captures_iter(line) {
-                let link_target = cap[1].to_string();
-                if let Some(link) = parse_link(&link_target) {
-                    if let Some(&idx) = heading_stack.last() {
-                        headings[idx].outgoing.push(link);
-                    } else {
-                        outgoing.push(link);
-                    }
-                }
+    fn handle_body_line(&mut self, line_idx: usize, line: &str, trimmed: &str) {
+        self.try_extract_title(line);
+        self.try_extract_filetags(line);
+
+        if self.try_parse_heading(line_idx, line) {
+            return;
+        }
+
+        self.try_parse_scheduled_deadline(trimmed);
+        self.extract_links(line);
+    }
+
+    fn try_extract_title(&mut self, line: &str) {
+        if self.title.is_some() {
+            return;
+        }
+        if let Some(cap) = TITLE_RE.captures(line) {
+            self.title = Some(cap[1].trim().to_string());
+        }
+    }
+
+    fn try_extract_filetags(&mut self, line: &str) {
+        let Some(cap) = FILETAGS_RE.captures(line) else {
+            return;
+        };
+        let tags_str = cap.get(1).map_or("", |m| m.as_str());
+        for tag in tags_str.split(':') {
+            let tag = tag.trim();
+            if !tag.is_empty() {
+                self.filetags.push(tag.to_string());
             }
         }
     }
 
-    ParsedNote {
-        uuids,
-        title,
-        filetags,
-        categories,
-        roam_aliases,
-        roam_refs,
-        outgoing,
-        headings,
+    fn try_parse_heading(&mut self, line_idx: usize, line: &str) -> bool {
+        let Some(cap) = HEADING_RE.captures(line) else {
+            return false;
+        };
+        if cap[1].len() <= 1 && cap.get(4).is_none_or(|m| m.as_str().is_empty()) {
+            return false;
+        }
+
+        let level = cap[1].len();
+        while let Some(&top_idx) = self.heading_stack.last() {
+            if self.headings[top_idx].level >= level {
+                self.heading_stack.pop();
+            } else {
+                break;
+            }
+        }
+
+        let todo_state = cap.get(2).map(|m| m.as_str().to_string());
+        let priority = cap.get(3).and_then(|m| m.as_str().chars().next());
+        let heading_title = cap.get(4).map_or("", |m| m.as_str()).to_string();
+        let tags = cap
+            .get(5)
+            .map(|m| {
+                m.as_str()
+                    .split(':')
+                    .filter(|t| !t.is_empty())
+                    .map(std::string::ToString::to_string)
+                    .collect()
+            })
+            .unwrap_or_default();
+        self.headings.push(Heading {
+            level,
+            title: heading_title,
+            todo_state,
+            tags,
+            uuid: None,
+            scheduled: None,
+            deadline: None,
+            priority,
+            line_number: line_idx + 1,
+            outgoing: vec![],
+        });
+        self.heading_stack.push(self.headings.len() - 1);
+        self.current_heading_idx = Some(self.headings.len() - 1);
+        self.just_saw_heading = true;
+
+        for cap in LINK_RE.captures_iter(line) {
+            let link_target = cap[1].to_string();
+            if let Some(link) = parse_link(&link_target) {
+                if let Some(&idx) = self.heading_stack.last() {
+                    self.headings[idx].outgoing.push(link);
+                } else {
+                    self.outgoing.push(link);
+                }
+            }
+        }
+
+        true
     }
+
+    fn try_parse_scheduled_deadline(&mut self, trimmed: &str) {
+        if !self.just_saw_heading || trimmed.is_empty() {
+            return;
+        }
+        if let Some(cap) = SCHEDULED_RE.captures(trimmed)
+            && let Some(idx) = self.current_heading_idx
+        {
+            self.headings[idx].scheduled = cap.get(1).map(|m| m.as_str().to_string());
+        }
+        if let Some(cap) = DEADLINE_RE.captures(trimmed)
+            && let Some(idx) = self.current_heading_idx
+        {
+            self.headings[idx].deadline = cap.get(1).map(|m| m.as_str().to_string());
+        }
+        self.just_saw_heading = false;
+    }
+
+    fn extract_links(&mut self, line: &str) {
+        for cap in LINK_RE.captures_iter(line) {
+            let link_target = cap[1].to_string();
+            if let Some(link) = parse_link(&link_target) {
+                if let Some(&idx) = self.heading_stack.last() {
+                    self.headings[idx].outgoing.push(link);
+                } else {
+                    self.outgoing.push(link);
+                }
+            }
+        }
+    }
+}
+
+pub fn parse_note(content: &str) -> ParsedNote {
+    let mut ctx = ParseContext::new();
+    for (line_idx, line) in content.lines().enumerate() {
+        ctx.process_line(line_idx, line);
+    }
+    ctx.finalize()
 }
 
 pub fn strip_org_links(text: &str) -> String {

@@ -125,197 +125,236 @@ fn process_headings(
     }
 }
 
-impl Graph {
-    pub fn build(results: Vec<FileScanResult>) -> Self {
-        let mut nodes = HashMap::new();
-        let mut path_to_uuid = HashMap::new();
-        let mut title_to_uuid: HashMap<String, Vec<String>> = HashMap::new();
-        let mut alias_to_uuid: HashMap<String, Vec<String>> = HashMap::new();
-        let mut parse_errors = Vec::new();
-        let mut skipped_files = Vec::new();
-        let mut missing_titles = Vec::new();
-        let mut seen_uuids: HashMap<String, std::path::PathBuf> = HashMap::new();
-        let mut duplicate_uuids = Vec::new();
-        let mut seen_titles: HashMap<String, std::path::PathBuf> = HashMap::new();
-        let mut duplicate_titles = Vec::new();
-        let mut uuid_to_outgoing: HashMap<String, Vec<Link>> = HashMap::new();
-        let mut heading_uuid_to_primary: HashMap<String, String> = HashMap::new();
-        let mut all_uuids_seen: HashMap<String, std::path::PathBuf> = HashMap::new();
+struct BuildContext {
+    nodes: HashMap<String, Node>,
+    path_to_uuid: HashMap<std::path::PathBuf, String>,
+    title_to_uuid: HashMap<String, Vec<String>>,
+    alias_to_uuid: HashMap<String, Vec<String>>,
+    parse_errors: Vec<(std::path::PathBuf, String)>,
+    skipped_files: Vec<std::path::PathBuf>,
+    missing_titles: Vec<std::path::PathBuf>,
+    seen_uuids: HashMap<String, std::path::PathBuf>,
+    duplicate_uuids: Vec<DuplicateEntry>,
+    seen_titles: HashMap<String, std::path::PathBuf>,
+    duplicate_titles: Vec<DuplicateEntry>,
+    uuid_to_outgoing: HashMap<String, Vec<Link>>,
+    heading_uuid_to_primary: HashMap<String, String>,
+    all_uuids_seen: HashMap<String, std::path::PathBuf>,
+}
 
-        for result in results {
-            if let Some(err) = result.parse_error {
-                parse_errors.push((result.path.clone(), err));
-                skipped_files.push(result.path);
-                continue;
-            }
+impl BuildContext {
+    fn new() -> Self {
+        BuildContext {
+            nodes: HashMap::new(),
+            path_to_uuid: HashMap::new(),
+            title_to_uuid: HashMap::new(),
+            alias_to_uuid: HashMap::new(),
+            parse_errors: Vec::new(),
+            skipped_files: Vec::new(),
+            missing_titles: Vec::new(),
+            seen_uuids: HashMap::new(),
+            duplicate_uuids: Vec::new(),
+            seen_titles: HashMap::new(),
+            duplicate_titles: Vec::new(),
+            uuid_to_outgoing: HashMap::new(),
+            heading_uuid_to_primary: HashMap::new(),
+            all_uuids_seen: HashMap::new(),
+        }
+    }
 
-            let parsed = result.parsed;
-            let path = result.path;
+    fn process_result(&mut self, result: FileScanResult) {
+        if let Some(err) = result.parse_error {
+            self.parse_errors.push((result.path.clone(), err));
+            self.skipped_files.push(result.path);
+            return;
+        }
 
-            if parsed.uuids.is_empty() {
-                skipped_files.push(path);
-                continue;
-            }
+        let parsed = result.parsed;
+        let path = result.path;
 
-            let primary_uuid = &parsed.uuids[0];
+        if parsed.uuids.is_empty() {
+            self.skipped_files.push(path);
+            return;
+        }
 
-            let is_duplicate = seen_uuids
-                .get(primary_uuid.as_str())
-                .is_some_and(|existing| existing != &path);
-            if is_duplicate {
-                duplicate_uuids.push(DuplicateEntry {
-                    value: primary_uuid.clone(),
-                    paths: vec![
-                        seen_uuids[primary_uuid.as_str()]
-                            .to_string_lossy()
-                            .to_string(),
-                        path.to_string_lossy().to_string(),
-                    ],
-                });
-                continue;
-            }
+        let primary_uuid = &parsed.uuids[0];
 
-            if let Some(existing) = all_uuids_seen.get(primary_uuid.as_str())
-                && existing != &path
-            {
-                duplicate_uuids.push(DuplicateEntry {
-                    value: primary_uuid.clone(),
-                    paths: vec![
-                        existing.to_string_lossy().to_string(),
-                        path.to_string_lossy().to_string(),
-                    ],
-                });
-            }
+        if let Some(existing) = self.seen_uuids.get(primary_uuid.as_str())
+            && existing != &path
+        {
+            self.duplicate_uuids.push(DuplicateEntry {
+                value: primary_uuid.clone(),
+                paths: vec![
+                    self.seen_uuids[primary_uuid.as_str()]
+                        .to_string_lossy()
+                        .to_string(),
+                    path.to_string_lossy().to_string(),
+                ],
+            });
+            return;
+        }
 
-            seen_uuids.insert(primary_uuid.clone(), path.clone());
-            all_uuids_seen.insert(primary_uuid.clone(), path.clone());
+        if let Some(existing) = self.all_uuids_seen.get(primary_uuid.as_str())
+            && existing != &path
+        {
+            self.duplicate_uuids.push(DuplicateEntry {
+                value: primary_uuid.clone(),
+                paths: vec![
+                    existing.to_string_lossy().to_string(),
+                    path.to_string_lossy().to_string(),
+                ],
+            });
+        }
 
-            let title = if let Some(t) = parsed.title.clone() {
-                t
-            } else {
-                missing_titles.push(path.clone());
-                path.file_stem()
-                    .map(|s| s.to_string_lossy().to_string())
-                    .unwrap_or_default()
-            };
+        self.seen_uuids.insert(primary_uuid.clone(), path.clone());
+        self.all_uuids_seen
+            .insert(primary_uuid.clone(), path.clone());
 
-            if let Some(existing) = seen_titles.get(&title) {
-                duplicate_titles.push(DuplicateEntry {
-                    value: title.clone(),
-                    paths: vec![
-                        existing.to_string_lossy().to_string(),
-                        path.to_string_lossy().to_string(),
-                    ],
-                });
-            } else {
-                seen_titles.insert(title.clone(), path.clone());
-            }
+        let title = if let Some(t) = parsed.title.clone() {
+            t
+        } else {
+            self.missing_titles.push(path.clone());
+            path.file_stem()
+                .map(|s| s.to_string_lossy().to_string())
+                .unwrap_or_default()
+        };
 
-            for alias in &parsed.roam_aliases {
-                alias_to_uuid
-                    .entry(alias.clone())
-                    .or_default()
-                    .push(primary_uuid.clone());
-            }
+        if let Some(existing) = self.seen_titles.get(&title) {
+            self.duplicate_titles.push(DuplicateEntry {
+                value: title.clone(),
+                paths: vec![
+                    existing.to_string_lossy().to_string(),
+                    path.to_string_lossy().to_string(),
+                ],
+            });
+        } else {
+            self.seen_titles.insert(title.clone(), path.clone());
+        }
 
-            // Collect outgoing links from headings without UUIDs into the primary note
-            let heading_orphan_links: Vec<Link> = parsed
-                .headings
-                .iter()
-                .filter(|h| h.uuid.is_none())
-                .flat_map(|h| h.outgoing.clone())
-                .collect();
-
-            let mut node =
-                Node::from_parsed(primary_uuid.clone(), title.clone(), path.clone(), &parsed);
-            node.outgoing.extend(heading_orphan_links.clone());
-
-            // Insert primary UUID into nodes
-            nodes.insert(primary_uuid.clone(), node.clone());
-            let mut primary_outgoing = parsed.outgoing.clone();
-            primary_outgoing.extend(heading_orphan_links);
-            uuid_to_outgoing.insert(primary_uuid.clone(), primary_outgoing);
-
-            // Check heading UUIDs for uniqueness
-            let mut file_heading_uuids_seen = std::collections::HashSet::new();
-            let heading_uuids_list: Vec<String> = parsed.heading_uuids();
-            for heading_uuid in &heading_uuids_list {
-                if heading_uuid == primary_uuid {
-                    duplicate_uuids.push(DuplicateEntry {
-                        value: heading_uuid.clone(),
-                        paths: vec![
-                            path.to_string_lossy().to_string(),
-                            path.to_string_lossy().to_string(),
-                        ],
-                    });
-                    continue;
-                }
-                if !file_heading_uuids_seen.insert(heading_uuid.clone()) {
-                    duplicate_uuids.push(DuplicateEntry {
-                        value: heading_uuid.clone(),
-                        paths: vec![
-                            path.to_string_lossy().to_string(),
-                            path.to_string_lossy().to_string(),
-                        ],
-                    });
-                    continue;
-                }
-                if let Some(existing) = all_uuids_seen.get(heading_uuid.as_str())
-                    && existing != &path
-                {
-                    duplicate_uuids.push(DuplicateEntry {
-                        value: heading_uuid.clone(),
-                        paths: vec![
-                            existing.to_string_lossy().to_string(),
-                            path.to_string_lossy().to_string(),
-                        ],
-                    });
-                }
-                all_uuids_seen.insert(heading_uuid.clone(), path.clone());
-            }
-
-            // Process headings to create heading nodes with parent-child edges
-            process_headings(
-                &parsed.headings,
-                primary_uuid,
-                &parsed.filetags,
-                &parsed.categories,
-                &parsed.roam_aliases,
-                &parsed.roam_refs,
-                &path,
-                &mut nodes,
-                &mut uuid_to_outgoing,
-                &mut heading_uuid_to_primary,
-            );
-
-            path_to_uuid.insert(path, primary_uuid.clone());
-            title_to_uuid
-                .entry(title)
+        for alias in &parsed.roam_aliases {
+            self.alias_to_uuid
+                .entry(alias.clone())
                 .or_default()
                 .push(primary_uuid.clone());
         }
 
-        let (backlinks, broken_links) = build_links(&uuid_to_outgoing, &nodes);
+        let heading_orphan_links: Vec<Link> = parsed
+            .headings
+            .iter()
+            .filter(|h| h.uuid.is_none())
+            .flat_map(|h| h.outgoing.clone())
+            .collect();
+
+        let mut node =
+            Node::from_parsed(primary_uuid.clone(), title.clone(), path.clone(), &parsed);
+        node.outgoing.extend(heading_orphan_links.clone());
+
+        self.nodes.insert(primary_uuid.clone(), node);
+        let mut primary_outgoing = parsed.outgoing.clone();
+        primary_outgoing.extend(heading_orphan_links);
+        self.uuid_to_outgoing
+            .insert(primary_uuid.clone(), primary_outgoing);
+
+        self.check_heading_uuids(&parsed, primary_uuid, &path);
+
+        process_headings(
+            &parsed.headings,
+            primary_uuid,
+            &parsed.filetags,
+            &parsed.categories,
+            &parsed.roam_aliases,
+            &parsed.roam_refs,
+            &path,
+            &mut self.nodes,
+            &mut self.uuid_to_outgoing,
+            &mut self.heading_uuid_to_primary,
+        );
+
+        self.path_to_uuid.insert(path, primary_uuid.clone());
+        self.title_to_uuid
+            .entry(title)
+            .or_default()
+            .push(primary_uuid.clone());
+    }
+
+    fn check_heading_uuids(
+        &mut self,
+        parsed: &crate::parser::ParsedNote,
+        primary_uuid: &str,
+        path: &std::path::Path,
+    ) {
+        let mut file_heading_uuids_seen = std::collections::HashSet::new();
+        let heading_uuids_list: Vec<String> = parsed.heading_uuids();
+        for heading_uuid in &heading_uuids_list {
+            if heading_uuid == primary_uuid {
+                self.duplicate_uuids.push(DuplicateEntry {
+                    value: heading_uuid.clone(),
+                    paths: vec![
+                        path.to_string_lossy().to_string(),
+                        path.to_string_lossy().to_string(),
+                    ],
+                });
+                continue;
+            }
+            if !file_heading_uuids_seen.insert(heading_uuid.clone()) {
+                self.duplicate_uuids.push(DuplicateEntry {
+                    value: heading_uuid.clone(),
+                    paths: vec![
+                        path.to_string_lossy().to_string(),
+                        path.to_string_lossy().to_string(),
+                    ],
+                });
+                continue;
+            }
+            if let Some(existing) = self.all_uuids_seen.get(heading_uuid.as_str())
+                && existing != path
+            {
+                self.duplicate_uuids.push(DuplicateEntry {
+                    value: heading_uuid.clone(),
+                    paths: vec![
+                        existing.to_string_lossy().to_string(),
+                        path.to_string_lossy().to_string(),
+                    ],
+                });
+            }
+            self.all_uuids_seen
+                .insert(heading_uuid.clone(), path.to_path_buf());
+        }
+    }
+
+    fn finalize(self) -> Graph {
+        let (backlinks, broken_links) = build_links(&self.uuid_to_outgoing, &self.nodes);
 
         Graph {
-            nodes,
-            path_to_uuid,
-            title_to_uuid,
-            alias_to_uuid,
+            nodes: self.nodes,
+            path_to_uuid: self.path_to_uuid,
+            title_to_uuid: self.title_to_uuid,
+            alias_to_uuid: self.alias_to_uuid,
             backlinks,
             broken_links,
-            parse_errors,
-            skipped_files,
+            parse_errors: self.parse_errors,
+            skipped_files: self.skipped_files,
             duplicates: DuplicateInfo {
-                duplicate_uuids,
-                duplicate_titles,
-                missing_titles: missing_titles
+                duplicate_uuids: self.duplicate_uuids,
+                duplicate_titles: self.duplicate_titles,
+                missing_titles: self
+                    .missing_titles
                     .iter()
                     .map(|p| p.to_string_lossy().to_string())
                     .collect(),
             },
-            heading_uuid_to_primary,
+            heading_uuid_to_primary: self.heading_uuid_to_primary,
             results: vec![],
         }
+    }
+}
+
+impl Graph {
+    pub fn build(results: Vec<FileScanResult>) -> Self {
+        let mut ctx = BuildContext::new();
+        for result in results {
+            ctx.process_result(result);
+        }
+        ctx.finalize()
     }
 }
