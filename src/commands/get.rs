@@ -2,18 +2,12 @@ use crate::cli::OutputFormat;
 use crate::config::Config;
 use crate::graph::{Graph, Node};
 use crate::output::OutputContext;
-use crate::parser::HEADING_RE;
+use crate::parser;
 use crate::tokens;
 use crate::util;
 use anyhow::Result;
-use regex::Regex;
 use serde::Serialize;
 use std::collections::HashMap;
-use std::sync::LazyLock;
-
-static HEADING_UUID_RE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r":ID:\s+([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})").unwrap()
-});
 
 #[derive(Serialize)]
 pub struct HeadingJson {
@@ -29,82 +23,28 @@ pub struct HeadingJson {
     pub deadline: Option<String>,
 }
 
-fn parse_headings_from_content(content: &str) -> Vec<HeadingJson> {
-    let mut headings: Vec<HeadingJson> = Vec::new();
-    let mut current_heading_idx: Option<usize> = None;
-    let mut in_properties = false;
-    let mut just_saw_heading = false;
-
-    for line in content.lines() {
-        let trimmed = line.trim();
-
-        if trimmed == ":PROPERTIES:" {
-            in_properties = true;
-            continue;
-        }
-        if trimmed == ":END:" {
-            in_properties = false;
-            continue;
-        }
-
-        if in_properties {
-            if let Some(cap) = HEADING_UUID_RE.captures(line)
-                && let Some(idx) = current_heading_idx
-            {
-                headings[idx].uuid = Some(cap[1].to_string());
-            }
-            continue;
-        }
-
-        if let Some(cap) = HEADING_RE.captures(line) {
-            let level = cap[1].len();
-            let todo_state = cap.get(2).map(|m| m.as_str().to_string());
-            let priority = cap.get(3).and_then(|m| m.as_str().chars().next());
-            let heading_title = cap.get(4).map_or("", |m| m.as_str()).to_string();
-            if level > 1 || !heading_title.is_empty() {
-                let tags = cap
-                    .get(5)
-                    .map(|m| {
-                        m.as_str()
-                            .split(':')
-                            .filter(|t| !t.is_empty())
-                            .map(std::string::ToString::to_string)
-                            .collect()
-                    })
-                    .unwrap_or_default();
-                headings.push(HeadingJson {
-                    level,
-                    title: heading_title,
-                    todo_state,
-                    tags,
-                    raw: line.to_string(),
-                    uuid: None,
-                    priority,
-                    scheduled: None,
-                    deadline: None,
-                });
-                current_heading_idx = Some(headings.len() - 1);
-                just_saw_heading = true;
-                continue;
-            }
-        }
-
-        if just_saw_heading && !trimmed.is_empty() {
-            if let Some(cap) = crate::parser::SCHEDULED_RE.captures(line)
-                && let Some(idx) = current_heading_idx
-            {
-                headings[idx].scheduled = cap.get(1).map(|m| m.as_str().to_string());
-            }
-            if let Some(cap) = crate::parser::DEADLINE_RE.captures(line)
-                && let Some(idx) = current_heading_idx
-            {
-                headings[idx].deadline = cap.get(1).map(|m| m.as_str().to_string());
-            }
-            just_saw_heading = false;
+impl From<&parser::Heading> for HeadingJson {
+    fn from(h: &parser::Heading) -> Self {
+        HeadingJson {
+            level: h.level,
+            title: h.title.clone(),
+            todo_state: h.todo_state.clone(),
+            tags: h.tags.clone(),
+            raw: h.raw.clone(),
+            uuid: h.uuid.clone(),
+            priority: h.priority,
+            scheduled: h.scheduled.clone(),
+            deadline: h.deadline.clone(),
         }
     }
+}
 
-    headings
+fn headings_from_content(content: &str) -> Vec<HeadingJson> {
+    parser::parse_note(content)
+        .headings
+        .iter()
+        .map(HeadingJson::from)
+        .collect()
 }
 
 #[derive(Serialize)]
@@ -202,7 +142,7 @@ fn process_one_get(
         head_content.clone()
     };
 
-    let headings = head_content.as_deref().map(parse_headings_from_content);
+    let headings = head_content.as_deref().map(headings_from_content);
 
     let node_json = NodeJson::from_node(&node, node_content.as_deref(), headings);
 
@@ -257,7 +197,7 @@ fn print_one_get_text(
     }
 
     if show_headings && let Some(ref content) = full_content {
-        let headings = parse_headings_from_content(content);
+        let headings = headings_from_content(content);
         if !headings.is_empty() {
             println!();
             println!("--- Headings ---");

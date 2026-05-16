@@ -72,6 +72,7 @@ pub struct Heading {
     pub priority: Option<char>,
     pub line_number: usize,
     pub outgoing: Vec<Link>,
+    pub raw: String,
 }
 
 const PROP_ID: &str = "ID";
@@ -295,6 +296,7 @@ impl ParseContext {
             priority,
             line_number: line_idx + 1,
             outgoing: vec![],
+            raw: line.to_string(),
         });
         self.heading_stack.push(self.headings.len() - 1);
         self.current_heading_idx = Some(self.headings.len() - 1);

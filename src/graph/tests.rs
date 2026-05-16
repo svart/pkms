@@ -38,6 +38,7 @@ fn make_note_with_headings(
             priority: None,
             line_number: 1,
             outgoing: vec![],
+            raw: format!("* Heading {}", huid),
         })
         .collect();
     FileScanResult {
