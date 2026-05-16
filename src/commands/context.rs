@@ -76,15 +76,15 @@ fn build_context_output(
     let rendered = render_template(
         DEFAULT_TEMPLATE,
         &ContextVars {
-            title: &node.title,
-            uuid: &node.uuid,
-            path: &node.path.to_string_lossy(),
-            tags: &tags_str,
-            categories: &cats_str,
-            aliases: &aliases_str,
-            content: &content,
-            neighbors: &neighbors_text,
-            backlinks: &backlinks_text,
+            title: node.title.clone(),
+            uuid: node.uuid.clone(),
+            path: node.path.to_string_lossy().to_string(),
+            tags: tags_str,
+            categories: cats_str,
+            aliases: aliases_str,
+            content: content.clone(),
+            neighbors: neighbors_text.clone(),
+            backlinks: backlinks_text.clone(),
         },
     );
 
@@ -157,16 +157,16 @@ pub fn run(config: &Config, ctx: &OutputContext, opts: &ContextOptions) -> Resul
 }
 
 #[derive(Serialize)]
-struct ContextVars<'a> {
-    title: &'a str,
-    uuid: &'a str,
-    path: &'a str,
-    tags: &'a str,
-    categories: &'a str,
-    aliases: &'a str,
-    content: &'a str,
-    neighbors: &'a str,
-    backlinks: &'a str,
+struct ContextVars {
+    title: String,
+    uuid: String,
+    path: String,
+    tags: String,
+    categories: String,
+    aliases: String,
+    content: String,
+    neighbors: String,
+    backlinks: String,
 }
 
 static HANDLEBARS: LazyLock<Handlebars> = LazyLock::new(|| {
@@ -204,15 +204,15 @@ mod tests {
     #[test]
     fn test_render_template_basic() {
         let vars = ContextVars {
-            title: "My Note",
-            uuid: "abcd",
-            path: "/a.org",
-            tags: "tag1, tag2",
-            categories: "",
-            aliases: "",
-            content: "some content",
-            neighbors: "",
-            backlinks: "",
+            title: "My Note".to_string(),
+            uuid: "abcd".to_string(),
+            path: "/a.org".to_string(),
+            tags: "tag1, tag2".to_string(),
+            categories: String::new(),
+            aliases: String::new(),
+            content: "some content".to_string(),
+            neighbors: String::new(),
+            backlinks: String::new(),
         };
         let result = render_template("Title: {{title}}\nUUID: {{uuid}}", &vars);
         assert_eq!(result, "Title: My Note\nUUID: abcd");
@@ -221,15 +221,15 @@ mod tests {
     #[test]
     fn test_render_template_conditional_present() {
         let vars = ContextVars {
-            title: "Note",
-            uuid: "x",
-            path: "/x.org",
-            tags: "mytag",
-            categories: "",
-            aliases: "",
-            content: "body",
-            neighbors: "",
-            backlinks: "",
+            title: "Note".to_string(),
+            uuid: "x".to_string(),
+            path: "/x.org".to_string(),
+            tags: "mytag".to_string(),
+            categories: String::new(),
+            aliases: String::new(),
+            content: "body".to_string(),
+            neighbors: String::new(),
+            backlinks: String::new(),
         };
         let result = render_template("{{#if tags}}Tags: {{tags}}{{/if}}", &vars);
         assert_eq!(result, "Tags: mytag");
@@ -238,15 +238,15 @@ mod tests {
     #[test]
     fn test_render_template_conditional_empty() {
         let vars = ContextVars {
-            title: "Note",
-            uuid: "x",
-            path: "/x.org",
-            tags: "",
-            categories: "",
-            aliases: "",
-            content: "body",
-            neighbors: "",
-            backlinks: "",
+            title: "Note".to_string(),
+            uuid: "x".to_string(),
+            path: "/x.org".to_string(),
+            tags: String::new(),
+            categories: String::new(),
+            aliases: String::new(),
+            content: "body".to_string(),
+            neighbors: String::new(),
+            backlinks: String::new(),
         };
         let result = render_template("before{{#if tags}}Tags: {{tags}}{{/if}}after", &vars);
         assert_eq!(result, "beforeafter");
@@ -255,15 +255,15 @@ mod tests {
     #[test]
     fn test_default_template() {
         let vars = ContextVars {
-            title: "My Note",
-            uuid: "uu-id-1234",
-            path: "/path/to/note.org",
-            tags: "tag1",
-            categories: "",
-            aliases: "",
-            content: "file content\nsecond line",
-            neighbors: "\n  → Linked Note\n",
-            backlinks: "",
+            title: "My Note".to_string(),
+            uuid: "uu-id-1234".to_string(),
+            path: "/path/to/note.org".to_string(),
+            tags: "tag1".to_string(),
+            categories: String::new(),
+            aliases: String::new(),
+            content: "file content\nsecond line".to_string(),
+            neighbors: "\n  → Linked Note\n".to_string(),
+            backlinks: String::new(),
         };
         let result = render_template(DEFAULT_TEMPLATE, &vars);
         assert!(result.contains("My Note"));

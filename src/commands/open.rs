@@ -57,10 +57,14 @@ fn open_target(
         });
     println!("Opening: {} (line {})", title, actual_line);
 
-    let editor_parts: Vec<&str> = editor.split_whitespace().collect();
-    let mut cmd = std::process::Command::new(editor_parts[0]);
-    if editor_parts.len() > 1 {
-        cmd.args(&editor_parts[1..]);
+    let editor_parts = shlex::split(editor).unwrap_or_else(|| vec![editor.to_string()]);
+    let Some((first, rest)) = editor_parts.split_first() else {
+        eprintln!("Empty editor command");
+        return Ok(());
+    };
+    let mut cmd = std::process::Command::new(first);
+    if !rest.is_empty() {
+        cmd.args(rest);
     }
     cmd.arg(format!("+{actual_line}"));
     cmd.arg(&path);
@@ -68,8 +72,8 @@ fn open_target(
     let status = cmd.status();
     match status {
         Ok(s) if s.success() => {}
-        Ok(s) => eprintln!("{} exited with error: {s}", editor_parts[0]),
-        Err(e) => eprintln!("Failed to run {}: {e}", editor_parts[0]),
+        Ok(s) => eprintln!("{first} exited with error: {s}"),
+        Err(e) => eprintln!("Failed to run {first}: {e}"),
     }
 
     Ok(())

@@ -303,8 +303,19 @@ fn check_overlinking(node: &crate::graph::Node, graph: &Graph, issues: &mut Vec<
 fn validate_one(graph: &Graph, target: &str, db_root: &Path) -> Result<ValidateOutput> {
     let node = graph.resolve_target(target)?.clone();
     let is_heading_node = graph.heading_uuid_to_primary.contains_key(&node.uuid);
-    let mut issues = Vec::new();
     let target_is_uuid = UUID_FORMAT_RE.is_match(target);
+    validate_node(graph, &node, target, target_is_uuid, is_heading_node, db_root)
+}
+
+fn validate_node(
+    graph: &Graph,
+    node: &crate::graph::Node,
+    target: &str,
+    target_is_uuid: bool,
+    is_heading_node: bool,
+    db_root: &Path,
+) -> Result<ValidateOutput> {
+    let mut issues = Vec::new();
 
     let content = graph
         .results
@@ -374,8 +385,12 @@ pub fn run(config: &Config, ctx: &OutputContext, opts: &ValidateOptions) -> Resu
         OutputFormat::Text => {
             for t in &opts.targets {
                 let node = graph.resolve_target(t)?.clone();
+                let is_heading_node = graph.heading_uuid_to_primary.contains_key(&node.uuid);
+                let target_is_uuid = UUID_FORMAT_RE.is_match(t);
                 let incoming = graph.backlinks.get(&node.uuid).cloned().unwrap_or_default();
-                let output = validate_one(&graph, t, db_root)?;
+                let output = validate_node(
+                    &graph, &node, t, target_is_uuid, is_heading_node, db_root,
+                )?;
                 print_validate_text(
                     &node,
                     &output.broken_internal,
