@@ -101,6 +101,21 @@ Introduce key terms in *bold* the first time they appear in a note (org-mode use
 Do not bold for emphasis. Reserve bold for definitional anchors.
 Use org-mode `*bold*`.
 
+### Bold vs Section Headings
+
+Bold text must never be used as a substitute for section headings. A standalone line containing only bold markup (`*Section Name*`) is ambiguous — it visually mimics a heading but is not recognised as one by org-mode parsers, outline navigation, or table of contents generation.
+
+Section divisions always use org-mode heading syntax:
+
+```org
+* Section Name
+** Sub-section Name
+```
+
+A bold term `*like this*` is only valid inline within a paragraph, as a definitional anchor for the key concept the note introduces. A standalone bold line is always a mistake — convert it to a heading.
+
+**Rule**: if text sits alone on its own line wrapped in single asterisks, it is a heading, not a bold term. Replace `*Text*` with `* Text`.
+
 ### The "Applied to …" Pattern
 
 Optionally end a core note with a concrete analogy from a familiar domain (everyday life, a well-known craft). Use this only when it brings significantly more clarity — an analogy that earns its keep is worth including, but a forced one is worse than none. The analogy is told as a mini-narrative, not stated as a comparison:
@@ -209,6 +224,7 @@ The voice is that of a knowledgeable practitioner explaining to a peer. Not a te
 - Avoid bullet points where prose works — use lists only for enumerations of parallel items
 - Avoid empty transitional phrases ("It is important to note that", "It should be noted that")
 - Avoid "It is not X — it is Y" constructions. State directly what something is. If a contrast is needed, state both sides plainly without the "not X" framing.
+- Avoid using standalone bold text (`*Section Name*`) as section headings. Use org-mode heading syntax (`* Section Name`) instead. Bold is only for definitional anchors inline within prose.
 
 ## Workflow
 
