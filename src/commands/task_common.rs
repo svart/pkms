@@ -238,12 +238,11 @@ pub trait RowItem {
             ]);
         }
 
-        if rows.is_empty()
-            && let Some(dfd) = self.daily_file_date()
-        {
+        if rows.is_empty() {
+            let date = self.daily_file_date().map(|d| d.to_string());
             rows.push([
                 id,
-                dfd.to_string(),
+                date.unwrap_or_default(),
                 state,
                 String::new(),
                 prio,

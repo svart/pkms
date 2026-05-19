@@ -9,6 +9,53 @@ fn test_todo_human() {
 }
 
 #[test]
+fn test_todo_dateless_items_visible_in_text() {
+    let (_dir, root) = setup_db();
+    let (v, _) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "todo",
+    ]);
+    let json_total = v["items"].as_array().unwrap().len();
+
+    let (stdout, _stderr, status) = run(&["--db", root.to_str().unwrap(), "todo"]);
+    assert!(status.success(), "todo failed: {stdout}");
+
+    // Items known to have no SCHEDULED/DEADLINE/daily_file_date should appear
+    // in text output
+    assert!(
+        stdout.contains("Completed task"),
+        "dateless DONE item missing"
+    );
+    assert!(stdout.contains("Review"), "dateless WAITING item missing");
+    assert!(stdout.contains("Something"), "dateless IDEA item missing");
+    assert!(
+        stdout.contains("Child task B"),
+        "dateless TODO child missing"
+    );
+    assert!(stdout.contains("Grandchild"), "dateless DONE child missing");
+    assert!(
+        stdout.contains("Another top task"),
+        "dateless TODO item missing"
+    );
+
+    // The footer should say "Total:" (not "Shown:") and the count should
+    // match the JSON item count
+    let footer_line = stdout.lines().last().unwrap_or("");
+    assert!(
+        footer_line.starts_with("Total:"),
+        "expected footer to show Total, got: {footer_line}"
+    );
+    assert!(
+        footer_line.contains(&json_total.to_string()),
+        "expected footer count {} in: {footer_line}",
+        json_total
+    );
+}
+
+#[test]
 fn test_todo_json() {
     let (_dir, root) = setup_db();
     let (v, status) = run_json(&[
