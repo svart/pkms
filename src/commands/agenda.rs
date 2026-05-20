@@ -2,8 +2,8 @@ use crate::cli::OutputFormat;
 use crate::commands::task_common::*;
 use crate::commands::task_index::{TaskRecord, assign_canonical_ids, collect_agenda_records};
 use crate::config::ResolvedConfig;
-use crate::graph::Graph;
 use crate::output::{Column, OutputContext};
+use crate::workspace::Workspace;
 use anyhow::Result;
 use chrono::{Local, NaiveDate};
 use serde::Serialize;
@@ -113,7 +113,8 @@ impl From<TaskRecord> for AgendaItem {
 }
 
 pub fn run(config: &ResolvedConfig, ctx: &OutputContext, opts: &AgendaOptions) -> Result<()> {
-    let graph = Graph::load(config)?;
+    let workspace = Workspace::load(config)?;
+    let graph = &workspace.graph;
 
     let today_date = Local::now().date_naive();
 
@@ -133,7 +134,7 @@ pub fn run(config: &ResolvedConfig, ctx: &OutputContext, opts: &AgendaOptions) -
     let tags_filters = parse_filters(opts.tags.as_deref());
     let type_filters = parse_filters(opts.kind.as_deref());
     let mut records = collect_agenda_records(
-        &graph,
+        &workspace.corpus,
         &valid_states,
         &closed_states,
         today_date,
@@ -165,7 +166,7 @@ pub fn run(config: &ResolvedConfig, ctx: &OutputContext, opts: &AgendaOptions) -
         records.retain(|item| item.is_overdue);
     }
 
-    assign_canonical_ids(config, &graph, &mut records);
+    assign_canonical_ids(config, graph, &mut records);
     let mut items: Vec<AgendaItem> = records.into_iter().map(AgendaItem::from).collect();
 
     if opts.upcoming {

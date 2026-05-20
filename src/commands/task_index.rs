@@ -2,6 +2,7 @@ use crate::commands::task_common::{
     Filter, apply_state_filter, apply_tags_filter, apply_type_filter, extract_date, is_overdue,
 };
 use crate::config::ResolvedConfig;
+use crate::corpus::Corpus;
 use crate::graph::Graph;
 use crate::parser::{Heading, find_daily_file_date, strip_org_links};
 use chrono::NaiveDate;
@@ -30,13 +31,13 @@ pub struct TaskRecord {
 }
 
 pub fn collect_todo_records(
-    graph: &Graph,
+    corpus: &Corpus,
     valid_states: &[String],
     state_filters: &[Filter],
     tags_filters: &[Filter],
     type_filters: &[Filter],
 ) -> Vec<TaskRecord> {
-    collect_records(graph, |parsed, heading, _is_daily| {
+    collect_records(corpus, |parsed, heading, _is_daily| {
         heading
             .todo_state
             .as_ref()
@@ -52,7 +53,7 @@ pub fn collect_todo_records(
 }
 
 pub fn collect_agenda_records(
-    graph: &Graph,
+    corpus: &Corpus,
     valid_states: &[String],
     closed_states: &[String],
     today: NaiveDate,
@@ -60,7 +61,7 @@ pub fn collect_agenda_records(
     tags_filters: &[Filter],
     type_filters: &[Filter],
 ) -> Vec<TaskRecord> {
-    collect_records(graph, |parsed, heading, is_daily| {
+    collect_records(corpus, |parsed, heading, is_daily| {
         let eligible = heading.scheduled.is_some()
             || heading.deadline.is_some()
             || (is_daily
@@ -119,11 +120,11 @@ pub fn assign_canonical_ids(config: &ResolvedConfig, graph: &Graph, records: &mu
 }
 
 fn collect_records(
-    graph: &Graph,
+    corpus: &Corpus,
     mut include_heading: impl FnMut(&crate::parser::ParsedNote, &Heading, bool) -> bool,
 ) -> Vec<TaskRecord> {
     let mut items = Vec::new();
-    for result in &graph.results {
+    for result in corpus.results() {
         if result.parse_error.is_some() {
             continue;
         }

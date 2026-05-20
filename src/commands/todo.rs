@@ -5,6 +5,7 @@ use crate::config::ResolvedConfig;
 use crate::graph::Graph;
 use crate::org_date::parse_org_date;
 use crate::output::{Column, OutputContext};
+use crate::workspace::Workspace;
 use anyhow::Result;
 use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
 use serde::Serialize;
@@ -194,7 +195,8 @@ fn resolve_scope_paths(
 }
 
 pub fn run(config: &ResolvedConfig, ctx: &OutputContext, opts: &TodoOptions) -> Result<()> {
-    let graph = Graph::load(config)?;
+    let workspace = Workspace::load(config)?;
+    let graph = &workspace.graph;
 
     let valid_states = config.todo_states();
     let state_filters = parse_filters(opts.state.as_deref());
@@ -202,18 +204,18 @@ pub fn run(config: &ResolvedConfig, ctx: &OutputContext, opts: &TodoOptions) -> 
     let type_filters = parse_filters(opts.kind.as_deref());
 
     let mut records = collect_todo_records(
-        &graph,
+        &workspace.corpus,
         &valid_states,
         &state_filters,
         &tags_filters,
         &type_filters,
     );
-    assign_canonical_ids(config, &graph, &mut records);
+    assign_canonical_ids(config, graph, &mut records);
     let mut items: Vec<TodoItem> = records.into_iter().map(TodoItem::from).collect();
 
     if !opts.scope.is_empty() {
         let db_root = config.resolved_db_root();
-        let item_paths = resolve_scope_paths(&graph, &opts.scope, db_root);
+        let item_paths = resolve_scope_paths(graph, &opts.scope, db_root);
         items.retain(|item| item_paths.contains(&item.path));
     }
 

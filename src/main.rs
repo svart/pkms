@@ -13,6 +13,7 @@ mod output;
 mod parser;
 mod tokens;
 mod util;
+mod workspace;
 
 use anyhow::Result;
 use app::App;
