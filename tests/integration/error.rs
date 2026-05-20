@@ -126,6 +126,7 @@ fn test_missing_db_json_error() {
     let output = std::process::Command::new(pkms_binary())
         .args(["--output-format", "json", "stats"])
         .env("XDG_CONFIG_HOME", dir.path())
+        .env_remove("PKMS_DB_ROOT")
         .output()
         .unwrap();
     let stdout = String::from_utf8_lossy(&output.stdout).to_string();

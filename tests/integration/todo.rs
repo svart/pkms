@@ -263,6 +263,54 @@ fn test_todo_sort_state() {
 }
 
 #[test]
+fn test_todo_and_agenda_share_canonical_ids_for_same_headings() {
+    let (_dir, root) = setup_db();
+    let (todo, todo_status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "todo",
+    ]);
+    assert!(todo_status.success());
+    let (agenda, agenda_status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "agenda",
+    ]);
+    assert!(agenda_status.success());
+
+    let mut todo_ids_by_heading = std::collections::HashMap::new();
+    for item in todo["items"].as_array().unwrap() {
+        let key = (
+            item["path"].as_str().unwrap().to_string(),
+            item["line_number"].as_u64().unwrap(),
+        );
+        todo_ids_by_heading.insert(key, item["id"].as_u64().unwrap());
+    }
+
+    let agenda_items = agenda["items"].as_array().unwrap();
+    assert!(
+        !agenda_items.is_empty(),
+        "fixture should contain agenda-backed tasks"
+    );
+    for item in agenda_items {
+        let key = (
+            item["path"].as_str().unwrap().to_string(),
+            item["line_number"].as_u64().unwrap(),
+        );
+        assert_eq!(
+            todo_ids_by_heading.get(&key).copied(),
+            Some(item["id"].as_u64().unwrap()),
+            "agenda item should use the same canonical ID as todo: {}",
+            item["heading_title"].as_str().unwrap()
+        );
+    }
+}
+
+#[test]
 fn test_todo_group_state() {
     let (_dir, root) = setup_db();
     let (v, status) = run_json(&[

@@ -32,6 +32,23 @@ fn test_fix_json() {
 }
 
 #[test]
+fn test_fix_invalid_uuid_json_error() {
+    let (_dir, root) = setup_db();
+    let (stdout, _stderr, status) = run(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "fix",
+        "not-a-uuid",
+        "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa",
+    ]);
+    assert!(!status.success());
+    let v: serde_json::Value = serde_json::from_str(stdout.trim()).unwrap();
+    assert!(v.get("error").is_some());
+}
+
+#[test]
 fn test_fix_broken_not_found() {
     let (_dir, root) = setup_db();
     let (stdout, _stderr, status) = run(&[

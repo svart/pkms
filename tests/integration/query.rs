@@ -26,6 +26,21 @@ fn test_query_json() {
 }
 
 #[test]
+fn test_query_missing_terms_json_error() {
+    let (_dir, root) = setup_db();
+    let (stdout, _stderr, status) = run(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "query",
+    ]);
+    assert!(!status.success());
+    let v: serde_json::Value = serde_json::from_str(stdout.trim()).unwrap();
+    assert!(v.get("error").is_some());
+}
+
+#[test]
 fn test_query_ndjson() {
     let (_dir, root) = setup_db();
     let (stdout, _stderr, status) = run(&[
