@@ -1,4 +1,4 @@
-use crate::config::{Config, ConfigInfo};
+use crate::config::{ConfigInfo, ResolvedConfig};
 use crate::output::OutputContext;
 use anyhow::Result;
 use serde::Serialize;
@@ -9,10 +9,8 @@ pub struct InfoOutput {
     pub config_path: String,
 }
 
-pub fn run(config: &Config, ctx: &OutputContext) -> Result<()> {
-    let db_root = config.resolved_db_root()?;
-    let new_notes_dir = config.resolve_new_notes_dir(db_root);
-    let info = config.resolved_info(db_root, &new_notes_dir);
+pub fn run(config: &ResolvedConfig, ctx: &OutputContext) -> Result<()> {
+    let info = config.resolved_info();
 
     if ctx.is_json() {
         let output = InfoOutput {

@@ -1,11 +1,11 @@
 use crate::cli::{Cli, OutputFormat};
-use crate::config::Config;
+use crate::config::{Config, ResolvedConfig};
 use crate::output::OutputContext;
 use anyhow::Result;
 use std::process::ExitCode;
 
 pub struct App {
-    pub config: Config,
+    pub config: ResolvedConfig,
     pub output: OutputContext,
 }
 
@@ -14,7 +14,7 @@ impl App {
         let output = OutputContext {
             format: cli.output_format.clone().unwrap_or(OutputFormat::Text),
         };
-        let config = Config::load()?.with_resolved_db_root(cli.db.clone())?;
+        let config = Config::load()?.resolve(cli.db.clone())?;
         Ok(App { config, output })
     }
 }

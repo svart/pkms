@@ -1,7 +1,7 @@
 use crate::commands::task_common::{
     Filter, apply_state_filter, apply_tags_filter, apply_type_filter, extract_date, is_overdue,
 };
-use crate::config::Config;
+use crate::config::ResolvedConfig;
 use crate::graph::Graph;
 use crate::parser::{Heading, find_daily_file_date, strip_org_links};
 use chrono::NaiveDate;
@@ -104,7 +104,7 @@ pub fn collect_agenda_records(
     .collect()
 }
 
-pub fn assign_canonical_ids(config: &Config, graph: &Graph, records: &mut [TaskRecord]) {
+pub fn assign_canonical_ids(config: &ResolvedConfig, graph: &Graph, records: &mut [TaskRecord]) {
     let global_ids: std::collections::HashMap<(String, usize), usize> = graph
         .all_task_entries(config)
         .into_iter()

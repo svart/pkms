@@ -1,5 +1,5 @@
 use crate::cli::OutputFormat;
-use crate::config::Config;
+use crate::config::ResolvedConfig;
 use crate::discovery;
 use crate::output::OutputContext;
 use crate::parser::{FILETAGS_RE, ID_PROPERTY_RE, TITLE_RE, parse_note};
@@ -156,8 +156,8 @@ pub struct ResolveOptions {
     pub todos: bool,
 }
 
-pub fn run(config: &Config, ctx: &OutputContext, opts: &ResolveOptions) -> Result<()> {
-    let db_root = config.resolved_db_root()?;
+pub fn run(config: &ResolvedConfig, ctx: &OutputContext, opts: &ResolveOptions) -> Result<()> {
+    let db_root = config.resolved_db_root();
     let ignore = config.resolve_ignore_patterns();
     let notes = scan_files(db_root, &ignore, opts.uuid.as_deref());
 

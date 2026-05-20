@@ -12,6 +12,15 @@ pub struct Config {
     pub agenda: Option<AgendaConfig>,
 }
 
+#[derive(Debug, Clone)]
+pub struct ResolvedConfig {
+    pub db_root: PathBuf,
+    pub new_notes_dir: Option<PathBuf>,
+    pub ignore_patterns: Option<Vec<String>>,
+    pub columns: Option<Vec<String>>,
+    pub agenda: Option<AgendaConfig>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AgendaConfig {
     #[serde(default = "default_open_todo_states")]
@@ -50,7 +59,7 @@ impl Config {
         }
     }
 
-    pub fn with_resolved_db_root(mut self, cli_db: Option<PathBuf>) -> Result<Self> {
+    pub fn resolve(self, cli_db: Option<PathBuf>) -> Result<ResolvedConfig> {
         let db_root = cli_db
             .or_else(|| std::env::var("PKMS_DB_ROOT").ok().map(PathBuf::from))
             .or_else(|| self.db_root.clone())
@@ -60,20 +69,27 @@ impl Config {
                      or set db_root in ~/.config/pkms.toml"
                 )
             })?;
-        self.db_root = Some(canonicalize_or_abs(&db_root));
-        Ok(self)
+        Ok(ResolvedConfig {
+            db_root: canonicalize_or_abs(&db_root),
+            new_notes_dir: self.new_notes_dir,
+            ignore_patterns: self.ignore_patterns,
+            columns: self.columns,
+            agenda: self.agenda,
+        })
     }
+}
 
-    pub fn resolve_new_notes_dir(&self, db_root: &std::path::Path) -> PathBuf {
+impl ResolvedConfig {
+    pub fn resolve_new_notes_dir(&self) -> PathBuf {
         match &self.new_notes_dir {
             Some(dir) => {
                 if dir.is_absolute() {
                     dir.clone()
                 } else {
-                    db_root.join(dir)
+                    self.db_root.join(dir)
                 }
             }
-            None => db_root.join("roam"),
+            None => self.db_root.join("roam"),
         }
     }
 
@@ -81,10 +97,8 @@ impl Config {
         self.ignore_patterns.clone().unwrap_or_default()
     }
 
-    pub fn resolved_db_root(&self) -> Result<&Path> {
-        self.db_root
-            .as_deref()
-            .ok_or_else(|| anyhow::anyhow!("db_root not resolved before use"))
+    pub fn resolved_db_root(&self) -> &Path {
+        &self.db_root
     }
 
     pub fn todo_states(&self) -> Vec<String> {
@@ -110,10 +124,10 @@ impl Config {
             .unwrap_or_else(default_closed_todo_states)
     }
 
-    pub fn resolved_info(&self, db_root: &Path, new_notes_dir: &Path) -> ConfigInfo {
+    pub fn resolved_info(&self) -> ConfigInfo {
         ConfigInfo {
-            db_root: db_root.to_path_buf(),
-            new_notes_dir: new_notes_dir.to_path_buf(),
+            db_root: self.db_root.clone(),
+            new_notes_dir: self.resolve_new_notes_dir(),
             ignore_patterns: self.resolve_ignore_patterns(),
             has_config_file: dirs::config_dir().is_some_and(|d| d.join("pkms.toml").exists()),
         }
@@ -181,56 +195,50 @@ mod tests {
 
     #[test]
     fn test_resolve_new_notes_dir_default() {
-        let config = Config {
-            db_root: None,
+        let config = ResolvedConfig {
+            db_root: PathBuf::from("/test/root"),
             new_notes_dir: None,
             ignore_patterns: None,
             columns: None,
             agenda: None,
         };
-        let db_root = Path::new("/test/root");
         assert_eq!(
-            config.resolve_new_notes_dir(db_root),
+            config.resolve_new_notes_dir(),
             PathBuf::from("/test/root/roam")
         );
     }
 
     #[test]
     fn test_resolve_new_notes_dir_absolute() {
-        let config = Config {
-            db_root: None,
+        let config = ResolvedConfig {
+            db_root: PathBuf::from("/test/root"),
             new_notes_dir: Some(PathBuf::from("/abs/path")),
             ignore_patterns: None,
             columns: None,
             agenda: None,
         };
-        let db_root = Path::new("/test/root");
-        assert_eq!(
-            config.resolve_new_notes_dir(db_root),
-            PathBuf::from("/abs/path")
-        );
+        assert_eq!(config.resolve_new_notes_dir(), PathBuf::from("/abs/path"));
     }
 
     #[test]
     fn test_resolve_new_notes_dir_relative() {
-        let config = Config {
-            db_root: None,
+        let config = ResolvedConfig {
+            db_root: PathBuf::from("/test/root"),
             new_notes_dir: Some(PathBuf::from("subdir")),
             ignore_patterns: None,
             columns: None,
             agenda: None,
         };
-        let db_root = Path::new("/test/root");
         assert_eq!(
-            config.resolve_new_notes_dir(db_root),
+            config.resolve_new_notes_dir(),
             PathBuf::from("/test/root/subdir")
         );
     }
 
     #[test]
     fn test_resolve_ignore_patterns_some() {
-        let config = Config {
-            db_root: None,
+        let config = ResolvedConfig {
+            db_root: PathBuf::from("/test/root"),
             new_notes_dir: None,
             ignore_patterns: Some(vec!["*.bak".to_string(), ".attach".to_string()]),
             columns: None,
@@ -243,8 +251,8 @@ mod tests {
 
     #[test]
     fn test_resolve_ignore_patterns_none() {
-        let config = Config {
-            db_root: None,
+        let config = ResolvedConfig {
+            db_root: PathBuf::from("/test/root"),
             new_notes_dir: None,
             ignore_patterns: None,
             columns: None,
@@ -281,14 +289,14 @@ mod tests {
 
     #[test]
     fn test_resolved_info() {
-        let config = Config {
-            db_root: Some(PathBuf::from("/db")),
-            new_notes_dir: None,
+        let config = ResolvedConfig {
+            db_root: PathBuf::from("/actual/db"),
+            new_notes_dir: Some(PathBuf::from("/notes/dir")),
             ignore_patterns: Some(vec!["*.tmp".to_string()]),
             columns: None,
             agenda: None,
         };
-        let info = config.resolved_info(Path::new("/actual/db"), Path::new("/notes/dir"));
+        let info = config.resolved_info();
         assert_eq!(info.db_root, PathBuf::from("/actual/db"));
         assert_eq!(info.new_notes_dir, PathBuf::from("/notes/dir"));
         assert_eq!(info.ignore_patterns, vec!["*.tmp".to_string()]);

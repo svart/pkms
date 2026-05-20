@@ -1,4 +1,4 @@
-use crate::config::Config;
+use crate::config::ResolvedConfig;
 use crate::graph::Graph;
 use crate::output::OutputContext;
 use crate::util;
@@ -28,7 +28,7 @@ pub struct OrphansOptions {
     pub with_dailies: bool,
 }
 
-pub fn run(config: &Config, ctx: &OutputContext, opts: &OrphansOptions) -> Result<()> {
+pub fn run(config: &ResolvedConfig, ctx: &OutputContext, opts: &OrphansOptions) -> Result<()> {
     let graph = Graph::load(config)?;
     let mut orphans = graph.orphan_nodes();
 

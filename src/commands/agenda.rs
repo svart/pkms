@@ -1,7 +1,7 @@
 use crate::cli::OutputFormat;
 use crate::commands::task_common::*;
 use crate::commands::task_index::{TaskRecord, assign_canonical_ids, collect_agenda_records};
-use crate::config::Config;
+use crate::config::ResolvedConfig;
 use crate::graph::Graph;
 use crate::output::{Column, OutputContext};
 use anyhow::Result;
@@ -112,7 +112,7 @@ impl From<TaskRecord> for AgendaItem {
     }
 }
 
-pub fn run(config: &Config, ctx: &OutputContext, opts: &AgendaOptions) -> Result<()> {
+pub fn run(config: &ResolvedConfig, ctx: &OutputContext, opts: &AgendaOptions) -> Result<()> {
     let graph = Graph::load(config)?;
 
     let today_date = Local::now().date_naive();

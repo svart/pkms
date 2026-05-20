@@ -1,4 +1,4 @@
-use crate::config::Config;
+use crate::config::ResolvedConfig;
 use crate::graph::{
     DuplicateInfo, Graph, GraphStats, OverlinkEntry, SelfLinkEntry, file_link_target_exists,
 };
@@ -103,9 +103,9 @@ pub struct CheckOptions {
     pub cross_links: Option<Vec<String>>,
 }
 
-pub fn run(config: &Config, ctx: &OutputContext, opts: &CheckOptions) -> Result<ExitCode> {
+pub fn run(config: &ResolvedConfig, ctx: &OutputContext, opts: &CheckOptions) -> Result<ExitCode> {
     let graph = Graph::load(config)?;
-    let db_root = config.resolved_db_root()?;
+    let db_root = config.resolved_db_root();
 
     let cross_links_specified = opts.cross_links.is_some();
     let any_explicit = opts.stats

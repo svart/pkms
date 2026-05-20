@@ -13,7 +13,7 @@ pub mod tasks;
 pub mod traversal;
 pub mod validation;
 
-use crate::config::Config;
+use crate::config::ResolvedConfig;
 use crate::corpus::Corpus;
 pub use crate::corpus::FileScanResult;
 use crate::parser::{Link, ParsedNote};
@@ -149,7 +149,7 @@ pub fn file_link_target_exists(target: &str, source_path: &Path, db_root: &Path)
 }
 
 impl Graph {
-    pub fn load(config: &Config) -> anyhow::Result<Self> {
+    pub fn load(config: &ResolvedConfig) -> anyhow::Result<Self> {
         let corpus = Corpus::load(config)?;
         Ok(Self::from_corpus(&corpus))
     }

@@ -1,5 +1,5 @@
 use crate::cli::OutputFormat;
-use crate::config::Config;
+use crate::config::ResolvedConfig;
 use crate::graph::Graph;
 use crate::output::OutputContext;
 use crate::tokens;
@@ -105,7 +105,7 @@ fn build_context_output(
     })
 }
 
-pub fn run(config: &Config, ctx: &OutputContext, opts: &ContextOptions) -> Result<()> {
+pub fn run(config: &ResolvedConfig, ctx: &OutputContext, opts: &ContextOptions) -> Result<()> {
     let graph = Graph::load(config)?;
 
     match ctx.format {

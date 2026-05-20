@@ -1,4 +1,4 @@
-use crate::config::Config;
+use crate::config::ResolvedConfig;
 use crate::output::OutputContext;
 use crate::parser::ID_PROPERTY_RE;
 use anyhow::{Context, Result};
@@ -50,10 +50,10 @@ pub struct NewOptions {
     pub heading: Option<String>,
 }
 
-pub fn run(config: &Config, ctx: &OutputContext, opts: &NewOptions) -> Result<()> {
-    let db_root = config.resolved_db_root()?;
+pub fn run(config: &ResolvedConfig, ctx: &OutputContext, opts: &NewOptions) -> Result<()> {
+    let db_root = config.resolved_db_root();
     let ignore = config.resolve_ignore_patterns();
-    let new_notes_dir = config.resolve_new_notes_dir(db_root);
+    let new_notes_dir = config.resolve_new_notes_dir();
 
     let uuid = uuid::Uuid::new_v4().to_string();
     let slug = title_to_slug(&opts.title);

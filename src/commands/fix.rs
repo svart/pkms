@@ -1,4 +1,4 @@
-use crate::config::Config;
+use crate::config::ResolvedConfig;
 use crate::graph::Graph;
 use crate::output::OutputContext;
 use anyhow::Result;
@@ -96,9 +96,9 @@ pub struct FixOptions {
     pub apply: bool,
 }
 
-pub fn run(config: &Config, ctx: &OutputContext, opts: &FixOptions) -> Result<()> {
+pub fn run(config: &ResolvedConfig, ctx: &OutputContext, opts: &FixOptions) -> Result<()> {
     let graph = Graph::load(config)?;
-    let db_root = config.resolved_db_root()?;
+    let db_root = config.resolved_db_root();
 
     let (replacement_uuid, replacement_title) = graph
         .nodes

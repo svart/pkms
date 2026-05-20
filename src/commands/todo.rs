@@ -1,7 +1,7 @@
 use crate::cli::OutputFormat;
 use crate::commands::task_common::*;
 use crate::commands::task_index::{TaskRecord, assign_canonical_ids, collect_todo_records};
-use crate::config::Config;
+use crate::config::ResolvedConfig;
 use crate::graph::Graph;
 use crate::org_date::parse_org_date;
 use crate::output::{Column, OutputContext};
@@ -193,7 +193,7 @@ fn resolve_scope_paths(
         .collect()
 }
 
-pub fn run(config: &Config, ctx: &OutputContext, opts: &TodoOptions) -> Result<()> {
+pub fn run(config: &ResolvedConfig, ctx: &OutputContext, opts: &TodoOptions) -> Result<()> {
     let graph = Graph::load(config)?;
 
     let valid_states = config.todo_states();
@@ -212,7 +212,7 @@ pub fn run(config: &Config, ctx: &OutputContext, opts: &TodoOptions) -> Result<(
     let mut items: Vec<TodoItem> = records.into_iter().map(TodoItem::from).collect();
 
     if !opts.scope.is_empty() {
-        let db_root = config.resolved_db_root()?;
+        let db_root = config.resolved_db_root();
         let item_paths = resolve_scope_paths(&graph, &opts.scope, db_root);
         items.retain(|item| item_paths.contains(&item.path));
     }

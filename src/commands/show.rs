@@ -1,5 +1,5 @@
 use crate::cli::OutputFormat;
-use crate::config::Config;
+use crate::config::ResolvedConfig;
 use crate::graph::Graph;
 use crate::output::OutputContext;
 use crate::parser::{Link, strip_org_links};
@@ -239,7 +239,11 @@ fn show_heading_by_line(
     })
 }
 
-fn process_one_show(graph: &Graph, config: &Config, target: &HeadingTarget) -> Result<ShowOutput> {
+fn process_one_show(
+    graph: &Graph,
+    config: &ResolvedConfig,
+    target: &HeadingTarget,
+) -> Result<ShowOutput> {
     let (path, line_number) = if let Some(cid) = target.canonical_id {
         graph.resolve_canonical_task_id(config, cid)?
     } else {
@@ -463,7 +467,7 @@ fn print_one_show_text(output: &ShowOutput, graph: &Graph) {
     }
 }
 
-pub fn run(config: &Config, ctx: &OutputContext, opts: &ShowOptions) -> Result<()> {
+pub fn run(config: &ResolvedConfig, ctx: &OutputContext, opts: &ShowOptions) -> Result<()> {
     let graph = Graph::load(config)?;
 
     match ctx.format {

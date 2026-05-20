@@ -1,5 +1,5 @@
 use crate::cli::OutputFormat;
-use crate::config::Config;
+use crate::config::ResolvedConfig;
 use crate::graph::Graph;
 use crate::output::OutputContext;
 use crate::parser::Link;
@@ -104,9 +104,9 @@ pub struct StatsOptions {
     pub todos: bool,
 }
 
-pub fn run(config: &Config, ctx: &OutputContext, opts: &StatsOptions) -> Result<()> {
+pub fn run(config: &ResolvedConfig, ctx: &OutputContext, opts: &StatsOptions) -> Result<()> {
     let graph = Graph::load(config)?;
-    let db_root = config.resolved_db_root()?;
+    let db_root = config.resolved_db_root();
 
     if let Some(limit) = opts.hubs {
         return print_hubs(ctx, &graph, limit);

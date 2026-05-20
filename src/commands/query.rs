@@ -1,5 +1,5 @@
 use crate::cli::OutputFormat;
-use crate::config::Config;
+use crate::config::ResolvedConfig;
 #[cfg(feature = "embed")]
 use crate::embed;
 use crate::graph::Graph;
@@ -44,7 +44,7 @@ pub struct QueryOptions {
     pub embed: bool,
 }
 
-pub fn run(config: &Config, ctx: &OutputContext, opts: &QueryOptions) -> Result<()> {
+pub fn run(config: &ResolvedConfig, ctx: &OutputContext, opts: &QueryOptions) -> Result<()> {
     let graph = Graph::load(config)?;
 
     let mut combined = if opts.embed {

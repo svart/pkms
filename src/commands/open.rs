@@ -1,4 +1,4 @@
-use crate::config::Config;
+use crate::config::ResolvedConfig;
 use crate::graph::Graph;
 use crate::output::OutputContext;
 use anyhow::Result;
@@ -26,7 +26,7 @@ fn find_line_for_node(graph: &Graph, path: &std::path::Path) -> usize {
 
 fn open_target(
     graph: &Graph,
-    config: &Config,
+    config: &ResolvedConfig,
     target: &str,
     editor: &str,
     line: Option<usize>,
@@ -79,7 +79,7 @@ fn open_target(
     Ok(())
 }
 
-pub fn run(config: &Config, _ctx: &OutputContext, opts: &OpenOptions) -> Result<()> {
+pub fn run(config: &ResolvedConfig, _ctx: &OutputContext, opts: &OpenOptions) -> Result<()> {
     let graph = Graph::load(config)?;
 
     for target in &opts.targets {

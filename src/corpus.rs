@@ -1,4 +1,4 @@
-use crate::config::Config;
+use crate::config::ResolvedConfig;
 use crate::discovery::discover_files;
 use crate::parser::{ParsedNote, parse_note};
 use anyhow::Result;
@@ -19,8 +19,8 @@ pub struct Corpus {
 }
 
 impl Corpus {
-    pub fn load(config: &Config) -> Result<Self> {
-        let db_root = config.resolved_db_root()?;
+    pub fn load(config: &ResolvedConfig) -> Result<Self> {
+        let db_root = config.resolved_db_root();
         let ignore = config.resolve_ignore_patterns();
         Self::scan(db_root, &ignore)
     }

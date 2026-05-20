@@ -1,5 +1,5 @@
 use crate::cli::OutputFormat;
-use crate::config::Config;
+use crate::config::ResolvedConfig;
 use crate::graph::{Graph, Node};
 use crate::output::OutputContext;
 use crate::parser;
@@ -248,7 +248,7 @@ fn print_one_get_text(
     Ok(())
 }
 
-pub fn run(config: &Config, ctx: &OutputContext, opts: &GetOptions) -> Result<()> {
+pub fn run(config: &ResolvedConfig, ctx: &OutputContext, opts: &GetOptions) -> Result<()> {
     let graph = Graph::load(config)?;
 
     match ctx.format {

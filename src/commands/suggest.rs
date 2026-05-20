@@ -1,5 +1,5 @@
 use crate::cli::OutputFormat;
-use crate::config::Config;
+use crate::config::ResolvedConfig;
 #[cfg(feature = "embed")]
 use crate::embed;
 use crate::graph::{Graph, Node};
@@ -559,7 +559,7 @@ pub struct SuggestOptions {
     pub use_embed: bool,
 }
 
-pub fn run(config: &Config, ctx: &OutputContext, opts: &SuggestOptions) -> Result<()> {
+pub fn run(config: &ResolvedConfig, ctx: &OutputContext, opts: &SuggestOptions) -> Result<()> {
     let graph = Graph::load(config)?;
 
     if opts.use_embed {

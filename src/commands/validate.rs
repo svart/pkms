@@ -1,5 +1,5 @@
 use crate::cli::OutputFormat;
-use crate::config::Config;
+use crate::config::ResolvedConfig;
 use crate::graph::{Graph, file_link_target_exists, resolve_file_link_path};
 use crate::output::OutputContext;
 use crate::parser::{ID_PROPERTY_RE, Link, UUID_FORMAT_RE, validate_filetags_format};
@@ -388,9 +388,9 @@ pub struct ValidateOptions {
     pub targets: Vec<String>,
 }
 
-pub fn run(config: &Config, ctx: &OutputContext, opts: &ValidateOptions) -> Result<()> {
+pub fn run(config: &ResolvedConfig, ctx: &OutputContext, opts: &ValidateOptions) -> Result<()> {
     let graph = Graph::load(config)?;
-    let db_root = config.resolved_db_root()?;
+    let db_root = config.resolved_db_root();
 
     match ctx.format {
         OutputFormat::Text => {

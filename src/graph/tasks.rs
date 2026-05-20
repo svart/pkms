@@ -1,9 +1,9 @@
 use super::Graph;
-use crate::config::Config;
+use crate::config::ResolvedConfig;
 use crate::util::priority_value;
 
 impl Graph {
-    pub fn all_task_entries(&self, config: &Config) -> Vec<(usize, String, usize)> {
+    pub fn all_task_entries(&self, config: &ResolvedConfig) -> Vec<(usize, String, usize)> {
         let entries = self.sorted_task_entries(config);
         entries
             .into_iter()
@@ -14,7 +14,7 @@ impl Graph {
 
     pub fn resolve_canonical_task_id(
         &self,
-        config: &Config,
+        config: &ResolvedConfig,
         id: usize,
     ) -> anyhow::Result<(String, usize)> {
         let entries = self.sorted_task_entries(config);
@@ -29,7 +29,10 @@ impl Graph {
         Ok((path.clone(), *line))
     }
 
-    fn sorted_task_entries(&self, config: &Config) -> Vec<(String, usize, Option<char>, bool)> {
+    fn sorted_task_entries(
+        &self,
+        config: &ResolvedConfig,
+    ) -> Vec<(String, usize, Option<char>, bool)> {
         let valid_states = config.todo_states();
         let open_states = config.open_todo_states();
         let closed_states = config.closed_todo_states();

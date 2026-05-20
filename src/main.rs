@@ -39,7 +39,7 @@ fn main() -> ExitCode {
     }
 }
 
-fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<ExitCode> {
+fn dispatch(cli: &Cli, cfg: &config::ResolvedConfig, ctx: &OutputContext) -> Result<ExitCode> {
     Ok(match &cli.command {
         Command::Check(args) => commands::check::run(
             cfg,

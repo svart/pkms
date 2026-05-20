@@ -1,4 +1,4 @@
-use crate::config::Config;
+use crate::config::ResolvedConfig;
 use crate::graph::Graph;
 use crate::output::OutputContext;
 use anyhow::Result;
@@ -24,7 +24,7 @@ pub struct PathOptions {
     pub to: String,
 }
 
-pub fn run(config: &Config, ctx: &OutputContext, opts: &PathOptions) -> Result<()> {
+pub fn run(config: &ResolvedConfig, ctx: &OutputContext, opts: &PathOptions) -> Result<()> {
     let graph = Graph::load(config)?;
 
     let from_node = graph.find_node(&opts.from);
