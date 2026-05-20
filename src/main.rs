@@ -1,3 +1,4 @@
+mod app;
 mod cli;
 mod commands;
 mod config;
@@ -5,6 +6,7 @@ mod discovery;
 #[cfg(feature = "embed")]
 mod embed;
 mod graph;
+mod input;
 mod org_date;
 mod output;
 mod parser;
@@ -12,70 +14,22 @@ mod tokens;
 mod util;
 
 use anyhow::Result;
+use app::App;
 use clap::Parser;
-use cli::{Cli, Command, OutputFormat};
-use output::{ALL_COLUMNS, Column, OutputContext};
+use cli::{Cli, Command};
+use output::OutputContext;
 use std::process::ExitCode;
-use util::read_stdin_ndjson;
 
 fn main() -> ExitCode {
     let cli = Cli::parse();
-    let ctx = OutputContext {
-        format: cli.output_format.clone().unwrap_or(OutputFormat::Text),
-    };
-    let machine = ctx.is_json();
-
-    let mut cfg = match config::Config::load() {
-        Ok(c) => c,
-        Err(e) => {
-            if machine {
-                println!("{}", serde_json::json!({"error": e.to_string()}));
-            } else {
-                eprintln!("Error: {e:#}");
-            }
-            return ExitCode::from(2);
-        }
+    let app = match App::from_cli(&cli) {
+        Ok(app) => app,
+        Err(e) => return app::startup_error(e),
     };
 
-    let resolved = cli
-        .db
-        .clone()
-        .or_else(|| {
-            std::env::var("PKMS_DB_ROOT")
-                .ok()
-                .map(std::path::PathBuf::from)
-        })
-        .or_else(|| cfg.db_root.clone())
-        .ok_or_else(|| {
-            anyhow::anyhow!(
-                "No database root specified. Provide --db PATH, set PKMS_DB_ROOT env var, \
-                 or set db_root in ~/.config/pkms.toml"
-            )
-        })
-        .map(|p| config::canonicalize_or_abs(&p));
-
-    cfg.db_root = match resolved {
-        Ok(db_root) => Some(db_root),
-        Err(e) => {
-            if machine {
-                println!("{}", serde_json::json!({"error": e.to_string()}));
-            } else {
-                eprintln!("Error: {e}");
-            }
-            return ExitCode::from(2);
-        }
-    };
-
-    match dispatch(&cli, &cfg, &ctx) {
+    match dispatch(&cli, &app.config, &app.output) {
         Ok(code) => code,
-        Err(e) => {
-            if machine {
-                println!("{}", serde_json::json!({"error": e.to_string()}));
-            } else {
-                eprintln!("Error: {e}");
-            }
-            ExitCode::from(1)
-        }
+        Err(e) => app::command_error(&app.output, e),
     }
 }
 
@@ -107,7 +61,7 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
             },
         )?,
         Command::Validate { target, from_stdin } => {
-            let targets = resolve_targets(target, from_stdin)?;
+            let targets = input::resolve_targets(target, *from_stdin)?;
             commands::validate::run(cfg, ctx, &commands::validate::ValidateOptions { targets })
                 .map(|()| ExitCode::SUCCESS)?
         }
@@ -148,7 +102,7 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
             encoding,
             from_stdin,
         } => {
-            let targets = resolve_targets(target, from_stdin)?;
+            let targets = input::resolve_targets(target, *from_stdin)?;
             commands::context::run(
                 cfg,
                 ctx,
@@ -175,13 +129,9 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
             &commands::resolve::ResolveOptions {
                 uuid: uuid.clone(),
                 title: title.clone(),
-                tags: tags
-                    .as_deref()
-                    .map(|s| s.split(',').map(|s| s.trim().to_string()).collect()),
+                tags: input::comma_list(tags.as_deref()),
                 limit: *limit,
-                fields: fields
-                    .as_deref()
-                    .map(|s| s.split(',').map(|s| s.trim().to_string()).collect()),
+                fields: input::comma_list(fields.as_deref()),
                 todos: *todos,
             },
         )
@@ -218,7 +168,7 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
         } => {
             #[cfg(not(feature = "embed"))]
             let embed = &false;
-            let targets = resolve_targets(target, from_stdin)?;
+            let targets = input::resolve_targets(target, *from_stdin)?;
             commands::suggest::run(
                 cfg,
                 ctx,
@@ -243,12 +193,8 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
             &commands::new::NewOptions {
                 title: title.clone(),
                 create: *create,
-                tags: tags
-                    .as_deref()
-                    .map(|s| s.split(',').map(|s| s.trim().to_string()).collect()),
-                aliases: aliases
-                    .as_deref()
-                    .map(|s| s.split(',').map(|s| s.trim().to_string()).collect()),
+                tags: input::comma_list(tags.as_deref()),
+                aliases: input::comma_list(aliases.as_deref()),
                 heading: heading.clone(),
             },
         )
@@ -261,7 +207,7 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
             from_stdin,
             encoding,
         } => {
-            let targets = resolve_targets(target, from_stdin)?;
+            let targets = input::resolve_targets(target, *from_stdin)?;
             commands::get::run(
                 cfg,
                 ctx,
@@ -322,11 +268,11 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
             columns,
         } => {
             let resolved_scope = if *from_stdin {
-                read_stdin_ndjson()?
+                util::read_stdin_ndjson()?
             } else {
                 scope.clone().unwrap_or_default()
             };
-            let todo_cols = resolve_columns(columns.as_deref(), &cfg.columns);
+            let todo_cols = input::resolve_columns(columns.as_deref(), &cfg.columns);
             commands::todo::run(
                 cfg,
                 ctx,
@@ -338,24 +284,8 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
                     limit: *limit,
                     group: group.clone(),
                     scope: resolved_scope,
-                    after: after.as_deref().and_then(|d| {
-                        chrono::NaiveDateTime::parse_from_str(d, "%Y-%m-%d %H:%M")
-                            .ok()
-                            .or_else(|| {
-                                chrono::NaiveDate::parse_from_str(d, "%Y-%m-%d")
-                                    .ok()
-                                    .map(|dt| dt.and_hms_opt(0, 0, 0).expect("midnight is valid"))
-                            })
-                    }),
-                    before: before.as_deref().and_then(|d| {
-                        chrono::NaiveDateTime::parse_from_str(d, "%Y-%m-%d %H:%M")
-                            .ok()
-                            .or_else(|| {
-                                chrono::NaiveDate::parse_from_str(d, "%Y-%m-%d")
-                                    .ok()
-                                    .map(|dt| dt.and_hms_opt(0, 0, 0).expect("midnight is valid"))
-                            })
-                    }),
+                    after: input::parse_datetime(after.as_deref()),
+                    before: input::parse_datetime(before.as_deref()),
                     prio: prio.clone(),
                     line_sep: *line_sep,
                     columns: todo_cols,
@@ -378,7 +308,7 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
             line_sep,
             columns,
         } => {
-            let agenda_cols = resolve_columns(columns.as_deref(), &cfg.columns);
+            let agenda_cols = input::resolve_columns(columns.as_deref(), &cfg.columns);
             commands::agenda::run(
                 cfg,
                 ctx,
@@ -389,9 +319,7 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
                     prio: prio.clone(),
                     overdue: *overdue,
                     upcoming: *upcoming,
-                    date: date
-                        .as_deref()
-                        .and_then(|d| chrono::NaiveDate::parse_from_str(d, "%Y-%m-%d").ok()),
+                    date: input::parse_date(date.as_deref()),
                     sort: sort.clone(),
                     limit: *limit,
                     today: *today,
@@ -418,7 +346,7 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
             line,
             from_stdin,
         } => {
-            let targets = resolve_targets(target, from_stdin)?;
+            let targets = input::resolve_targets(target, *from_stdin)?;
             commands::open::run(
                 cfg,
                 ctx,
@@ -454,39 +382,6 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
                 .map(|()| ExitCode::SUCCESS)?
         }
     })
-}
-
-fn resolve_targets(target: &Option<String>, from_stdin: &bool) -> Result<Vec<String>> {
-    use util::{is_stdin_piped, read_stdin_ndjson};
-    if *from_stdin || (target.is_none() && is_stdin_piped()) {
-        read_stdin_ndjson()
-    } else if let Some(t) = target {
-        Ok(vec![t.clone()])
-    } else {
-        anyhow::bail!(
-            "No target specified and no stdin pipe detected. \
-             Provide a target or use --from-stdin."
-        )
-    }
-}
-
-fn resolve_columns(cli_cols: Option<&str>, config_cols: &Option<Vec<String>>) -> Vec<Column> {
-    if let Some(s) = cli_cols {
-        let cols: Vec<Column> = s
-            .split(',')
-            .filter_map(|c| Column::from_str(c.trim()))
-            .collect();
-        if !cols.is_empty() {
-            return cols;
-        }
-    }
-    if let Some(names) = config_cols {
-        let cols: Vec<Column> = names.iter().filter_map(|c| Column::from_str(c)).collect();
-        if !cols.is_empty() {
-            return cols;
-        }
-    }
-    ALL_COLUMNS.to_vec()
 }
 
 fn init_config(db: Option<&std::path::Path>, ctx: &OutputContext) -> Result<ExitCode> {

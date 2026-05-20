@@ -50,6 +50,20 @@ impl Config {
         }
     }
 
+    pub fn with_resolved_db_root(mut self, cli_db: Option<PathBuf>) -> Result<Self> {
+        let db_root = cli_db
+            .or_else(|| std::env::var("PKMS_DB_ROOT").ok().map(PathBuf::from))
+            .or_else(|| self.db_root.clone())
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "No database root specified. Provide --db PATH, set PKMS_DB_ROOT env var, \
+                     or set db_root in ~/.config/pkms.toml"
+                )
+            })?;
+        self.db_root = Some(canonicalize_or_abs(&db_root));
+        Ok(self)
+    }
+
     pub fn resolve_new_notes_dir(&self, db_root: &std::path::Path) -> PathBuf {
         match &self.new_notes_dir {
             Some(dir) => {
