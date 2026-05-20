@@ -96,8 +96,6 @@ pub fn terminal_width() -> Option<usize> {
         .filter(|&w| w > 0)
 }
 
-const BASE_PADDING: usize = 5;
-const COL_PADDING: usize = 2;
 const MIN_COLUMN_WIDTH: usize = 15;
 const TAG_WEIGHT: f64 = 0.20;
 const NOTE_WEIGHT: f64 = 0.35;
@@ -137,7 +135,7 @@ fn compute_widths(
     term_w: usize,
 ) -> Option<Vec<(Column, usize)>> {
     let n_columns = enabled_columns.len();
-    let padding = BASE_PADDING + COL_PADDING * n_columns;
+    let padding = n_columns.saturating_sub(1) + 2 * n_columns;
 
     let fixed_width: usize = enabled_columns
         .iter()
@@ -169,67 +167,125 @@ fn compute_widths(
         return None;
     }
 
-    let has_heading = wrap_cols.contains(&Column::Heading);
+    let total_weight: f64 = wrap_cols.iter().map(|c| wrap_weight(*c)).sum();
+
+    let mut widths: Vec<(Column, usize)> = wrap_cols
+        .iter()
+        .map(|&col| {
+            let w = (available as f64 * wrap_weight(col) / total_weight).floor() as usize;
+            (col, w)
+        })
+        .collect();
+
+    let sum_now: usize = widths.iter().map(|(_, w)| w).sum();
+    if sum_now < available {
+        let mut rem = available - sum_now;
+        widths.sort_by(|a, b| wrap_weight(b.0).partial_cmp(&wrap_weight(a.0)).unwrap());
+        for (_, w) in &mut widths {
+            if rem == 0 {
+                break;
+            }
+            *w += 1;
+            rem -= 1;
+        }
+        widths.sort_by_key(|&(col, _)| wrap_cols.iter().position(|&c| c == col).unwrap());
+    }
+
+    loop {
+        let mut any_capped = false;
+
+        for (col, w) in &mut widths {
+            let max_cw = max_widths[*col as usize];
+            if *w > max_cw {
+                *w = max_cw;
+                any_capped = true;
+            }
+        }
+
+        if !any_capped {
+            break;
+        }
+
+        let capped_sum: usize = widths.iter().map(|(_, w)| w).sum();
+        let leftover = available.saturating_sub(capped_sum);
+        if leftover == 0 {
+            break;
+        }
+
+        let uncapped: Vec<usize> = widths
+            .iter()
+            .enumerate()
+            .filter(|(_, (col, w))| *w < max_widths[*col as usize])
+            .map(|(i, _)| i)
+            .collect();
+        let uncapped_weight: f64 = uncapped.iter().map(|&i| wrap_weight(widths[i].0)).sum();
+        if uncapped_weight == 0.0 {
+            break;
+        }
+
+        let mut added_sum = 0usize;
+        for &i in &uncapped {
+            let add =
+                (leftover as f64 * wrap_weight(widths[i].0) / uncapped_weight).floor() as usize;
+            widths[i].1 += add;
+            added_sum += add;
+        }
+
+        let mut rem = leftover.saturating_sub(added_sum);
+        for &i in uncapped.iter().rev() {
+            if rem == 0 {
+                break;
+            }
+            widths[i].1 += 1;
+            rem -= 1;
+        }
+    }
+
+    for (_, w) in &mut widths {
+        if *w < min_col {
+            *w = min_col;
+        }
+    }
+    let sum_after_min: usize = widths.iter().map(|(_, w)| w).sum();
+    if sum_after_min > available {
+        let mut excess = sum_after_min - available;
+        widths.sort_by(|a, b| wrap_weight(a.0).partial_cmp(&wrap_weight(b.0)).unwrap());
+        for (_, w) in &mut widths {
+            if excess == 0 {
+                break;
+            }
+            let can_take = (*w).saturating_sub(min_col);
+            let take = can_take.min(excess);
+            *w -= take;
+            excess -= take;
+        }
+        if excess > 0 {
+            return None;
+        }
+    }
+
+    for _ in 0..widths.len() {
+        let mut changed = false;
+        for i in 1..widths.len() {
+            if widths[i].1 > widths[i - 1].1 {
+                let sum = widths[i - 1].1 + widths[i].1;
+                widths[i - 1].1 = sum.div_ceil(2);
+                widths[i].1 = sum / 2;
+                changed = true;
+            }
+        }
+        if !changed {
+            break;
+        }
+    }
 
     let mut result: Vec<(Column, usize)> = Vec::new();
-    let mut allocated = 0usize;
-
     for &col in enabled_columns {
         if is_fixed_column(col) {
             result.push((col, max_widths[col as usize]));
+        } else if let Some(&(_, w)) = widths.iter().find(|&&(c, _)| c == col) {
+            result.push((col, w));
         }
-    }
-
-    for &col in &wrap_cols {
-        if has_heading && col == Column::Heading {
-            continue;
-        }
-        let max_cw = max_widths[col as usize];
-        let weight = wrap_weight(col);
-        let sibling_weight: f64 = if has_heading {
-            wrap_cols
-                .iter()
-                .filter(|c| **c != Column::Heading)
-                .map(|c| wrap_weight(*c))
-                .sum()
-        } else {
-            wrap_cols.iter().map(|c| wrap_weight(*c)).sum()
-        };
-        let share = if sibling_weight > 0.0 {
-            (available as f64 * weight / sibling_weight).floor() as usize
-        } else {
-            0
-        };
-
-        let w = if available <= max_cw {
-            share.max(min_col)
-        } else {
-            max_cw.min(share).max(min_col)
-        };
-        result.push((col, w));
-        allocated += w;
-    }
-
-    if has_heading {
-        let mut heading_w = available.saturating_sub(allocated);
-        if heading_w < min_col {
-            let deficit = min_col - heading_w;
-            let mut remaining_deficit = deficit;
-            for (col, w) in result.iter_mut() {
-                if remaining_deficit == 0 {
-                    break;
-                }
-                if !is_wrap_column(*col) || *col == Column::Heading {
-                    continue;
-                }
-                let can_take = w.saturating_sub(min_col);
-                let take = can_take.min(remaining_deficit);
-                *w -= take;
-                remaining_deficit -= take;
-            }
-            heading_w = min_col;
-        }
-        result.push((Column::Heading, heading_w));
     }
 
     let wrap_min_check: Vec<&(Column, usize)> =
