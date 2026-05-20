@@ -21,5 +21,6 @@ pub mod show;
 pub mod stats;
 pub mod suggest;
 pub mod task_common;
+pub mod task_index;
 pub mod todo;
 pub mod validate;

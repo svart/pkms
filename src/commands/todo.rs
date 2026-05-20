@@ -1,10 +1,10 @@
 use crate::cli::OutputFormat;
 use crate::commands::task_common::*;
+use crate::commands::task_index::{TaskRecord, assign_canonical_ids, collect_todo_records};
 use crate::config::Config;
 use crate::graph::Graph;
 use crate::org_date::parse_org_date;
 use crate::output::{Column, OutputContext};
-use crate::parser::{find_daily_file_date, strip_org_links};
 use anyhow::Result;
 use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
 use serde::Serialize;
@@ -72,13 +72,6 @@ pub struct TodoItem {
     pub heading_tags: Vec<String>,
 }
 
-fn heading_is_eligible(heading: &crate::parser::Heading, valid_states: &[String]) -> bool {
-    heading
-        .todo_state
-        .as_ref()
-        .is_some_and(|s| valid_states.iter().any(|vs| vs.eq_ignore_ascii_case(s)))
-}
-
 pub struct TodoOptions {
     pub state: Option<String>,
     pub tags: Option<String>,
@@ -92,6 +85,31 @@ pub struct TodoOptions {
     pub prio: Option<String>,
     pub line_sep: bool,
     pub columns: Vec<Column>,
+}
+
+impl From<TaskRecord> for TodoItem {
+    fn from(record: TaskRecord) -> Self {
+        TodoItem {
+            id: record.id,
+            uuid: record.uuid,
+            title: record.title,
+            path: record.path,
+            filetags: record.filetags,
+            is_daily_file: record.is_daily_file,
+            daily_file_date: record.daily_file_date,
+            heading_title: record.heading_title,
+            heading_level: record.heading_level,
+            line_number: record.line_number,
+            todo_state: record.todo_state,
+            priority: record.priority,
+            scheduled: record.scheduled,
+            scheduled_date: record.scheduled_date,
+            deadline: record.deadline,
+            deadline_date: record.deadline_date,
+            is_overdue: record.is_overdue,
+            heading_tags: record.heading_tags,
+        }
+    }
 }
 
 fn item_datetimes(item: &TodoItem) -> Vec<NaiveDateTime> {
@@ -118,93 +136,6 @@ fn item_datetimes(item: &TodoItem) -> Vec<NaiveDateTime> {
         result.push(date.and_hms_opt(0, 0, 0).expect("midnight is valid"));
     }
     result
-}
-
-fn collect_todo_items(
-    graph: &Graph,
-    valid_states: &[String],
-    state_filters: &[Filter],
-    tags_filters: &[Filter],
-    type_filters: &[Filter],
-) -> Vec<TodoItem> {
-    let mut items = Vec::new();
-    for result in &graph.results {
-        if result.parse_error.is_some() {
-            continue;
-        }
-
-        let parsed = &result.parsed;
-        let path = &result.path;
-        let is_daily = find_daily_file_date(path).is_some();
-        let daily_date = find_daily_file_date(path).map(|d| d.format("%Y-%m-%d").to_string());
-
-        for heading in &parsed.headings {
-            if !heading_is_eligible(heading, valid_states) {
-                continue;
-            }
-
-            if !apply_state_filter(heading.todo_state.as_deref(), state_filters) {
-                continue;
-            }
-
-            let combined_tags: Vec<String> = {
-                let mut seen = std::collections::HashSet::new();
-                let mut result = Vec::new();
-                for tag in parsed.filetags.iter().chain(heading.tags.iter()) {
-                    if seen.insert(tag.clone()) {
-                        result.push(tag.clone());
-                    }
-                }
-                result
-            };
-
-            if !apply_tags_filter(&combined_tags, tags_filters) {
-                continue;
-            }
-
-            if !apply_type_filter(
-                heading.scheduled.is_some(),
-                heading.deadline.is_some(),
-                type_filters,
-            ) {
-                continue;
-            }
-
-            let item_scheduled_date = extract_date(heading.scheduled.as_ref());
-            let item_deadline_date = extract_date(heading.deadline.as_ref());
-            let item_is_overdue =
-                is_overdue(heading.deadline.as_ref()) || is_overdue(heading.scheduled.as_ref());
-
-            let primary_uuid = parsed.uuids.first().cloned().unwrap_or_default();
-            let note_title = strip_org_links(&parsed.title.clone().unwrap_or_else(|| {
-                path.file_stem()
-                    .map(|s| s.display().to_string())
-                    .unwrap_or_default()
-            }));
-
-            items.push(TodoItem {
-                id: 0,
-                uuid: primary_uuid,
-                title: note_title,
-                path: path.display().to_string(),
-                filetags: parsed.filetags.clone(),
-                is_daily_file: is_daily,
-                daily_file_date: daily_date.clone(),
-                heading_title: strip_org_links(&heading.title),
-                heading_level: heading.level,
-                line_number: heading.line_number,
-                todo_state: heading.todo_state.clone(),
-                priority: heading.priority,
-                scheduled: heading.scheduled.clone(),
-                scheduled_date: item_scheduled_date,
-                deadline: heading.deadline.clone(),
-                deadline_date: item_deadline_date,
-                is_overdue: item_is_overdue,
-                heading_tags: heading.tags.clone(),
-            });
-        }
-    }
-    items
 }
 
 fn resolve_scope_paths(
@@ -270,25 +201,15 @@ pub fn run(config: &Config, ctx: &OutputContext, opts: &TodoOptions) -> Result<(
     let tags_filters = parse_filters(opts.tags.as_deref());
     let type_filters = parse_filters(opts.kind.as_deref());
 
-    let mut items = collect_todo_items(
+    let mut records = collect_todo_records(
         &graph,
         &valid_states,
         &state_filters,
         &tags_filters,
         &type_filters,
     );
-
-    let global_ids: std::collections::HashMap<(String, usize), usize> = graph
-        .all_task_entries(config)
-        .into_iter()
-        .map(|(id, path, line)| ((path, line), id))
-        .collect();
-    for item in &mut items {
-        item.id = global_ids
-            .get(&(item.path.clone(), item.line_number))
-            .copied()
-            .unwrap_or(0);
-    }
+    assign_canonical_ids(config, &graph, &mut records);
+    let mut items: Vec<TodoItem> = records.into_iter().map(TodoItem::from).collect();
 
     if !opts.scope.is_empty() {
         let db_root = config.resolved_db_root()?;
