@@ -1,4 +1,6 @@
+use crate::cli::NewArgs;
 use crate::config::ResolvedConfig;
+use crate::input;
 use crate::output::OutputContext;
 use crate::parser::ID_PROPERTY_RE;
 use anyhow::{Context, Result};
@@ -48,6 +50,18 @@ pub struct NewOptions {
     pub tags: Option<Vec<String>>,
     pub aliases: Option<Vec<String>>,
     pub heading: Option<String>,
+}
+
+impl From<&NewArgs> for NewOptions {
+    fn from(args: &NewArgs) -> Self {
+        NewOptions {
+            title: args.title.clone(),
+            create: args.create,
+            tags: input::comma_list(args.tags.as_deref()),
+            aliases: input::comma_list(args.aliases.as_deref()),
+            heading: args.heading.clone(),
+        }
+    }
 }
 
 pub fn run(config: &ResolvedConfig, ctx: &OutputContext, opts: &NewOptions) -> Result<()> {

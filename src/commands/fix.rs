@@ -1,3 +1,4 @@
+use crate::cli::FixArgs;
 use crate::config::ResolvedConfig;
 use crate::graph::Graph;
 use crate::output::OutputContext;
@@ -94,6 +95,24 @@ pub struct FixOptions {
     pub broken_uuid: String,
     pub target_uuid: String,
     pub apply: bool,
+}
+
+impl TryFrom<&FixArgs> for FixOptions {
+    type Error = anyhow::Error;
+
+    fn try_from(args: &FixArgs) -> Result<Self> {
+        let broken_uuid = uuid::Uuid::parse_str(&args.broken_uuid)
+            .map_err(|_| anyhow::anyhow!("Invalid UUID format: {}", args.broken_uuid))?
+            .to_string();
+        let target_uuid = uuid::Uuid::parse_str(&args.target)
+            .map_err(|_| anyhow::anyhow!("Invalid UUID format: {}", args.target))?
+            .to_string();
+        Ok(FixOptions {
+            broken_uuid,
+            target_uuid,
+            apply: args.apply,
+        })
+    }
 }
 
 pub fn run(config: &ResolvedConfig, ctx: &OutputContext, opts: &FixOptions) -> Result<()> {

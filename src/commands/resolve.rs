@@ -1,6 +1,7 @@
-use crate::cli::OutputFormat;
+use crate::cli::{OutputFormat, ResolveArgs};
 use crate::config::ResolvedConfig;
 use crate::discovery;
+use crate::input;
 use crate::output::OutputContext;
 use crate::parser::{FILETAGS_RE, ID_PROPERTY_RE, TITLE_RE, parse_note};
 use anyhow::Result;
@@ -154,6 +155,19 @@ pub struct ResolveOptions {
     pub limit: Option<usize>,
     pub fields: Option<Vec<String>>,
     pub todos: bool,
+}
+
+impl From<&ResolveArgs> for ResolveOptions {
+    fn from(args: &ResolveArgs) -> Self {
+        ResolveOptions {
+            uuid: args.uuid.clone(),
+            title: args.title.clone(),
+            tags: input::comma_list(args.tags.as_deref()),
+            limit: args.limit,
+            fields: input::comma_list(args.fields.as_deref()),
+            todos: args.todos,
+        }
+    }
 }
 
 pub fn run(config: &ResolvedConfig, ctx: &OutputContext, opts: &ResolveOptions) -> Result<()> {

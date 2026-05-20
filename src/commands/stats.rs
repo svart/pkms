@@ -1,4 +1,4 @@
-use crate::cli::OutputFormat;
+use crate::cli::{OutputFormat, StatsArgs};
 use crate::config::ResolvedConfig;
 use crate::graph::Graph;
 use crate::output::OutputContext;
@@ -102,6 +102,17 @@ pub struct StatsOptions {
     pub hubs: Option<usize>,
     pub tags: bool,
     pub todos: bool,
+}
+
+impl From<&StatsArgs> for StatsOptions {
+    fn from(args: &StatsArgs) -> Self {
+        StatsOptions {
+            days: args.days,
+            hubs: args.hubs,
+            tags: args.tags,
+            todos: args.todos,
+        }
+    }
 }
 
 pub fn run(config: &ResolvedConfig, ctx: &OutputContext, opts: &StatsOptions) -> Result<()> {

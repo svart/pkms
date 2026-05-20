@@ -1,3 +1,4 @@
+use crate::cli::OrphansArgs;
 use crate::config::ResolvedConfig;
 use crate::graph::Graph;
 use crate::output::OutputContext;
@@ -26,6 +27,15 @@ pub struct OrphanEntry {
 pub struct OrphansOptions {
     pub limit: Option<usize>,
     pub with_dailies: bool,
+}
+
+impl From<&OrphansArgs> for OrphansOptions {
+    fn from(args: &OrphansArgs) -> Self {
+        OrphansOptions {
+            limit: args.limit,
+            with_dailies: args.with_dailies,
+        }
+    }
 }
 
 pub fn run(config: &ResolvedConfig, ctx: &OutputContext, opts: &OrphansOptions) -> Result<()> {

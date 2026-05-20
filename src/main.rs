@@ -42,46 +42,22 @@ fn main() -> ExitCode {
 
 fn dispatch(cli: &Cli, cfg: &config::ResolvedConfig, ctx: &OutputContext) -> Result<ExitCode> {
     Ok(match &cli.command {
-        Command::Check(args) => commands::check::run(
-            cfg,
-            ctx,
-            &commands::check::CheckOptions {
-                stats: args.stats,
-                file_links: args.file_links,
-                attachment_links: args.attachment_links,
-                id_links: args.id_links,
-                filetags: args.filetags,
-                agenda: args.agenda,
-                self_links: args.self_links,
-                overlinks: args.overlinks,
-                cross_links: args.cross_links.clone(),
-            },
-        )?,
+        Command::Check(args) => {
+            commands::check::run(cfg, ctx, &commands::check::CheckOptions::from(args))?
+        }
         Command::Validate(args) => {
             let targets = input::resolve_targets(&args.target, args.from_stdin)?;
             commands::validate::run(cfg, ctx, &commands::validate::ValidateOptions { targets })
                 .map(|()| ExitCode::SUCCESS)?
         }
-        Command::Stats(args) => commands::stats::run(
-            cfg,
-            ctx,
-            &commands::stats::StatsOptions {
-                days: args.days,
-                hubs: args.hubs,
-                tags: args.tags,
-                todos: args.todos,
-            },
-        )
-        .map(|()| ExitCode::SUCCESS)?,
-        Command::Orphans(args) => commands::orphans::run(
-            cfg,
-            ctx,
-            &commands::orphans::OrphansOptions {
-                limit: args.limit,
-                with_dailies: args.with_dailies,
-            },
-        )
-        .map(|()| ExitCode::SUCCESS)?,
+        Command::Stats(args) => {
+            commands::stats::run(cfg, ctx, &commands::stats::StatsOptions::from(args))
+                .map(|()| ExitCode::SUCCESS)?
+        }
+        Command::Orphans(args) => {
+            commands::orphans::run(cfg, ctx, &commands::orphans::OrphansOptions::from(args))
+                .map(|()| ExitCode::SUCCESS)?
+        }
         Command::Info => commands::info::run(cfg, ctx).map(|()| ExitCode::SUCCESS)?,
         Command::InitConfig(args) => init_config(args.db.as_deref(), ctx)?,
         Command::Context(args) => {
@@ -99,36 +75,12 @@ fn dispatch(cli: &Cli, cfg: &config::ResolvedConfig, ctx: &OutputContext) -> Res
             )
             .map(|()| ExitCode::SUCCESS)?
         }
-        Command::Resolve(args) => commands::resolve::run(
-            cfg,
-            ctx,
-            &commands::resolve::ResolveOptions {
-                uuid: args.uuid.clone(),
-                title: args.title.clone(),
-                tags: input::comma_list(args.tags.as_deref()),
-                limit: args.limit,
-                fields: input::comma_list(args.fields.as_deref()),
-                todos: args.todos,
-            },
-        )
-        .map(|()| ExitCode::SUCCESS)?,
+        Command::Resolve(args) => {
+            commands::resolve::run(cfg, ctx, &commands::resolve::ResolveOptions::from(args))
+                .map(|()| ExitCode::SUCCESS)?
+        }
         Command::Fix(args) => {
-            let broken = uuid::Uuid::parse_str(&args.broken_uuid)
-                .map_err(|_| anyhow::anyhow!("Invalid UUID format: {}", args.broken_uuid))?
-                .to_string();
-            let target_uuid = uuid::Uuid::parse_str(&args.target)
-                .map_err(|_| anyhow::anyhow!("Invalid UUID format: {}", args.target))?
-                .to_string();
-            commands::fix::run(
-                cfg,
-                ctx,
-                &commands::fix::FixOptions {
-                    broken_uuid: broken,
-                    target_uuid,
-                    apply: args.apply,
-                },
-            )
-            .map(|()| ExitCode::SUCCESS)?
+            commands::fix::run(cfg, ctx, &args.try_into()?).map(|()| ExitCode::SUCCESS)?
         }
         Command::Suggest(args) => {
             #[cfg(not(feature = "embed"))]
@@ -148,18 +100,8 @@ fn dispatch(cli: &Cli, cfg: &config::ResolvedConfig, ctx: &OutputContext) -> Res
             )
             .map(|()| ExitCode::SUCCESS)?
         }
-        Command::New(args) => commands::new::run(
-            cfg,
-            ctx,
-            &commands::new::NewOptions {
-                title: args.title.clone(),
-                create: args.create,
-                tags: input::comma_list(args.tags.as_deref()),
-                aliases: input::comma_list(args.aliases.as_deref()),
-                heading: args.heading.clone(),
-            },
-        )
-        .map(|()| ExitCode::SUCCESS)?,
+        Command::New(args) => commands::new::run(cfg, ctx, &commands::new::NewOptions::from(args))
+            .map(|()| ExitCode::SUCCESS)?,
         Command::Get(args) => {
             let targets = input::resolve_targets(&args.target, args.from_stdin)?;
             commands::get::run(
@@ -177,28 +119,7 @@ fn dispatch(cli: &Cli, cfg: &config::ResolvedConfig, ctx: &OutputContext) -> Res
             .map(|()| ExitCode::SUCCESS)?
         }
         Command::Query(args) => {
-            #[cfg(not(feature = "embed"))]
-            let embed = &false;
-            #[cfg(feature = "embed")]
-            let embed = &args.embed;
-            let terms = args
-                .terms
-                .clone()
-                .ok_or_else(|| anyhow::anyhow!("No search terms specified. Provide terms"))?;
-            commands::query::run(
-                cfg,
-                ctx,
-                &commands::query::QueryOptions {
-                    terms,
-                    limit: args.limit,
-                    tags: args.tags,
-                    title: args.title,
-                    content: args.content,
-                    todos: args.todos,
-                    embed: *embed,
-                },
-            )
-            .map(|()| ExitCode::SUCCESS)?
+            commands::query::run(cfg, ctx, &args.try_into()?).map(|()| ExitCode::SUCCESS)?
         }
         Command::Todo(args) => {
             let resolved_scope = if args.from_stdin {
@@ -251,16 +172,7 @@ fn dispatch(cli: &Cli, cfg: &config::ResolvedConfig, ctx: &OutputContext) -> Res
             .map(|()| ExitCode::SUCCESS)?
         }
         Command::Path(args) => {
-            let from = args
-                .from
-                .clone()
-                .ok_or_else(|| anyhow::anyhow!("No source specified. Provide --from"))?;
-            let to = args
-                .to
-                .clone()
-                .ok_or_else(|| anyhow::anyhow!("No target specified. Provide --to"))?;
-            commands::path::run(cfg, ctx, &commands::path::PathOptions { from, to })
-                .map(|()| ExitCode::SUCCESS)?
+            commands::path::run(cfg, ctx, &args.try_into()?).map(|()| ExitCode::SUCCESS)?
         }
         Command::Open(args) => {
             let targets = input::resolve_targets(&args.target, args.from_stdin)?;

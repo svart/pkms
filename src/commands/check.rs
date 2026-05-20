@@ -1,3 +1,4 @@
+use crate::cli::CheckArgs;
 use crate::config::ResolvedConfig;
 use crate::graph::{
     DuplicateInfo, Graph, GraphStats, OverlinkEntry, SelfLinkEntry, file_link_target_exists,
@@ -101,6 +102,22 @@ pub struct CheckOptions {
     pub self_links: bool,
     pub overlinks: bool,
     pub cross_links: Option<Vec<String>>,
+}
+
+impl From<&CheckArgs> for CheckOptions {
+    fn from(args: &CheckArgs) -> Self {
+        CheckOptions {
+            stats: args.stats,
+            file_links: args.file_links,
+            attachment_links: args.attachment_links,
+            id_links: args.id_links,
+            filetags: args.filetags,
+            agenda: args.agenda,
+            self_links: args.self_links,
+            overlinks: args.overlinks,
+            cross_links: args.cross_links.clone(),
+        }
+    }
 }
 
 pub fn run(config: &ResolvedConfig, ctx: &OutputContext, opts: &CheckOptions) -> Result<ExitCode> {

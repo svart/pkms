@@ -1,3 +1,4 @@
+use crate::cli::PathArgs;
 use crate::config::ResolvedConfig;
 use crate::graph::Graph;
 use crate::output::OutputContext;
@@ -22,6 +23,22 @@ pub struct PathNode {
 pub struct PathOptions {
     pub from: String,
     pub to: String,
+}
+
+impl TryFrom<&PathArgs> for PathOptions {
+    type Error = anyhow::Error;
+
+    fn try_from(args: &PathArgs) -> Result<Self> {
+        let from = args
+            .from
+            .clone()
+            .ok_or_else(|| anyhow::anyhow!("No source specified. Provide --from"))?;
+        let to = args
+            .to
+            .clone()
+            .ok_or_else(|| anyhow::anyhow!("No target specified. Provide --to"))?;
+        Ok(PathOptions { from, to })
+    }
 }
 
 pub fn run(config: &ResolvedConfig, ctx: &OutputContext, opts: &PathOptions) -> Result<()> {

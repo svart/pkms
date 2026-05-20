@@ -1,4 +1,4 @@
-use crate::cli::OutputFormat;
+use crate::cli::{OutputFormat, QueryArgs};
 use crate::config::ResolvedConfig;
 #[cfg(feature = "embed")]
 use crate::embed;
@@ -42,6 +42,30 @@ pub struct QueryOptions {
     pub content: bool,
     pub todos: bool,
     pub embed: bool,
+}
+
+impl TryFrom<&QueryArgs> for QueryOptions {
+    type Error = anyhow::Error;
+
+    fn try_from(args: &QueryArgs) -> Result<Self> {
+        #[cfg(not(feature = "embed"))]
+        let embed = false;
+        #[cfg(feature = "embed")]
+        let embed = args.embed;
+
+        Ok(QueryOptions {
+            terms: args
+                .terms
+                .clone()
+                .ok_or_else(|| anyhow::anyhow!("No search terms specified. Provide terms"))?,
+            limit: args.limit,
+            tags: args.tags,
+            title: args.title,
+            content: args.content,
+            todos: args.todos,
+            embed,
+        })
+    }
 }
 
 pub fn run(config: &ResolvedConfig, ctx: &OutputContext, opts: &QueryOptions) -> Result<()> {
