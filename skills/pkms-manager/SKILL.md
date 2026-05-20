@@ -127,7 +127,7 @@ Results are scored and sorted by relevance.
 | `pkms query "term" --tags` | Search only within filetags. |
 | `pkms query "term" --limit N` | Show not more than N matching notes. |
 | `pkms query "term" --title` | Search only in titles, aliases, and refs. |
-| `pkms query "term" --embed` | Semantic search via embeddings. |
+| `pkms query "term" --embed` | Semantic search via embeddings. Requires a build with `--features embed`. |
 
 If you what to search multiple terms enclose them into quotes and separate by spaces: `pkms query "term1 term2"`
 
@@ -151,7 +151,7 @@ Find thematically related notes by multi-factor scoring
 | Command | Usecase |
 |---------|---------|
 | `pkms suggest <uuid>` | Find related notes by multi-factor scoring. |
-| `pkms suggest <uuid> --embed` | Semantic suggestions via embeddings. |
+| `pkms suggest <uuid> --embed` | Semantic suggestions via embeddings. Requires a build with `--features embed`. |
 
 ### `context` — [Full reference](references/context.md)
 Build an AI-friendly context window for a note.
@@ -280,7 +280,7 @@ Commands can be chained via Unix pipes using NDJSON.
 Producers emit per-item lines with a field; consumers read them from stdin via automatic pipe detection or `--from-stdin`.
 
 **Producers** (emit with `--output-format ndjson`): `resolve`, `query`, `orphans`, `stats --hubs`, `suggest`
-**Consumers** (read via pipe or `--from-stdin`): `get`, `suggest`, `validate`, `context`, `todo`
+**Consumers** (read via pipe or `--from-stdin`): `get`, `suggest`, `validate`, `context`, `todo`, `show`
 
 Always use `--output-format ndjson` for commands that pass data to other commands in pipeline.
 
