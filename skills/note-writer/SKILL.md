@@ -156,7 +156,7 @@ Do not place links at the end of paragraphs or sections as an afterthought. Avoi
 
 The only exception is hub notes. A hub note serves as an index for a topic area and needs a flat list of links enumerating the constituent notes. That list is the hub's purpose, not an afterthought.
 
-Bidirectional linking (note A links to note B and note B links back to note A) is usually a sign of muddled structure. One direction is almost always enough — choose the direction that serves the reader's flow. Reserve bidirectional links for the rare case where each note genuinely needs the other for context on its own terms, and not merely because a mechanical symmetry feels tidy.
+See [[#bidirectional-links][Bidirectional Links]] in the Workflow section for rules on when two notes should link to each other.
 
 ### Link Justification
 
@@ -232,8 +232,65 @@ The voice is that of a knowledgeable practitioner explaining to a peer. Not a te
 2. **Create notes** — for each distinct page, run `pkms new "prefix Title" --create` to generate UUIDs and boilerplate files.
 3. **Resolve UUIDs** — use `pkms resolve --title "prefix" --output-format json` to get all UUIDs.
 4. **Write content** — fill each note following the patterns in the style reference. Inline links to other notes using `[[id:<uuid>][title]]`.
-5. **Connect with pkms-manager** — use `pkms resolve` and `pkms query` from the pkms-manager skill to find existing notes for cross-linking.
-6. **Verify** — run `pkms check` to confirm no broken links, duplicate UUIDs, or missing titles.
+5. **Cross-link** — follow the mandatory [[#cross-linking-procedure][cross-linking procedure]] below to connect every concept mentioned in the note to the rest of the database.
+6. **Verify** — run `pkms check` to confirm no broken links, duplicate UUIDs, or missing titles. A note is not complete until the [[#completion-criteria][completion criteria]] are met.
+
+### Completion Criteria
+
+A note is ready only when:
+
+- It has zero broken internal links (~pkms validate <uuid>~ reports `Broken: 0 internal, 0 file`).
+- It has at least one meaningful outgoing or incoming link. Leaf notes with zero connections are orphaned by definition and must be linked to the graph before the task is finished.
+- Every concept, technology, or API mentioned in the note has been checked as a link candidate. Not every term justifies a link, but every term must be checked.
+
+### Cross-linking Procedure
+
+After writing content, for every concept mentioned in the note:
+
+```
+For each concept mentioned in the note:
+  pkms resolve --title "<concept>" (or pkms query "concept")
+  If a matching note exists:
+    read it to confirm relevance (pkms get <uuid>)
+    inline the link where the concept appears in the prose
+    skip if the concept is already linked from another part of the same note
+  If no note exists:
+    decide: is this concept substantial enough to warrant its own note?
+      If yes → create it now, write it following the style reference, link
+      If no → leave unlinked (only substantial concepts need their own notes)
+```
+
+A concept is substantial enough for its own note when it is:
+- A distinct technology, protocol, or system call with its own history and behaviour;
+- A design pattern or architectural principle referenced across multiple notes.
+
+A concept is not substantial when it is:
+- A well-known general term already explained in the current note;
+- A passing mention with no further context in the source material;
+- A platform name used only as an example of where a technology runs.
+
+### Bidirectional Links
+
+Bidirectional links (note A links to note B and note B links back to note A) are usually a sign of muddled structure. One direction is almost always enough — choose the direction that serves the reader's flow.
+
+Bidirectional links are justified when two notes cover overlapping but non-nested concepts that each need the other for context on their own terms (e.g. ~epoll~ ↔ ~kqueue~, which are counterparts on different operating systems), and each side of the link has an independent link justification in the sentence where it appears.
+
+### Overlinking
+
+After adding links, run `pkms validate <uuid>` on each changed note. Respond to overlinking warnings:
+
+- More than two links to the same target note within one source note is almost always a mistake. The only exception is tables, where each row represents a distinct concept and may link to its own note.
+- When overlinking is reported, keep the link in the sentence where the concept is the direct object. Remove duplicates from sections where the concept is only mentioned in passing.
+
+### Stub Notes
+
+When discovering a stub note (fewer than ~150 tokens of content, no heading structure beyond a single ~Interesting resources~ or similar placeholder), fill it with full content immediately rather than leaving it for later. A stub note is a dead end for readers and a broken promise in the graph.
+
+Fill stubs by:
+1. Reading any external resources already linked in the stub.
+2. Searching for the concept's relationship to other notes already in the database.
+3. Writing full content following the style reference.
+4. Running the cross-linking procedure on the filled note.
 
 ## Linking Isolated Subgraphs
 
