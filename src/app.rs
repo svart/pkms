@@ -27,8 +27,12 @@ pub fn print_error(ctx: Option<&OutputContext>, err: &anyhow::Error) {
     }
 }
 
-pub fn startup_error(err: anyhow::Error) -> ExitCode {
-    eprintln!("Error: {err:#}");
+pub fn startup_error(ctx: &OutputContext, err: anyhow::Error) -> ExitCode {
+    if ctx.is_json() {
+        println!("{}", serde_json::json!({"error": err.to_string()}));
+    } else {
+        eprintln!("Error: {err:#}");
+    }
     ExitCode::from(2)
 }
 

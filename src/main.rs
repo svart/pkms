@@ -16,7 +16,7 @@ mod util;
 use anyhow::Result;
 use app::App;
 use clap::Parser;
-use cli::{Cli, Command};
+use cli::{Cli, Command, OutputFormat};
 use output::OutputContext;
 use std::process::ExitCode;
 
@@ -24,7 +24,12 @@ fn main() -> ExitCode {
     let cli = Cli::parse();
     let app = match App::from_cli(&cli) {
         Ok(app) => app,
-        Err(e) => return app::startup_error(e),
+        Err(e) => {
+            let ctx = OutputContext {
+                format: cli.output_format.clone().unwrap_or(OutputFormat::Text),
+            };
+            return app::startup_error(&ctx, e);
+        }
     };
 
     match dispatch(&cli, &app.config, &app.output) {
@@ -35,117 +40,82 @@ fn main() -> ExitCode {
 
 fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<ExitCode> {
     Ok(match &cli.command {
-        Command::Check {
-            stats,
-            file_links,
-            attachment_links,
-            id_links,
-            filetags,
-            agenda,
-            self_links,
-            overlinks,
-            cross_links,
-        } => commands::check::run(
+        Command::Check(args) => commands::check::run(
             cfg,
             ctx,
             &commands::check::CheckOptions {
-                stats: *stats,
-                file_links: *file_links,
-                attachment_links: *attachment_links,
-                id_links: *id_links,
-                filetags: *filetags,
-                agenda: *agenda,
-                self_links: *self_links,
-                overlinks: *overlinks,
-                cross_links: cross_links.clone(),
+                stats: args.stats,
+                file_links: args.file_links,
+                attachment_links: args.attachment_links,
+                id_links: args.id_links,
+                filetags: args.filetags,
+                agenda: args.agenda,
+                self_links: args.self_links,
+                overlinks: args.overlinks,
+                cross_links: args.cross_links.clone(),
             },
         )?,
-        Command::Validate { target, from_stdin } => {
-            let targets = input::resolve_targets(target, *from_stdin)?;
+        Command::Validate(args) => {
+            let targets = input::resolve_targets(&args.target, args.from_stdin)?;
             commands::validate::run(cfg, ctx, &commands::validate::ValidateOptions { targets })
                 .map(|()| ExitCode::SUCCESS)?
         }
-        Command::Stats {
-            days,
-            hubs,
-            tags,
-            todos,
-        } => commands::stats::run(
+        Command::Stats(args) => commands::stats::run(
             cfg,
             ctx,
             &commands::stats::StatsOptions {
-                days: *days,
-                hubs: *hubs,
-                tags: *tags,
-                todos: *todos,
+                days: args.days,
+                hubs: args.hubs,
+                tags: args.tags,
+                todos: args.todos,
             },
         )
         .map(|()| ExitCode::SUCCESS)?,
-        Command::Orphans {
-            limit,
-            with_dailies,
-        } => commands::orphans::run(
+        Command::Orphans(args) => commands::orphans::run(
             cfg,
             ctx,
             &commands::orphans::OrphansOptions {
-                limit: *limit,
-                with_dailies: *with_dailies,
+                limit: args.limit,
+                with_dailies: args.with_dailies,
             },
         )
         .map(|()| ExitCode::SUCCESS)?,
         Command::Info => commands::info::run(cfg, ctx).map(|()| ExitCode::SUCCESS)?,
-        Command::InitConfig { db } => init_config(db.as_deref(), ctx)?,
-        Command::Context {
-            target,
-            depth,
-            max_tokens,
-            encoding,
-            from_stdin,
-        } => {
-            let targets = input::resolve_targets(target, *from_stdin)?;
+        Command::InitConfig(args) => init_config(args.db.as_deref(), ctx)?,
+        Command::Context(args) => {
+            let targets = input::resolve_targets(&args.target, args.from_stdin)?;
             commands::context::run(
                 cfg,
                 ctx,
                 &commands::context::ContextOptions {
                     targets,
-                    depth: *depth,
-                    max_tokens: *max_tokens,
-                    encoding: tokens::Encoding::from_str(encoding)
-                        .ok_or_else(|| anyhow::anyhow!("Unknown encoding: {encoding}"))?,
+                    depth: args.depth,
+                    max_tokens: args.max_tokens,
+                    encoding: tokens::Encoding::from_str(&args.encoding)
+                        .ok_or_else(|| anyhow::anyhow!("Unknown encoding: {}", args.encoding))?,
                 },
             )
             .map(|()| ExitCode::SUCCESS)?
         }
-        Command::Resolve {
-            uuid,
-            title,
-            tags,
-            limit,
-            fields,
-            todos,
-        } => commands::resolve::run(
+        Command::Resolve(args) => commands::resolve::run(
             cfg,
             ctx,
             &commands::resolve::ResolveOptions {
-                uuid: uuid.clone(),
-                title: title.clone(),
-                tags: input::comma_list(tags.as_deref()),
-                limit: *limit,
-                fields: input::comma_list(fields.as_deref()),
-                todos: *todos,
+                uuid: args.uuid.clone(),
+                title: args.title.clone(),
+                tags: input::comma_list(args.tags.as_deref()),
+                limit: args.limit,
+                fields: input::comma_list(args.fields.as_deref()),
+                todos: args.todos,
             },
         )
         .map(|()| ExitCode::SUCCESS)?,
-        Command::Fix {
-            broken_uuid,
-            target,
-            apply,
-        } => {
-            let broken = uuid::Uuid::parse_str(broken_uuid)
-                .map_err(|_| anyhow::anyhow!("Invalid UUID format: {broken_uuid}"))?
+        Command::Fix(args) => {
+            let broken = uuid::Uuid::parse_str(&args.broken_uuid)
+                .map_err(|_| anyhow::anyhow!("Invalid UUID format: {}", args.broken_uuid))?
                 .to_string();
-            let target_uuid = uuid::Uuid::parse_str(target)
-                .map_err(|_| anyhow::anyhow!("Invalid UUID format: {target}"))?
+            let target_uuid = uuid::Uuid::parse_str(&args.target)
+                .map_err(|_| anyhow::anyhow!("Invalid UUID format: {}", args.target))?
                 .to_string();
             commands::fix::run(
                 cfg,
@@ -153,88 +123,64 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
                 &commands::fix::FixOptions {
                     broken_uuid: broken,
                     target_uuid,
-                    apply: *apply,
+                    apply: args.apply,
                 },
             )
             .map(|()| ExitCode::SUCCESS)?
         }
-        Command::Suggest {
-            target,
-            limit,
-            exclude_orphans,
-            from_stdin,
-            #[cfg(feature = "embed")]
-            embed,
-        } => {
+        Command::Suggest(args) => {
             #[cfg(not(feature = "embed"))]
             let embed = &false;
-            let targets = input::resolve_targets(target, *from_stdin)?;
+            #[cfg(feature = "embed")]
+            let embed = &args.embed;
+            let targets = input::resolve_targets(&args.target, args.from_stdin)?;
             commands::suggest::run(
                 cfg,
                 ctx,
                 &commands::suggest::SuggestOptions {
                     targets,
-                    limit: *limit,
-                    exclude_orphans: *exclude_orphans,
+                    limit: args.limit,
+                    exclude_orphans: args.exclude_orphans,
                     use_embed: *embed,
                 },
             )
             .map(|()| ExitCode::SUCCESS)?
         }
-        Command::New {
-            title,
-            create,
-            tags,
-            aliases,
-            heading,
-        } => commands::new::run(
+        Command::New(args) => commands::new::run(
             cfg,
             ctx,
             &commands::new::NewOptions {
-                title: title.clone(),
-                create: *create,
-                tags: input::comma_list(tags.as_deref()),
-                aliases: input::comma_list(aliases.as_deref()),
-                heading: heading.clone(),
+                title: args.title.clone(),
+                create: args.create,
+                tags: input::comma_list(args.tags.as_deref()),
+                aliases: input::comma_list(args.aliases.as_deref()),
+                heading: args.heading.clone(),
             },
         )
         .map(|()| ExitCode::SUCCESS)?,
-        Command::Get {
-            target,
-            links,
-            headings,
-            no_content,
-            from_stdin,
-            encoding,
-        } => {
-            let targets = input::resolve_targets(target, *from_stdin)?;
+        Command::Get(args) => {
+            let targets = input::resolve_targets(&args.target, args.from_stdin)?;
             commands::get::run(
                 cfg,
                 ctx,
                 &commands::get::GetOptions {
                     targets,
-                    show_links: *links,
-                    show_headings: *headings,
-                    no_content: *no_content,
-                    encoding: tokens::Encoding::from_str(encoding)
-                        .ok_or_else(|| anyhow::anyhow!("Unknown encoding: {encoding}"))?,
+                    show_links: args.links,
+                    show_headings: args.headings,
+                    no_content: args.no_content,
+                    encoding: tokens::Encoding::from_str(&args.encoding)
+                        .ok_or_else(|| anyhow::anyhow!("Unknown encoding: {}", args.encoding))?,
                 },
             )
             .map(|()| ExitCode::SUCCESS)?
         }
-        Command::Query {
-            terms,
-            limit,
-            tags,
-            title,
-            content,
-            todos,
-            #[cfg(feature = "embed")]
-            embed,
-        } => {
+        Command::Query(args) => {
             #[cfg(not(feature = "embed"))]
             let embed = &false;
-            let terms = terms
+            #[cfg(feature = "embed")]
+            let embed = &args.embed;
+            let terms = args
+                .terms
                 .clone()
                 .ok_or_else(|| anyhow::anyhow!("No search terms specified. Provide terms"))?;
             commands::query::run(
@@ -242,132 +188,97 @@ fn dispatch(cli: &Cli, cfg: &config::Config, ctx: &OutputContext) -> Result<Exit
                 ctx,
                 &commands::query::QueryOptions {
                     terms,
-                    limit: *limit,
-                    tags: *tags,
-                    title: *title,
-                    content: *content,
-                    todos: *todos,
+                    limit: args.limit,
+                    tags: args.tags,
+                    title: args.title,
+                    content: args.content,
+                    todos: args.todos,
                     embed: *embed,
                 },
             )
             .map(|()| ExitCode::SUCCESS)?
         }
-        Command::Todo {
-            state,
-            tags,
-            kind,
-            sort,
-            limit,
-            group,
-            scope,
-            after,
-            before,
-            prio,
-            from_stdin,
-            line_sep,
-            columns,
-        } => {
-            let resolved_scope = if *from_stdin {
+        Command::Todo(args) => {
+            let resolved_scope = if args.from_stdin {
                 util::read_stdin_ndjson()?
             } else {
-                scope.clone().unwrap_or_default()
+                args.scope.clone().unwrap_or_default()
             };
-            let todo_cols = input::resolve_columns(columns.as_deref(), &cfg.columns);
+            let todo_cols = input::resolve_columns(args.table.columns.as_deref(), &cfg.columns);
             commands::todo::run(
                 cfg,
                 ctx,
                 &commands::todo::TodoOptions {
-                    state: state.clone(),
-                    tags: tags.clone(),
-                    kind: kind.clone(),
-                    sort: sort.clone(),
-                    limit: *limit,
-                    group: group.clone(),
+                    state: args.filters.state.clone(),
+                    tags: args.filters.tags.clone(),
+                    kind: args.filters.kind.clone(),
+                    sort: args.sort.clone(),
+                    limit: args.limit,
+                    group: args.group.clone(),
                     scope: resolved_scope,
-                    after: input::parse_datetime(after.as_deref()),
-                    before: input::parse_datetime(before.as_deref()),
-                    prio: prio.clone(),
-                    line_sep: *line_sep,
+                    after: input::parse_datetime(args.after.as_deref()),
+                    before: input::parse_datetime(args.before.as_deref()),
+                    prio: args.prio.clone(),
+                    line_sep: args.table.line_sep,
                     columns: todo_cols,
                 },
             )
             .map(|()| ExitCode::SUCCESS)?
         }
-        Command::Agenda {
-            state,
-            tags,
-            kind,
-            prio,
-            overdue,
-            date,
-            sort,
-            limit,
-            today,
-            week,
-            upcoming,
-            line_sep,
-            columns,
-        } => {
-            let agenda_cols = input::resolve_columns(columns.as_deref(), &cfg.columns);
+        Command::Agenda(args) => {
+            let agenda_cols = input::resolve_columns(args.table.columns.as_deref(), &cfg.columns);
             commands::agenda::run(
                 cfg,
                 ctx,
                 &commands::agenda::AgendaOptions {
-                    state: state.clone(),
-                    tags: tags.clone(),
-                    kind: kind.clone(),
-                    prio: prio.clone(),
-                    overdue: *overdue,
-                    upcoming: *upcoming,
-                    date: input::parse_date(date.as_deref()),
-                    sort: sort.clone(),
-                    limit: *limit,
-                    today: *today,
-                    week: *week,
-                    line_sep: *line_sep,
+                    state: args.filters.state.clone(),
+                    tags: args.filters.tags.clone(),
+                    kind: args.filters.kind.clone(),
+                    prio: args.prio.clone(),
+                    overdue: args.overdue,
+                    upcoming: args.upcoming,
+                    date: input::parse_date(args.date.as_deref()),
+                    sort: args.sort.clone(),
+                    limit: args.limit,
+                    today: args.today,
+                    week: args.week,
+                    line_sep: args.table.line_sep,
                     columns: agenda_cols,
                 },
             )
             .map(|()| ExitCode::SUCCESS)?
         }
-        Command::Path { from, to } => {
-            let from = from
+        Command::Path(args) => {
+            let from = args
+                .from
                 .clone()
                 .ok_or_else(|| anyhow::anyhow!("No source specified. Provide --from"))?;
-            let to = to
+            let to = args
+                .to
                 .clone()
                 .ok_or_else(|| anyhow::anyhow!("No target specified. Provide --to"))?;
             commands::path::run(cfg, ctx, &commands::path::PathOptions { from, to })
                 .map(|()| ExitCode::SUCCESS)?
         }
-        Command::Open {
-            target,
-            editor,
-            line,
-            from_stdin,
-        } => {
-            let targets = input::resolve_targets(target, *from_stdin)?;
+        Command::Open(args) => {
+            let targets = input::resolve_targets(&args.target, args.from_stdin)?;
             commands::open::run(
                 cfg,
                 ctx,
                 &commands::open::OpenOptions {
                     targets,
-                    editor: editor.clone(),
-                    line: *line,
+                    editor: args.editor.clone(),
+                    line: args.line,
                 },
             )
             .map(|()| ExitCode::SUCCESS)?
         }
-        Command::Show {
-            target,
-            uuid,
-            from_stdin,
-        } => {
-            let targets = if *from_stdin {
+        Command::Show(args) => {
+            let targets = if args.from_stdin {
                 commands::show::read_stdin_targets()?
-            } else if let Some(t) = target {
+            } else if let Some(t) = &args.target {
                 vec![commands::show::HeadingTarget::from_arg(t.clone())?]
-            } else if let Some(u) = uuid {
+            } else if let Some(u) = &args.uuid {
                 vec![commands::show::HeadingTarget {
                     note_target: u.clone(),
                     canonical_id: None,
