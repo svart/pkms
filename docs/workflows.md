@@ -38,7 +38,8 @@ Use these checks when cleaning up dense notes or after broad link replacement.
 ```bash
 pkms orphans
 pkms get <orphan> --links
-pkms suggest <orphan> --limit 8
+pkms query <related_term> --limit 20
+pkms suggest <orphan> --limit 20
 pkms validate <orphan>
 pkms check
 ```
