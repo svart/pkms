@@ -165,15 +165,14 @@ pub fn run(config: &ResolvedConfig, ctx: &OutputContext, opts: &CheckOptions) ->
     if show_attach {
         for node in graph.nodes.values() {
             for link in &node.outgoing {
-                if let Link::Attachment(target) = link {
-                    let attach_path = util::resolve_attachment_path(db_root, &node.uuid, target);
-                    if !attach_path.exists() {
-                        broken_attachment.push(BrokenAttachmentLinkEntry {
-                            source_uuid: node.uuid.clone(),
-                            source_title: node.title.clone(),
-                            target_path: target.clone(),
-                        });
-                    }
+                if let Link::Attachment(target) = link
+                    && !util::attachment_target_exists(db_root, &node.uuid, target)
+                {
+                    broken_attachment.push(BrokenAttachmentLinkEntry {
+                        source_uuid: node.uuid.clone(),
+                        source_title: node.title.clone(),
+                        target_path: target.clone(),
+                    });
                 }
             }
         }

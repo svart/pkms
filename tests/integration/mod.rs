@@ -251,6 +251,14 @@ fn write_file_links(common: &std::path::Path) {
 }
 
 fn write_attachment_links(common: &std::path::Path) {
+    let root = common
+        .parent()
+        .and_then(|roam| roam.parent())
+        .expect("common should be under roam under root");
+    let attach_dir = root.join(".attach/aa/aaaaaa-aaaa-4aaa-aaaa-bbbbbbbbbbbb");
+    fs::create_dir_all(&attach_dir).unwrap();
+    fs::write(attach_dir.join("image.png"), b"image").unwrap();
+
     write_file(
         common,
         "20220101000010-attachment.org",

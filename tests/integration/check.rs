@@ -118,6 +118,12 @@ fn test_check_attachment_links_json() {
     assert!(broken_attach[0]["source_title"].is_string());
     assert!(broken_attach[0]["target_path"].is_string());
     assert!(
+        !broken_attach
+            .iter()
+            .any(|entry| entry["target_path"] == "image.png"),
+        "org-attach hashed path should be treated as existing"
+    );
+    assert!(
         v.get("stats").is_none(),
         "stats should not appear with --attachment-links only"
     );

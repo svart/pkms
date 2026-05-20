@@ -29,7 +29,20 @@ pub fn format_size(bytes: u64) -> String {
 }
 
 pub fn resolve_attachment_path(db_root: &Path, uuid: &str, target: &str) -> PathBuf {
-    db_root.join(".attach").join(uuid).join(target)
+    if uuid.len() > 2 {
+        db_root
+            .join(".attach")
+            .join(&uuid[..2])
+            .join(&uuid[2..])
+            .join(target)
+    } else {
+        db_root.join(".attach").join(uuid).join(target)
+    }
+}
+
+pub fn attachment_target_exists(db_root: &Path, uuid: &str, target: &str) -> bool {
+    resolve_attachment_path(db_root, uuid, target).exists()
+        || db_root.join(".attach").join(uuid).join(target).exists()
 }
 
 pub fn is_stdin_piped() -> bool {
