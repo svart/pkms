@@ -75,10 +75,26 @@ pub struct Heading {
     pub raw: String,
 }
 
-const PROP_ID: &str = "ID";
-const PROP_CATEGORY: &str = "CATEGORY";
-const PROP_ROAM_ALIASES: &str = "ROAM_ALIASES";
-const PROP_ROAM_REFS: &str = "ROAM_REFS";
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PropertyKey {
+    Id,
+    Category,
+    RoamAliases,
+    RoamRefs,
+    Other,
+}
+
+impl PropertyKey {
+    fn parse(key: &str) -> Self {
+        match key {
+            "ID" => PropertyKey::Id,
+            "CATEGORY" => PropertyKey::Category,
+            "ROAM_ALIASES" => PropertyKey::RoamAliases,
+            "ROAM_REFS" => PropertyKey::RoamRefs,
+            _ => PropertyKey::Other,
+        }
+    }
+}
 
 pub(crate) static LINK_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"\[\[([^\]]+?)(?:\]\[([^\]]*))?\]\]").unwrap());
@@ -197,27 +213,27 @@ impl ParseContext {
             return;
         };
         match key {
-            PROP_ID => {
+            PropertyKey::Id => {
                 if let Some(idx) = self.current_heading_idx {
                     self.headings[idx].uuid = Some(value.to_string());
                 } else {
                     self.uuids.push(value.to_string());
                 }
             }
-            PROP_CATEGORY => self.categories.push(value.to_string()),
-            PROP_ROAM_ALIASES => {
+            PropertyKey::Category => self.categories.push(value.to_string()),
+            PropertyKey::RoamAliases => {
                 self.aliases = value
                     .split_whitespace()
                     .map(std::string::ToString::to_string)
                     .collect();
             }
-            PROP_ROAM_REFS => {
+            PropertyKey::RoamRefs => {
                 self.roam_refs = value
                     .split_whitespace()
                     .map(std::string::ToString::to_string)
                     .collect();
             }
-            _ => {}
+            PropertyKey::Other => {}
         }
     }
 
@@ -374,7 +390,7 @@ pub fn find_daily_file_date(path: &std::path::Path) -> Option<NaiveDate> {
     NaiveDate::parse_from_str(cap.get(1)?.as_str(), "%Y-%m-%d").ok()
 }
 
-fn parse_property(line: &str) -> Option<(&str, &str)> {
+fn parse_property(line: &str) -> Option<(PropertyKey, &str)> {
     let line = line.trim();
     if line.starts_with(':')
         && let Some(end) = line[1..].find(':')
@@ -382,7 +398,7 @@ fn parse_property(line: &str) -> Option<(&str, &str)> {
         let key = &line[1..=end];
         let value = line[end + 2..].trim();
         if !key.is_empty() && !value.is_empty() {
-            return Some((key, value));
+            return Some((PropertyKey::parse(key), value));
         }
     }
     None
