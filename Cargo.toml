@@ -1,6 +1,6 @@
 [package]
 name = "pkms"
-version = "0.50.15"
+version = "0.50.16"
 edition = "2024"
 
 [features]

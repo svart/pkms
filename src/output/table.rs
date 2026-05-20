@@ -178,21 +178,6 @@ fn compute_widths(
         }
     }
 
-    for _ in 0..widths.len() {
-        let mut changed = false;
-        for i in 1..widths.len() {
-            if widths[i].1 > widths[i - 1].1 {
-                let sum = widths[i - 1].1 + widths[i].1;
-                widths[i - 1].1 = sum.div_ceil(2);
-                widths[i].1 = sum / 2;
-                changed = true;
-            }
-        }
-        if !changed {
-            break;
-        }
-    }
-
     let mut result: Vec<(Column, usize)> = Vec::new();
     for &col in enabled_columns {
         if is_fixed_column(col) {
@@ -214,6 +199,18 @@ fn compute_widths(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn width_for(widths: &[(Column, usize)], column: Column) -> usize {
+        widths
+            .iter()
+            .find_map(|(col, width)| (*col == column).then_some(*width))
+            .unwrap()
+    }
+
+    fn rendered_width(widths: &[(Column, usize)]) -> usize {
+        let padding = widths.len().saturating_sub(1) + 2 * widths.len();
+        widths.iter().map(|(_, w)| *w).sum::<usize>() + padding
+    }
 
     #[test]
     fn test_adaptive_column_widths_only_fixed() {
@@ -249,5 +246,81 @@ mod tests {
         assert!(result.is_some());
         let widths = result.unwrap();
         assert!(widths.len() >= 5);
+    }
+
+    #[test]
+    fn test_adaptive_column_widths_full_todo_agenda_layout_fits_terminal() {
+        let cols = [
+            Column::Id,
+            Column::Date,
+            Column::State,
+            Column::Type,
+            Column::Prio,
+            Column::Tags,
+            Column::Note,
+            Column::Heading,
+        ];
+        let max_widths = [3, 10, 5, 5, 4, 36, 42, 70];
+        let widths = compute_widths(&cols, &max_widths, 120).unwrap();
+
+        assert_eq!(widths.iter().map(|(col, _)| *col).collect::<Vec<_>>(), cols);
+        assert!(rendered_width(&widths) <= 120);
+        for (column, width) in &widths {
+            assert!(
+                *width <= max_widths[*column as usize],
+                "{column:?} exceeded its content width"
+            );
+            if is_wrap_column(*column) {
+                assert!(*width >= MIN_COLUMN_WIDTH, "{column:?} is too narrow");
+            }
+        }
+    }
+
+    #[test]
+    fn test_adaptive_column_widths_respects_user_selected_column_order() {
+        let cols = [Column::Heading, Column::Id, Column::Note];
+        let max_widths = [3, 0, 0, 0, 0, 0, 50, 80];
+        let widths = compute_widths(&cols, &max_widths, 100).unwrap();
+
+        assert_eq!(
+            widths.iter().map(|(col, _)| *col).collect::<Vec<_>>(),
+            vec![Column::Heading, Column::Id, Column::Note]
+        );
+        assert!(rendered_width(&widths) <= 100);
+    }
+
+    #[test]
+    fn test_adaptive_column_widths_weights_heading_more_than_note_and_tags() {
+        let cols = [Column::Tags, Column::Note, Column::Heading];
+        let max_widths = [0, 0, 0, 0, 0, 100, 100, 100];
+        let widths = compute_widths(&cols, &max_widths, 108).unwrap();
+
+        assert!(width_for(&widths, Column::Tags) < width_for(&widths, Column::Note));
+        assert!(width_for(&widths, Column::Note) < width_for(&widths, Column::Heading));
+        assert_eq!(rendered_width(&widths), 108);
+    }
+
+    #[test]
+    fn test_adaptive_column_widths_caps_short_content_columns() {
+        let cols = [Column::Tags, Column::Note, Column::Heading];
+        let max_widths = [0, 0, 0, 0, 0, 18, 80, 80];
+        let widths = compute_widths(&cols, &max_widths, 120).unwrap();
+
+        assert_eq!(width_for(&widths, Column::Tags), 18);
+        assert!(width_for(&widths, Column::Note) <= 80);
+        assert!(width_for(&widths, Column::Heading) <= 80);
+        assert!(rendered_width(&widths) <= 120);
+    }
+
+    #[test]
+    fn test_adaptive_column_widths_uses_minimum_for_each_wrapped_column() {
+        let cols = [Column::Tags, Column::Note, Column::Heading];
+        let max_widths = [0, 0, 0, 0, 0, 100, 100, 100];
+        let widths = compute_widths(&cols, &max_widths, 53).unwrap();
+
+        assert_eq!(width_for(&widths, Column::Tags), MIN_COLUMN_WIDTH);
+        assert_eq!(width_for(&widths, Column::Note), MIN_COLUMN_WIDTH);
+        assert_eq!(width_for(&widths, Column::Heading), MIN_COLUMN_WIDTH);
+        assert_eq!(rendered_width(&widths), 53);
     }
 }
