@@ -2,35 +2,27 @@
   "$schema": "https://json-schema.org/draft-07/schema#",
   "title": "QueryOutput",
   "type": "object",
+  "additionalProperties": true,
   "properties": {
     "query": { "type": "string" },
     "total_results": { "type": "integer" },
-    "results": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "properties": {
-          "uuid": { "type": "string" },
-          "title": { "type": "string" },
-          "path": { "type": "string" },
-          "filetags": { "type": "array", "items": { "type": "string" } },
-          "score": { "type": "number" },
-          "matches": { "type": "array", "items": { "type": "string" } },
-          "content_matches": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "properties": {
-                "line": { "type": "integer" },
-                "text": { "type": "string" }
-              },
-              "required": ["line", "text"]
-            }
-          }
-        },
-        "required": ["uuid", "title", "score"]
-      }
-    }
+    "results": { "type": "array", "items": { "$ref": "#/definitions/ResultEntry" } }
   },
-  "required": ["query", "total_results", "results"]
+  "required": ["query", "total_results", "results"],
+  "definitions": {
+    "ResultEntry": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "uuid": { "type": "string" },
+        "title": { "type": "string" },
+        "path": { "type": "string" },
+        "filetags": { "type": "array", "items": { "type": "string" } },
+        "score": { "type": "number" },
+        "matches": { "type": "array", "items": { "type": "string" } },
+        "content_matches": { "type": "array", "items": { "type": "object", "additionalProperties": true } }
+      },
+      "required": ["uuid", "title", "score"]
+    }
+  }
 }

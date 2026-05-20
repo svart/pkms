@@ -2,22 +2,13 @@
   "$schema": "https://json-schema.org/draft-07/schema#",
   "title": "PathOutput",
   "type": "object",
+  "additionalProperties": true,
   "properties": {
     "from": { "type": "string" },
     "to": { "type": "string" },
     "found": { "type": "boolean" },
     "hops": { "type": "integer" },
-    "path": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "properties": {
-          "uuid": { "type": "string" },
-          "title": { "type": "string" }
-        },
-        "required": ["uuid", "title"]
-      }
-    }
+    "path": { "type": "array", "items": { "type": "object", "additionalProperties": true } }
   },
   "required": ["from", "to", "found", "hops", "path"]
 }

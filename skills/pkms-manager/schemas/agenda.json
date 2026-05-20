@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "title": "AgendaOutput",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "total": { "type": "integer" },
+    "items": { "type": "array", "items": { "$ref": "task-item.json" } }
+  },
+  "required": ["total", "items"]
+}

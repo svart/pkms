@@ -2,23 +2,25 @@
   "$schema": "https://json-schema.org/draft-07/schema#",
   "title": "OrphansOutput",
   "type": "object",
+  "additionalProperties": true,
   "properties": {
     "count": { "type": "integer" },
     "showed": { "type": "integer" },
-    "orphans": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "properties": {
-          "uuid": { "type": "string" },
-          "title": { "type": "string" },
-          "path": { "type": "string" },
-          "filetags": { "type": "array", "items": { "type": "string" } },
-          "categories": { "type": "array", "items": { "type": "string" } }
-        },
-        "required": ["uuid", "title", "path", "filetags", "categories"]
-      }
-    }
+    "orphans": { "type": "array", "items": { "$ref": "#/definitions/NoteEntry" } }
   },
-  "required": ["count", "orphans"]
+  "required": ["count", "orphans"],
+  "definitions": {
+    "NoteEntry": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "uuid": { "type": "string" },
+        "title": { "type": "string" },
+        "path": { "type": "string" },
+        "filetags": { "type": "array", "items": { "type": "string" } },
+        "categories": { "type": "array", "items": { "type": "string" } }
+      },
+      "required": ["uuid", "title", "path"]
+    }
+  }
 }

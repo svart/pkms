@@ -1,0 +1,77 @@
+# pkms Commands Overview
+
+Use `pkms <command> --help` for exact current flags. This page is a compact map
+for choosing commands.
+
+## Health
+
+```bash
+pkms check
+pkms check --id-links
+pkms check --file-links
+pkms check --attachment-links
+pkms check --filetags
+pkms check --agenda
+pkms check --self-links
+pkms check --overlinks
+pkms check --cross-links <note-a> <note-b>
+pkms validate <target>
+```
+
+## Lookup and Search
+
+```bash
+pkms resolve --title <term>
+pkms resolve --uuid <uuid-fragment>
+pkms resolve --tags "tag1,tag2"
+pkms resolve --todos
+pkms query "terms"
+pkms query "terms" --title
+pkms query "terms" --tags
+pkms query "terms" --content
+pkms query "terms" --todos
+```
+
+`--embed` for `query` and `suggest` exists only in builds made with the
+`embed` feature.
+
+## Inspect and Navigate
+
+```bash
+pkms get <target>
+pkms get <target> --links
+pkms get <target> --headings --no-content
+pkms path <from> <to>
+pkms context <target> --depth 2 --max-tokens 4000
+```
+
+## Create and Repair
+
+```bash
+pkms new "Title"
+pkms new "Title" --create --tags "tag1,tag2"
+pkms new "Existing Note" --create --heading "Heading"
+pkms fix <broken-full-uuid> <replacement-full-uuid>
+pkms fix <broken-full-uuid> <replacement-full-uuid> --apply
+```
+
+`fix` requires full UUIDs for both arguments.
+
+## Tasks
+
+```bash
+pkms todo
+pkms agenda
+pkms show <canonical-id>
+pkms open <canonical-id>
+```
+
+## Statistics
+
+```bash
+pkms stats
+pkms stats --hubs
+pkms stats --tags
+pkms stats --todos
+pkms orphans
+```

@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "title": "TaskItem",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "id": { "type": "integer" },
+    "uuid": { "type": "string" },
+    "title": { "type": "string" },
+    "path": { "type": "string" },
+    "filetags": { "type": "array", "items": { "type": "string" } },
+    "heading_title": { "type": "string" },
+    "heading_level": { "type": "integer" },
+    "line_number": { "type": "integer" },
+    "todo_state": { "type": ["string", "null"] },
+    "priority": { "type": ["string", "null"] },
+    "scheduled": { "type": ["string", "null"] },
+    "scheduled_date": { "type": ["string", "null"] },
+    "deadline": { "type": ["string", "null"] },
+    "deadline_date": { "type": ["string", "null"] },
+    "is_overdue": { "type": "boolean" },
+    "heading_tags": { "type": "array", "items": { "type": "string" } }
+  },
+  "required": ["id", "uuid", "title", "path", "heading_title", "line_number"]
+}

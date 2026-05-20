@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "title": "ShowOutput",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "heading_title": { "type": "string" },
+    "line_number": { "type": "integer" },
+    "end_line": { "type": "integer" },
+    "todo_state": { "type": ["string", "null"] },
+    "priority": { "type": ["string", "null"] },
+    "tags": { "type": "array", "items": { "type": "string" } },
+    "filetags": { "type": "array", "items": { "type": "string" } },
+    "scheduled": { "type": ["string", "null"] },
+    "deadline": { "type": ["string", "null"] },
+    "path": { "type": "string" },
+    "note_title": { "type": "string" },
+    "note_uuid": { "type": "string" },
+    "heading_uuid": { "type": ["string", "null"] },
+    "parents": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
+    "children": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
+    "outgoing": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
+    "content": { "type": "string" }
+  },
+  "required": ["heading_title", "line_number", "path", "note_title", "content"]
+}

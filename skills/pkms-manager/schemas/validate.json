@@ -2,6 +2,7 @@
   "$schema": "https://json-schema.org/draft-07/schema#",
   "title": "ValidateOutput",
   "type": "object",
+  "additionalProperties": true,
   "properties": {
     "uuid": { "type": "string" },
     "title": { "type": "string" },
@@ -12,24 +13,8 @@
     "refs": { "type": "array", "items": { "type": "string" } },
     "headings": { "type": "integer" },
     "heading_uuids": { "type": "array", "items": { "type": "string" } },
-    "outgoing": { "type": "integer" },
-    "incoming": { "type": "integer" },
-    "outgoing_internal": { "type": "integer" },
-    "broken_internal": { "type": "array", "items": { "type": "string" } },
-    "broken_files": { "type": "array", "items": { "type": "string" } },
-    "backlinks": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "properties": {
-          "uuid": { "type": "string" },
-          "title": { "type": "string" }
-        },
-        "required": ["uuid", "title"]
-      }
-    },
     "issues": { "type": "array", "items": { "type": "string" } },
     "healthy": { "type": "boolean" }
   },
-  "required": ["uuid", "title", "path", "healthy", "issues", "backlinks", "broken_internal", "broken_files"]
+  "required": ["uuid", "title", "path", "healthy", "issues"]
 }

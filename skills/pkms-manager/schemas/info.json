@@ -2,25 +2,20 @@
   "$schema": "https://json-schema.org/draft-07/schema#",
   "title": "InfoOutput",
   "type": "object",
+  "additionalProperties": true,
   "properties": {
     "config": {
       "type": "object",
+      "additionalProperties": true,
       "properties": {
         "db_root": { "type": "string" },
         "new_notes_dir": { "type": "string" },
         "ignore_patterns": { "type": "array", "items": { "type": "string" } },
         "has_config_file": { "type": "boolean" }
-      },
-      "required": ["db_root", "new_notes_dir", "ignore_patterns", "has_config_file"]
+      }
     },
     "config_path": { "type": "string" },
-    "cli_overrides": {
-      "type": "object",
-      "properties": {
-        "db_override": { "type": "boolean" }
-      },
-      "required": ["db_override"]
-    }
+    "cli_overrides": { "type": "object", "additionalProperties": true }
   },
-  "required": ["config", "config_path", "cli_overrides"]
+  "required": ["config"]
 }

@@ -2,6 +2,7 @@
   "$schema": "https://json-schema.org/draft-07/schema#",
   "title": "StatsOutput",
   "type": "object",
+  "additionalProperties": true,
   "properties": {
     "db_root": { "type": "string" },
     "total_notes": { "type": "integer" },
@@ -13,29 +14,7 @@
     "orphans": { "type": "integer" },
     "broken_links": { "type": "integer" },
     "disk_size_bytes": { "type": "integer" },
-    "directories": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "properties": {
-          "directory": { "type": "string" },
-          "count": { "type": "integer" }
-        },
-        "required": ["directory", "count"]
-      }
-    },
-    "recent_notes": {
-      "type": ["array", "null"],
-      "items": {
-        "type": "object",
-        "properties": {
-          "uuid": { "type": "string" },
-          "title": { "type": "string" },
-          "path": { "type": "string" }
-        },
-        "required": ["uuid", "title", "path"]
-      }
-    }
-  },
-  "required": ["total_notes", "total_links", "directories"]
+    "directories": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
+    "recent_notes": { "type": ["array", "null"], "items": { "type": "object", "additionalProperties": true } }
+  }
 }

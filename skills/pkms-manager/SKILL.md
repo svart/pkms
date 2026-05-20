@@ -1,318 +1,134 @@
 ---
 name: pkms-manager
-description: Manage and navigate an org-roam PKMS (Personal Knowledge Management System) database of interconnected notes. Use this skill whenever the user wants to search their notes, check database health, fix broken links, retrieve note context for research, create new notes, analyze connections between notes, or perform any operation on their org-roam knowledge base. Trigger when the user mentions PKMS, org-roam, their note database, knowledge base, or references to ~/Documents/org. This skill knows the exact CLI interface including all subcommands, JSON output parsing, and common workflows.
+description: Manage and navigate an org-roam PKMS database with the pkms CLI. Use when the user asks to search notes, inspect note content or links, validate database health, fix broken links, create notes, work with TODO/agenda tasks, build AI context, use pkms pipelines, or operate on an org-roam knowledge base. Prefer current `pkms <command> --help` for exact flags and consult bundled references only as needed.
 ---
 
 # pkms-manager
 
-This skill helps you work with the `pkms` CLI tool to manage an org-roam database.
+Use this skill to operate the `pkms` CLI against an org-roam notes database.
+Keep work grounded in live command behavior: run `pkms <command> --help` when
+exact flags matter.
 
-## Tool location
+## Start Here
 
-The `pkms` binary should be available. The database location is configured via `~/.config/pkms.toml` or the `--db` flag.
+Before any database workflow, verify the active configuration:
 
-## Database
-
-The org-roam database contains org-mode notes organized in subdirectories (varies by database — run `pkms info` to see configuration). Each note has UUID v4 `:ID:` in a property drawer, `#+title:`, and internal links via `[[id:<uuid>][description]]`. Headings within notes may also carry `:ID:` properties for direct section-level linking. Use `pkms get <target> --headings` to see heading UUIDs, and `pkms new --heading` to create them. Run `pkms info` as your first command to understand the active configuration.
-
-### Before any workflow
-
-Always start by verifying the configuration:
 ```bash
 pkms info
 ```
-This shows the active db_root, new_notes_dir, and whether a config file is loaded. If the database root is wrong, pass `--db /actual/path` to any command.
 
-## Global flags
+If `db_root` is wrong, pass `--db /actual/path` to commands. For reported tool
+bugs against the current database, build the repository binary and reproduce
+with `target/debug/pkms` before analysis.
 
-These flags work with every command:
-
-| Flag | Description |
-|------|-------------|
-| `--db PATH` | Path to org-roam database root (overrides config) |
-| `--output-format FMT` | Output format: `text`, `json` or `ndjson` |
-
-## Commands reference
-
-Each command has a detailed reference file in [`references/`](references/).
-
-### `check` — [Full reference](references/check.md)
-Full database health scan.
-Validates all notes, detects broken internal/file/attachment links, duplicate UUIDs/titles, missing titles, and parse errors.
-Returns exit code 0 if healthy, 1 if issues found.
-Run after edits to verify database integrity.
-
-Each section (stats, id-links, file-links, attachment-links, filetags)
-has its own flag. When no flags are given, all sections are shown.
-When specific flags are given, only those sections are shown.
-
-| Command | Usecase |
-|---------|---------|
-| `pkms check` | Full health scan: all sections shown. |
-| `pkms check --stats` | Show database statistics (notes, links, orphans, broken counts). |
-| `pkms check --id-links` | Verify only that links resolve to valid UUIDs in the database. |
-| `pkms check --file-links` | Check only that `file:` link targets exist on disk. |
-| `pkms check --attachment-links` | Check only that `attachment:` link targets exist on disk. |
-| `pkms check --filetags` | Verify that all `#+filetags:` lines use the canonical `:tag1:tag2:tag3:` format. |
-
-
-### `validate` — [Full reference](references/validate.md)
-Health check for a single note.
-Verifies UUID format, title presence, outgoing links.
-Use after creating or editing a specific note.
-
-| Command | Usecase |
-|---------|---------|
-| `pkms validate <UUID>` | Check a single note UUID |
-
-### `stats` — [Full reference](references/stats.md)
-Comprehensive database statistics: total notes, link breakdown, orphans, broken links, disk size.
-
-| Command | Usecase |
-|---------|---------|
-| `pkms stats` | Show full statistics: notes, links, orphans, broken links, disk size. |
-| `pkms stats --hubs` | List top 10 most-connected hub notes (exploration starting points). |
-| `pkms stats --hubs 20` | List top 20 most-connected hub notes. |
-| `pkms stats --tags` | Browse all filetags with note counts. |
-
-### `orphans` — [Full reference](references/orphans.md)
-List notes with no connections — no outgoing internal links and no backlinks.
-
-| Command | Usecase |
-|---------|---------|
-| `pkms orphans` | List notes with no incoming or outgoing internal links. |
-
-### `resolve` — [Full reference](references/resolve.md)
-Fast notes lookup by metadata.
-
-| Command | Usecase |
-|---------|---------|
-| `pkms resolve --uuid <UUID>` | Find a note by any :ID: (note-level or heading-level, substring match) |
-| `pkms resolve --title <title>` | Look up notes by title or alias substring |
-| `pkms resolve --title "graph"` | Look up notes with "graph" substring in title (e.g "subgraph", "graphs", etc.) |
-| `pkms resolve --title "gr alg"` | Look up notes with "gr" and "alg" substrings in title (e.g "graph algorithms", "algorithms on graphs", etc.) |
-| `pkms resolve --tags "tagname"` | Filter notes by tag. Substring matching. |
-| `pkms resolve --tags "tag1,tag2"` | Filter notes by multiple tags (comma-separated). Substring matching. At least one tag should match to get result. |
-
-### `get` — [Full reference](references/get.md)
-Retrieve a note's full content with optional neighbor display.
-
-| Command | Usecase |
-|---------|---------|
-| `pkms get <target>` | Retrieve note content |
-| `pkms get <target> --links` | Show note content with forward and backward neighbors |
-| `pkms get <target> --links --no-content` | Show only list of links |
-| `pkms get <target> --headings --no-content` | Show only heading structure |
-| `pkms get <target> --links --headings --no-content` | Show links and heading structure without content |
-
-`<target>` may be UUID, title or absolute file path.
-
-### `path` — [Full reference](references/path.md)
-Find the shortest path between two notes through the notes graph.
-Accepts titles, UUIDs, or absolute file paths.
-Good for checking if notes are connected via well-defined logic.
-
-
-| Command | Usecase |
-|---------|---------|
-| `pkms path <from> <to>` | Find shortest path between two notes via BFS |
-
-### `query` — [Full reference](references/query.md)
-Fuzzy search across all note content (titles, aliases, refs, tags, file content).
-Results are scored and sorted by relevance.
-
-| Command | Usecase |
-|---------|---------|
-| `pkms query "term"` | Fuzzy search titles, aliases, refs, tags, and file content |
-| `pkms query "term" --tags` | Search only within filetags. |
-| `pkms query "term" --limit N` | Show not more than N matching notes. |
-| `pkms query "term" --title` | Search only in titles, aliases, and refs. |
-| `pkms query "term" --embed` | Semantic search via embeddings. Requires a build with `--features embed`. |
-
-If you what to search multiple terms enclose them into quotes and separate by spaces: `pkms query "term1 term2"`
-
-### `fix` — [Full reference](references/fix.md)
-Replace all occurrences of a broken UUID across the entire database. Both arguments must be full UUIDs (with dashes). Dry-run by default; use `--apply` to write changes.
-
-| Command | Usecase |
-|---------|---------|
-| `pkms fix <broken_uuid> <replacement_uuid>` | Dry-run: preview which files and how many replacements would be made |
-| `pkms fix <broken_uuid> <replacement_uuid> --apply` | Apply broken UUID replacement in all files |
-
-### `suggest` — [Full reference](references/suggest.md)
-Find thematically related notes by multi-factor scoring
-- title overlap;
-- shared tags;
-- shared backlinks/outgoing;
-- content keywords;
-- directory proximity;
-- neighborhood relevance.
-
-| Command | Usecase |
-|---------|---------|
-| `pkms suggest <uuid>` | Find related notes by multi-factor scoring. |
-| `pkms suggest <uuid> --embed` | Semantic suggestions via embeddings. Requires a build with `--features embed`. |
-
-### `context` — [Full reference](references/context.md)
-Build an AI-friendly context window for a note.
-Includes the note's full content plus linked neighbors at each depth level.
-
-| Command | Usecase |
-|---------|---------|
-| `pkms context <target> --depth N` | Build context window with linked neighbors up to depth N |
-| `pkms context <target> --depth N --max-tokens M` | Build context with token budget for LLM consumption |
-
-`<target>` may be UUID, title or absolute file path.
-
-### `new` — [Full reference](references/new.md)
-Generate a UUID v4 and timestamped filename (`YYYYMMDDHHMMSS-slug.org`) in the configured new notes directory.
-
-| Command | Usecase |
-|---------|---------|
-| `pkms new "Title"` | Dry-run: preview generated UUID, filename, and path. |
-| `pkms new "Title" --create` | Create boilerplate note file on disk. |
-| `pkms new "Title" --create --tags "tag1,tag2"` | Create note with filetags. |
-| `pkms new "Title" --create --heading "Heading 1"` | Generate heading-level `:ID:` for an existing heading in the note |
-
-### `info` — [Full reference](references/info.md)
-Show the configuration with notes database path.
-
-| Command | Usecase |
-|---------|---------|
-| `pkms info` | Show config.  |
-
-## Common workflows
-
-### Note Discovery
-1. `pkms resolve --title <term>` for fast targeted lookup.
-2. `pkms query "term"` for broad search.
-3. Analyze content of 3-5 relevant notes and their neighbors if necessary (use `pkms get`).
-4. `pkms stats --tags` to browse by filetag.
-5. `pkms stats --hubs 20` to find hub notes.
-6. `pkms suggest <UUID>` command for related notes suggestions if query did not bring.
-
-### Research / Context Building
-1. Find hubs: `pkms stats --hubs 20`. Identify related hubs for the research topic.
-2. Explore relevant for the topic hub via `pkms get <UUID>`.
-3. Find relevant information in the hub, follow the links using `pkms get <UUID>`.
-4. Discover relevan notes using `pkms suggest <UUID>`.
-5. Search for specific terms across the database: `pkms query` and `pkms resolve` to find more relevant notes.
-6. Collect information about the topic create summary then propose user what to do next in your research by providing 3-4 variants.
-
-### Database Health Maintenance
-1. `check` to see health status and broken links.
-2. Apply procedure from "Note Discovery" to find relevant notes for broken links.
-3. `fix <broken-uuid> <replacement> --apply` for each broken UUID.
-4. Apply procedure from "Linking Orphans to the Graph" for finding and fixing orphans.
-5. `check` to verify final state
-
-### Fixing Broken Links
-
-When `check --id-links` reports broken links, follow this workflow to ensure every
-replacement points to the correct target.
-
-1. **Read the link before replacing.** The check output shows `source_note -> broken_uuid`,
-   which tells you where the link lives but not what it points to. Grep the broken UUID
-   across the database or use `pkms get <source_note>` to see the actual
-   `[[id:UUID][description]]` — the description text reveals the intended target. Search for
-   notes matching the *description* with `pkms resolve --title "description"`, not just the
-   source note's title.
-2. **Dry-run `fix` and apply non-conflicting replacements first.** Run `pkms fix <broken_uuid> <replacement>` without `--apply` to preview which files are affected. For
-   broken UUIDs that map to a single unambiguous replacement, run `pkms fix` with `--apply`
-   in batches.
-3. **Handle conflicting broken UUIDs manually.** When the same broken UUID appears in
-   multiple source notes with different link descriptions, `pkms fix` would replace all
-   occurrences identically. Instead, read each affected file and edit the link individually
-   to point to the correct target for that context.
-4. **Check for self-links after every batch.** Run `pkms check --self-links`.
-   A `pkms fix` that replaces a broken UUID with the note's own UUID creates a self-link.
-   For each self-link found:
-   - Search for a note matching the link's description text. If a canonical note exists,
-     replace the self-link with its UUID.
-   - If no note matches, remove the link markup entirely, keeping the description as plain
-     text.
-   - Do not just strip every self-link to plain text — most description texts *do* have
-     corresponding notes in the database.
-5. **Prefer canonical notes.** When multiple notes match a description, pick the most
-   general one (e.g. link "DNS" to the `dns` note, not `dns record types`). Check aliases
-   with `pkms resolve --title` — concepts may exist under variant names.
-6. **Create aliases, not approximations.** If a concept is frequently referenced by a
-   variant name, add it as a `:ROAM_ALIASES:` on the canonical note's property drawer instead
-   of linking to a vaguely related note.
-7. **Remove links that add no navigation value.** Drop links when: the description is
-   self-referential within its own note, the description is a filename or proper noun with
-   no corresponding note, or the sentence already provides the same information via another
-   mechanism (e.g. a direct URL).
-8. **Verify.** Run `pkms validate <uuid>` on each changed note and
-   `pkms check --self-links --id-links` after each batch to confirm no regressions.
-
-### Linking Orphans to the Graph
-1. `orphans` to list all orphans. Pick ones with clear thematic connections.
-2. If orphaned note fills empty. Fill it with minimal necessary information.
-3. Apply procedure from "Note Discovery" to find relevant note.
-4. **Analyze suggestions** — read the orphan's content and at least 5-8 top suggestions to confirm connections are real.
-5. If suggestions still not so relevant you may create "adoption" note to smoothly connect current orphan to the graph. Fill new note with short portion of relevant information.
-6. Always **inline links** when content exists: embed `[[id:<full-uuid>][description]]` into existing sentences. E.g. "A systematic framework for technical [[id:63649b3f-5168-4fdc-96ec-1911a91b54a5][documentation]] authoring." If content does not exist, create highly relevant content for the note.
-7. **Use full UUIDs** (dashed format), not short 8-char UUIDs. Every link must match the `:ID:` property exactly.
-8. **Backlinks sparingly** — only add a link *from* an existing note *to* the orphan when there is genuine contextual reason (shared topic, direct dependency, natural cross-reference). Do not mechanically pair every forward link with a backlink.
-9. If mentioning orphan in already existing note is natural just create this link without adding direct forward link from orphan.
-10. `validate <uuid>` each changed note to confirm no broken links.
-11. `check` to verify overall database health.. `check` to verify overall health.
-
-### Creating and Linking Heading-Level IDs
-
-When a topic within a note deserves its own anchor point for cross-linking:
-
-1. Create the note with heading (if note is not available):
-   `pkms new "Note name" --create`
-2. Add the heading manually to the note file (e.g. `* Sub Topic`).
-3. Generate heading-level `:ID:`:
-   `pkms new "Note name" --create --heading "Sub Topic"`
-4. Find heading UUIDs in an existing note or get heading UUID from previous `new` command output:
-   `pkms get <target> --headings --no-content --output-format json`
-5. Link to a specific heading from another note:
-   `[[id:<heading-uuid>][contextual text here]]`
-6. Verify both notes with `pkms validate <uuid>`.
-
-## Command Pipelining
-
-Commands can be chained via Unix pipes using NDJSON.
-Producers emit per-item lines with a field; consumers read them from stdin via automatic pipe detection or `--from-stdin`.
-
-**Producers** (emit with `--output-format ndjson`): `resolve`, `query`, `orphans`, `stats --hubs`, `suggest`
-**Consumers** (read via pipe or `--from-stdin`): `get`, `suggest`, `validate`, `context`, `todo`, `show`
-
-Always use `--output-format ndjson` for commands that pass data to other commands in pipeline.
-
-### Key pipelines
+Prefer structured output when an agent must parse results:
 
 ```bash
-# Search → deep dive (core research)
-pkms query "distributed systems" --output-format ndjson | pkms get --links
-
-# Tag browse → examine subarea
-pkms resolve --tags "ai" --output-format ndjson | pkms get --links
-
-# Orphans → inspect for linking
-pkms orphans --output-format ndjson | pkms get --links --no-content
-
-# Search → suggest → explore (triple pipeline)
-pkms query "concurrency" --output-format ndjson |
-  pkms suggest --output-format ndjson |
-  pkms get --links
-
-# Tag group → cross-pollinate suggestions
-pkms resolve --tags "ml,rust" --output-format ndjson | pkms suggest
-
-# Batch validate search results
-pkms query "foo" --output-format ndjson | pkms validate
-
-# Scope TODO list to tagged notes
-pkms resolve --tags "project" --output-format ndjson | pkms todo --from-stdin
+pkms --output-format json <command>
+pkms <producer> --output-format ndjson | pkms <consumer> --from-stdin
 ```
 
-See [Pipelining reference](references/pipelining.md) for the full catalog of examples.
+## Reference Map
 
-## Performance Notes
+Load only the file needed for the task:
 
-All subcommands are very fast even on large databases.
+- Command syntax overview: `references/commands.md`
+- Health and validation: `references/check.md`, `references/validate.md`
+- Lookup and search: `references/resolve.md`, `references/query.md`
+- Note inspection and graph navigation: `references/get.md`, `references/path.md`, `references/context.md`
+- Note creation and repair: `references/new.md`, `references/fix.md`
+- Suggestions and orphan linking: `references/suggest.md`, `references/orphans.md`
+- TODO and agenda tasks: `references/todo.md`, `references/agenda.md`, `references/show.md`, `references/open.md`
+- Pipelines: `references/pipelining.md`
+- Configuration: `references/info.md`, `references/init-config.md`
+
+JSON schemas for maintained structured outputs live in `schemas/`.
+
+## Core Workflows
+
+### Discover Notes
+
+1. Use `pkms resolve --title <term>` for fast title/alias lookup.
+2. Use `pkms query "<terms>"` for broad title/tag/content search.
+3. Inspect promising results with `pkms get <target> --links`.
+4. Use `pkms stats --tags` or `pkms stats --hubs` to find broader entry points.
+5. Use `pkms suggest <uuid>` after resolving an exact UUID.
+
+### Build Research Context
+
+1. Find candidate notes with `resolve`, `query`, tags, or hubs.
+2. Read relevant notes with `get --links`.
+3. Use `context <target> --depth N --max-tokens M` when the output is for an LLM.
+4. Summarize findings with citations to note titles/UUIDs when useful.
+
+### Validate and Maintain
+
+1. Run `pkms validate <target>` after editing one note.
+2. Run focused checks for the risk being handled, such as `check --id-links`,
+   `check --self-links`, or `check --filetags`.
+3. Run `pkms check` after a batch of changes.
+
+### Fix Broken ID Links
+
+Do not blindly replace a broken UUID. First inspect the source link text to
+understand the intended target.
+
+1. Run `pkms check --id-links`.
+2. Open or inspect the source note and find the `[[id:...][description]]`.
+3. Resolve the intended target from the description with `resolve`/`query`.
+4. Dry-run `pkms fix <broken-full-uuid> <replacement-full-uuid>`.
+5. Apply only when the mapping is unambiguous.
+6. Verify with `pkms check --self-links --id-links`.
+
+`fix` requires full UUIDs for both arguments.
+
+### Work With Tasks
+
+Use `todo` and `agenda` to list task headings. Their `Id` column is the
+canonical ID used by `show <ID>` and `open <ID>`.
+
+```bash
+pkms todo --columns Id,Date,Prio,Note,Heading
+pkms agenda --today
+pkms show 5
+pkms open 5
+```
+
+See the TODO/agenda references before changing task workflows.
+
+### Create and Link Notes
+
+Use `pkms new` for new note boilerplate and UUID generation. Use full dashed
+UUIDs in org links:
+
+```org
+[[id:aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa][description]]
+```
+
+For heading anchors, add the heading first, then run:
+
+```bash
+pkms new "Existing Note" --create --heading "Heading Title"
+```
+
+Validate changed notes afterward.
+
+## Editing Safety
+
+- Inspect user-provided example files before broader analysis.
+- Prefer existing notes and aliases over creating approximate links.
+- Use inline links only where the surrounding sentence justifies the relation.
+- Do not mechanically add backlinks.
+- Preserve org heading hierarchy and existing file style.
+- After note edits, run `validate` on changed notes and a focused `check`.
+
+## Pipelining Rules
+
+Use NDJSON for command chaining. Producers emit one JSON object per line;
+consumers read UUID/path targets from stdin.
+
+Common producers: `resolve`, `query`, `orphans`, `stats --hubs`, `suggest`.
+Common consumers: `get`, `suggest`, `validate`, `context`, `todo`, `show`.
+
+Use `--from-stdin` when the consumer also has other flags or scope could be
+ambiguous.
