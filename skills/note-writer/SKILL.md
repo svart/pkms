@@ -1,402 +1,65 @@
 ---
 name: note-writer
-description: Write well-structured, stylistically consistent org-mode notes for an org-roam PKMS database. Use this skill to create a cohesive set of notes on any topic, following a proven pattern for content structure, phrasing, and cross-linking. Use the pkms-manager skill to find existing note UUIDs for internal links.
+description: Write or revise stylistically consistent org-mode notes in this org-roam PKMS. Use this skill when drafting new notes, improving existing notes, filling stubs, structuring note sets, or adding internal links. Coordinate with pkms-manager to inspect existing notes, resolve UUIDs, validate links, and avoid duplicate notes.
 ---
 
 # Note-writer
 
-This skill helps you write a cohesive set of org-mode notes on any topic, following a consistent style for content structure, phrasing, and cross-linking.
+Use this skill to write, revise, and connect org-mode notes in the local PKMS style. The goal is a readable note that fits the existing graph: clear definitions, justified links, valid org syntax, and no duplicate concept notes.
 
-## Prerequisites
+## Before Writing
 
-Before writing notes, resolve existing note UUIDs using the `pkms-manager` skill:
+Inspect the database before creating or editing notes:
 
 ```bash
-pkms resolve --title <term>
-pkms query "term"
+pkms resolve --title "<term>"
+pkms query "<term>"
+pkms get <uuid> --no-content
 ```
 
-Use the returned UUIDs to create inline links between notes.
+Use `pkms-manager` for command details and JSON schemas. Read candidate notes before linking to them. Do not create a new note when an existing note already covers the concept under a title, alias, or close variant.
 
-## Writing Style Reference
+If the user gives source files or existing notes, inspect them first. If the task is only analysis, do not edit the notes database.
 
-### Opening Definition Pattern
+## Reference Map
 
-Every core-concept note opens with a tight two-sentence definition. The first sentence categorises what the thing *is*. The second draws a boundary — it states what makes it distinct, what its scope is, or what it is not. Both sentences are complete, self-contained statements. Never use an em-dash to tack a second-person explanation onto the second sentence:
+Load only the references needed for the current task:
 
-> A widget is a mechanism that transforms input into output. Unlike filters, a widget preserves the full structure.
+- `references/style.md`: prose style, openings, headings, bold text, quotes, code, and tables.
+- `references/linking.md`: link justification, UUID resolution, bidirectional links, overlinking, and link candidate decisions.
+- `references/workflows.md`: workflows for new notes, existing notes, stub repair, and validation.
+- `references/subgraphs.md`: connecting isolated clusters through bridge notes and preserving graph shape.
 
-> Frobnication is a technique for rearranging data in place. It does not create new data, only changes the order.
+For most note-writing tasks, read `references/style.md` and `references/linking.md`. For creation, stub repair, or validation-heavy work, also read `references/workflows.md`. Read `references/subgraphs.md` only when connecting disconnected clusters or designing bridge paths.
 
-> A quux is a formal description of the system's behaviour. It specifies what the system does, not how to use it.
+## Core Workflow
 
-**Structure**: sentence 1 = category + essential action. sentence 2 = boundary or contrast that distinguishes it from similar concepts. Both sentences must stand on their own. Specific formular could be changed in favor of clarity.
+1. Identify the note type: new note, existing note revision, stub repair, link cleanup, or subgraph connection.
+2. Resolve existing concepts with `pkms resolve` and `pkms query`; inspect likely matches with `pkms get`.
+3. Write or revise the note using the local style rules.
+4. Add only locally justified inline links using `[[id:<uuid>][description]]`.
+5. Validate each changed note and fix broken links, duplicate links, missing titles, and obvious orphans.
 
-### Second-Paragraph Elaboration
+## Note Design
 
-Immediately after the opening, a second paragraph expands without digression — more detail on the same thought, same register, same level of abstraction:
+Prefer small, focused notes. Split "why" and "how" when a concept has both theoretical and practical sides. Use separate distinction notes when the main value is a boundary between related concepts.
 
-> A widget works by accepting an input stream and producing a transformed output. Its purpose is to guarantee that no information is lost during the process. Unlike filters, widgets preserve the full structure of the input. A widget is a transducer.
+Core concept notes open with a concise definition and boundary statement. Practical notes describe concrete principles, usage, or failure modes. Hub notes are indexes; they may contain flat link lists, but ordinary notes should place links inline in prose.
 
-This paragraph never introduces a new topic. It deepens the opening claim.
+## Link Discipline
 
-### Sentence Rhythm
+A link belongs only when the surrounding sentence is genuinely about the linked concept. Prefer the most general matching note unless the sentence is explicitly about a narrower variant. Avoid links to broad hubs from child notes, duplicate links to the same target, and internal links that duplicate the value of an external reference.
 
-Short, declarative sentences. Compound sentences joined by commas, not semicolons. Each sentence adds exactly one new piece of information. Avoid dependent clauses that delay the main point.
+Check salient graph-worthy terms as link candidates. Leave general words, passing mentions, and incidental platform examples unlinked unless they are central to the note.
 
-**Prefer**:
-> A widget is a data transformer. In a transformation, what matters is the mapping from input to output. By contrast, the internal state of the widget is irrelevant to the caller.
+## Completion Criteria
 
-**Avoid**:
-> A widget, which is a data transformer that produces an output from an input, is something in which the internal state is irrelevant to the caller.
+A changed note is ready when:
 
-### Heading Levels
+- Internal links are valid.
+- The note has a clear title and useful body content.
+- Inline links are justified by nearby prose.
+- Obvious duplicate notes or duplicate links have been resolved.
+- The note is connected to the graph unless it is intentionally standalone.
 
-Headings must be consecutive — never skip a level. If the parent is `*`, the child is `**`, not `***`. A `***` is only valid when preceded by a `**`. This preserves the structural hierarchy for org-mode parsers.
-
-### Heading-Level `:ID:` Properties
-
-When a heading covers a concept that deserves its own link anchor, add a PROPERTIES drawer with `:ID:` immediately after the heading line:
-
-```org
-** HTTP/2
-:PROPERTIES:
-:ID:       bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb
-:END:
-```
-
-Generate heading UUIDs with `pkms new "Note Title" --create --heading "HTTP/2"`.
-Link to a heading from another note with:
-
-```
-[[id:bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb][HTTP/2]]
-```
-
-The link description should match the context of the surrounding text.
-
-Heading IDs are warranted when:
-- The heading covers a sub-concept that other notes need to reference directly.
-- The heading is a version/variant of the main topic (e.g., HTTP/2 under HTTP).
-- The heading is a distinct protocol, specification, standard, or case within a broader note.
-
-Do not add heading IDs mechanically to every heading. Only add them when cross-note linking to that specific section is expected.
-
-### Key Principles Lists
-
-When a source lists principles, rules, or steps, introduce each as an imperative or directive subheading with a colon, then a short explanatory paragraph:
-
-> *** Maintain idempotency
-> Ensure the widget produces the same result when given the same input multiple times. This makes the system predictable and testable.
-
-Each entry is: heading phrase (call to action) + 1-2 sentences of justification or effect. No numbered steps unless the source itself uses them.
-
-### Use of Bold for Key Terms
-
-Introduce key terms in *bold* the first time they appear in a note (org-mode uses single asterisks: *bold*). Use bold sparingly — only for terms that the note itself is defining:
-
-> *Idempotency* is the property of producing the same result on repeated application.
-
-> *Widgets are wholly distinct from filters.*
-
-Do not bold for emphasis. Reserve bold for definitional anchors.
-Use org-mode `*bold*`.
-
-### Bold vs Section Headings
-
-Bold text must never be used as a substitute for section headings. A standalone line containing only bold markup (`*Section Name*`) is ambiguous — it visually mimics a heading but is not recognised as one by org-mode parsers, outline navigation, or table of contents generation.
-
-Section divisions always use org-mode heading syntax:
-
-```org
-* Section Name
-** Sub-section Name
-```
-
-A bold term `*like this*` is only valid inline within a paragraph, as a definitional anchor for the key concept the note introduces. A standalone bold line is always a mistake — convert it to a heading.
-
-**Rule**: if text sits alone on its own line wrapped in single asterisks, it is a heading, not a bold term. Replace `*Text*` with `* Text`.
-
-### The "Applied to …" Pattern
-
-Optionally end a core note with a concrete analogy from a familiar domain (everyday life, a well-known craft). Use this only when it brings significantly more clarity — an analogy that earns its keep is worth including, but a forced one is worse than none. The analogy is told as a mini-narrative, not stated as a comparison:
-
-> Teaching someone to ride a bicycle illustrates what idempotency means in practice. Each attempt starts from the same place. The outcome — staying upright — is always the same regardless of who tries. The value lies in the predictability of the result, not in the novelty of the attempt.
-
-When used, follow this structure: (1) state the domain, (2) describe a scene or scenario, (3) draw the parallel implicitly — trust the reader to connect it.
-
-### Quote Integration
-
-Quotes from authoritative sources are introduced with a blockquote. Attribution follows on a separate line with an em-dash:
-
-```
-#+begin_quote
-A widget is only as good as its failure modes.
-
-— Some Authority
-#+end_quote
-```
-
-Quotes are short (1-3 sentences) and punchy. They are not analysed or explained after being quoted.
-
-### Handling "Why" and "How" Separately
-
-When a concept has both a practical aspect and a theoretical aspect, separate them into distinct notes. The "how" notes cover practical patterns, key principles, and usage. The "why" notes cover foundations, theory, and rationale. Distinction notes cover where the boundary lies between related concepts.
-
-This separation mirrors the source material's own structure — don't invent categories, just keep them cleanly divided.
-
-### Cross-Reference Style
-
-Inline links to other notes into the prose wherever a natural connection exists. The link should sit on the phrase that names the related concept, not tacked on at the end:
-
-> This is closely related to [[id:uuid][widget lifetimes]] but covers a different scope.
-
-> Unlike [[id:uuid][filters]], widgets preserve the full structure of the input.
-
-Do not place links at the end of paragraphs or sections as an afterthought. Avoid separate "See also" sections — if a link belongs, it belongs in the sentence that mentions the concept.
-
-The only exception is hub notes. A hub note serves as an index for a topic area and needs a flat list of links enumerating the constituent notes. That list is the hub's purpose, not an afterthought.
-
-See [[#bidirectional-links][Bidirectional Links]] in the Workflow section for rules on when two notes should link to each other.
-
-### Link Justification
-
-A link must be justified by the immediate sentence, not by general relevance. A link belongs only when the linked concept is the *direct object* of what the sentence is literally about — the sentence would be incomplete or inaccurate without it.
-
-- Don't add links to hub notes from child notes. A child note about a specific feature should link only to its parent topic note, not to broadly related hubs.
-- Don't enumerate platforms or ecosystems on general concept notes (html, markdown, etc.). A concept note defines the concept; it does not list where it is used.
-- "Comparable to" links are appropriate in a main topic note (e.g. gitlab → github), but not in child notes or concept notes.
-- Don't create intermediate notes to rescue a broken link. Remove the broken link instead if you cannot find corresponding note in the database.
-- Prefer the most general note when multiple candidates match. Link "DNS" to the `dns` note, not `dns record types`. Check aliases — a concept may be recorded under a variant name. Inspect candidates with `pkms resolve --title "term"` and `pkms get <target> --no-content`.
-- A link must earn its place by adding genuine navigation value. Remove links when: the referenced concept is already the subject of the current note (self-referencing), the description is a filename or proper noun with no corresponding note, or the sentence already provides the needed context through another mechanism (a direct URL, a code example, or the definition itself).
-- Prefer external URLs over internal links for reference and background context. An Arch Wiki link belongs as an external URL, not as a link to an internal Arch Linux note.
-- One link per sentence is enough. Multiple links in a single sentence dilute each link's justification.
-
-### Inline Verbatim and Code
-
-Use ~ for short non-code technical terms, concepts, notation, or any verbatim emphasis that is not source code: ~O(n)~, ~rpm~, ~/var/log~, ~:ID:~.
-
-Use = for short inline source code fragments only — function names, variables, arguments, expressions: =function_call(2)=, =std::vector<int>=.
-
-Use `#+begin_src` blocks for multi-line code or examples longer than a few words. Specify the language for syntax highlighting:
-
-```
-#+begin_src python
-def greet(name):
-    print(f"hello, {name}")
-#+end_src
-```
-
-Shell commands and one-liners go in `#+begin_src sh` or `#+begin_src shell`. Keep examples focused — one block per distinct concept, with a short explanatory heading above it.
-
-### Table Style
-
-When converting HTML tables from source material or creating the new tables, keep them as org-mode tables. Use a header row, a separator row, then data rows. Column headers are short noun phrases.
-
-```
-|                    | DPDK                                   | XDP/AF_XDP                               |
-|--------------------+----------------------------------------+------------------------------------------|
-| Kernel involvement | None — userspace driver                | BPF program in kernel driver             |
-| Data path          | Polling, no syscalls                   | Poll or interrupt, descriptor passing    |
-| NIC ownership      | Removed from kernel                    | Shared with kernel                       |
-| Use case           | Maximum throughput, dedicated hardware | Flexible processing, kernel co-existence |
-```
-
-Keep tables narrow — no more than 4-5 columns. If the source table is wider, split it or convert to prose.
-
-### Overall Voice Profile
-
-| Dimension | Choice |
-|-----------|--------|
-| Register | Neutral, authoritative, plain |
-| Person | Third-person (except for direct quotes) |
-| Tenses | Present simple (timeless claims) |
-| Sentence length | Short to medium; no run-ons |
-| Rhetorical mode | Exposition — define, describe, contrast |
-| Flavour | Understated; no hyperbole, no marketing language |
-
-The voice is that of a knowledgeable practitioner explaining to a peer. Not a teacher simplifying for a beginner, not an academic building a theory — someone who *does* the thing explaining how it works to someone else who might also do it.
-
-### What to Avoid
-
-- Avoid rhetorical questions ("So what does this mean?")
-- Avoid first-person editorialising ("I think", "in my opinion")
-- Avoid humour, metaphors, or idioms that depend on cultural knowledge
-- Avoid bullet points where prose works — use lists only for enumerations of parallel items
-- Avoid empty transitional phrases ("It is important to note that", "It should be noted that")
-- Avoid "It is not X — it is Y" constructions. State directly what something is. If a contrast is needed, state both sides plainly without the "not X" framing.
-- Avoid using standalone bold text (`*Section Name*`) as section headings. Use org-mode heading syntax (`* Section Name`) instead. Bold is only for definitional anchors inline within prose.
-
-## Workflow
-
-1. **Fetch source material** — retrieve all pages/sections of the material you are capturing.
-2. **Create notes** — for each distinct page, run `pkms new "prefix Title" --create` to generate UUIDs and boilerplate files.
-3. **Resolve UUIDs** — use `pkms resolve --title "prefix" --output-format json` to get all UUIDs.
-4. **Write content** — fill each note following the patterns in the style reference. Inline links to other notes using `[[id:<uuid>][title]]`.
-5. **Cross-link** — follow the mandatory [[#cross-linking-procedure][cross-linking procedure]] below to connect every concept mentioned in the note to the rest of the database.
-6. **Verify** — run `pkms check` to confirm no broken links, duplicate UUIDs, or missing titles. A note is not complete until the [[#completion-criteria][completion criteria]] are met.
-
-### Completion Criteria
-
-A note is ready only when:
-
-- It has zero broken internal links (~pkms validate <uuid>~ reports `Broken: 0 internal, 0 file`).
-- It has at least one meaningful outgoing or incoming link. Leaf notes with zero connections are orphaned by definition and must be linked to the graph before the task is finished.
-- Every concept, technology, or API mentioned in the note has been checked as a link candidate. Not every term justifies a link, but every term must be checked.
-
-### Cross-linking Procedure
-
-After writing content, for every concept mentioned in the note:
-
-```
-For each concept mentioned in the note:
-  pkms resolve --title "<concept>" (or pkms query "concept")
-  If a matching note exists:
-    read it to confirm relevance (pkms get <uuid>)
-    inline the link where the concept appears in the prose
-    skip if the concept is already linked from another part of the same note
-  If no note exists:
-    decide: is this concept substantial enough to warrant its own note?
-      If yes → create it now, write it following the style reference, link
-      If no → leave unlinked (only substantial concepts need their own notes)
-```
-
-A concept is substantial enough for its own note when it is:
-- A distinct technology, protocol, or system call with its own history and behaviour;
-- A design pattern or architectural principle referenced across multiple notes.
-
-A concept is not substantial when it is:
-- A well-known general term already explained in the current note;
-- A passing mention with no further context in the source material;
-- A platform name used only as an example of where a technology runs.
-
-### Bidirectional Links
-
-Bidirectional links (note A links to note B and note B links back to note A) are usually a sign of muddled structure. One direction is almost always enough — choose the direction that serves the reader's flow.
-
-Bidirectional links are justified when two notes cover overlapping but non-nested concepts that each need the other for context on their own terms (e.g. ~epoll~ ↔ ~kqueue~, which are counterparts on different operating systems), and each side of the link has an independent link justification in the sentence where it appears.
-
-### Overlinking
-
-After adding links, run `pkms validate <uuid>` on each changed note. Respond to overlinking warnings:
-
-- More than two links to the same target note within one source note is almost always a mistake. The only exception is tables, where each row represents a distinct concept and may link to its own note.
-- When overlinking is reported, keep the link in the sentence where the concept is the direct object. Remove duplicates from sections where the concept is only mentioned in passing.
-
-### Stub Notes
-
-When discovering a stub note (fewer than ~150 tokens of content, no heading structure beyond a single ~Interesting resources~ or similar placeholder), fill it with full content immediately rather than leaving it for later. A stub note is a dead end for readers and a broken promise in the graph.
-
-Fill stubs by:
-1. Reading any external resources already linked in the stub.
-2. Searching for the concept's relationship to other notes already in the database.
-3. Writing full content following the style reference.
-4. Running the cross-linking procedure on the filled note.
-
-## Linking Isolated Subgraphs
-
-When you discover a cluster of notes disconnected from the main graph, connect
-it through shared concepts rather than forcing direct links to an overloaded
-hub. These patterns emerge from practical experience linking three disconnected
-subgraphs (cellular signal metrics, Wi-Fi, mobile network identities) into a
-well-connected wireless networking graph.
-
-### Identify Shared Technology Bridges
-
-Isolated subgraphs are usually focused on a specific domain. Find the concepts
-it shares with the main graph — those are your bridge points. List the
-technologies, standards, or measurements the subgraph covers, then check which
-of those already exist in the main graph.
-
-> Wi-Fi subgraph covers: OFDM, MIMO, RSSI, signal-to-noise ratio, QAM modulation.
-> Main graph already has: lte ofdm, lte mimo, RSSI, SINR.
-> → Bridges: OFDM (shared PHY technique), signal quality (shared metric).
-
-Each shared concept becomes a bridge. Create one bridging note per concept. A
-bridging note defines the concept in a general, cross-technology way and links
-to the technology-specific notes on both sides.
-
-### Prefer Existing Intermediate Nodes over Direct Links
-
-Before creating a new bridging note, check whether an existing note in the main
-graph already sits on the boundary. If a note like "4g" or "CQI" already
-connects to the main hub (LTE), use it as the attachment point instead of
-linking directly to the hub. This keeps the hub from becoming overlinked.
-
-> MCC subgraph needs connection to LTE. The "4g" note already sits between 3G and LTE.
-> → Link UMTS → 4g (not UMTS → LTE). Path becomes UMTS → 4g → LTE (2 hops).
-
-When no suitable intermediate exists, create a bridging note. A bridging note
-earns its place by defining a concept that genuinely spans both sides — RSSI and
-SNR are the same physical measurements in Wi-Fi and LTE; OFDM is the same
-modulation technique.
-
-### Merge Duplicates before Connecting
-
-If the subgraph contains two notes about the same concept under different
-titles, merge them into one note before connecting outward. Duplicates create
-split attention and force readers to guess which note to read.
-
-> "wifi" (empty) and "wi-fi" (one sentence) are the same concept.
-> → Merge into one "wifi" note with content. Redirect links from the discarded UUID.
-
-Merge by: 
-1. picking the note with the most inbound links to keep; 
-2. consolidating content into it;
-3. updating all links that point to the discarded UUID;
-4. deleting the discarded file.
-
-### Prefer 2-3 Hops from the Hub
-
-A hub note with too many incoming links becomes hard to navigate (the user
-mentioned LTE with 13 backlinks). When connecting a subgraph, aim for paths of
-2-3 hops from the hub, not direct links. Each hop distributes the cognitive load
-across intermediate notes.
-Sometimes more hops are necessary for better linking logic. Tell user about it.
-
-> Instead of linking signal metrics directly to LTE:
-> SINR → CQI → LTE (2 hops).
-> RSRP → SINR → CQI → LTE (3 hops).
-
-Use `pkms path <from> <to>` to check the hop count before committing to a linking strategy.
-
-### Fill Stub Notes with Minimal Viable Content
-
-An empty note with only a title is a dead end. Before linking a subgraph
-outward, give each stub note enough content to be useful on its own. Follow a
-minimal template:
-
-- A definition sentence (what it is, in context)
-- A boundary sentence (what distinguishes it from related concepts)
-- At least one inline link to another note in the same subgraph
-
-This ensures the note rewards reading and provides a base for future expansion.
-The `pkms validate` output flags notes with 0 outgoing links — prefer each note
-to have at least one internal link.
-
-### Build Several Independent Bridge Paths
-
-A subgraph connected through a single bridge is fragile — if that bridge note is
-ever restructured, the subgraph becomes orphaned. Create 2-3 independent bridge
-paths through different shared concepts. 
-
-> Wi-Fi subgraph connects via:
-> (a) wifi → wireless signal quality → RSSI → SINR → ... → LTE
-> (b) 802.11ax → OFDM → lte ofdm → LTE
-> (c) 802.11ac → lte mimo → LTE
-
-Each path stands on its own. If one bridge is removed, the subgraph remains connected through the others.
-
-But don't overuse it. If it is completely enough to one path between notes, then leave it.
-
-### Link Direction
-
-When connecting subgraphs through a bridging note, the link direction should
-serve the reader's flow:
-
-- From specific to general: a technology-specific note links to the general bridging concept (802.11ac → OFDM), not the reverse
-- From newer to older in an backward evolutionary chain: 4g → UMTS → GSM . So user will follow backlinks if necessary.
-- The bridging note may be linked by itself or link outward to specific notes. It depends on the case.
-
-This keeps the graph navigable: a reader starting in the subgraph naturally
-discovers the bridge, follows it to the general concept, and from there reaches
-the main graph.
+Use `pkms validate <uuid>` for changed notes. Use `pkms check` when broader graph integrity may be affected.
