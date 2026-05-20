@@ -1,7 +1,7 @@
 //! In-memory knowledge graph of org-roam notes.
 //!
-//! [`Graph`] is the central data structure, built from [`FileScanResult`]s produced by
-//! scanning `.org` files. Each file is parsed into a [`ParsedNote`](crate::parser::ParsedNote)
+//! [`Graph`] is the central data structure, built from parsed `.org` files.
+//! Each file is parsed into a [`ParsedNote`](crate::parser::ParsedNote)
 //! (UUIDs, title, tags, aliases, links, headings). The builder promotes the primary UUID of
 //! each file into a [`Node`] and creates separate heading-nodes for headings with their own
 //! `:ID:` property. The graph resolves internal links into backlinks and detects broken links.
@@ -14,9 +14,9 @@ pub mod traversal;
 pub mod validation;
 
 use crate::config::Config;
-use crate::discovery::discover_files;
-use crate::parser::{Link, ParsedNote, parse_note};
-use rayon::prelude::*;
+use crate::corpus::Corpus;
+pub use crate::corpus::FileScanResult;
+use crate::parser::{Link, ParsedNote};
 use serde::Serialize;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -52,14 +52,6 @@ impl Node {
             has_todos: parsed.has_todo_headings(),
         }
     }
-}
-
-#[derive(Debug, Clone)]
-pub struct FileScanResult {
-    pub path: PathBuf,
-    pub parsed: ParsedNote,
-    pub raw_content: Option<String>,
-    pub parse_error: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -157,42 +149,16 @@ pub fn file_link_target_exists(target: &str, source_path: &Path, db_root: &Path)
 }
 
 impl Graph {
-    pub fn scan(db_root: &Path, ignore: &[String]) -> anyhow::Result<Vec<FileScanResult>> {
-        let files = discover_files(db_root, ignore)?;
-        let results: Vec<FileScanResult> = files
-            .into_par_iter()
-            .map(|entry| {
-                let path = entry.path.clone();
-                match std::fs::read_to_string(&path) {
-                    Ok(content) => {
-                        let parsed = parse_note(&content);
-                        FileScanResult {
-                            path,
-                            parsed,
-                            raw_content: Some(content),
-                            parse_error: None,
-                        }
-                    }
-                    Err(e) => FileScanResult {
-                        path,
-                        parsed: ParsedNote::empty(),
-                        raw_content: None,
-                        parse_error: Some(format!("IO error: {e}")),
-                    },
-                }
-            })
-            .collect();
-
-        Ok(results)
+    pub fn load(config: &Config) -> anyhow::Result<Self> {
+        let corpus = Corpus::load(config)?;
+        Ok(Self::from_corpus(&corpus))
     }
 
-    pub fn load(config: &Config) -> anyhow::Result<Self> {
-        let db_root = config.resolved_db_root()?;
-        let ignore = config.resolve_ignore_patterns();
-        let results = Self::scan(db_root, &ignore)?;
+    pub fn from_corpus(corpus: &Corpus) -> Self {
+        let results = corpus.results().to_vec();
         let mut graph = Graph::build(results.clone());
         graph.results = results;
-        Ok(graph)
+        graph
     }
 
     pub fn find_node(&self, target: &str) -> Option<&Node> {

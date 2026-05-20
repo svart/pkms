@@ -2,6 +2,7 @@ mod app;
 mod cli;
 mod commands;
 mod config;
+mod corpus;
 mod discovery;
 #[cfg(feature = "embed")]
 mod embed;
