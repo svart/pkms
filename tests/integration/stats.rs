@@ -25,6 +25,31 @@ fn test_stats_json() {
 }
 
 #[test]
+fn test_stats_orphans_exclude_dailies() {
+    let (_dir, root) = setup_db();
+    let db = root.to_str().unwrap();
+    let (stats, status) = run_json(&["--db", db, "--output-format", "json", "stats"]);
+    assert!(status.success());
+    let (orphans, status) = run_json(&["--db", db, "--output-format", "json", "orphans"]);
+    assert!(status.success());
+    let (orphans_with_dailies, status) = run_json(&[
+        "--db",
+        db,
+        "--output-format",
+        "json",
+        "orphans",
+        "--with-dailies",
+    ]);
+    assert!(status.success());
+
+    assert_eq!(stats["orphans"], orphans["count"]);
+    assert!(
+        orphans_with_dailies["count"].as_u64().unwrap() > orphans["count"].as_u64().unwrap(),
+        "test fixture should contain daily orphan notes"
+    );
+}
+
+#[test]
 fn test_stats_hubs() {
     let (_dir, root) = setup_db();
     let (_stdout, _stderr, status) = run(&["--db", root.to_str().unwrap(), "stats", "--hubs"]);

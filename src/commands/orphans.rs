@@ -4,7 +4,6 @@ use crate::graph::Graph;
 use crate::output::OutputContext;
 use crate::util;
 use anyhow::Result;
-use regex::Regex;
 use serde::Serialize;
 
 #[derive(Serialize)]
@@ -40,17 +39,11 @@ impl From<&OrphansArgs> for OrphansOptions {
 
 pub fn run(config: &ResolvedConfig, ctx: &OutputContext, opts: &OrphansOptions) -> Result<()> {
     let graph = Graph::load(config)?;
-    let mut orphans = graph.orphan_nodes();
-
-    if !opts.with_dailies {
-        let daily_re = Regex::new(r"^\d{4}-\d{2}-\d{2}$").unwrap();
-        orphans.retain(|n| {
-            n.path
-                .file_stem()
-                .and_then(|s| s.to_str())
-                .is_none_or(|s| !daily_re.is_match(s))
-        });
-    }
+    let mut orphans = if opts.with_dailies {
+        graph.orphan_nodes_including_dailies()
+    } else {
+        graph.orphan_nodes()
+    };
 
     let count = orphans.len();
     let showed = opts.limit.map(|l| {
