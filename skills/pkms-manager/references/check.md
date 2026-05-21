@@ -21,6 +21,9 @@ pkms check --cross-links <note-a> <note-b>
 When no section flags are given, all default checks are shown. When section
 flags are given, output is limited to those sections.
 
+`check --stats` reports orphan counts with the same policy as default
+`pkms orphans`: daily notes are excluded.
+
 ## Agent Workflow
 
 - Use `--id-links` before fixing broken UUIDs.
