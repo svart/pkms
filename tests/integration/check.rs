@@ -12,13 +12,8 @@ fn test_check_human() {
 #[test]
 fn test_check_json() {
     let (_dir, root) = setup_db();
-    let (v, status) = run_json(&[
-        "--db",
-        root.to_str().unwrap(),
-        "--output-format",
-        "json",
-        "check",
-    ]);
+    let db = root.to_str().unwrap();
+    let (v, status) = run_json(&["--db", db, "--output-format", "json", "check"]);
     assert!(!status.success());
     assert!(v.get("stats").is_some());
     assert_eq!(v["healthy"], false);
@@ -42,6 +37,10 @@ fn test_check_json() {
         .map(|a| a.len())
         .unwrap_or(0);
     assert!(dups >= 1, "expected duplicate UUIDs");
+
+    let (orphans, status) = run_json(&["--db", db, "--output-format", "json", "orphans"]);
+    assert!(status.success());
+    assert_eq!(v["stats"]["orphan_notes"], orphans["count"]);
 }
 
 #[test]

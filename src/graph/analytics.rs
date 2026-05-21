@@ -3,6 +3,7 @@ use std::path::Path;
 use std::time::SystemTime;
 
 use crate::parser::Link;
+use crate::parser::find_daily_file_date;
 
 use super::{Graph, GraphStats};
 
@@ -73,7 +74,7 @@ impl Graph {
             .collect()
     }
 
-    pub fn orphan_nodes(&self) -> Vec<&super::Node> {
+    pub fn orphan_nodes_including_dailies(&self) -> Vec<&super::Node> {
         self.primary_nodes()
             .into_iter()
             .filter(|n| {
@@ -81,6 +82,13 @@ impl Graph {
                 let has_incoming = self.backlinks.get(&n.uuid).is_some_and(|b| !b.is_empty());
                 !has_outgoing && !has_incoming
             })
+            .collect()
+    }
+
+    pub fn orphan_nodes(&self) -> Vec<&super::Node> {
+        self.orphan_nodes_including_dailies()
+            .into_iter()
+            .filter(|n| find_daily_file_date(&n.path).is_none())
             .collect()
     }
 
