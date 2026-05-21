@@ -132,3 +132,6 @@ Common consumers: `get`, `suggest`, `validate`, `context`, `todo`, `show`.
 
 Use `--from-stdin` when the consumer also has other flags or scope could be
 ambiguous.
+
+`orphans` excludes daily notes by default. Use `orphans --with-dailies` only
+when explicitly auditing daily notes or debugging orphan-count differences.
