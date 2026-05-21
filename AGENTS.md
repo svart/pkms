@@ -174,7 +174,6 @@ Keep producer and consumer contracts compatible when changing structured output.
 - `docs/`: detailed installation, configuration, commands, database format,
   TODO/agenda behavior, pipelining, JSON/NDJSON, workflows, development.
 - `skills/pkms-manager/`: agent workflow knowledge for operating `pkms`.
-- `skills/note-writer/`: note authoring style and org-mode writing rules.
 
 When changing CLI behavior, update the command reference and any affected
 workflow docs. When changing agent workflows, update the relevant skill.
