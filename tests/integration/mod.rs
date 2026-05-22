@@ -22,15 +22,36 @@ mod todo;
 mod validate;
 
 use std::fs;
+use std::path::Path;
 use std::path::PathBuf;
 use std::process::{Command, ExitStatus};
+
+const TEST_CONFIG: &str = r#"[agenda]
+open_todo_states = ["TODO", "IN-PROGRESS", "IDEA", "PROBLEM", "WAITING", "DELEGATED", "POSTPONED"]
+closed_todo_states = ["DONE", "CANCELED"]
+"#;
 
 pub fn pkms_binary() -> PathBuf {
     PathBuf::from(env!("CARGO_BIN_EXE_pkms"))
 }
 
+fn setup_test_config_home() -> tempfile::TempDir {
+    let config_home = tempfile::tempdir().unwrap();
+    fs::write(config_home.path().join("pkms.toml"), TEST_CONFIG).unwrap();
+    config_home
+}
+
+fn configure_test_command(command: &mut Command, config_home: &Path) {
+    command
+        .env("XDG_CONFIG_HOME", config_home)
+        .env_remove("PKMS_DB_ROOT");
+}
+
 pub fn run(args: &[&str]) -> (String, String, ExitStatus) {
-    let output = Command::new(pkms_binary()).args(args).output().unwrap();
+    let config_home = setup_test_config_home();
+    let mut command = Command::new(pkms_binary());
+    configure_test_command(&mut command, config_home.path());
+    let output = command.args(args).output().unwrap();
     (
         String::from_utf8_lossy(&output.stdout).to_string(),
         String::from_utf8_lossy(&output.stderr).to_string(),
@@ -53,7 +74,10 @@ pub fn run_json(args: &[&str]) -> (serde_json::Value, ExitStatus) {
 }
 
 fn run_pipe(producer_args: &[&str], consumer_args: &[&str]) -> (String, String, ExitStatus) {
-    let producer_output = Command::new(pkms_binary())
+    let producer_config_home = setup_test_config_home();
+    let mut producer = Command::new(pkms_binary());
+    configure_test_command(&mut producer, producer_config_home.path());
+    let producer_output = producer
         .args(producer_args)
         .output()
         .expect("Failed to run producer");
@@ -64,7 +88,9 @@ fn run_pipe(producer_args: &[&str], consumer_args: &[&str]) -> (String, String, 
         String::from_utf8_lossy(&producer_output.stdout),
         String::from_utf8_lossy(&producer_output.stderr),
     );
+    let consumer_config_home = setup_test_config_home();
     let mut consumer = Command::new(pkms_binary());
+    configure_test_command(&mut consumer, consumer_config_home.path());
     consumer.args(consumer_args);
     consumer
         .stdin(std::process::Stdio::piped())
