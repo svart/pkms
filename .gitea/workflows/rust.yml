@@ -15,9 +15,14 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          github-server-url: http://server.in.svart.io/gitea
+        env:
+          GITEA_TOKEN: ${{ github.token }}
+        run: |
+          git init .
+          git remote add origin http://server.in.svart.io/gitea/${GITHUB_REPOSITORY}.git
+          AUTH="$(printf 'x-access-token:%s' "$GITEA_TOKEN" | base64 -w0)"
+          git -c "http.http://server.in.svart.io/gitea/.extraheader=AUTHORIZATION: basic $AUTH" fetch --depth=1 origin "$GITHUB_SHA"
+          git checkout --detach FETCH_HEAD
 
       - name: Check formatting
         run: cargo fmt --all -- --check
