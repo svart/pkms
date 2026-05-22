@@ -11,22 +11,13 @@ env:
 
 jobs:
   check:
-    runs-on: ubuntu-latest
+    runs-on: rust-latest
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Install system dependencies
-        run: |
-          apt-get update
-          apt-get install -y --no-install-recommends ca-certificates curl build-essential pkg-config libssl-dev
-          rm -rf /var/lib/apt/lists/*
-
-      - name: Install Rust toolchain
-        run: |
-          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --component clippy,rustfmt
-          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+        with:
+          github-server-url: http://server.in.svart.io/gitea
 
       - name: Check formatting
         run: cargo fmt --all -- --check
