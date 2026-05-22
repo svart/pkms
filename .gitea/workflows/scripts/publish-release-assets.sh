@@ -8,7 +8,7 @@ release_json="$(curl -fsS \
   -H "Authorization: token ${GITEA_TOKEN}" \
   "${api}/releases/tags/${tag}" || true)"
 
-release_id="$(printf '%s' "$release_json" | sed -n 's/.*"id":[[:space:]]*\([0-9][0-9]*\).*/\1/p')"
+release_id="$(printf '%s' "$release_json" | tr ',' '\n' | sed -n 's/.*"id":[[:space:]]*\([0-9][0-9]*\).*/\1/p' | head -n 1)"
 
 if [ -z "$release_id" ]; then
   release_json="$(curl -fsS -X POST \
@@ -16,7 +16,7 @@ if [ -z "$release_id" ]; then
     -H "Content-Type: application/json" \
     -d "{\"tag_name\":\"${tag}\",\"name\":\"${tag}\",\"draft\":false,\"prerelease\":false}" \
     "${api}/releases")"
-  release_id="$(printf '%s' "$release_json" | sed -n 's/.*"id":[[:space:]]*\([0-9][0-9]*\).*/\1/p')"
+  release_id="$(printf '%s' "$release_json" | tr ',' '\n' | sed -n 's/.*"id":[[:space:]]*\([0-9][0-9]*\).*/\1/p' | head -n 1)"
 fi
 
 if [ -z "$release_id" ]; then
