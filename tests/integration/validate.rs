@@ -104,7 +104,7 @@ fn test_validate_agenda_issue() {
     let issues = v["issues"].as_array().unwrap();
     let has_agenda_issue = issues
         .iter()
-        .any(|i| i.as_str().map_or(false, |s| s.contains("agenda")));
+        .any(|i| i.as_str().is_some_and(|s| s.contains("agenda")));
     assert!(
         has_agenda_issue,
         "validate should report missing :agenda: filetag, issues: {:?}",

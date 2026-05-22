@@ -71,7 +71,7 @@ fn test_stats_hubs_json() {
     assert!(
         v.get("hubs")
             .and_then(|h| h.as_array())
-            .map_or(false, |h| !h.is_empty())
+            .is_some_and(|h| !h.is_empty())
     );
     assert!(v["hubs"][0]["uuid"].is_string());
 }
@@ -96,7 +96,7 @@ fn test_stats_tags_json() {
         "--tags",
     ]);
     assert!(status.success());
-    assert!(v["tags"].as_array().map_or(false, |t| !t.is_empty()));
+    assert!(v["tags"].as_array().is_some_and(|t| !t.is_empty()));
     assert!(v["tags"][0]["tag"].is_string());
 }
 

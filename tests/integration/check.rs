@@ -69,7 +69,7 @@ fn test_check_file_links_json() {
         "expected broken_file_links field"
     );
     let broken_files = v["broken_file_links"].as_array().unwrap();
-    assert!(broken_files.len() >= 1, "expected broken file links");
+    assert!(!broken_files.is_empty(), "expected broken file links");
     assert!(broken_files[0]["source_title"].is_string());
     assert!(broken_files[0]["target_path"].is_string());
     assert!(
@@ -113,7 +113,10 @@ fn test_check_attachment_links_json() {
         "expected broken_attachment_links field"
     );
     let broken_attach = v["broken_attachment_links"].as_array().unwrap();
-    assert!(broken_attach.len() >= 1, "expected broken attachment links");
+    assert!(
+        !broken_attach.is_empty(),
+        "expected broken attachment links"
+    );
     assert!(broken_attach[0]["source_title"].is_string());
     assert!(broken_attach[0]["target_path"].is_string());
     assert!(
@@ -143,8 +146,8 @@ fn test_check_file_and_attachment_links_json() {
     assert!(!status.success());
     assert!(v.get("broken_file_links").is_some());
     assert!(v.get("broken_attachment_links").is_some());
-    assert!(v["broken_file_links"].as_array().unwrap().len() >= 1);
-    assert!(v["broken_attachment_links"].as_array().unwrap().len() >= 1);
+    assert!(!v["broken_file_links"].as_array().unwrap().is_empty());
+    assert!(!v["broken_attachment_links"].as_array().unwrap().is_empty());
     assert!(
         v.get("stats").is_none(),
         "stats should not appear without --stats flag"
@@ -163,11 +166,7 @@ fn test_check_id_links_json() {
         "--id-links",
     ]);
     assert!(!status.success());
-    assert!(
-        v["broken_links"]
-            .as_array()
-            .map_or(false, |a| !a.is_empty())
-    );
+    assert!(v["broken_links"].as_array().is_some_and(|a| !a.is_empty()));
     assert!(v["broken_links"][0]["source_uuid"].is_string());
     assert!(
         v.get("broken_file_links").is_none(),
@@ -211,7 +210,7 @@ fn test_check_agenda_json() {
     );
     let issues = v["agenda_issues"].as_array().unwrap();
     assert!(
-        issues.len() >= 1,
+        !issues.is_empty(),
         "expected at least 1 agenda issue, got {}",
         issues.len()
     );

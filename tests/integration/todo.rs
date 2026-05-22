@@ -69,7 +69,7 @@ fn test_todo_json() {
     assert!(v.get("total").is_some(), "expected total field");
     assert!(v.get("items").is_some(), "expected items field");
     assert!(
-        v["items"].as_array().unwrap().len() >= 1,
+        !v["items"].as_array().unwrap().is_empty(),
         "expected at least 1 todo item"
     );
 }
@@ -111,7 +111,7 @@ fn test_todo_state_include() {
         .filter(|i| i["todo_state"].as_str() == Some("DONE"))
         .collect();
     assert!(
-        done_items.len() >= 1,
+        !done_items.is_empty(),
         "expected DONE items with --state DONE"
     );
     for item in items {
@@ -734,7 +734,7 @@ fn test_todo_columns_json_unaffected() {
     assert!(v.get("total").is_some(), "expected total field");
     assert!(v.get("items").is_some(), "expected items field");
     assert!(
-        v["items"].as_array().unwrap().len() >= 1,
+        !v["items"].as_array().unwrap().is_empty(),
         "expected at least 1 todo item"
     );
     // JSON should still contain all fields

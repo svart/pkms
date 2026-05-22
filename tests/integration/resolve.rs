@@ -25,7 +25,7 @@ fn test_resolve_json() {
     assert!(v.get("query").is_some());
     assert!(v.get("total").is_some());
     assert!(v.get("results").is_some());
-    assert!(v["results"].as_array().map_or(false, |r| !r.is_empty()));
+    assert!(v["results"].as_array().is_some_and(|r| !r.is_empty()));
     assert!(v["results"][0]["uuid"].is_string());
 }
 

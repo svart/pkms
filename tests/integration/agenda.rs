@@ -22,7 +22,7 @@ fn test_agenda_json() {
     assert!(v.get("total").is_some(), "expected total field");
     assert!(v.get("items").is_some(), "expected items field");
     assert!(
-        v["items"].as_array().unwrap().len() >= 1,
+        !v["items"].as_array().unwrap().is_empty(),
         "expected at least 1 agenda item"
     );
 }
@@ -64,7 +64,7 @@ fn test_agenda_state_include() {
         .filter(|i| i["todo_state"].as_str() == Some("TODO"))
         .collect();
     assert!(
-        todo_items.len() >= 1,
+        !todo_items.is_empty(),
         "expected TODO items with --state TODO"
     );
     for item in items {

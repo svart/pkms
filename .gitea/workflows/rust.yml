@@ -1,0 +1,40 @@
+name: Rust checks
+
+on:
+  push:
+    branches: ["master"]
+  pull_request:
+    branches: ["master"]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  check:
+    runs-on: rust-latest
+
+    steps:
+      - name: Checkout
+        env:
+          GITEA_TOKEN: ${{ github.token }}
+        run: |
+          git init .
+          git remote add origin http://server.in.svart.io/gitea/${GITHUB_REPOSITORY}.git
+          AUTH="$(printf 'x-access-token:%s' "$GITEA_TOKEN" | base64 -w0)"
+          git -c "http.http://server.in.svart.io/gitea/.extraheader=AUTHORIZATION: basic $AUTH" fetch --depth=1 origin "$GITHUB_SHA"
+          git checkout --detach FETCH_HEAD
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Run clippy
+        run: cargo clippy --locked --all-targets -- -D warnings
+
+      - name: Check embed feature build
+        run: cargo build --locked --features embed
+
+      - name: Run tests
+        run: cargo test --locked
+
+      - name: Build release binary
+        run: cargo build --locked --release

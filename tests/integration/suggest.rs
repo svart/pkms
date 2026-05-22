@@ -27,19 +27,19 @@ fn test_suggest_json() {
     assert!(status.success());
     assert_eq!(v["target"], "Note A");
     assert!(v.get("suggestions").is_some());
-    if let Some(suggestions) = v["suggestions"].as_array() {
-        if !suggestions.is_empty() {
-            let s = &suggestions[0];
-            assert!(
-                s.get("scores").is_some(),
-                "missing per-factor scores: {}",
-                s
-            );
-            let scores = s["scores"].as_object().unwrap();
-            assert!(!scores.is_empty(), "scores should not be empty: {}", s);
-            for (_k, v) in scores {
-                assert!(v.is_number(), "score value should be number: {}", v);
-            }
+    if let Some(suggestions) = v["suggestions"].as_array()
+        && !suggestions.is_empty()
+    {
+        let s = &suggestions[0];
+        assert!(
+            s.get("scores").is_some(),
+            "missing per-factor scores: {}",
+            s
+        );
+        let scores = s["scores"].as_object().unwrap();
+        assert!(!scores.is_empty(), "scores should not be empty: {}", s);
+        for (_k, v) in scores {
+            assert!(v.is_number(), "score value should be number: {}", v);
         }
     }
 }
