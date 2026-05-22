@@ -73,7 +73,7 @@ fn make_note_full(
             title: Some(title.to_string()),
             filetags,
             categories: vec![],
-            aliases: aliases,
+            aliases,
             roam_refs: vec![],
             outgoing,
             headings: vec![],
@@ -665,7 +665,7 @@ fn test_get_neighbors_no_outgoing() {
     let results = vec![make_note("a", "A", vec![])];
     let graph = Graph::build(results);
     let neighbors = graph.get_neighbors("a", 1);
-    assert!(neighbors.is_empty() || neighbors.get(&1).is_some());
+    assert!(neighbors.is_empty() || neighbors.contains_key(&1));
 }
 
 #[test]

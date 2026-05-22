@@ -22,7 +22,7 @@ fn test_query_json() {
     assert!(status.success());
     assert_eq!(v["query"], "Note");
     assert!(v["total_results"].as_u64().unwrap_or(0) >= 2);
-    assert!(v["results"].as_array().map_or(false, |r| !r.is_empty()));
+    assert!(v["results"].as_array().is_some_and(|r| !r.is_empty()));
 }
 
 #[test]
