@@ -128,10 +128,9 @@ pkms task agenda --week source:all
 pkms task today source:all
 pkms task report --today --source all --output-format json
 pkms task plan --today --source all --output-format json
-pkms task clarify --source todoist --output-format json
 pkms task inbox
-pkms task projects source:todoist
-pkms task labels source:todoist
+pkms task list projects source:todoist
+pkms task list tags source:todoist
 pkms task show todoist:<remote-id>
 pkms task add --source todoist "Buy milk tomorrow"
 pkms task add --source todoist --title "Call Alice" --due 2026-05-24 --priority B
@@ -139,9 +138,6 @@ pkms task add --source todoist --title "Call Alice" --note "Project Alpha"
 pkms task done todoist:<remote-id>
 pkms task postpone todoist:<remote-id> --to tomorrow
 pkms task schedule todoist:<remote-id> --due none
-pkms task update todoist:<remote-id> --title "Call Alice" --project Work --priority A
-pkms task delete todoist:<remote-id> --dry-run
-pkms task reopen todoist:<remote-id>
 ```
 
 See [TODO and Agenda](todo-agenda.md) for task IDs, filtering, table columns,

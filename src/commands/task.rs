@@ -1,8 +1,7 @@
 use crate::cli::{
-    OutputFormat, TaskAddArgs, TaskAgendaArgs, TaskClarifyArgs, TaskCommand, TaskDeleteArgs,
-    TaskDoneArgs, TaskListArgs, TaskMetadataArgs, TaskOpenArgs, TaskPostponeArgs, TaskReportArgs,
-    TaskScheduleArgs, TaskShortcutArgs, TaskStateArgs, TaskTargetArgs, TaskUpcomingArgs,
-    TaskUpdateArgs,
+    OutputFormat, TaskAddArgs, TaskAgendaArgs, TaskCommand, TaskDoneArgs, TaskListArgs,
+    TaskOpenArgs, TaskPostponeArgs, TaskReportArgs, TaskScheduleArgs, TaskShortcutArgs,
+    TaskStateArgs, TaskTargetArgs, TaskUpcomingArgs,
 };
 use crate::commands::open::OpenOptions;
 use crate::commands::show::{HeadingTarget, ShowOptions};
@@ -14,7 +13,7 @@ use crate::output::OutputContext;
 use crate::parser::HEADING_RE;
 use crate::tasks::filter::{SourceSelection, TaskFilters, parse_task_filters};
 use crate::tasks::id::TaskId;
-use crate::tasks::model::TaskItem;
+use crate::tasks::model::{TaskItem, TaskSourceKind};
 use crate::tasks::pkms::record_to_task_item;
 use crate::workspace::Workspace;
 use anyhow::{Result, bail};
@@ -47,9 +46,6 @@ pub fn run(config: &ResolvedConfig, ctx: &OutputContext, command: &TaskCommand) 
         TaskCommand::Inbox(args) => run_shortcut(config, ctx, args, ShortcutKind::Inbox),
         TaskCommand::Report(args) => run_report(config, ctx, args, ReportKind::Report),
         TaskCommand::Plan(args) => run_report(config, ctx, args, ReportKind::Plan),
-        TaskCommand::Clarify(args) => run_clarify(config, ctx, args),
-        TaskCommand::Projects(args) => run_projects(config, ctx, args),
-        TaskCommand::Labels(args) => run_labels(config, ctx, args),
         TaskCommand::Show(args) => run_show(config, ctx, args),
         TaskCommand::Open(args) => run_open(config, ctx, args),
         TaskCommand::State(args) => run_state(config, ctx, args),
@@ -57,9 +53,6 @@ pub fn run(config: &ResolvedConfig, ctx: &OutputContext, command: &TaskCommand) 
         TaskCommand::Add(args) => run_add(config, ctx, args),
         TaskCommand::Postpone(args) => run_postpone(config, ctx, args),
         TaskCommand::Schedule(args) => run_schedule(config, ctx, args),
-        TaskCommand::Update(args) => run_update(config, ctx, args),
-        TaskCommand::Delete(args) => run_delete(config, ctx, args),
-        TaskCommand::Reopen(args) => run_reopen(config, ctx, args),
     }
 }
 
@@ -71,8 +64,40 @@ enum ShortcutKind {
     Inbox,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TaskListMode {
+    Tasks,
+    Projects,
+    Tags,
+}
+
 fn run_list(config: &ResolvedConfig, ctx: &OutputContext, args: &TaskListArgs) -> Result<()> {
-    let filters = parse_task_filters(&args.filters)?;
+    let (mode, filters) = split_task_list_mode(&args.filters);
+    match mode {
+        TaskListMode::Tasks => run_task_list(config, ctx, args, &filters),
+        TaskListMode::Projects => run_projects(config, ctx, &filters),
+        TaskListMode::Tags => run_tags(config, ctx, &filters),
+    }
+}
+
+fn split_task_list_mode(filters: &[String]) -> (TaskListMode, Vec<String>) {
+    let Some((first, rest)) = filters.split_first() else {
+        return (TaskListMode::Tasks, Vec::new());
+    };
+    match first.as_str() {
+        "projects" => (TaskListMode::Projects, rest.to_vec()),
+        "tags" | "labels" => (TaskListMode::Tags, rest.to_vec()),
+        _ => (TaskListMode::Tasks, filters.to_vec()),
+    }
+}
+
+fn run_task_list(
+    config: &ResolvedConfig,
+    ctx: &OutputContext,
+    args: &TaskListArgs,
+    raw_filters: &[String],
+) -> Result<()> {
+    let filters = parse_task_filters(raw_filters)?;
     let mut items = match filters.source {
         SourceSelection::Pkms => collect_pkms_list_items(config)?,
         SourceSelection::Todoist => collect_todoist_items(config, &filters)?,
@@ -565,227 +590,6 @@ fn print_report_section(title: &str, section: &TaskReportSection) {
     }
 }
 
-fn run_clarify(config: &ResolvedConfig, ctx: &OutputContext, args: &TaskClarifyArgs) -> Result<()> {
-    let mut filters = args.filters.clone();
-    if let Some(source) = args.source.as_deref() {
-        filters.push(format!("source:{source}"));
-    } else if !filters
-        .iter()
-        .any(|filter| filter.starts_with("source:") || filter.starts_with("src:"))
-    {
-        filters.push("source:todoist".to_string());
-    }
-
-    let filters = parse_task_filters(&filters)?;
-    if matches!(filters.source, SourceSelection::Pkms) {
-        bail!("PKMS task clarification is not supported yet. Use --source todoist.");
-    }
-    clarify_todoist_tasks(config, ctx, &filters, args.stale_days.max(0))
-}
-
-#[cfg(feature = "todoist")]
-#[derive(Debug, Serialize)]
-struct ClarifyOutput {
-    total: usize,
-    stale_inbox_days: i64,
-    items: Vec<ClarifyItem>,
-}
-
-#[cfg(feature = "todoist")]
-#[derive(Debug, Serialize)]
-struct ClarifyItem {
-    item: TaskItem,
-    reasons: Vec<ClarifyReason>,
-}
-
-#[cfg(feature = "todoist")]
-#[derive(Debug, Serialize)]
-struct ClarifyReason {
-    code: &'static str,
-    message: &'static str,
-}
-
-#[cfg(feature = "todoist")]
-fn clarify_todoist_tasks(
-    config: &ResolvedConfig,
-    ctx: &OutputContext,
-    filters: &TaskFilters,
-    stale_days: i64,
-) -> Result<()> {
-    let token = crate::tasks::todoist::ensure_enabled(config)?;
-    let client =
-        crate::tasks::todoist::TodoistClient::with_base_url(config.todoist_api_base_url(), token);
-    let tasks = match filters
-        .todoist_filter
-        .as_deref()
-        .or_else(|| config.todoist_default_filter())
-    {
-        Some(filter) => client.filter_tasks(filter)?,
-        None => client.list_tasks()?,
-    };
-    let metadata = if tasks.iter().any(|task| task.project_id.is_some()) {
-        Some(crate::tasks::todoist::TodoistMetadata::new(
-            client.list_projects()?,
-        ))
-    } else {
-        None
-    };
-
-    let mut created_at = Vec::with_capacity(tasks.len());
-    let mut items = Vec::with_capacity(tasks.len());
-    for task in tasks {
-        created_at.push(task.created_at.clone());
-        items.push(crate::tasks::todoist::task_to_item_with_metadata(
-            task,
-            metadata.as_ref(),
-        ));
-    }
-    enrich_todoist_items_with_pkms_notes(config, &mut items)?;
-
-    let rows = items
-        .into_iter()
-        .zip(created_at)
-        .filter_map(|(item, created_at)| {
-            let reasons = clarification_reasons(&item, created_at.as_deref(), stale_days);
-            (!reasons.is_empty()).then_some(ClarifyItem { item, reasons })
-        })
-        .collect::<Vec<_>>();
-    print_clarify_output(
-        ctx,
-        ClarifyOutput {
-            total: rows.len(),
-            stale_inbox_days: stale_days,
-            items: rows,
-        },
-    )
-}
-
-#[cfg(not(feature = "todoist"))]
-fn clarify_todoist_tasks(
-    _config: &ResolvedConfig,
-    _ctx: &OutputContext,
-    _filters: &TaskFilters,
-    _stale_days: i64,
-) -> Result<()> {
-    bail!("Todoist support is not available in this build. Rebuild with --features todoist.")
-}
-
-#[cfg(feature = "todoist")]
-fn clarification_reasons(
-    item: &TaskItem,
-    created_at: Option<&str>,
-    stale_days: i64,
-) -> Vec<ClarifyReason> {
-    let mut reasons = Vec::new();
-    if effective_date(item).is_none() {
-        reasons.push(ClarifyReason {
-            code: "no_date",
-            message: "Task has no due date.",
-        });
-    }
-    if item.project.is_none() && item.project_id.is_none() {
-        reasons.push(ClarifyReason {
-            code: "no_project",
-            message: "Task has no project.",
-        });
-    }
-    if item
-        .body
-        .as_deref()
-        .is_none_or(|body| body.trim().is_empty())
-        && item.note_uuid.is_none()
-    {
-        reasons.push(ClarifyReason {
-            code: "no_context",
-            message: "Task has no description or linked PKMS note.",
-        });
-    }
-    if title_needs_clarification(&item.title) {
-        reasons.push(ClarifyReason {
-            code: "vague_title",
-            message: "Task title is too short or vague.",
-        });
-    }
-    if item_is_stale_inbox(item, created_at, stale_days) {
-        reasons.push(ClarifyReason {
-            code: "stale_inbox",
-            message: "Task is in Inbox and older than the stale threshold.",
-        });
-    }
-    reasons
-}
-
-#[cfg(feature = "todoist")]
-fn title_needs_clarification(title: &str) -> bool {
-    let normalized = title.trim().to_ascii_lowercase();
-    if normalized.chars().filter(|ch| ch.is_alphanumeric()).count() <= 3 {
-        return true;
-    }
-    let words = normalized
-        .split(|ch: char| !ch.is_alphanumeric())
-        .filter(|word| !word.is_empty())
-        .collect::<Vec<_>>();
-    !words.is_empty()
-        && words.len() <= 2
-        && words.iter().all(|word| {
-            matches!(
-                *word,
-                "do" | "it" | "thing" | "stuff" | "task" | "todo" | "fix" | "check" | "update"
-            )
-        })
-}
-
-#[cfg(feature = "todoist")]
-fn item_is_stale_inbox(item: &TaskItem, created_at: Option<&str>, stale_days: i64) -> bool {
-    let is_inbox = item
-        .project
-        .as_deref()
-        .is_some_and(|project| project.eq_ignore_ascii_case("inbox"))
-        || item
-            .project_id
-            .as_deref()
-            .is_some_and(|project| project.eq_ignore_ascii_case("inbox"));
-    if !is_inbox {
-        return false;
-    }
-    let Some(created_at) = created_at.and_then(parse_todoist_created_date) else {
-        return false;
-    };
-    created_at < Local::now().date_naive() - chrono::Duration::days(stale_days)
-}
-
-#[cfg(feature = "todoist")]
-fn parse_todoist_created_date(value: &str) -> Option<NaiveDate> {
-    chrono::DateTime::parse_from_rfc3339(value)
-        .ok()
-        .map(|datetime| datetime.date_naive())
-}
-
-#[cfg(feature = "todoist")]
-fn print_clarify_output(ctx: &OutputContext, output: ClarifyOutput) -> Result<()> {
-    match ctx.format {
-        OutputFormat::Text => {
-            if output.items.is_empty() {
-                println!("No tasks need clarification.");
-                return Ok(());
-            }
-            println!("Tasks needing clarification: {}", output.total);
-            for row in &output.items {
-                let reasons = row
-                    .reasons
-                    .iter()
-                    .map(|reason| reason.code)
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                println!("- [{}] {}: {reasons}", row.item.display_id, row.item.title);
-            }
-            Ok(())
-        }
-        OutputFormat::Json => ctx.print_json(&output),
-        OutputFormat::Ndjson => ctx.print_ndjson(&output.items),
-    }
-}
-
 fn run_show(config: &ResolvedConfig, ctx: &OutputContext, args: &TaskTargetArgs) -> Result<()> {
     match args.id.parse::<TaskId>()? {
         TaskId::Pkms(id) => crate::commands::show::run(
@@ -882,113 +686,178 @@ fn show_todoist_task(_config: &ResolvedConfig, _ctx: &OutputContext, _id: &str) 
     bail!("Todoist support is not available in this build. Rebuild with --features todoist.")
 }
 
-#[cfg(feature = "todoist")]
-fn run_projects(
-    config: &ResolvedConfig,
-    ctx: &OutputContext,
-    args: &TaskMetadataArgs,
-) -> Result<()> {
-    ensure_todoist_metadata_source(&args.filters)?;
-    let token = crate::tasks::todoist::ensure_enabled(config)?;
-    let client =
-        crate::tasks::todoist::TodoistClient::with_base_url(config.todoist_api_base_url(), token);
-    let projects = client.list_projects()?;
-    print_metadata(ctx, "project", &projects)
-}
-
-#[cfg(not(feature = "todoist"))]
-fn run_projects(
-    _config: &ResolvedConfig,
-    _ctx: &OutputContext,
-    _args: &TaskMetadataArgs,
-) -> Result<()> {
-    bail!("Todoist support is not available in this build. Rebuild with --features todoist.")
-}
-
-#[cfg(feature = "todoist")]
-fn run_labels(config: &ResolvedConfig, ctx: &OutputContext, args: &TaskMetadataArgs) -> Result<()> {
-    ensure_todoist_metadata_source(&args.filters)?;
-    let token = crate::tasks::todoist::ensure_enabled(config)?;
-    let client =
-        crate::tasks::todoist::TodoistClient::with_base_url(config.todoist_api_base_url(), token);
-    let labels = client.list_labels()?;
-    print_metadata(ctx, "label", &labels)
-}
-
-#[cfg(not(feature = "todoist"))]
-fn run_labels(
-    _config: &ResolvedConfig,
-    _ctx: &OutputContext,
-    _args: &TaskMetadataArgs,
-) -> Result<()> {
-    bail!("Todoist support is not available in this build. Rebuild with --features todoist.")
-}
-
-#[cfg(feature = "todoist")]
-trait MetadataDisplay: Serialize {
-    fn id(&self) -> &str;
-    fn name(&self) -> &str;
-}
-
-#[cfg(feature = "todoist")]
-impl MetadataDisplay for crate::tasks::todoist::TodoistProject {
-    fn id(&self) -> &str {
-        &self.id
-    }
-
-    fn name(&self) -> &str {
-        &self.name
-    }
-}
-
-#[cfg(feature = "todoist")]
-impl MetadataDisplay for crate::tasks::todoist::TodoistLabel {
-    fn id(&self) -> &str {
-        &self.id
-    }
-
-    fn name(&self) -> &str {
-        &self.name
-    }
-}
-
-#[cfg(feature = "todoist")]
-fn ensure_todoist_metadata_source(filters: &[String]) -> Result<()> {
+fn run_projects(config: &ResolvedConfig, ctx: &OutputContext, filters: &[String]) -> Result<()> {
     let filters = parse_task_filters(filters)?;
-    if matches!(filters.source, SourceSelection::Pkms) {
-        bail!("PKMS task metadata is not supported yet. Use source:todoist.");
-    }
     if filters.todoist_filter.is_some() {
         bail!("Todoist metadata commands do not accept todoist.filter.");
     }
-    Ok(())
+    let mut rows = Vec::new();
+    if matches!(filters.source, SourceSelection::Pkms | SourceSelection::All) {
+        rows.extend(pkms_project_rows(config)?);
+    }
+    if matches!(
+        filters.source,
+        SourceSelection::Todoist | SourceSelection::All
+    ) {
+        rows.extend(todoist_project_rows(config)?);
+    }
+    sort_metadata_rows(&mut rows);
+    print_metadata_rows(ctx, "project", &rows)
+}
+
+fn run_tags(config: &ResolvedConfig, ctx: &OutputContext, filters: &[String]) -> Result<()> {
+    let filters = parse_task_filters(filters)?;
+    if filters.todoist_filter.is_some() {
+        bail!("Todoist metadata commands do not accept todoist.filter.");
+    }
+    let mut rows = Vec::new();
+    if matches!(filters.source, SourceSelection::Pkms | SourceSelection::All) {
+        rows.extend(pkms_tag_rows(config)?);
+    }
+    if matches!(
+        filters.source,
+        SourceSelection::Todoist | SourceSelection::All
+    ) {
+        rows.extend(todoist_label_rows(config)?);
+    }
+    sort_metadata_rows(&mut rows);
+    print_metadata_rows(ctx, "tag", &rows)
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct TaskMetadataRow {
+    source: TaskSourceKind,
+    id: String,
+    name: String,
+    count: Option<usize>,
+}
+
+fn pkms_project_rows(config: &ResolvedConfig) -> Result<Vec<TaskMetadataRow>> {
+    let mut counts = BTreeMap::new();
+    for item in collect_pkms_list_items(config)? {
+        if let Some(project) = item.project.filter(|project| !project.trim().is_empty()) {
+            *counts.entry(project).or_insert(0) += 1;
+        }
+    }
+    Ok(counts
+        .into_iter()
+        .map(|(project, count)| TaskMetadataRow {
+            source: TaskSourceKind::Pkms,
+            id: project.clone(),
+            name: project,
+            count: Some(count),
+        })
+        .collect())
+}
+
+fn pkms_tag_rows(config: &ResolvedConfig) -> Result<Vec<TaskMetadataRow>> {
+    let mut counts = BTreeMap::new();
+    for item in collect_pkms_list_items(config)? {
+        for tag in item.tags {
+            if !tag.trim().is_empty() {
+                *counts.entry(tag).or_insert(0) += 1;
+            }
+        }
+    }
+    Ok(counts
+        .into_iter()
+        .map(|(tag, count)| TaskMetadataRow {
+            source: TaskSourceKind::Pkms,
+            id: tag.clone(),
+            name: tag,
+            count: Some(count),
+        })
+        .collect())
 }
 
 #[cfg(feature = "todoist")]
-fn print_metadata<T: MetadataDisplay>(ctx: &OutputContext, kind: &str, rows: &[T]) -> Result<()> {
+fn todoist_project_rows(config: &ResolvedConfig) -> Result<Vec<TaskMetadataRow>> {
+    let token = crate::tasks::todoist::ensure_enabled(config)?;
+    let client =
+        crate::tasks::todoist::TodoistClient::with_base_url(config.todoist_api_base_url(), token);
+    Ok(client
+        .list_projects()?
+        .into_iter()
+        .map(|project| TaskMetadataRow {
+            source: TaskSourceKind::Todoist,
+            id: project.id,
+            name: project.name,
+            count: None,
+        })
+        .collect())
+}
+
+#[cfg(not(feature = "todoist"))]
+fn todoist_project_rows(_config: &ResolvedConfig) -> Result<Vec<TaskMetadataRow>> {
+    bail!("Todoist support is not available in this build. Rebuild with --features todoist.")
+}
+
+#[cfg(feature = "todoist")]
+fn todoist_label_rows(config: &ResolvedConfig) -> Result<Vec<TaskMetadataRow>> {
+    let token = crate::tasks::todoist::ensure_enabled(config)?;
+    let client =
+        crate::tasks::todoist::TodoistClient::with_base_url(config.todoist_api_base_url(), token);
+    Ok(client
+        .list_labels()?
+        .into_iter()
+        .map(|label| TaskMetadataRow {
+            source: TaskSourceKind::Todoist,
+            id: label.id,
+            name: label.name,
+            count: None,
+        })
+        .collect())
+}
+
+#[cfg(not(feature = "todoist"))]
+fn todoist_label_rows(_config: &ResolvedConfig) -> Result<Vec<TaskMetadataRow>> {
+    bail!("Todoist support is not available in this build. Rebuild with --features todoist.")
+}
+
+fn sort_metadata_rows(rows: &mut [TaskMetadataRow]) {
+    rows.sort_by(|a, b| {
+        source_sort_key(&a.source)
+            .cmp(&source_sort_key(&b.source))
+            .then_with(|| a.name.cmp(&b.name))
+            .then_with(|| a.id.cmp(&b.id))
+    });
+}
+
+fn source_sort_key(source: &TaskSourceKind) -> u8 {
+    match source {
+        TaskSourceKind::Pkms => 0,
+        TaskSourceKind::Todoist => 1,
+    }
+}
+
+fn print_metadata_rows(ctx: &OutputContext, kind: &str, rows: &[TaskMetadataRow]) -> Result<()> {
     match ctx.format {
         OutputFormat::Text => {
             if rows.is_empty() {
-                println!("No Todoist {kind}s found.");
+                println!("No task {kind}s found.");
                 return Ok(());
             }
             let mut builder = Builder::new();
-            builder.push_record(["Id", "Name"]);
+            builder.push_record(["Source", "Name", "Count"]);
             for row in rows {
-                builder.push_record([row.id(), row.name()]);
+                builder.push_record([
+                    format!("{:?}", row.source).to_ascii_lowercase(),
+                    row.name.clone(),
+                    row.count.map(|count| count.to_string()).unwrap_or_default(),
+                ]);
             }
             let mut table = builder.build();
             table.with(Style::blank());
             println!("{table}");
             println!();
-            println!("Total: {} Todoist {kind}(s)", rows.len());
+            println!("Total: {} task {kind}(s)", rows.len());
             Ok(())
         }
         OutputFormat::Json => {
             #[derive(Serialize)]
-            struct MetadataOutput<'a, T> {
+            struct MetadataOutput<'a> {
                 total: usize,
-                items: &'a [T],
+                items: &'a [TaskMetadataRow],
             }
             ctx.print_json(&MetadataOutput {
                 total: rows.len(),
@@ -1059,21 +928,6 @@ fn run_schedule(
         },
         serde_json::json!({ "due_date": due }),
     )
-}
-
-fn run_update(config: &ResolvedConfig, ctx: &OutputContext, args: &TaskUpdateArgs) -> Result<()> {
-    let id = todoist_only_id(&args.id)?;
-    update_todoist_task(config, ctx, &id, args)
-}
-
-fn run_delete(config: &ResolvedConfig, ctx: &OutputContext, args: &TaskDeleteArgs) -> Result<()> {
-    let id = todoist_only_id(&args.id)?;
-    delete_todoist_task(config, ctx, &id, args.dry_run)
-}
-
-fn run_reopen(config: &ResolvedConfig, ctx: &OutputContext, args: &TaskTargetArgs) -> Result<()> {
-    let id = todoist_only_id(&args.id)?;
-    reopen_todoist_task(config, ctx, &id)
 }
 
 fn todoist_only_id(id: &str) -> Result<String> {
@@ -1444,159 +1298,6 @@ fn mutate_todoist_task(
     _action: &'static str,
     _request: serde_json::Value,
 ) -> Result<()> {
-    bail!("Todoist support is not available in this build. Rebuild with --features todoist.")
-}
-
-#[cfg(feature = "todoist")]
-fn update_todoist_task(
-    config: &ResolvedConfig,
-    ctx: &OutputContext,
-    id: &str,
-    args: &TaskUpdateArgs,
-) -> Result<()> {
-    let priority = args
-        .priority
-        .as_deref()
-        .map(todoist_create_priority)
-        .transpose()?;
-    let token = crate::tasks::todoist::ensure_enabled(config)?;
-    let client =
-        crate::tasks::todoist::TodoistClient::with_base_url(config.todoist_api_base_url(), token);
-    let metadata = crate::tasks::todoist::TodoistMetadata::new(client.list_projects()?);
-    let mut request = serde_json::Map::new();
-    if let Some(title) = args
-        .title
-        .as_deref()
-        .filter(|title| !title.trim().is_empty())
-    {
-        request.insert(
-            "content".to_string(),
-            serde_json::Value::String(title.to_string()),
-        );
-    }
-    if let Some(project) = args.project.as_deref() {
-        request.insert(
-            "project_id".to_string(),
-            serde_json::Value::String(metadata.resolve_project_id(project)?),
-        );
-    }
-    if let Some(priority) = priority {
-        request.insert(
-            "priority".to_string(),
-            serde_json::Value::Number(priority.into()),
-        );
-    }
-    if !args.label.is_empty() {
-        request.insert(
-            "labels".to_string(),
-            serde_json::Value::Array(
-                args.label
-                    .iter()
-                    .map(|label| serde_json::Value::String(label.clone()))
-                    .collect(),
-            ),
-        );
-    }
-    if let Some(description) = args.description.as_ref() {
-        request.insert(
-            "description".to_string(),
-            serde_json::Value::String(description.clone()),
-        );
-    }
-    if request.is_empty() {
-        bail!(
-            "No Todoist update fields provided. Use --title, --project, --priority, --label, or --description."
-        );
-    }
-
-    client.update_task(id, &serde_json::Value::Object(request))?;
-    let task = client.get_task(id)?;
-    let mut item = crate::tasks::todoist::task_to_item_with_metadata(task, Some(&metadata));
-    enrich_todoist_items_with_pkms_notes(config, std::slice::from_mut(&mut item))?;
-    print_mutation_output(ctx, "update", item)
-}
-
-#[cfg(not(feature = "todoist"))]
-fn update_todoist_task(
-    _config: &ResolvedConfig,
-    _ctx: &OutputContext,
-    _id: &str,
-    _args: &TaskUpdateArgs,
-) -> Result<()> {
-    bail!("Todoist support is not available in this build. Rebuild with --features todoist.")
-}
-
-#[cfg(feature = "todoist")]
-fn delete_todoist_task(
-    config: &ResolvedConfig,
-    ctx: &OutputContext,
-    id: &str,
-    dry_run: bool,
-) -> Result<()> {
-    #[derive(Serialize)]
-    struct DeleteOutput<'a> {
-        source: &'static str,
-        id: String,
-        remote_id: &'a str,
-        deleted: bool,
-        dry_run: bool,
-    }
-
-    if !dry_run {
-        let token = crate::tasks::todoist::ensure_enabled(config)?;
-        let client = crate::tasks::todoist::TodoistClient::with_base_url(
-            config.todoist_api_base_url(),
-            token,
-        );
-        client.delete_task(id)?;
-    }
-
-    let output = DeleteOutput {
-        source: "todoist",
-        id: format!("todoist:{id}"),
-        remote_id: id,
-        deleted: !dry_run,
-        dry_run,
-    };
-    match ctx.format {
-        OutputFormat::Text => {
-            if dry_run {
-                println!("Would delete Todoist task todoist:{id}");
-            } else {
-                println!("Deleted Todoist task todoist:{id}");
-            }
-            Ok(())
-        }
-        OutputFormat::Json => ctx.print_json(&output),
-        OutputFormat::Ndjson => ctx.print_ndjson(&[output]),
-    }
-}
-
-#[cfg(not(feature = "todoist"))]
-fn delete_todoist_task(
-    _config: &ResolvedConfig,
-    _ctx: &OutputContext,
-    _id: &str,
-    _dry_run: bool,
-) -> Result<()> {
-    bail!("Todoist support is not available in this build. Rebuild with --features todoist.")
-}
-
-#[cfg(feature = "todoist")]
-fn reopen_todoist_task(config: &ResolvedConfig, ctx: &OutputContext, id: &str) -> Result<()> {
-    let token = crate::tasks::todoist::ensure_enabled(config)?;
-    let client =
-        crate::tasks::todoist::TodoistClient::with_base_url(config.todoist_api_base_url(), token);
-    client.reopen_task(id)?;
-    let task = client.get_task(id)?;
-    let metadata = todoist_metadata_for_task(&client, &task)?;
-    let mut item = crate::tasks::todoist::task_to_item_with_metadata(task, metadata.as_ref());
-    enrich_todoist_items_with_pkms_notes(config, std::slice::from_mut(&mut item))?;
-    print_mutation_output(ctx, "reopen", item)
-}
-
-#[cfg(not(feature = "todoist"))]
-fn reopen_todoist_task(_config: &ResolvedConfig, _ctx: &OutputContext, _id: &str) -> Result<()> {
     bail!("Todoist support is not available in this build. Rebuild with --features todoist.")
 }
 

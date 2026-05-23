@@ -40,10 +40,11 @@ pkms task overdue source:todoist
 pkms task upcoming --days 7 source:all
 pkms task report --today --source all --output-format json
 pkms task plan --today --source all --output-format json
-pkms task clarify --source todoist --output-format json
 pkms task inbox
-pkms task projects source:todoist
-pkms task labels source:todoist
+pkms task list projects source:todoist
+pkms task list tags source:todoist
+pkms task list projects source:all
+pkms task list tags source:all
 pkms task list source:todoist 'todoist.filter:today | overdue'
 pkms task show todoist:<remote-id>
 pkms task add --source todoist "Buy milk tomorrow"
@@ -52,9 +53,6 @@ pkms task add --source todoist --title "Call Alice" --note "Project Alpha"
 pkms task done todoist:<remote-id>
 pkms task postpone todoist:<remote-id> --to tomorrow
 pkms task schedule todoist:<remote-id> --due none
-pkms task update todoist:<remote-id> --title "Call Alice" --project Work --priority A
-pkms task delete todoist:<remote-id> --dry-run
-pkms task reopen todoist:<remote-id>
 ```
 
 Use stable `todoist:<remote-id>` IDs. Do not invent view-local Todoist IDs.
@@ -82,12 +80,6 @@ daily summary or planning context. Prefer these over raw `task list` or
 commands use a Todoist filter for today, overdue, no-date, and upcoming tasks
 before grouping the returned items locally.
 
-Use `task clarify --source todoist --output-format json` before planning when
-the assistant needs to identify tasks that need date, project, scope, or context.
-It is read-only and returns per-task reason codes: `no_date`, `no_project`,
-`no_context`, `vague_title`, and `stale_inbox`. Use text output for a short
-inbox review and JSON output for automated assistant decisions.
-
 Use positional text with `task add --source todoist` for Todoist Quick Add
 natural-language parsing. Use structured creation for deterministic assistant
 tasks:
@@ -107,9 +99,13 @@ user-authored description text. Later `task list source:todoist` and
 `task show todoist:<remote-id>` populate `note_uuid` and `note_title` from that
 marker. Treat this as a privacy boundary: the PKMS UUID is stored in Todoist.
 
-Use `task projects source:todoist` and `task labels source:todoist` when you
-need available Todoist metadata. Todoist task output uses a human-readable
-`project` when metadata is available and keeps the raw id in `project_id`.
+Use `task list projects` and `task list tags` when you need task metadata. With
+`source:pkms`, projects come from note-level or heading-level `PROJECT`
+properties, and tags combine note `#+filetags` with heading tags as in `todo`
+and `agenda`. With `source:todoist`, projects and tags come from Todoist
+metadata. `source:all` combines both sources. Todoist task output uses a
+human-readable `project` when metadata is available and keeps the raw id in
+`project_id`.
 
 JSON output from `task add --source todoist` is a creation wrapper with
 `created: true` and the created source-neutral `TaskItem` in `item`. Use
@@ -124,7 +120,4 @@ pkms task done todoist:<remote-id> --dry-run
 
 Use stable `todoist:<remote-id>` ids for Todoist mutations. `task postpone`
 accepts `--to tomorrow` or `--to YYYY-MM-DD`; `task schedule` accepts
-`--due tomorrow`, `--due YYYY-MM-DD`, or `--due none`; `task update` can change
-title, project, priority, labels, and description. Always use
-`task delete ... --dry-run` before deleting real Todoist tasks. `task reopen`
-reopens completed Todoist tasks.
+`--due tomorrow`, `--due YYYY-MM-DD`, or `--due none`.

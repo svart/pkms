@@ -31,7 +31,38 @@ fn test_task_help_lists_subcommands() {
     assert!(stdout.contains("add"));
     assert!(stdout.contains("report"));
     assert!(stdout.contains("plan"));
-    assert!(stdout.contains("clarify"));
+    let commands = task_help_commands(&stdout);
+    assert!(!commands.contains(&"projects"));
+    assert!(!commands.contains(&"labels"));
+    assert!(!commands.contains(&"clarify"));
+    assert!(!commands.contains(&"update"));
+    assert!(!commands.contains(&"delete"));
+    assert!(!commands.contains(&"reopen"));
+}
+
+#[test]
+fn test_removed_task_subcommands_are_rejected() {
+    for subcommand in [
+        "projects", "labels", "clarify", "update", "delete", "reopen",
+    ] {
+        let (stdout, stderr, status) = run(&["task", subcommand, "--help"]);
+        assert!(
+            !status.success(),
+            "task {subcommand} unexpectedly succeeded:\n{stdout}\n{stderr}"
+        );
+    }
+}
+
+fn task_help_commands(stdout: &str) -> Vec<&str> {
+    stdout
+        .lines()
+        .filter_map(|line| {
+            let line = line.strip_prefix("  ")?;
+            let command = line.split_whitespace().next()?;
+            (command != "-h," && command != "--db" && command != "--output-format")
+                .then_some(command)
+        })
+        .collect()
 }
 
 #[test]
@@ -301,6 +332,95 @@ fn test_task_overdue_accepts_limit_json() {
     ]);
     assert!(status.success());
     assert!(v["items"].as_array().unwrap().len() <= 1);
+}
+
+#[test]
+fn test_task_list_projects_pkms_uses_project_properties() {
+    let (_dir, root) = setup_db();
+    add_pkms_project_metadata_note(&root);
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "task",
+        "list",
+        "projects",
+        "source:pkms",
+    ]);
+    assert!(status.success());
+    assert_metadata_row(&v, "pkms", "Heading Project");
+    assert_metadata_row(&v, "pkms", "Note Project");
+}
+
+#[test]
+fn test_task_list_tags_pkms_uses_filetags_and_heading_tags() {
+    let (_dir, root) = setup_db();
+    add_pkms_project_metadata_note(&root);
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "task",
+        "list",
+        "tags",
+        "source:pkms",
+    ]);
+    assert!(status.success());
+    assert_metadata_row(&v, "pkms", "filetag");
+    assert_metadata_row(&v, "pkms", "headingtag");
+}
+
+#[test]
+fn test_task_list_metadata_text_omits_id_column() {
+    let (_dir, root) = setup_db();
+    add_pkms_project_metadata_note(&root);
+    let (stdout, stderr, status) = run(&[
+        "--db",
+        root.to_str().unwrap(),
+        "task",
+        "list",
+        "projects",
+        "source:pkms",
+    ]);
+    assert!(status.success(), "stdout:\n{stdout}\nstderr:\n{stderr}");
+    assert!(stdout.contains("Source"));
+    assert!(stdout.contains("Name"));
+    assert!(stdout.contains("Count"));
+    assert!(
+        !stdout.lines().next().unwrap_or_default().contains("Id"),
+        "metadata table should not include Id column:\n{stdout}"
+    );
+}
+
+fn add_pkms_project_metadata_note(root: &std::path::Path) {
+    std::fs::write(
+        root.join("roam/common/20260524000000-task_metadata.org"),
+        r#":PROPERTIES:
+:ID:       77777777-7777-4777-8777-777777777777
+:PROJECT: Note Project
+:END:
+#+title: Task Metadata
+#+filetags: :filetag:
+
+* TODO Note project task :headingtag:
+* TODO Heading project task
+:PROPERTIES:
+:PROJECT: Heading Project
+:END:
+"#,
+    )
+    .unwrap();
+}
+
+fn assert_metadata_row(v: &serde_json::Value, source: &str, name: &str) {
+    assert!(
+        v["items"].as_array().unwrap().iter().any(|row| {
+            row["source"].as_str() == Some(source) && row["name"].as_str() == Some(name)
+        }),
+        "missing metadata row {source}:{name}: {v}"
+    );
 }
 
 #[test]
@@ -575,6 +695,7 @@ fn test_task_list_todoist_uses_mock_api_and_pagination() {
             "json",
             "task",
             "list",
+            "projects",
             "source:todoist",
         ],
         &base_url,
@@ -612,6 +733,7 @@ fn test_task_projects_todoist_lists_metadata() {
             "--output-format",
             "json",
             "task",
+            "list",
             "projects",
             "source:todoist",
         ],
@@ -621,6 +743,7 @@ fn test_task_projects_todoist_lists_metadata() {
     assert!(output.status.success());
     let v: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
     assert_eq!(v["total"], 2);
+    assert_eq!(v["items"][0]["source"], "todoist");
     assert_eq!(v["items"][0]["id"], "inbox");
     assert_eq!(v["items"][0]["name"], "Inbox");
 }
@@ -641,7 +764,8 @@ fn test_task_labels_todoist_lists_metadata() {
             "--output-format",
             "json",
             "task",
-            "labels",
+            "list",
+            "tags",
             "source:todoist",
         ],
         &base_url,
@@ -650,8 +774,69 @@ fn test_task_labels_todoist_lists_metadata() {
     assert!(output.status.success());
     let v: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
     assert_eq!(v["total"], 2);
-    assert_eq!(v["items"][1]["id"], "errand-id");
-    assert_eq!(v["items"][1]["name"], "errand");
+    assert_eq!(v["items"][0]["source"], "todoist");
+    assert_eq!(v["items"][0]["id"], "errand-id");
+    assert_eq!(v["items"][0]["name"], "errand");
+}
+
+#[cfg(feature = "todoist")]
+#[test]
+fn test_task_list_projects_all_combines_pkms_and_todoist_metadata() {
+    let (_dir, root) = setup_db();
+    add_pkms_project_metadata_note(&root);
+    let (base_url, handle) = spawn_todoist_mock(vec![(
+        "GET",
+        "/projects?limit=200",
+        r#"{"results":[{"id":"todoist-work","name":"Todoist Work"}],"next_cursor":null}"#,
+    )]);
+    let output = run_with_todoist_env(
+        &[
+            "--db",
+            root.to_str().unwrap(),
+            "--output-format",
+            "json",
+            "task",
+            "list",
+            "projects",
+            "source:all",
+        ],
+        &base_url,
+    );
+    handle.join().unwrap();
+    assert!(output.status.success());
+    let v: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_metadata_row(&v, "pkms", "Note Project");
+    assert_metadata_row(&v, "todoist", "Todoist Work");
+}
+
+#[cfg(feature = "todoist")]
+#[test]
+fn test_task_list_tags_all_combines_pkms_and_todoist_metadata() {
+    let (_dir, root) = setup_db();
+    add_pkms_project_metadata_note(&root);
+    let (base_url, handle) = spawn_todoist_mock(vec![(
+        "GET",
+        "/labels?limit=200",
+        r#"{"results":[{"id":"todoist-label","name":"todoist-tag"}],"next_cursor":null}"#,
+    )]);
+    let output = run_with_todoist_env(
+        &[
+            "--db",
+            root.to_str().unwrap(),
+            "--output-format",
+            "json",
+            "task",
+            "list",
+            "tags",
+            "source:all",
+        ],
+        &base_url,
+    );
+    handle.join().unwrap();
+    assert!(output.status.success());
+    let v: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_metadata_row(&v, "pkms", "filetag");
+    assert_metadata_row(&v, "todoist", "todoist-tag");
 }
 
 #[cfg(feature = "todoist")]
@@ -1117,72 +1302,6 @@ SCHEDULED: <{today} 10:30>
     assert!(v["by_source"]["pkms"]["total"].as_u64().unwrap() > 0);
     assert_eq!(v["by_source"]["todoist"]["total"], 2);
     assert_eq!(v["by_project"]["Work"]["total"], 2);
-}
-
-#[cfg(feature = "todoist")]
-#[test]
-fn test_task_clarify_todoist_reports_structured_reasons() {
-    let (_dir, root) = setup_db();
-    let (base_url, handle) = spawn_todoist_mock(vec![
-        (
-            "GET",
-            "/tasks?limit=200",
-            r#"{"results":[
-                {"id":"no-date","content":"Prepare proposal","description":"Context","project_id":"work-id","priority":1,"labels":[],"created_at":"2026-05-22T00:00:00Z"},
-                {"id":"no-project","content":"Send proposal","description":"Context","priority":1,"labels":[],"due":{"date":"2099-01-01","string":"2099-01-01"},"created_at":"2026-05-22T00:00:00Z"},
-                {"id":"vague","content":"Do it","description":"Context","project_id":"work-id","priority":1,"labels":[],"due":{"date":"2099-01-01","string":"2099-01-01"},"created_at":"2026-05-22T00:00:00Z"},
-                {"id":"no-context","content":"Contextless task","description":"","project_id":"work-id","priority":1,"labels":[],"due":{"date":"2099-01-01","string":"2099-01-01"},"created_at":"2026-05-22T00:00:00Z"},
-                {"id":"stale","content":"Inbox stale task","description":"Context","project_id":"inbox","priority":1,"labels":[],"due":{"date":"2099-01-01","string":"2099-01-01"},"created_at":"2000-01-01T00:00:00Z"}
-            ],"next_cursor":null}"#,
-        ),
-        (
-            "GET",
-            "/projects?limit=200",
-            r#"{"results":[{"id":"work-id","name":"Work"},{"id":"inbox","name":"Inbox"}],"next_cursor":null}"#,
-        ),
-    ]);
-    let output = run_with_todoist_env(
-        &[
-            "--db",
-            root.to_str().unwrap(),
-            "--output-format",
-            "json",
-            "task",
-            "clarify",
-            "--source",
-            "todoist",
-            "--stale-days",
-            "7",
-        ],
-        &base_url,
-    );
-    handle.join().unwrap();
-    assert!(output.status.success());
-    let v: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
-    assert_eq!(v["total"], 5);
-    assert_clarify_reason(&v, "no-date", "no_date");
-    assert_clarify_reason(&v, "no-project", "no_project");
-    assert_clarify_reason(&v, "vague", "vague_title");
-    assert_clarify_reason(&v, "no-context", "no_context");
-    assert_clarify_reason(&v, "stale", "stale_inbox");
-}
-
-#[cfg(feature = "todoist")]
-fn assert_clarify_reason(v: &serde_json::Value, source_id: &str, code: &str) {
-    let row = v["items"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .find(|row| row["item"]["source_id"] == source_id)
-        .unwrap_or_else(|| panic!("missing clarify row for {source_id}"));
-    assert!(
-        row["reasons"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .any(|reason| reason["code"] == code),
-        "missing reason {code} for {source_id}: {row}"
-    );
 }
 
 #[cfg(feature = "todoist")]
@@ -1759,155 +1878,6 @@ fn test_task_schedule_todoist_can_clear_due_date() {
     assert_eq!(v["changed"], true);
     assert_eq!(v["action"], "unschedule");
     assert!(v["item"]["scheduled"].is_null());
-}
-
-#[cfg(feature = "todoist")]
-#[test]
-fn test_task_update_todoist_updates_fields_and_resolves_project() {
-    let (_dir, root) = setup_db();
-    let (base_url, handle) = spawn_todoist_mock_expect_bodies(vec![
-        (
-            "GET",
-            "/projects?limit=200",
-            serde_json::Value::Null,
-            r#"{"results":[{"id":"work-id","name":"Work"}],"next_cursor":null}"#,
-        ),
-        (
-            "POST",
-            "/tasks/abc",
-            serde_json::json!({
-                "content": "Call Alice",
-                "description": "Discuss launch",
-                "project_id": "work-id",
-                "priority": 4,
-                "labels": ["phone", "launch"]
-            }),
-            r#"{}"#,
-        ),
-        (
-            "GET",
-            "/tasks/abc",
-            serde_json::Value::Null,
-            r#"{"id":"abc","content":"Call Alice","description":"Discuss launch","project_id":"work-id","priority":4,"labels":["phone","launch"]}"#,
-        ),
-    ]);
-    let output = run_with_todoist_env(
-        &[
-            "--db",
-            root.to_str().unwrap(),
-            "--output-format",
-            "json",
-            "task",
-            "update",
-            "todoist:abc",
-            "--title",
-            "Call Alice",
-            "--project",
-            "Work",
-            "--priority",
-            "A",
-            "--label",
-            "phone",
-            "--label",
-            "launch",
-            "--description",
-            "Discuss launch",
-        ],
-        &base_url,
-    );
-    handle.join().unwrap();
-    assert!(output.status.success());
-    let v: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
-    assert_eq!(v["changed"], true);
-    assert_eq!(v["action"], "update");
-    assert_eq!(v["item"]["title"], "Call Alice");
-    assert_eq!(v["item"]["priority"], "A");
-    assert_eq!(v["item"]["project"], "Work");
-    assert_eq!(v["item"]["project_id"], "work-id");
-    assert_eq!(v["item"]["tags"], serde_json::json!(["phone", "launch"]));
-}
-
-#[cfg(feature = "todoist")]
-#[test]
-fn test_task_delete_todoist_dry_run_does_not_call_mock_api() {
-    let (_dir, root) = setup_db();
-    let (base_url, handle) = spawn_todoist_mock(vec![]);
-    let output = run_with_todoist_env(
-        &[
-            "--db",
-            root.to_str().unwrap(),
-            "--output-format",
-            "json",
-            "task",
-            "delete",
-            "todoist:abc",
-            "--dry-run",
-        ],
-        &base_url,
-    );
-    handle.join().unwrap();
-    assert!(output.status.success());
-    let v: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
-    assert_eq!(v["id"], "todoist:abc");
-    assert_eq!(v["deleted"], false);
-    assert_eq!(v["dry_run"], true);
-}
-
-#[cfg(feature = "todoist")]
-#[test]
-fn test_task_delete_todoist_calls_mock_api() {
-    let (_dir, root) = setup_db();
-    let (base_url, handle) = spawn_todoist_mock(vec![("DELETE", "/tasks/abc", r#"{}"#)]);
-    let output = run_with_todoist_env(
-        &[
-            "--db",
-            root.to_str().unwrap(),
-            "--output-format",
-            "json",
-            "task",
-            "delete",
-            "todoist:abc",
-        ],
-        &base_url,
-    );
-    handle.join().unwrap();
-    assert!(output.status.success());
-    let v: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
-    assert_eq!(v["id"], "todoist:abc");
-    assert_eq!(v["deleted"], true);
-}
-
-#[cfg(feature = "todoist")]
-#[test]
-fn test_task_reopen_todoist_calls_mock_api() {
-    let (_dir, root) = setup_db();
-    let (base_url, handle) = spawn_todoist_mock_expect_bodies(vec![
-        ("POST", "/tasks/abc/reopen", serde_json::json!({}), r#"{}"#),
-        (
-            "GET",
-            "/tasks/abc",
-            serde_json::Value::Null,
-            r#"{"id":"abc","content":"Call Alice","description":"","priority":1,"labels":[]}"#,
-        ),
-    ]);
-    let output = run_with_todoist_env(
-        &[
-            "--db",
-            root.to_str().unwrap(),
-            "--output-format",
-            "json",
-            "task",
-            "reopen",
-            "todoist:abc",
-        ],
-        &base_url,
-    );
-    handle.join().unwrap();
-    assert!(output.status.success());
-    let v: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
-    assert_eq!(v["changed"], true);
-    assert_eq!(v["action"], "reopen");
-    assert_eq!(v["item"]["display_id"], "todoist:abc");
 }
 
 #[cfg(feature = "todoist")]

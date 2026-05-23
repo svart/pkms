@@ -28,7 +28,7 @@ pub struct Cli {
         long,
         value_enum,
         value_name = "FMT",
-        help = "Output format: text, json, ndjson"
+        help = "Output format"
     )]
     pub output_format: Option<OutputFormat>,
 
@@ -422,12 +422,6 @@ pub enum TaskCommand {
     Report(TaskReportArgs),
     #[command(about = "Show structured daily plan sections")]
     Plan(TaskReportArgs),
-    #[command(about = "Find tasks needing clarification")]
-    Clarify(TaskClarifyArgs),
-    #[command(about = "List task projects")]
-    Projects(TaskMetadataArgs),
-    #[command(about = "List task labels")]
-    Labels(TaskMetadataArgs),
     #[command(about = "Show detailed task information")]
     Show(TaskTargetArgs),
     #[command(about = "Open a task in an editor")]
@@ -442,17 +436,11 @@ pub enum TaskCommand {
     Postpone(TaskPostponeArgs),
     #[command(about = "Schedule or unschedule a Todoist task")]
     Schedule(TaskScheduleArgs),
-    #[command(about = "Update a Todoist task")]
-    Update(TaskUpdateArgs),
-    #[command(about = "Delete a Todoist task")]
-    Delete(TaskDeleteArgs),
-    #[command(about = "Reopen a Todoist task")]
-    Reopen(TaskTargetArgs),
 }
 
 #[derive(Debug, Args)]
 pub struct TaskListArgs {
-    #[arg(value_name = "FILTER")]
+    #[arg(value_name = "MODE_OR_FILTER")]
     pub filters: Vec<String>,
     #[arg(long, value_name = "SORT")]
     pub sort: Option<String>,
@@ -522,26 +510,6 @@ pub struct TaskReportArgs {
         help = "Number of days in the upcoming section"
     )]
     pub upcoming_days: i64,
-}
-
-#[derive(Debug, Args)]
-pub struct TaskClarifyArgs {
-    #[arg(value_name = "FILTER")]
-    pub filters: Vec<String>,
-    #[arg(
-        long,
-        value_name = "SOURCE",
-        help = "Task source: todoist or all; defaults to todoist"
-    )]
-    pub source: Option<String>,
-    #[arg(long, default_value_t = 7, help = "Days before Inbox tasks are stale")]
-    pub stale_days: i64,
-}
-
-#[derive(Debug, Args)]
-pub struct TaskMetadataArgs {
-    #[arg(value_name = "FILTER")]
-    pub filters: Vec<String>,
 }
 
 #[derive(Debug, Args)]
@@ -640,34 +608,6 @@ pub struct TaskScheduleArgs {
         help = "New due date: tomorrow, YYYY-MM-DD, or none"
     )]
     pub due: String,
-}
-
-#[derive(Debug, Args)]
-pub struct TaskUpdateArgs {
-    #[arg(help = "Task ID: todoist:<remote-id>")]
-    pub id: String,
-    #[arg(long, value_name = "TITLE", help = "New task title")]
-    pub title: Option<String>,
-    #[arg(
-        long,
-        value_name = "PROJECT",
-        help = "Todoist project id or exact name"
-    )]
-    pub project: Option<String>,
-    #[arg(long, value_name = "PRIO", help = "Priority: A, B, or C")]
-    pub priority: Option<String>,
-    #[arg(long, value_name = "LABEL", help = "Replacement label name")]
-    pub label: Vec<String>,
-    #[arg(long, value_name = "TEXT", help = "New task description")]
-    pub description: Option<String>,
-}
-
-#[derive(Debug, Args)]
-pub struct TaskDeleteArgs {
-    #[arg(help = "Task ID: todoist:<remote-id>")]
-    pub id: String,
-    #[arg(long, help = "Print the planned deletion without calling Todoist")]
-    pub dry_run: bool,
 }
 
 #[derive(Debug, Args)]

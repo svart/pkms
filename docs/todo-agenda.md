@@ -154,10 +154,11 @@ pkms task overdue source:todoist
 pkms task upcoming --days 7 source:all
 pkms task report --today --source all --output-format json
 pkms task plan --today --source all --output-format json
-pkms task clarify --source todoist --output-format json
 pkms task inbox
-pkms task projects source:todoist
-pkms task labels source:todoist
+pkms task list projects source:todoist
+pkms task list tags source:todoist
+pkms task list projects source:all
+pkms task list tags source:all
 pkms task list source:todoist 'todoist.filter:today | overdue'
 pkms task show todoist:<remote-id>
 pkms task add --source todoist "Buy milk tomorrow"
@@ -169,9 +170,6 @@ pkms task done todoist:<remote-id> --dry-run
 pkms task postpone todoist:<remote-id> --to tomorrow
 pkms task schedule todoist:<remote-id> --due 2026-05-24
 pkms task schedule todoist:<remote-id> --due none
-pkms task update todoist:<remote-id> --title "Call Alice" --project Work --priority A
-pkms task delete todoist:<remote-id> --dry-run
-pkms task reopen todoist:<remote-id>
 ```
 
 Todoist tasks are fetched only when the source set includes Todoist. Local
@@ -213,13 +211,6 @@ records and emit stable JSON with `total`, `sections`, `by_source`, and
 `--today`, the command uses a Todoist filter covering today, overdue, no-date,
 and next-`N`-days tasks before grouping the returned items locally.
 
-Use `task clarify --source todoist --output-format json` for inbox hygiene and
-pre-planning review. It does not mutate tasks. JSON output returns tasks with
-structured clarification reasons such as `no_date`, `no_project`, `no_context`,
-`vague_title`, and `stale_inbox`. Text output is intentionally short for a quick
-inbox review. The initial stale Inbox threshold is conservative and can be
-overridden with `--stale-days N`.
-
 Todoist task creation supports two modes. Positional text uses Todoist Quick Add
 and lets Todoist parse natural language, labels, priorities, and projects:
 
@@ -256,9 +247,13 @@ populates `note_uuid` and `note_title` when the note exists locally. The marker
 reveals a PKMS note UUID to Todoist; avoid `--note` for tasks where even that
 identifier should not leave the local database.
 
-Use `task projects source:todoist` and `task labels source:todoist` to inspect
-available Todoist metadata. Todoist task output sets `project` to the display
-name when metadata is available and keeps the raw id in `project_id`.
+Use `task list projects` and `task list tags` to inspect task metadata. With
+`source:pkms`, projects come from note-level or heading-level `PROJECT`
+properties, and tags combine note `#+filetags` with heading tags as in `todo`
+and `agenda`. With `source:todoist`, projects and tags come from Todoist
+metadata. `source:all` combines both sources. Todoist task output sets `project`
+to the display name when metadata is available and keeps the raw id in
+`project_id`.
 
 `task add --source todoist --output-format json` returns a wrapper with
 `created: true` and the created source-neutral `TaskItem` under `item`, including

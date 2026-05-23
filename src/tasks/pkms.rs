@@ -29,8 +29,8 @@ pub fn record_to_task_item(config: &ResolvedConfig, record: TaskRecord) -> TaskI
             date: record.deadline_date,
         }),
         tags: combine_tags(&record.filetags, &record.heading_tags),
-        project: None,
-        project_id: None,
+        project: record.project.clone(),
+        project_id: record.project,
         note_title: Some(record.title),
         note_uuid: Some(record.uuid),
         path: Some(PathBuf::from(record.path)),
@@ -111,6 +111,7 @@ mod tests {
             line_number: 12,
             todo_state: Some("todo".to_string()),
             priority: Some('A'),
+            project: Some("Work".to_string()),
             scheduled: Some("<2026-05-23 Sat>".to_string()),
             scheduled_date: Some("2026-05-23".to_string()),
             deadline: None,
@@ -129,6 +130,8 @@ mod tests {
         assert_eq!(item.status, TaskStatus::Open);
         assert_eq!(item.title, "Call supplier");
         assert_eq!(item.note_title.as_deref(), Some("Note A"));
+        assert_eq!(item.project.as_deref(), Some("Work"));
+        assert_eq!(item.project_id.as_deref(), Some("Work"));
         assert_eq!(item.tags, vec!["agenda", "work", "phone"]);
         assert_eq!(item.scheduled.unwrap().date.as_deref(), Some("2026-05-23"));
     }
