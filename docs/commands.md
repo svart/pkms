@@ -113,10 +113,23 @@ pkms todo
 pkms agenda
 pkms show <id>
 pkms open <id>
+pkms task list
+pkms task agenda
+pkms task show p<id>
+pkms task open p<id>
+pkms task state p<id> WAITING
+pkms task done p<id>
+pkms task list source:todoist
+pkms task show todoist:<remote-id>
+pkms task add --source todoist "Buy milk tomorrow"
+pkms task done todoist:<remote-id>
 ```
 
 See [TODO and Agenda](todo-agenda.md) for task IDs, filtering, table columns,
-and editor behavior.
+editor behavior, and task state changes.
+
+Todoist task reads require a build with `--features todoist` and a token in the
+configured environment variable.
 
 ## Configuration
 

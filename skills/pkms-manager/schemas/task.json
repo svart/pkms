@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "title": "TaskOutput",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "total": { "type": "integer" },
+    "items": {
+      "type": "array",
+      "items": { "type": "object", "additionalProperties": true }
+    },
+    "id": { "type": "string" },
+    "path": { "type": "string" },
+    "line_number": { "type": "integer" },
+    "old_state": { "type": "string" },
+    "new_state": { "type": "string" },
+    "dry_run": { "type": "boolean" }
+  },
+  "examples": [
+    {
+      "total": 1,
+      "items": [
+        {
+          "source": "todoist",
+          "source_id": "6XGgm6PHrGgMpCFX",
+          "display_id": "todoist:6XGgm6PHrGgMpCFX",
+          "title": "Buy milk"
+        }
+      ]
+    }
+  ]
+}

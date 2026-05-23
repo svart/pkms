@@ -64,6 +64,16 @@ pkms todo
 pkms agenda
 pkms show <canonical-id>
 pkms open <canonical-id>
+pkms task list
+pkms task agenda
+pkms task show p<canonical-id>
+pkms task open p<canonical-id>
+pkms task state p<canonical-id> WAITING
+pkms task done p<canonical-id>
+pkms task list source:todoist
+pkms task show todoist:<remote-id>
+pkms task add --source todoist "Buy milk tomorrow"
+pkms task done todoist:<remote-id>
 ```
 
 ## Statistics

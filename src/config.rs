@@ -10,6 +10,7 @@ pub struct Config {
     pub ignore_patterns: Option<Vec<String>>,
     pub columns: Option<Vec<String>>,
     pub agenda: Option<AgendaConfig>,
+    pub todoist: Option<TodoistConfig>,
 }
 
 #[derive(Debug, Clone)]
@@ -19,6 +20,7 @@ pub struct ResolvedConfig {
     pub ignore_patterns: Option<Vec<String>>,
     pub columns: Option<Vec<String>>,
     pub agenda: Option<AgendaConfig>,
+    pub todoist: Option<TodoistConfig>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -27,6 +29,14 @@ pub struct AgendaConfig {
     pub open_todo_states: Vec<String>,
     #[serde(default = "default_closed_todo_states")]
     pub closed_todo_states: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TodoistConfig {
+    #[serde(default)]
+    pub enabled: bool,
+    pub token_env: Option<String>,
+    pub default_filter: Option<String>,
 }
 
 fn default_open_todo_states() -> Vec<String> {
@@ -55,6 +65,7 @@ impl Config {
                 ignore_patterns: None,
                 columns: None,
                 agenda: None,
+                todoist: None,
             })
         }
     }
@@ -75,6 +86,7 @@ impl Config {
             ignore_patterns: self.ignore_patterns,
             columns: self.columns,
             agenda: self.agenda,
+            todoist: self.todoist,
         })
     }
 }
@@ -122,6 +134,39 @@ impl ResolvedConfig {
             .as_ref()
             .map(|a| a.closed_todo_states.clone())
             .unwrap_or_else(default_closed_todo_states)
+    }
+
+    pub fn todoist_enabled(&self) -> bool {
+        self.todoist.as_ref().is_some_and(|todoist| todoist.enabled)
+    }
+
+    pub fn todoist_token_env(&self) -> &str {
+        self.todoist
+            .as_ref()
+            .and_then(|todoist| todoist.token_env.as_deref())
+            .unwrap_or("TODOIST_API_TOKEN")
+    }
+
+    pub fn todoist_default_filter(&self) -> Option<&str> {
+        self.todoist
+            .as_ref()
+            .and_then(|todoist| todoist.default_filter.as_deref())
+    }
+
+    pub fn todoist_token(&self) -> Result<String> {
+        let env_name = self.todoist_token_env();
+        let token = std::env::var(env_name)
+            .map_err(|_| anyhow::anyhow!("Todoist token env var {env_name} is not set"))?;
+        let token = token.trim();
+        if token.is_empty() {
+            anyhow::bail!("Todoist token env var {env_name} is empty");
+        }
+        Ok(token.to_string())
+    }
+
+    pub fn todoist_api_base_url(&self) -> String {
+        std::env::var("PKMS_TODOIST_API_BASE_URL")
+            .unwrap_or_else(|_| "https://api.todoist.com/api/v1".to_string())
     }
 
     pub fn resolved_info(&self) -> ConfigInfo {
@@ -178,6 +223,12 @@ pub fn generate_default_config(db_root: Option<&std::path::Path>) -> String {
 # [agenda]
 # open_todo_states = ["TODO"]
 # closed_todo_states = ["DONE"]
+
+# Todoist is disabled by default. Prefer storing the token in the environment.
+# [todoist]
+# enabled = false
+# token_env = "TODOIST_API_TOKEN"
+# default_filter = "today | overdue"
 "#,
     )
 }
@@ -201,6 +252,7 @@ mod tests {
             ignore_patterns: None,
             columns: None,
             agenda: None,
+            todoist: None,
         };
         assert_eq!(
             config.resolve_new_notes_dir(),
@@ -216,6 +268,7 @@ mod tests {
             ignore_patterns: None,
             columns: None,
             agenda: None,
+            todoist: None,
         };
         assert_eq!(config.resolve_new_notes_dir(), PathBuf::from("/abs/path"));
     }
@@ -228,6 +281,7 @@ mod tests {
             ignore_patterns: None,
             columns: None,
             agenda: None,
+            todoist: None,
         };
         assert_eq!(
             config.resolve_new_notes_dir(),
@@ -243,6 +297,7 @@ mod tests {
             ignore_patterns: Some(vec!["*.bak".to_string(), ".attach".to_string()]),
             columns: None,
             agenda: None,
+            todoist: None,
         };
         let patterns = config.resolve_ignore_patterns();
         assert_eq!(patterns.len(), 2);
@@ -257,6 +312,7 @@ mod tests {
             ignore_patterns: None,
             columns: None,
             agenda: None,
+            todoist: None,
         };
         let patterns = config.resolve_ignore_patterns();
         assert!(patterns.is_empty());
@@ -295,6 +351,7 @@ mod tests {
             ignore_patterns: Some(vec!["*.tmp".to_string()]),
             columns: None,
             agenda: None,
+            todoist: None,
         };
         let info = config.resolved_info();
         assert_eq!(info.db_root, PathBuf::from("/actual/db"));
@@ -308,10 +365,55 @@ mod tests {
 db_root = "/test/db"
 new_notes_dir = "notes"
 ignore_patterns = [".attach"]
+
+[todoist]
+enabled = true
+token_env = "PKMS_TEST_TODOIST_TOKEN"
+default_filter = "today | overdue"
 "#;
         let config: Config = toml::from_str(content).unwrap();
         assert_eq!(config.db_root, Some(PathBuf::from("/test/db")));
         assert_eq!(config.new_notes_dir, Some(PathBuf::from("notes")));
         assert_eq!(config.ignore_patterns, Some(vec![".attach".to_string()]));
+        let todoist = config.todoist.unwrap();
+        assert!(todoist.enabled);
+        assert_eq!(
+            todoist.token_env.as_deref(),
+            Some("PKMS_TEST_TODOIST_TOKEN")
+        );
+        assert_eq!(todoist.default_filter.as_deref(), Some("today | overdue"));
+    }
+
+    #[test]
+    fn test_todoist_config_defaults() {
+        let config = ResolvedConfig {
+            db_root: PathBuf::from("/test/root"),
+            new_notes_dir: None,
+            ignore_patterns: None,
+            columns: None,
+            agenda: None,
+            todoist: None,
+        };
+        assert!(!config.todoist_enabled());
+        assert_eq!(config.todoist_token_env(), "TODOIST_API_TOKEN");
+        assert_eq!(config.todoist_default_filter(), None);
+    }
+
+    #[test]
+    fn test_todoist_token_error_does_not_include_secret_value() {
+        let config = ResolvedConfig {
+            db_root: PathBuf::from("/test/root"),
+            new_notes_dir: None,
+            ignore_patterns: None,
+            columns: None,
+            agenda: None,
+            todoist: Some(TodoistConfig {
+                enabled: true,
+                token_env: Some("PKMS_TEST_MISSING_TODOIST_TOKEN".to_string()),
+                default_filter: None,
+            }),
+        };
+        let error = config.todoist_token().unwrap_err().to_string();
+        assert!(error.contains("PKMS_TEST_MISSING_TODOIST_TOKEN"));
     }
 }

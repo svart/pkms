@@ -38,7 +38,7 @@ Load only the file needed for the task:
 - Note inspection and graph navigation: `references/get.md`, `references/path.md`, `references/context.md`
 - Note creation and repair: `references/new.md`, `references/fix.md`
 - Suggestions and orphan linking: `references/suggest.md`, `references/orphans.md`
-- TODO and agenda tasks: `references/todo.md`, `references/agenda.md`, `references/show.md`, `references/open.md`
+- TODO and agenda tasks: `references/todo.md`, `references/agenda.md`, `references/show.md`, `references/open.md`, `references/task.md`
 - Pipelines: `references/pipelining.md`
 - Configuration: `references/info.md`, `references/init-config.md`
 
@@ -84,14 +84,19 @@ understand the intended target.
 
 ### Work With Tasks
 
-Use `todo` and `agenda` to list task headings. Their `Id` column is the
-canonical ID used by `show <ID>` and `open <ID>`.
+Use `todo` and `agenda` to list compatibility task views. Their `Id` column is
+the canonical ID used by `show <ID>`, `open <ID>`, and `task` IDs such as
+`p<ID>` or `pkms:<ID>`.
 
 ```bash
 pkms todo --columns Id,Date,Prio,Note,Heading
 pkms agenda --today
 pkms show 5
 pkms open 5
+pkms task list
+pkms task agenda --today
+pkms task state p5 WAITING
+pkms task done p5 --dry-run
 ```
 
 See the TODO/agenda references before changing task workflows.

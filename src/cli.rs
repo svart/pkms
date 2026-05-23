@@ -70,6 +70,8 @@ pub enum Command {
     Agenda(AgendaArgs),
     #[command(about = "Display TODO items (use --group to group by state/priority/file)")]
     Todo(TodoArgs),
+    #[command(about = "List, inspect, and update tasks across configured sources")]
+    Task(TaskArgs),
     #[command(name = "path", about = "Find shortest path between two notes")]
     Path(PathArgs),
     #[command(about = "Show detailed task information for a heading")]
@@ -394,6 +396,114 @@ pub struct TaskTableArgs {
         help = "Comma-separated column names: Id,Date,State,Type,Prio,Tags,Note,Heading"
     )]
     pub columns: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct TaskArgs {
+    #[command(subcommand)]
+    pub command: TaskCommand,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum TaskCommand {
+    #[command(about = "List tasks")]
+    List(TaskListArgs),
+    #[command(about = "Show scheduled and deadline tasks")]
+    Agenda(TaskAgendaArgs),
+    #[command(about = "Show detailed task information")]
+    Show(TaskTargetArgs),
+    #[command(about = "Open a task in an editor")]
+    Open(TaskOpenArgs),
+    #[command(about = "Set a task TODO state")]
+    State(TaskStateArgs),
+    #[command(about = "Set a task to the configured closed state")]
+    Done(TaskDoneArgs),
+    #[command(about = "Add a task to an external source")]
+    Add(TaskAddArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct TaskListArgs {
+    #[arg(value_name = "FILTER")]
+    pub filters: Vec<String>,
+    #[arg(long, value_name = "SORT")]
+    pub sort: Option<String>,
+    #[arg(long, help = "Maximum results")]
+    pub limit: Option<usize>,
+    #[command(flatten)]
+    pub table: TaskTableArgs,
+}
+
+#[derive(Debug, Args)]
+pub struct TaskAgendaArgs {
+    #[arg(value_name = "FILTER")]
+    pub filters: Vec<String>,
+    #[arg(long, help = "Show today's agenda items")]
+    pub today: bool,
+    #[arg(long, help = "Show this week's agenda items")]
+    pub week: bool,
+    #[arg(long, help = "Only show overdue items")]
+    pub overdue: bool,
+    #[arg(long, help = "Show only upcoming items")]
+    pub upcoming: bool,
+    #[arg(long, value_name = "SORT")]
+    pub sort: Option<String>,
+    #[arg(long, help = "Maximum results")]
+    pub limit: Option<usize>,
+    #[command(flatten)]
+    pub table: TaskTableArgs,
+}
+
+#[derive(Debug, Args)]
+pub struct TaskTargetArgs {
+    #[arg(help = "Task ID: 12, p12, pkms:12, or todoist:<remote-id>")]
+    pub id: String,
+}
+
+#[derive(Debug, Args)]
+pub struct TaskOpenArgs {
+    #[arg(help = "Task ID: 12, p12, pkms:12, or todoist:<remote-id>")]
+    pub id: String,
+    #[arg(
+        long,
+        default_value = "emacsclient -n",
+        help = "Editor command (default: emacsclient -n)"
+    )]
+    pub editor: String,
+    #[arg(short, long, value_name = "LINE", help = "Line number to open at")]
+    pub line: Option<usize>,
+}
+
+#[derive(Debug, Args)]
+pub struct TaskStateArgs {
+    #[arg(help = "Task ID: 12, p12, pkms:12, or todoist:<remote-id>")]
+    pub id: String,
+    #[arg(help = "TODO state from configured open_todo_states or closed_todo_states")]
+    pub state: String,
+    #[arg(long, help = "Print the planned change without writing")]
+    pub dry_run: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct TaskDoneArgs {
+    #[arg(help = "Task ID: 12, p12, pkms:12, or todoist:<remote-id>")]
+    pub id: String,
+    #[arg(long, help = "Print the planned change without writing")]
+    pub dry_run: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct TaskAddArgs {
+    #[arg(
+        long,
+        value_name = "SOURCE",
+        help = "Task source, initially todoist only"
+    )]
+    pub source: String,
+    #[arg(long, value_name = "PROJECT", help = "External project name")]
+    pub project: Option<String>,
+    #[arg(help = "Task text")]
+    pub text: String,
 }
 
 #[derive(Debug, Args)]

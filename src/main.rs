@@ -11,6 +11,7 @@ mod input;
 mod org_date;
 mod output;
 mod parser;
+pub mod tasks;
 mod tokens;
 mod util;
 mod workspace;
@@ -170,6 +171,9 @@ fn dispatch(cli: &Cli, cfg: &config::ResolvedConfig, ctx: &OutputContext) -> Res
                 },
             )
             .map(|()| ExitCode::SUCCESS)?
+        }
+        Command::Task(args) => {
+            commands::task::run(cfg, ctx, &args.command).map(|()| ExitCode::SUCCESS)?
         }
         Command::Path(args) => {
             commands::path::run(cfg, ctx, &args.try_into()?).map(|()| ExitCode::SUCCESS)?

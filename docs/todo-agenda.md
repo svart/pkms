@@ -1,7 +1,8 @@
 # TODO and Agenda
 
-`todo`, `agenda`, `show`, and `open` share one canonical task ID space. The ID
-shown by `todo` is the same ID used by `agenda`, `show <ID>`, and `open <ID>`.
+`todo`, `agenda`, `show`, `open`, and the local `task` namespace share one
+canonical task ID space. The ID shown by `todo` is the same ID used by
+`agenda`, `show <ID>`, `open <ID>`, `task show p<ID>`, and `task open p<ID>`.
 
 IDs are assigned globally using a deterministic sort:
 
@@ -11,6 +12,16 @@ IDs are assigned globally using a deterministic sort:
 
 IDs remain stable while the underlying files do not change. Filtered views may
 show non-contiguous IDs because excluded items still keep their global IDs.
+
+The `task` namespace accepts these PKMS task ID forms:
+
+```text
+12
+p12
+pkms:12
+```
+
+Top-level compatibility commands keep accepting bare numeric IDs.
 
 ## TODO
 
@@ -81,12 +92,15 @@ Inspect a task by canonical ID:
 
 ```bash
 pkms show 5
+pkms task show p5
+pkms task show pkms:5
 ```
 
 Open a task at its source heading:
 
 ```bash
 pkms open 5
+pkms task open p5
 ```
 
 By default, `open` runs `emacsclient -n`. Override it with `--editor` or open a
@@ -99,3 +113,88 @@ pkms open <uuid-or-title> --line 42
 
 Use `show --uuid <target>` when a numeric-looking target should be treated as a
 note target rather than a canonical task ID.
+
+## Task Namespace
+
+The `task` namespace is the newer task-oriented command surface. Local PKMS
+commands are available now:
+
+```bash
+pkms task list
+pkms task agenda
+pkms task agenda --today
+pkms task agenda --week
+pkms task agenda --overdue
+pkms task list source:pkms
+```
+
+`task list` and `task agenda` use source-neutral text columns:
+
+```text
+Id,Source,Date,State,Prio,Tags,Project,Task
+```
+
+JSON and NDJSON include source-neutral fields such as `source`, `source_id`,
+`display_id`, `status`, `state`, `note_title`, `note_uuid`, `path`, and
+`line_number`.
+
+When built with `--features todoist`, Todoist read commands are available:
+
+```bash
+pkms task list source:todoist
+pkms task list source:all
+pkms task list source:todoist 'todoist.filter:today | overdue'
+pkms task show todoist:<remote-id>
+pkms task add --source todoist "Buy milk tomorrow"
+pkms task add --source todoist --project Inbox "Buy milk tomorrow"
+pkms task done todoist:<remote-id>
+pkms task done todoist:<remote-id> --dry-run
+```
+
+Todoist tasks are fetched only when the source set includes Todoist. Local
+commands such as `pkms task list source:pkms` do not make Todoist requests.
+
+Set the token in the environment. Do not store the token in notes or command
+history:
+
+```bash
+export TODOIST_API_TOKEN=...
+```
+
+Optional config:
+
+```toml
+[todoist]
+enabled = false
+token_env = "TODOIST_API_TOKEN"
+default_filter = "today | overdue"
+```
+
+`todoist.filter:` uses Todoist's server-side filter endpoint. Pagination is
+handled automatically.
+
+Todoist writes are explicit. `task add --source todoist` uses Todoist Quick Add
+semantics, including natural language dates, labels, priorities, and project
+syntax. `--project NAME` appends `#NAME` to the Quick Add text.
+
+`task done todoist:<remote-id>` calls Todoist's close endpoint. Use `--dry-run`
+to print the planned completion without sending a Todoist request.
+
+## State Changes
+
+`task state` changes only the TODO keyword on the target heading. Valid states
+come from `open_todo_states` and `closed_todo_states` in config.
+
+```bash
+pkms task state p5 WAITING
+pkms task state pkms:5 done
+pkms task done p5
+pkms task done p5 --dry-run
+```
+
+State input is case-insensitive. The file is written with the canonical spelling
+from config, so `done`, `Done`, and `DONE` all write `DONE` when `DONE` is the
+configured state.
+
+`task done` is shorthand for setting the first configured closed state. If no
+closed state is configured, it defaults to `DONE`.

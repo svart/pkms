@@ -18,6 +18,7 @@ mod show;
 mod snapshot;
 mod stats;
 mod suggest;
+mod task;
 mod todo;
 mod validate;
 
