@@ -372,6 +372,28 @@ fn test_task_list_tags_pkms_uses_filetags_and_heading_tags() {
     assert_metadata_row(&v, "pkms", "headingtag");
 }
 
+#[test]
+fn test_task_list_metadata_text_omits_id_column() {
+    let (_dir, root) = setup_db();
+    add_pkms_project_metadata_note(&root);
+    let (stdout, stderr, status) = run(&[
+        "--db",
+        root.to_str().unwrap(),
+        "task",
+        "list",
+        "projects",
+        "source:pkms",
+    ]);
+    assert!(status.success(), "stdout:\n{stdout}\nstderr:\n{stderr}");
+    assert!(stdout.contains("Source"));
+    assert!(stdout.contains("Name"));
+    assert!(stdout.contains("Count"));
+    assert!(
+        !stdout.lines().next().unwrap_or_default().contains("Id"),
+        "metadata table should not include Id column:\n{stdout}"
+    );
+}
+
 fn add_pkms_project_metadata_note(root: &std::path::Path) {
     std::fs::write(
         root.join("roam/common/20260524000000-task_metadata.org"),

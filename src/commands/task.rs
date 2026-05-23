@@ -838,11 +838,10 @@ fn print_metadata_rows(ctx: &OutputContext, kind: &str, rows: &[TaskMetadataRow]
                 return Ok(());
             }
             let mut builder = Builder::new();
-            builder.push_record(["Source", "Id", "Name", "Count"]);
+            builder.push_record(["Source", "Name", "Count"]);
             for row in rows {
                 builder.push_record([
                     format!("{:?}", row.source).to_ascii_lowercase(),
-                    row.id.clone(),
                     row.name.clone(),
                     row.count.map(|count| count.to_string()).unwrap_or_default(),
                 ]);
