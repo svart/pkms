@@ -14,6 +14,10 @@ fn test_task_help_lists_subcommands() {
     assert!(status.success(), "task --help failed:\n{stdout}\n{stderr}");
     assert!(stdout.contains("list"));
     assert!(stdout.contains("agenda"));
+    assert!(stdout.contains("today"));
+    assert!(stdout.contains("overdue"));
+    assert!(stdout.contains("upcoming"));
+    assert!(stdout.contains("inbox"));
     assert!(stdout.contains("show"));
     assert!(stdout.contains("open"));
     assert!(stdout.contains("state"));
@@ -103,6 +107,130 @@ fn test_task_agenda_matches_agenda_count_json() {
         task["items"].as_array().unwrap().len(),
         agenda["items"].as_array().unwrap().len()
     );
+}
+
+#[test]
+fn test_task_today_matches_agenda_today_json() {
+    let (_dir, root) = setup_db();
+    std::fs::write(
+        root.join("roam/common/20260523000000-shortcut-today.org"),
+        r#":PROPERTIES:
+:ID:       12121212-1212-4121-8121-121212121212
+:END:
+#+title: Shortcut Today
+#+filetags: :agenda:
+
+* TODO Shortcut today task
+SCHEDULED: <2026-05-23 Sat>
+"#,
+    )
+    .unwrap();
+    let (shortcut, shortcut_status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "task",
+        "today",
+    ]);
+    let (agenda, agenda_status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "task",
+        "agenda",
+        "--today",
+    ]);
+    assert!(shortcut_status.success());
+    assert!(agenda_status.success());
+    assert_eq!(shortcut["items"], agenda["items"]);
+}
+
+#[test]
+fn test_task_today_ndjson() {
+    let (_dir, root) = setup_db();
+    std::fs::write(
+        root.join("roam/common/20260523000003-shortcut-today-ndjson.org"),
+        r#":PROPERTIES:
+:ID:       45454545-4545-4454-8454-454545454545
+:END:
+#+title: Shortcut Today Ndjson
+#+filetags: :agenda:
+
+* TODO Shortcut today ndjson task
+SCHEDULED: <2026-05-23 Sat>
+"#,
+    )
+    .unwrap();
+    let (stdout, _stderr, status) = run(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "ndjson",
+        "task",
+        "today",
+    ]);
+    assert!(status.success());
+    let first = stdout.lines().next().expect("expected at least one task");
+    let v: serde_json::Value = serde_json::from_str(first).unwrap();
+    assert_eq!(v["source"], "pkms");
+}
+
+#[test]
+fn test_task_upcoming_days_filters_pkms_range() {
+    let (_dir, root) = setup_db();
+    std::fs::write(
+        root.join("roam/common/20260523000001-shortcut-upcoming.org"),
+        r#":PROPERTIES:
+:ID:       23232323-2323-4232-8232-232323232323
+:END:
+#+title: Shortcut Upcoming
+#+filetags: :agenda:
+
+* TODO Tomorrow task
+SCHEDULED: <2026-05-24 Sun>
+* TODO Later task
+SCHEDULED: <2026-05-31 Sun>
+"#,
+    )
+    .unwrap();
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "task",
+        "upcoming",
+        "--days",
+        "3",
+    ]);
+    assert!(status.success());
+    let titles: Vec<&str> = v["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|item| item["title"].as_str())
+        .collect();
+    assert!(titles.contains(&"Tomorrow task"));
+    assert!(!titles.contains(&"Later task"));
+}
+
+#[test]
+fn test_task_overdue_accepts_limit_json() {
+    let (_dir, root) = setup_db();
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "task",
+        "overdue",
+        "--limit",
+        "1",
+    ]);
+    assert!(status.success());
+    assert!(v["items"].as_array().unwrap().len() <= 1);
 }
 
 #[test]
@@ -560,6 +688,130 @@ fn test_task_agenda_todoist_explicit_filter_overrides_agenda_filter() {
     assert!(output.status.success());
     let v: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
     assert_eq!(v["items"][0]["title"], "Priority task");
+}
+
+#[cfg(feature = "todoist")]
+#[test]
+fn test_task_today_todoist_uses_today_filter() {
+    let (_dir, root) = setup_db();
+    let (base_url, handle) = spawn_todoist_mock(vec![(
+        "GET",
+        "/tasks/filter?query=today&limit=200",
+        r#"{"results":[{"id":"today","content":"Today shortcut","priority":1,"labels":[]}],"next_cursor":null}"#,
+    )]);
+    let output = run_with_todoist_env(
+        &[
+            "--db",
+            root.to_str().unwrap(),
+            "--output-format",
+            "json",
+            "task",
+            "today",
+            "source:todoist",
+        ],
+        &base_url,
+    );
+    handle.join().unwrap();
+    assert!(output.status.success());
+    let v: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(v["items"][0]["title"], "Today shortcut");
+}
+
+#[cfg(feature = "todoist")]
+#[test]
+fn test_task_upcoming_todoist_uses_days_filter() {
+    let (_dir, root) = setup_db();
+    let (base_url, handle) = spawn_todoist_mock(vec![(
+        "GET",
+        "/tasks/filter?query=due%20after%3A%20today%20%26%20next%203%20days&limit=200",
+        r#"{"results":[{"id":"soon","content":"Soon shortcut","priority":1,"labels":[]}],"next_cursor":null}"#,
+    )]);
+    let output = run_with_todoist_env(
+        &[
+            "--db",
+            root.to_str().unwrap(),
+            "--output-format",
+            "json",
+            "task",
+            "upcoming",
+            "--days",
+            "3",
+            "source:todoist",
+        ],
+        &base_url,
+    );
+    handle.join().unwrap();
+    assert!(output.status.success());
+    let v: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(v["items"][0]["title"], "Soon shortcut");
+}
+
+#[cfg(feature = "todoist")]
+#[test]
+fn test_task_today_all_combines_pkms_and_todoist() {
+    let (_dir, root) = setup_db();
+    std::fs::write(
+        root.join("roam/common/20260523000002-shortcut-all-today.org"),
+        r#":PROPERTIES:
+:ID:       34343434-3434-4343-8343-343434343434
+:END:
+#+title: Shortcut All Today
+#+filetags: :agenda:
+
+* TODO Local shortcut today
+SCHEDULED: <2026-05-23 Sat>
+"#,
+    )
+    .unwrap();
+    let (base_url, handle) = spawn_todoist_mock(vec![(
+        "GET",
+        "/tasks/filter?query=today&limit=200",
+        r#"{"results":[{"id":"remote-today","content":"Remote shortcut today","priority":1,"labels":[]}],"next_cursor":null}"#,
+    )]);
+    let output = run_with_todoist_env(
+        &[
+            "--db",
+            root.to_str().unwrap(),
+            "--output-format",
+            "json",
+            "task",
+            "today",
+            "source:all",
+        ],
+        &base_url,
+    );
+    handle.join().unwrap();
+    assert!(output.status.success());
+    let v: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let items = v["items"].as_array().unwrap();
+    assert!(items.iter().any(|item| item["source"] == "pkms"));
+    assert!(items.iter().any(|item| item["source"] == "todoist"));
+}
+
+#[cfg(feature = "todoist")]
+#[test]
+fn test_task_inbox_defaults_to_todoist_inbox_filter() {
+    let (_dir, root) = setup_db();
+    let (base_url, handle) = spawn_todoist_mock(vec![(
+        "GET",
+        "/tasks/filter?query=%23Inbox&limit=200",
+        r#"{"results":[{"id":"inbox","content":"Inbox shortcut","priority":1,"labels":[]}],"next_cursor":null}"#,
+    )]);
+    let output = run_with_todoist_env(
+        &[
+            "--db",
+            root.to_str().unwrap(),
+            "--output-format",
+            "json",
+            "task",
+            "inbox",
+        ],
+        &base_url,
+    );
+    handle.join().unwrap();
+    assert!(output.status.success());
+    let v: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(v["items"][0]["title"], "Inbox shortcut");
 }
 
 #[cfg(feature = "todoist")]
