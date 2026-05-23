@@ -422,10 +422,6 @@ pub enum TaskCommand {
     Report(TaskReportArgs),
     #[command(about = "Show structured daily plan sections")]
     Plan(TaskReportArgs),
-    #[command(about = "List task projects")]
-    Projects(TaskMetadataArgs),
-    #[command(about = "List task labels")]
-    Labels(TaskMetadataArgs),
     #[command(about = "Show detailed task information")]
     Show(TaskTargetArgs),
     #[command(about = "Open a task in an editor")]
@@ -444,7 +440,7 @@ pub enum TaskCommand {
 
 #[derive(Debug, Args)]
 pub struct TaskListArgs {
-    #[arg(value_name = "FILTER")]
+    #[arg(value_name = "MODE_OR_FILTER")]
     pub filters: Vec<String>,
     #[arg(long, value_name = "SORT")]
     pub sort: Option<String>,
@@ -514,12 +510,6 @@ pub struct TaskReportArgs {
         help = "Number of days in the upcoming section"
     )]
     pub upcoming_days: i64,
-}
-
-#[derive(Debug, Args)]
-pub struct TaskMetadataArgs {
-    #[arg(value_name = "FILTER")]
-    pub filters: Vec<String>,
 }
 
 #[derive(Debug, Args)]

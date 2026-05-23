@@ -32,6 +32,8 @@ fn test_task_help_lists_subcommands() {
     assert!(stdout.contains("report"));
     assert!(stdout.contains("plan"));
     let commands = task_help_commands(&stdout);
+    assert!(!commands.contains(&"projects"));
+    assert!(!commands.contains(&"labels"));
     assert!(!commands.contains(&"clarify"));
     assert!(!commands.contains(&"update"));
     assert!(!commands.contains(&"delete"));
@@ -40,7 +42,9 @@ fn test_task_help_lists_subcommands() {
 
 #[test]
 fn test_removed_task_subcommands_are_rejected() {
-    for subcommand in ["clarify", "update", "delete", "reopen"] {
+    for subcommand in [
+        "projects", "labels", "clarify", "update", "delete", "reopen",
+    ] {
         let (stdout, stderr, status) = run(&["task", subcommand, "--help"]);
         assert!(
             !status.success(),
@@ -602,7 +606,7 @@ fn test_task_list_todoist_uses_mock_api_and_pagination() {
             "json",
             "task",
             "list",
-            "source:todoist",
+            "projects",
         ],
         &base_url,
     );
@@ -639,8 +643,8 @@ fn test_task_projects_todoist_lists_metadata() {
             "--output-format",
             "json",
             "task",
+            "list",
             "projects",
-            "source:todoist",
         ],
         &base_url,
     );
@@ -668,8 +672,8 @@ fn test_task_labels_todoist_lists_metadata() {
             "--output-format",
             "json",
             "task",
-            "labels",
-            "source:todoist",
+            "list",
+            "tags",
         ],
         &base_url,
     );

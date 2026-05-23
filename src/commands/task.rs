@@ -1,7 +1,7 @@
 use crate::cli::{
     OutputFormat, TaskAddArgs, TaskAgendaArgs, TaskCommand, TaskDoneArgs, TaskListArgs,
-    TaskMetadataArgs, TaskOpenArgs, TaskPostponeArgs, TaskReportArgs, TaskScheduleArgs,
-    TaskShortcutArgs, TaskStateArgs, TaskTargetArgs, TaskUpcomingArgs,
+    TaskOpenArgs, TaskPostponeArgs, TaskReportArgs, TaskScheduleArgs, TaskShortcutArgs,
+    TaskStateArgs, TaskTargetArgs, TaskUpcomingArgs,
 };
 use crate::commands::open::OpenOptions;
 use crate::commands::show::{HeadingTarget, ShowOptions};
@@ -46,8 +46,6 @@ pub fn run(config: &ResolvedConfig, ctx: &OutputContext, command: &TaskCommand) 
         TaskCommand::Inbox(args) => run_shortcut(config, ctx, args, ShortcutKind::Inbox),
         TaskCommand::Report(args) => run_report(config, ctx, args, ReportKind::Report),
         TaskCommand::Plan(args) => run_report(config, ctx, args, ReportKind::Plan),
-        TaskCommand::Projects(args) => run_projects(config, ctx, args),
-        TaskCommand::Labels(args) => run_labels(config, ctx, args),
         TaskCommand::Show(args) => run_show(config, ctx, args),
         TaskCommand::Open(args) => run_open(config, ctx, args),
         TaskCommand::State(args) => run_state(config, ctx, args),
@@ -66,8 +64,40 @@ enum ShortcutKind {
     Inbox,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TaskListMode {
+    Tasks,
+    Projects,
+    Tags,
+}
+
 fn run_list(config: &ResolvedConfig, ctx: &OutputContext, args: &TaskListArgs) -> Result<()> {
-    let filters = parse_task_filters(&args.filters)?;
+    let (mode, filters) = split_task_list_mode(&args.filters);
+    match mode {
+        TaskListMode::Tasks => run_task_list(config, ctx, args, &filters),
+        TaskListMode::Projects => run_projects(config, ctx, &filters),
+        TaskListMode::Tags => run_tags(config, ctx, &filters),
+    }
+}
+
+fn split_task_list_mode(filters: &[String]) -> (TaskListMode, Vec<String>) {
+    let Some((first, rest)) = filters.split_first() else {
+        return (TaskListMode::Tasks, Vec::new());
+    };
+    match first.as_str() {
+        "projects" => (TaskListMode::Projects, rest.to_vec()),
+        "tags" | "labels" => (TaskListMode::Tags, rest.to_vec()),
+        _ => (TaskListMode::Tasks, filters.to_vec()),
+    }
+}
+
+fn run_task_list(
+    config: &ResolvedConfig,
+    ctx: &OutputContext,
+    args: &TaskListArgs,
+    raw_filters: &[String],
+) -> Result<()> {
+    let filters = parse_task_filters(raw_filters)?;
     let mut items = match filters.source {
         SourceSelection::Pkms => collect_pkms_list_items(config)?,
         SourceSelection::Todoist => collect_todoist_items(config, &filters)?,
@@ -657,12 +687,8 @@ fn show_todoist_task(_config: &ResolvedConfig, _ctx: &OutputContext, _id: &str) 
 }
 
 #[cfg(feature = "todoist")]
-fn run_projects(
-    config: &ResolvedConfig,
-    ctx: &OutputContext,
-    args: &TaskMetadataArgs,
-) -> Result<()> {
-    ensure_todoist_metadata_source(&args.filters)?;
+fn run_projects(config: &ResolvedConfig, ctx: &OutputContext, filters: &[String]) -> Result<()> {
+    ensure_todoist_metadata_source(filters)?;
     let token = crate::tasks::todoist::ensure_enabled(config)?;
     let client =
         crate::tasks::todoist::TodoistClient::with_base_url(config.todoist_api_base_url(), token);
@@ -671,17 +697,13 @@ fn run_projects(
 }
 
 #[cfg(not(feature = "todoist"))]
-fn run_projects(
-    _config: &ResolvedConfig,
-    _ctx: &OutputContext,
-    _args: &TaskMetadataArgs,
-) -> Result<()> {
+fn run_projects(_config: &ResolvedConfig, _ctx: &OutputContext, _filters: &[String]) -> Result<()> {
     bail!("Todoist support is not available in this build. Rebuild with --features todoist.")
 }
 
 #[cfg(feature = "todoist")]
-fn run_labels(config: &ResolvedConfig, ctx: &OutputContext, args: &TaskMetadataArgs) -> Result<()> {
-    ensure_todoist_metadata_source(&args.filters)?;
+fn run_tags(config: &ResolvedConfig, ctx: &OutputContext, filters: &[String]) -> Result<()> {
+    ensure_todoist_metadata_source(filters)?;
     let token = crate::tasks::todoist::ensure_enabled(config)?;
     let client =
         crate::tasks::todoist::TodoistClient::with_base_url(config.todoist_api_base_url(), token);
@@ -690,11 +712,7 @@ fn run_labels(config: &ResolvedConfig, ctx: &OutputContext, args: &TaskMetadataA
 }
 
 #[cfg(not(feature = "todoist"))]
-fn run_labels(
-    _config: &ResolvedConfig,
-    _ctx: &OutputContext,
-    _args: &TaskMetadataArgs,
-) -> Result<()> {
+fn run_tags(_config: &ResolvedConfig, _ctx: &OutputContext, _filters: &[String]) -> Result<()> {
     bail!("Todoist support is not available in this build. Rebuild with --features todoist.")
 }
 
@@ -728,7 +746,14 @@ impl MetadataDisplay for crate::tasks::todoist::TodoistLabel {
 
 #[cfg(feature = "todoist")]
 fn ensure_todoist_metadata_source(filters: &[String]) -> Result<()> {
-    let filters = parse_task_filters(filters)?;
+    let mut filters = filters.to_vec();
+    if !filters
+        .iter()
+        .any(|filter| filter.starts_with("source:") || filter.starts_with("src:"))
+    {
+        filters.push("source:todoist".to_string());
+    }
+    let filters = parse_task_filters(&filters)?;
     if matches!(filters.source, SourceSelection::Pkms) {
         bail!("PKMS task metadata is not supported yet. Use source:todoist.");
     }
