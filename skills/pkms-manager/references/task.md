@@ -61,10 +61,11 @@ Use stable `todoist:<remote-id>` IDs. Do not invent view-local Todoist IDs.
 Never print the Todoist token. It is read from `TODOIST_API_TOKEN` by default,
 or from `[todoist].token` in config when the environment variable is unset.
 
-For Todoist-backed agenda views, `task agenda --today source:todoist` uses the
-Todoist `today` filter, `--overdue` uses `overdue`, `--week` uses `next 7 days`,
-and `--upcoming` uses `due after: today`. `todoist.filter:<query>` overrides
-those generated agenda filters when the assistant needs custom Todoist syntax.
+For Todoist-backed agenda views, bare `task agenda source:todoist` uses the
+Todoist `!no date` filter to show only scheduled tasks. `--today` uses `today`,
+`--overdue` uses `overdue`, `--week` uses `next 7 days`, and `--upcoming` uses
+`due after: today`. `todoist.filter:<query>` overrides those generated agenda
+filters when the assistant needs custom Todoist syntax.
 
 Prefer stable shortcuts for common assistant requests: `task today`,
 `task overdue`, `task upcoming --days N`, and `task inbox`. The first three
