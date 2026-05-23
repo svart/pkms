@@ -143,6 +143,8 @@ When built with `--features todoist`, Todoist read commands are available:
 ```bash
 pkms task list source:todoist
 pkms task list source:all
+pkms task agenda --today source:todoist
+pkms task agenda --week source:all
 pkms task list source:todoist 'todoist.filter:today | overdue'
 pkms task show todoist:<remote-id>
 pkms task add --source todoist "Buy milk tomorrow"
@@ -153,6 +155,18 @@ pkms task done todoist:<remote-id> --dry-run
 
 Todoist tasks are fetched only when the source set includes Todoist. Local
 commands such as `pkms task list source:pkms` do not make Todoist requests.
+For Todoist agenda views, `task agenda` translates high-level agenda flags to
+Todoist server-side filters:
+
+| Flag | Todoist filter |
+|------|----------------|
+| `--today` | `today` |
+| `--overdue` | `overdue` |
+| `--week` | `next 7 days` |
+| `--upcoming` | `due after: today` |
+
+An explicit `todoist.filter:<query>` takes precedence over agenda flags and is
+the escape hatch for custom Todoist filter syntax.
 
 Set the token in the environment when possible. Environment variables take
 precedence over config values and avoid storing the secret in a dotfile:

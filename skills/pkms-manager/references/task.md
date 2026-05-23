@@ -30,6 +30,8 @@ Todoist read support is available only in builds made with `--features todoist`:
 ```bash
 pkms task list source:todoist
 pkms task list source:all
+pkms task agenda --today source:todoist
+pkms task agenda --week source:all
 pkms task list source:todoist 'todoist.filter:today | overdue'
 pkms task show todoist:<remote-id>
 pkms task add --source todoist "Buy milk tomorrow"
@@ -39,6 +41,11 @@ pkms task done todoist:<remote-id>
 Use stable `todoist:<remote-id>` IDs. Do not invent view-local Todoist IDs.
 Never print the Todoist token. It is read from `TODOIST_API_TOKEN` by default,
 or from `[todoist].token` in config when the environment variable is unset.
+
+For Todoist-backed agenda views, `task agenda --today source:todoist` uses the
+Todoist `today` filter, `--overdue` uses `overdue`, `--week` uses `next 7 days`,
+and `--upcoming` uses `due after: today`. `todoist.filter:<query>` overrides
+those generated agenda filters when the assistant needs custom Todoist syntax.
 
 Use `--dry-run` before completing Todoist tasks when operating on a real token:
 
