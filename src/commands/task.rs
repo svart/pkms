@@ -24,6 +24,9 @@ use std::collections::BTreeMap;
 use tabled::builder::Builder;
 use tabled::settings::Style;
 
+#[cfg(feature = "todoist")]
+const PKMS_NOTE_MARKER_PREFIX: &str = "pkms:id:";
+
 #[derive(Debug, Serialize)]
 struct TaskStateChangeOutput {
     id: String,
@@ -615,7 +618,11 @@ fn collect_todoist_items(config: &ResolvedConfig, filters: &TaskFilters) -> Resu
     Ok(tasks
         .into_iter()
         .map(|task| crate::tasks::todoist::task_to_item_with_metadata(task, metadata.as_ref()))
-        .collect())
+        .collect::<Vec<_>>())
+    .and_then(|mut items| {
+        enrich_todoist_items_with_pkms_notes(config, &mut items)?;
+        Ok(items)
+    })
 }
 
 #[cfg(not(feature = "todoist"))]
@@ -639,7 +646,8 @@ fn show_todoist_task(config: &ResolvedConfig, ctx: &OutputContext, id: &str) -> 
     } else {
         None
     };
-    let item = crate::tasks::todoist::task_to_item_with_metadata(task, metadata.as_ref());
+    let mut item = crate::tasks::todoist::task_to_item_with_metadata(task, metadata.as_ref());
+    enrich_todoist_items_with_pkms_notes(config, std::slice::from_mut(&mut item))?;
     match ctx.format {
         OutputFormat::Text => print_task_table(&[item], 1),
         OutputFormat::Json => ctx.print_json(&item),
@@ -853,6 +861,72 @@ fn todoist_only_id(id: &str) -> Result<String> {
     Ok(id)
 }
 
+#[cfg(feature = "todoist")]
+#[derive(Debug, Clone)]
+struct PkmsNoteLink {
+    uuid: String,
+    title: String,
+}
+
+#[cfg(feature = "todoist")]
+fn resolve_pkms_note_link(config: &ResolvedConfig, target: &str) -> Result<PkmsNoteLink> {
+    let graph = crate::graph::Graph::load(config)?;
+    let node = graph.resolve_target(target)?;
+    Ok(PkmsNoteLink {
+        uuid: node.uuid.clone(),
+        title: node.title.clone(),
+    })
+}
+
+#[cfg(feature = "todoist")]
+fn description_with_pkms_note_marker(description: Option<&str>, uuid: &str) -> String {
+    let marker = format!("{PKMS_NOTE_MARKER_PREFIX}{uuid}");
+    match description
+        .map(str::trim_end)
+        .filter(|value| !value.is_empty())
+    {
+        Some(description) if description.contains(&marker) => description.to_string(),
+        Some(description) => format!("{description}\n\n{marker}"),
+        None => marker,
+    }
+}
+
+#[cfg(feature = "todoist")]
+fn pkms_note_marker_uuid(description: &str) -> Option<String> {
+    description.split_whitespace().find_map(|part| {
+        part.strip_prefix(PKMS_NOTE_MARKER_PREFIX)
+            .filter(|uuid| !uuid.is_empty())
+            .map(str::to_string)
+    })
+}
+
+#[cfg(feature = "todoist")]
+fn enrich_todoist_items_with_pkms_notes(
+    config: &ResolvedConfig,
+    items: &mut [TaskItem],
+) -> Result<()> {
+    if !items.iter().any(|item| {
+        item.body
+            .as_deref()
+            .and_then(pkms_note_marker_uuid)
+            .is_some()
+    }) {
+        return Ok(());
+    }
+
+    let graph = crate::graph::Graph::load(config)?;
+    for item in items {
+        let Some(uuid) = item.body.as_deref().and_then(pkms_note_marker_uuid) else {
+            continue;
+        };
+        item.note_uuid = Some(uuid.clone());
+        if let Some(node) = graph.find_node(&uuid) {
+            item.note_title = Some(node.title.clone());
+        }
+    }
+    Ok(())
+}
+
 fn set_pkms_task_state(
     config: &ResolvedConfig,
     ctx: &OutputContext,
@@ -1008,6 +1082,7 @@ fn is_structured_add(args: &TaskAddArgs) -> bool {
         || !args.label.is_empty()
         || args.priority.is_some()
         || args.description.is_some()
+        || args.note.is_some()
 }
 
 #[cfg(feature = "todoist")]
@@ -1016,14 +1091,27 @@ fn create_structured_todoist_task(
     ctx: &OutputContext,
     args: &TaskAddArgs,
 ) -> Result<()> {
-    if args.text.is_some() {
-        bail!("Structured Todoist task creation uses --title; omit positional quick-add text.");
+    if args.title.is_some() && args.text.is_some() {
+        bail!("Structured Todoist task creation uses --title or positional text, not both.");
     }
     let title = args
         .title
         .as_deref()
+        .or(args.text.as_deref())
         .filter(|title| !title.trim().is_empty())
         .ok_or_else(|| anyhow::anyhow!("Structured Todoist task creation requires --title"))?;
+    let linked_note = args
+        .note
+        .as_deref()
+        .map(|target| resolve_pkms_note_link(config, target))
+        .transpose()?;
+    let description = match linked_note.as_ref() {
+        Some(note) => Some(description_with_pkms_note_marker(
+            args.description.as_deref(),
+            &note.uuid,
+        )),
+        None => args.description.clone(),
+    };
     let due_date = validate_date_arg("due", args.due.as_deref())?;
     let deadline_date = validate_date_arg("deadline", args.deadline.as_deref())?;
     let priority = args
@@ -1042,7 +1130,7 @@ fn create_structured_todoist_task(
         .transpose()?;
     let request = crate::tasks::todoist::TodoistCreateTaskRequest {
         content: title.to_string(),
-        description: args.description.clone(),
+        description,
         project_id,
         labels: args.label.clone(),
         priority,
@@ -1051,10 +1139,14 @@ fn create_structured_todoist_task(
     };
 
     let task = client.create_task(&request)?;
-    print_add_output(
-        ctx,
-        crate::tasks::todoist::task_to_item_with_metadata(task, Some(&metadata)),
-    )
+    let mut item = crate::tasks::todoist::task_to_item_with_metadata(task, Some(&metadata));
+    if let Some(note) = linked_note {
+        item.note_uuid = Some(note.uuid);
+        item.note_title = Some(note.title);
+    } else {
+        enrich_todoist_items_with_pkms_notes(config, std::slice::from_mut(&mut item))?;
+    }
+    print_add_output(ctx, item)
 }
 
 #[cfg(feature = "todoist")]
@@ -1076,10 +1168,9 @@ fn quick_add_todoist_task(
     let id = todoist_created_task_id(&response)?;
     let task = client.get_task(&id)?;
     let metadata = crate::tasks::todoist::TodoistMetadata::new(client.list_projects()?);
-    print_add_output(
-        ctx,
-        crate::tasks::todoist::task_to_item_with_metadata(task, Some(&metadata)),
-    )
+    let mut item = crate::tasks::todoist::task_to_item_with_metadata(task, Some(&metadata));
+    enrich_todoist_items_with_pkms_notes(config, std::slice::from_mut(&mut item))?;
+    print_add_output(ctx, item)
 }
 
 #[cfg(feature = "todoist")]
@@ -1118,11 +1209,9 @@ fn mutate_todoist_task(
     client.update_task(id, &request)?;
     let task = client.get_task(id)?;
     let metadata = todoist_metadata_for_task(&client, &task)?;
-    print_mutation_output(
-        ctx,
-        action,
-        crate::tasks::todoist::task_to_item_with_metadata(task, metadata.as_ref()),
-    )
+    let mut item = crate::tasks::todoist::task_to_item_with_metadata(task, metadata.as_ref());
+    enrich_todoist_items_with_pkms_notes(config, std::slice::from_mut(&mut item))?;
+    print_mutation_output(ctx, action, item)
 }
 
 #[cfg(not(feature = "todoist"))]
@@ -1200,11 +1289,9 @@ fn update_todoist_task(
 
     client.update_task(id, &serde_json::Value::Object(request))?;
     let task = client.get_task(id)?;
-    print_mutation_output(
-        ctx,
-        "update",
-        crate::tasks::todoist::task_to_item_with_metadata(task, Some(&metadata)),
-    )
+    let mut item = crate::tasks::todoist::task_to_item_with_metadata(task, Some(&metadata));
+    enrich_todoist_items_with_pkms_notes(config, std::slice::from_mut(&mut item))?;
+    print_mutation_output(ctx, "update", item)
 }
 
 #[cfg(not(feature = "todoist"))]
@@ -1281,11 +1368,9 @@ fn reopen_todoist_task(config: &ResolvedConfig, ctx: &OutputContext, id: &str) -
     client.reopen_task(id)?;
     let task = client.get_task(id)?;
     let metadata = todoist_metadata_for_task(&client, &task)?;
-    print_mutation_output(
-        ctx,
-        "reopen",
-        crate::tasks::todoist::task_to_item_with_metadata(task, metadata.as_ref()),
-    )
+    let mut item = crate::tasks::todoist::task_to_item_with_metadata(task, metadata.as_ref());
+    enrich_todoist_items_with_pkms_notes(config, std::slice::from_mut(&mut item))?;
+    print_mutation_output(ctx, "reopen", item)
 }
 
 #[cfg(not(feature = "todoist"))]

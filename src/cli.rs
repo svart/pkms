@@ -592,6 +592,12 @@ pub struct TaskAddArgs {
     pub priority: Option<String>,
     #[arg(long, value_name = "TEXT", help = "Structured task description")]
     pub description: Option<String>,
+    #[arg(
+        long,
+        value_name = "NOTE",
+        help = "PKMS note UUID, title, or alias to link from the Todoist description"
+    )]
+    pub note: Option<String>,
     #[arg(help = "Task text")]
     pub text: Option<String>,
 }

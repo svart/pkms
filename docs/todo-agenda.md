@@ -162,6 +162,7 @@ pkms task show todoist:<remote-id>
 pkms task add --source todoist "Buy milk tomorrow"
 pkms task add --source todoist --project Inbox "Buy milk tomorrow"
 pkms task add --source todoist --title "Call Alice" --due 2026-05-24 --label phone --priority B
+pkms task add --source todoist --title "Call Alice" --note "Project Alpha"
 pkms task done todoist:<remote-id>
 pkms task done todoist:<remote-id> --dry-run
 pkms task postpone todoist:<remote-id> --to tomorrow
@@ -236,6 +237,14 @@ the source-neutral `A`, `B`, or `C` convention. Multiple `--label` flags are
 allowed. `--project` accepts either a Todoist project id or an exact project
 name. If a name matches multiple projects case-insensitively, `pkms` fails before
 creating the task and asks for the project id.
+
+Use `--note <uuid-or-title>` when a Todoist task should keep PKMS context.
+`pkms` resolves the note and appends a durable marker to the Todoist description:
+`pkms:id:<uuid>`. Existing descriptions are preserved and the marker is appended
+after a blank line. Listing or showing Todoist tasks detects this marker and
+populates `note_uuid` and `note_title` when the note exists locally. The marker
+reveals a PKMS note UUID to Todoist; avoid `--note` for tasks where even that
+identifier should not leave the local database.
 
 Use `task projects source:todoist` and `task labels source:todoist` to inspect
 available Todoist metadata. Todoist task output sets `project` to the display
