@@ -1,6 +1,6 @@
 use crate::cli::{
     OutputFormat, TaskAddArgs, TaskAgendaArgs, TaskCommand, TaskDoneArgs, TaskListArgs,
-    TaskOpenArgs, TaskStateArgs, TaskTargetArgs,
+    TaskOpenArgs, TaskShortcutArgs, TaskStateArgs, TaskTargetArgs, TaskUpcomingArgs,
 };
 use crate::commands::open::OpenOptions;
 use crate::commands::show::{HeadingTarget, ShowOptions};
@@ -35,12 +35,24 @@ pub fn run(config: &ResolvedConfig, ctx: &OutputContext, command: &TaskCommand) 
     match command {
         TaskCommand::List(args) => run_list(config, ctx, args),
         TaskCommand::Agenda(args) => run_agenda(config, ctx, args),
+        TaskCommand::Today(args) => run_shortcut(config, ctx, args, ShortcutKind::Today),
+        TaskCommand::Overdue(args) => run_shortcut(config, ctx, args, ShortcutKind::Overdue),
+        TaskCommand::Upcoming(args) => run_upcoming(config, ctx, args),
+        TaskCommand::Inbox(args) => run_shortcut(config, ctx, args, ShortcutKind::Inbox),
         TaskCommand::Show(args) => run_show(config, ctx, args),
         TaskCommand::Open(args) => run_open(config, ctx, args),
         TaskCommand::State(args) => run_state(config, ctx, args),
         TaskCommand::Done(args) => run_done(config, ctx, args),
         TaskCommand::Add(args) => run_add(config, ctx, args),
     }
+}
+
+#[derive(Debug, Clone, Copy)]
+enum ShortcutKind {
+    Today,
+    Overdue,
+    Upcoming { days: i64 },
+    Inbox,
 }
 
 fn run_list(config: &ResolvedConfig, ctx: &OutputContext, args: &TaskListArgs) -> Result<()> {
@@ -56,6 +68,63 @@ fn run_list(config: &ResolvedConfig, ctx: &OutputContext, args: &TaskListArgs) -
     };
     sort_task_items(&mut items, args.sort.as_deref().unwrap_or("priority"));
     print_task_items(ctx, items, args.limit)
+}
+
+fn run_shortcut(
+    config: &ResolvedConfig,
+    ctx: &OutputContext,
+    args: &TaskShortcutArgs,
+    kind: ShortcutKind,
+) -> Result<()> {
+    let mut items = collect_shortcut_items(config, &args.filters, kind)?;
+    sort_task_items(&mut items, "priority");
+    print_task_items(ctx, items, args.limit)
+}
+
+fn run_upcoming(
+    config: &ResolvedConfig,
+    ctx: &OutputContext,
+    args: &TaskUpcomingArgs,
+) -> Result<()> {
+    let mut items = collect_shortcut_items(
+        config,
+        &args.filters,
+        ShortcutKind::Upcoming {
+            days: args.days.max(0),
+        },
+    )?;
+    sort_task_items(&mut items, "priority");
+    print_task_items(ctx, items, args.limit)
+}
+
+fn collect_shortcut_items(
+    config: &ResolvedConfig,
+    raw_filters: &[String],
+    kind: ShortcutKind,
+) -> Result<Vec<TaskItem>> {
+    let mut filters = parse_task_filters(raw_filters)?;
+    if matches!(kind, ShortcutKind::Inbox) && raw_filters.is_empty() {
+        filters.source = SourceSelection::Todoist;
+    }
+    if matches!(kind, ShortcutKind::Inbox) && matches!(filters.source, SourceSelection::Pkms) {
+        bail!("PKMS inbox tasks are not supported yet. Use source:todoist.");
+    }
+
+    let todoist_filters = shortcut_todoist_filters(&filters, kind);
+    let items = match filters.source {
+        SourceSelection::Pkms => collect_pkms_shortcut_items(config, kind)?,
+        SourceSelection::Todoist => collect_todoist_items(config, &todoist_filters)?,
+        SourceSelection::All => {
+            let mut items = if matches!(kind, ShortcutKind::Inbox) {
+                Vec::new()
+            } else {
+                collect_pkms_shortcut_items(config, kind)?
+            };
+            items.extend(collect_todoist_items(config, &todoist_filters)?);
+            items
+        }
+    };
+    Ok(items)
 }
 
 fn run_agenda(config: &ResolvedConfig, ctx: &OutputContext, args: &TaskAgendaArgs) -> Result<()> {
@@ -77,6 +146,30 @@ fn run_agenda(config: &ResolvedConfig, ctx: &OutputContext, args: &TaskAgendaArg
     let mut items = collect_pkms_agenda_items(config, args)?;
     sort_task_items(&mut items, args.sort.as_deref().unwrap_or("priority"));
     print_task_items(ctx, items, args.limit)
+}
+
+fn collect_pkms_shortcut_items(
+    config: &ResolvedConfig,
+    kind: ShortcutKind,
+) -> Result<Vec<TaskItem>> {
+    let args = TaskAgendaArgs {
+        filters: Vec::new(),
+        today: matches!(kind, ShortcutKind::Today),
+        week: false,
+        overdue: matches!(kind, ShortcutKind::Overdue),
+        upcoming: matches!(kind, ShortcutKind::Upcoming { .. }),
+        sort: None,
+        limit: None,
+        table: crate::cli::TaskTableArgs {
+            line_sep: false,
+            columns: None,
+        },
+    };
+    let mut items = collect_pkms_agenda_items(config, &args)?;
+    if let ShortcutKind::Upcoming { days } = kind {
+        retain_upcoming_task_items(&mut items, days);
+    }
+    Ok(items)
 }
 
 fn collect_pkms_list_items(config: &ResolvedConfig) -> Result<Vec<TaskItem>> {
@@ -160,6 +253,26 @@ fn todoist_agenda_filter(args: &TaskAgendaArgs) -> Option<&'static str> {
         Some("next 7 days")
     } else {
         None
+    }
+}
+
+fn shortcut_todoist_filters(filters: &TaskFilters, kind: ShortcutKind) -> TaskFilters {
+    let todoist_filter = filters
+        .todoist_filter
+        .clone()
+        .or_else(|| shortcut_todoist_filter(kind));
+    TaskFilters {
+        source: filters.source,
+        todoist_filter,
+    }
+}
+
+fn shortcut_todoist_filter(kind: ShortcutKind) -> Option<String> {
+    match kind {
+        ShortcutKind::Today => Some("today".to_string()),
+        ShortcutKind::Overdue => Some("overdue".to_string()),
+        ShortcutKind::Upcoming { days } => Some(format!("due after: today & next {days} days")),
+        ShortcutKind::Inbox => Some("#Inbox".to_string()),
     }
 }
 
@@ -510,6 +623,16 @@ fn item_date(item: &crate::commands::task_index::TaskRecord) -> Option<NaiveDate
         .or(item.deadline_date.as_deref())
         .or(item.daily_file_date.as_deref())
         .and_then(|date| NaiveDate::parse_from_str(date, "%Y-%m-%d").ok())
+}
+
+fn retain_upcoming_task_items(items: &mut Vec<TaskItem>, days: i64) {
+    let today = Local::now().date_naive();
+    let cutoff = today + chrono::Duration::days(days);
+    items.retain(|item| {
+        effective_date(item)
+            .and_then(|date| NaiveDate::parse_from_str(date, "%Y-%m-%d").ok())
+            .is_some_and(|date| date > today && date <= cutoff)
+    });
 }
 
 fn sort_task_items(items: &mut [TaskItem], sort: &str) {

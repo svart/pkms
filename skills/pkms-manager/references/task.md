@@ -8,6 +8,9 @@ pkms task agenda
 pkms task agenda --today
 pkms task agenda --week
 pkms task agenda --overdue
+pkms task today
+pkms task overdue
+pkms task upcoming --days 7
 pkms task show p5
 pkms task open p5
 pkms task state p5 WAITING
@@ -32,6 +35,10 @@ pkms task list source:todoist
 pkms task list source:all
 pkms task agenda --today source:todoist
 pkms task agenda --week source:all
+pkms task today source:all
+pkms task overdue source:todoist
+pkms task upcoming --days 7 source:all
+pkms task inbox
 pkms task list source:todoist 'todoist.filter:today | overdue'
 pkms task show todoist:<remote-id>
 pkms task add --source todoist "Buy milk tomorrow"
@@ -46,6 +53,12 @@ For Todoist-backed agenda views, `task agenda --today source:todoist` uses the
 Todoist `today` filter, `--overdue` uses `overdue`, `--week` uses `next 7 days`,
 and `--upcoming` uses `due after: today`. `todoist.filter:<query>` overrides
 those generated agenda filters when the assistant needs custom Todoist syntax.
+
+Prefer stable shortcuts for common assistant requests: `task today`,
+`task overdue`, `task upcoming --days N`, and `task inbox`. The first three
+accept `source:pkms`, `source:todoist`, or `source:all`; `task inbox` defaults
+to Todoist and uses the Todoist `#Inbox` filter because PKMS has no local inbox
+convention yet.
 
 Use `--dry-run` before completing Todoist tasks when operating on a real token:
 

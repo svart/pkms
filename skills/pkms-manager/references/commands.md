@@ -66,6 +66,9 @@ pkms show <canonical-id>
 pkms open <canonical-id>
 pkms task list
 pkms task agenda
+pkms task today
+pkms task overdue
+pkms task upcoming --days 7
 pkms task show p<canonical-id>
 pkms task open p<canonical-id>
 pkms task state p<canonical-id> WAITING
@@ -73,6 +76,8 @@ pkms task done p<canonical-id>
 pkms task list source:todoist
 pkms task agenda --today source:todoist
 pkms task agenda --week source:all
+pkms task today source:all
+pkms task inbox
 pkms task show todoist:<remote-id>
 pkms task add --source todoist "Buy milk tomorrow"
 pkms task done todoist:<remote-id>

@@ -125,10 +125,14 @@ pkms task agenda
 pkms task agenda --today
 pkms task agenda --week
 pkms task agenda --overdue
+pkms task today
+pkms task overdue
+pkms task upcoming --days 7
 pkms task list source:pkms
 ```
 
-`task list` and `task agenda` use source-neutral text columns:
+`task list`, `task agenda`, and task shortcut commands use source-neutral text
+columns:
 
 ```text
 Id,Source,Date,State,Prio,Tags,Project,Task
@@ -145,6 +149,10 @@ pkms task list source:todoist
 pkms task list source:all
 pkms task agenda --today source:todoist
 pkms task agenda --week source:all
+pkms task today source:all
+pkms task overdue source:todoist
+pkms task upcoming --days 7 source:all
+pkms task inbox
 pkms task list source:todoist 'todoist.filter:today | overdue'
 pkms task show todoist:<remote-id>
 pkms task add --source todoist "Buy milk tomorrow"
@@ -167,6 +175,18 @@ Todoist server-side filters:
 
 An explicit `todoist.filter:<query>` takes precedence over agenda flags and is
 the escape hatch for custom Todoist filter syntax.
+
+Use the stable shortcut commands for common assistant workflows:
+
+| Command | Semantics |
+|---------|-----------|
+| `task today` | Today's PKMS agenda tasks by default; accepts `source:todoist` or `source:all`. |
+| `task overdue` | Overdue PKMS agenda tasks by default; accepts `source:todoist` or `source:all`. |
+| `task upcoming --days N` | Upcoming tasks after today through the next `N` days; defaults to 7. |
+| `task inbox` | Todoist Inbox tasks using the `#Inbox` filter. |
+
+`task inbox` defaults to Todoist because PKMS does not yet define a local inbox
+convention.
 
 Set the token in the environment when possible. Environment variables take
 precedence over config values and avoid storing the secret in a dotfile:

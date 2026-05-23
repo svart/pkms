@@ -410,6 +410,14 @@ pub enum TaskCommand {
     List(TaskListArgs),
     #[command(about = "Show scheduled and deadline tasks")]
     Agenda(TaskAgendaArgs),
+    #[command(about = "Show today's tasks")]
+    Today(TaskShortcutArgs),
+    #[command(about = "Show overdue tasks")]
+    Overdue(TaskShortcutArgs),
+    #[command(about = "Show upcoming tasks")]
+    Upcoming(TaskUpcomingArgs),
+    #[command(about = "Show inbox tasks")]
+    Inbox(TaskShortcutArgs),
     #[command(about = "Show detailed task information")]
     Show(TaskTargetArgs),
     #[command(about = "Open a task in an editor")]
@@ -448,6 +456,28 @@ pub struct TaskAgendaArgs {
     pub upcoming: bool,
     #[arg(long, value_name = "SORT")]
     pub sort: Option<String>,
+    #[arg(long, help = "Maximum results")]
+    pub limit: Option<usize>,
+    #[command(flatten)]
+    pub table: TaskTableArgs,
+}
+
+#[derive(Debug, Args)]
+pub struct TaskShortcutArgs {
+    #[arg(value_name = "FILTER")]
+    pub filters: Vec<String>,
+    #[arg(long, help = "Maximum results")]
+    pub limit: Option<usize>,
+    #[command(flatten)]
+    pub table: TaskTableArgs,
+}
+
+#[derive(Debug, Args)]
+pub struct TaskUpcomingArgs {
+    #[arg(value_name = "FILTER")]
+    pub filters: Vec<String>,
+    #[arg(long, default_value_t = 7, help = "Number of upcoming days to show")]
+    pub days: i64,
     #[arg(long, help = "Maximum results")]
     pub limit: Option<usize>,
     #[command(flatten)]
