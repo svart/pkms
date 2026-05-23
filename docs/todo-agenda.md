@@ -155,8 +155,10 @@ pkms task upcoming --days 7 source:all
 pkms task report --today --source all --output-format json
 pkms task plan --today --source all --output-format json
 pkms task inbox
-pkms task list projects
-pkms task list tags
+pkms task list projects source:todoist
+pkms task list tags source:todoist
+pkms task list projects source:all
+pkms task list tags source:all
 pkms task list source:todoist 'todoist.filter:today | overdue'
 pkms task show todoist:<remote-id>
 pkms task add --source todoist "Buy milk tomorrow"
@@ -245,10 +247,12 @@ populates `note_uuid` and `note_title` when the note exists locally. The marker
 reveals a PKMS note UUID to Todoist; avoid `--note` for tasks where even that
 identifier should not leave the local database.
 
-Use `task list projects` and `task list tags` to inspect available Todoist
-metadata. Both commands accept `source:todoist` explicitly, but default to
-Todoist metadata when no source filter is provided. Todoist task output sets
-`project` to the display name when metadata is available and keeps the raw id in
+Use `task list projects` and `task list tags` to inspect task metadata. With
+`source:pkms`, projects come from note-level or heading-level `PROJECT`
+properties, and tags combine note `#+filetags` with heading tags as in `todo`
+and `agenda`. With `source:todoist`, projects and tags come from Todoist
+metadata. `source:all` combines both sources. Todoist task output sets `project`
+to the display name when metadata is available and keeps the raw id in
 `project_id`.
 
 `task add --source todoist --output-format json` returns a wrapper with

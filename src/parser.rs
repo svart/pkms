@@ -15,6 +15,7 @@ pub struct ParsedNote {
     pub uuids: Vec<String>,
     pub title: Option<String>,
     pub filetags: Vec<String>,
+    pub project: Option<String>,
     pub categories: Vec<String>,
     pub aliases: Vec<String>,
     pub roam_refs: Vec<String>,
@@ -28,6 +29,7 @@ impl ParsedNote {
             uuids: vec![],
             title: None,
             filetags: vec![],
+            project: None,
             categories: vec![],
             aliases: vec![],
             roam_refs: vec![],
@@ -70,6 +72,7 @@ pub struct Heading {
     pub scheduled: Option<String>,
     pub deadline: Option<String>,
     pub priority: Option<char>,
+    pub project: Option<String>,
     pub line_number: usize,
     pub outgoing: Vec<Link>,
     pub raw: String,
@@ -79,6 +82,7 @@ pub struct Heading {
 enum PropertyKey {
     Id,
     Category,
+    Project,
     RoamAliases,
     RoamRefs,
     Other,
@@ -89,6 +93,7 @@ impl PropertyKey {
         match key {
             "ID" => PropertyKey::Id,
             "CATEGORY" => PropertyKey::Category,
+            "PROJECT" => PropertyKey::Project,
             "ROAM_ALIASES" => PropertyKey::RoamAliases,
             "ROAM_REFS" => PropertyKey::RoamRefs,
             _ => PropertyKey::Other,
@@ -133,6 +138,7 @@ struct ParseContext {
     uuids: Vec<String>,
     title: Option<String>,
     filetags: Vec<String>,
+    project: Option<String>,
     categories: Vec<String>,
     aliases: Vec<String>,
     roam_refs: Vec<String>,
@@ -151,6 +157,7 @@ impl ParseContext {
             uuids: Vec::new(),
             title: None,
             filetags: Vec::new(),
+            project: None,
             categories: Vec::new(),
             aliases: Vec::new(),
             roam_refs: Vec::new(),
@@ -169,6 +176,7 @@ impl ParseContext {
             uuids: self.uuids,
             title: self.title,
             filetags: self.filetags,
+            project: self.project,
             categories: self.categories,
             aliases: self.aliases,
             roam_refs: self.roam_refs,
@@ -221,6 +229,13 @@ impl ParseContext {
                 }
             }
             PropertyKey::Category => self.categories.push(value.to_string()),
+            PropertyKey::Project => {
+                if let Some(idx) = self.current_heading_idx {
+                    self.headings[idx].project = Some(value.to_string());
+                } else {
+                    self.project = Some(value.to_string());
+                }
+            }
             PropertyKey::RoamAliases => {
                 self.aliases = value
                     .split_whitespace()
@@ -310,6 +325,7 @@ impl ParseContext {
             scheduled: None,
             deadline: None,
             priority,
+            project: None,
             line_number: line_idx + 1,
             outgoing: vec![],
             raw: line.to_string(),
@@ -570,6 +586,26 @@ Some text
                 "sec-uuid-bbbb-0000-000000000002"
             ]
         );
+    }
+
+    #[test]
+    fn test_parse_project_properties() {
+        let content = r#":PROPERTIES:
+:ID:       a1b2c3d4-e5f6-7890-abcd-ef1234567890
+:PROJECT: Note Project
+:END:
+#+title: project properties
+
+* TODO Note project task
+* TODO Heading project task
+:PROPERTIES:
+:PROJECT: Heading Project
+:END:
+"#;
+        let note = parse_note(content);
+        assert_eq!(note.project.as_deref(), Some("Note Project"));
+        assert_eq!(note.headings[0].project.as_deref(), None);
+        assert_eq!(note.headings[1].project.as_deref(), Some("Heading Project"));
     }
 
     #[test]

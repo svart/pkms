@@ -335,6 +335,73 @@ fn test_task_overdue_accepts_limit_json() {
 }
 
 #[test]
+fn test_task_list_projects_pkms_uses_project_properties() {
+    let (_dir, root) = setup_db();
+    add_pkms_project_metadata_note(&root);
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "task",
+        "list",
+        "projects",
+        "source:pkms",
+    ]);
+    assert!(status.success());
+    assert_metadata_row(&v, "pkms", "Heading Project");
+    assert_metadata_row(&v, "pkms", "Note Project");
+}
+
+#[test]
+fn test_task_list_tags_pkms_uses_filetags_and_heading_tags() {
+    let (_dir, root) = setup_db();
+    add_pkms_project_metadata_note(&root);
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "task",
+        "list",
+        "tags",
+        "source:pkms",
+    ]);
+    assert!(status.success());
+    assert_metadata_row(&v, "pkms", "filetag");
+    assert_metadata_row(&v, "pkms", "headingtag");
+}
+
+fn add_pkms_project_metadata_note(root: &std::path::Path) {
+    std::fs::write(
+        root.join("roam/common/20260524000000-task_metadata.org"),
+        r#":PROPERTIES:
+:ID:       77777777-7777-4777-8777-777777777777
+:PROJECT: Note Project
+:END:
+#+title: Task Metadata
+#+filetags: :filetag:
+
+* TODO Note project task :headingtag:
+* TODO Heading project task
+:PROPERTIES:
+:PROJECT: Heading Project
+:END:
+"#,
+    )
+    .unwrap();
+}
+
+fn assert_metadata_row(v: &serde_json::Value, source: &str, name: &str) {
+    assert!(
+        v["items"].as_array().unwrap().iter().any(|row| {
+            row["source"].as_str() == Some(source) && row["name"].as_str() == Some(name)
+        }),
+        "missing metadata row {source}:{name}: {v}"
+    );
+}
+
+#[test]
 fn test_task_list_ndjson() {
     let (_dir, root) = setup_db();
     let (stdout, _stderr, status) = run(&[
@@ -607,6 +674,7 @@ fn test_task_list_todoist_uses_mock_api_and_pagination() {
             "task",
             "list",
             "projects",
+            "source:todoist",
         ],
         &base_url,
     );
@@ -645,6 +713,7 @@ fn test_task_projects_todoist_lists_metadata() {
             "task",
             "list",
             "projects",
+            "source:todoist",
         ],
         &base_url,
     );
@@ -652,6 +721,7 @@ fn test_task_projects_todoist_lists_metadata() {
     assert!(output.status.success());
     let v: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
     assert_eq!(v["total"], 2);
+    assert_eq!(v["items"][0]["source"], "todoist");
     assert_eq!(v["items"][0]["id"], "inbox");
     assert_eq!(v["items"][0]["name"], "Inbox");
 }
@@ -674,6 +744,7 @@ fn test_task_labels_todoist_lists_metadata() {
             "task",
             "list",
             "tags",
+            "source:todoist",
         ],
         &base_url,
     );
@@ -681,8 +752,69 @@ fn test_task_labels_todoist_lists_metadata() {
     assert!(output.status.success());
     let v: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
     assert_eq!(v["total"], 2);
-    assert_eq!(v["items"][1]["id"], "errand-id");
-    assert_eq!(v["items"][1]["name"], "errand");
+    assert_eq!(v["items"][0]["source"], "todoist");
+    assert_eq!(v["items"][0]["id"], "errand-id");
+    assert_eq!(v["items"][0]["name"], "errand");
+}
+
+#[cfg(feature = "todoist")]
+#[test]
+fn test_task_list_projects_all_combines_pkms_and_todoist_metadata() {
+    let (_dir, root) = setup_db();
+    add_pkms_project_metadata_note(&root);
+    let (base_url, handle) = spawn_todoist_mock(vec![(
+        "GET",
+        "/projects?limit=200",
+        r#"{"results":[{"id":"todoist-work","name":"Todoist Work"}],"next_cursor":null}"#,
+    )]);
+    let output = run_with_todoist_env(
+        &[
+            "--db",
+            root.to_str().unwrap(),
+            "--output-format",
+            "json",
+            "task",
+            "list",
+            "projects",
+            "source:all",
+        ],
+        &base_url,
+    );
+    handle.join().unwrap();
+    assert!(output.status.success());
+    let v: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_metadata_row(&v, "pkms", "Note Project");
+    assert_metadata_row(&v, "todoist", "Todoist Work");
+}
+
+#[cfg(feature = "todoist")]
+#[test]
+fn test_task_list_tags_all_combines_pkms_and_todoist_metadata() {
+    let (_dir, root) = setup_db();
+    add_pkms_project_metadata_note(&root);
+    let (base_url, handle) = spawn_todoist_mock(vec![(
+        "GET",
+        "/labels?limit=200",
+        r#"{"results":[{"id":"todoist-label","name":"todoist-tag"}],"next_cursor":null}"#,
+    )]);
+    let output = run_with_todoist_env(
+        &[
+            "--db",
+            root.to_str().unwrap(),
+            "--output-format",
+            "json",
+            "task",
+            "list",
+            "tags",
+            "source:all",
+        ],
+        &base_url,
+    );
+    handle.join().unwrap();
+    assert!(output.status.success());
+    let v: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_metadata_row(&v, "pkms", "filetag");
+    assert_metadata_row(&v, "todoist", "todoist-tag");
 }
 
 #[cfg(feature = "todoist")]

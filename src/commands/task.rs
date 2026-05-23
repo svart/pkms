@@ -13,7 +13,7 @@ use crate::output::OutputContext;
 use crate::parser::HEADING_RE;
 use crate::tasks::filter::{SourceSelection, TaskFilters, parse_task_filters};
 use crate::tasks::id::TaskId;
-use crate::tasks::model::TaskItem;
+use crate::tasks::model::{TaskItem, TaskSourceKind};
 use crate::tasks::pkms::record_to_task_item;
 use crate::workspace::Workspace;
 use anyhow::{Result, bail};
@@ -686,108 +686,179 @@ fn show_todoist_task(_config: &ResolvedConfig, _ctx: &OutputContext, _id: &str) 
     bail!("Todoist support is not available in this build. Rebuild with --features todoist.")
 }
 
-#[cfg(feature = "todoist")]
 fn run_projects(config: &ResolvedConfig, ctx: &OutputContext, filters: &[String]) -> Result<()> {
-    ensure_todoist_metadata_source(filters)?;
-    let token = crate::tasks::todoist::ensure_enabled(config)?;
-    let client =
-        crate::tasks::todoist::TodoistClient::with_base_url(config.todoist_api_base_url(), token);
-    let projects = client.list_projects()?;
-    print_metadata(ctx, "project", &projects)
-}
-
-#[cfg(not(feature = "todoist"))]
-fn run_projects(_config: &ResolvedConfig, _ctx: &OutputContext, _filters: &[String]) -> Result<()> {
-    bail!("Todoist support is not available in this build. Rebuild with --features todoist.")
-}
-
-#[cfg(feature = "todoist")]
-fn run_tags(config: &ResolvedConfig, ctx: &OutputContext, filters: &[String]) -> Result<()> {
-    ensure_todoist_metadata_source(filters)?;
-    let token = crate::tasks::todoist::ensure_enabled(config)?;
-    let client =
-        crate::tasks::todoist::TodoistClient::with_base_url(config.todoist_api_base_url(), token);
-    let labels = client.list_labels()?;
-    print_metadata(ctx, "label", &labels)
-}
-
-#[cfg(not(feature = "todoist"))]
-fn run_tags(_config: &ResolvedConfig, _ctx: &OutputContext, _filters: &[String]) -> Result<()> {
-    bail!("Todoist support is not available in this build. Rebuild with --features todoist.")
-}
-
-#[cfg(feature = "todoist")]
-trait MetadataDisplay: Serialize {
-    fn id(&self) -> &str;
-    fn name(&self) -> &str;
-}
-
-#[cfg(feature = "todoist")]
-impl MetadataDisplay for crate::tasks::todoist::TodoistProject {
-    fn id(&self) -> &str {
-        &self.id
-    }
-
-    fn name(&self) -> &str {
-        &self.name
-    }
-}
-
-#[cfg(feature = "todoist")]
-impl MetadataDisplay for crate::tasks::todoist::TodoistLabel {
-    fn id(&self) -> &str {
-        &self.id
-    }
-
-    fn name(&self) -> &str {
-        &self.name
-    }
-}
-
-#[cfg(feature = "todoist")]
-fn ensure_todoist_metadata_source(filters: &[String]) -> Result<()> {
-    let mut filters = filters.to_vec();
-    if !filters
-        .iter()
-        .any(|filter| filter.starts_with("source:") || filter.starts_with("src:"))
-    {
-        filters.push("source:todoist".to_string());
-    }
-    let filters = parse_task_filters(&filters)?;
-    if matches!(filters.source, SourceSelection::Pkms) {
-        bail!("PKMS task metadata is not supported yet. Use source:todoist.");
-    }
+    let filters = parse_task_filters(filters)?;
     if filters.todoist_filter.is_some() {
         bail!("Todoist metadata commands do not accept todoist.filter.");
     }
-    Ok(())
+    let mut rows = Vec::new();
+    if matches!(filters.source, SourceSelection::Pkms | SourceSelection::All) {
+        rows.extend(pkms_project_rows(config)?);
+    }
+    if matches!(
+        filters.source,
+        SourceSelection::Todoist | SourceSelection::All
+    ) {
+        rows.extend(todoist_project_rows(config)?);
+    }
+    sort_metadata_rows(&mut rows);
+    print_metadata_rows(ctx, "project", &rows)
+}
+
+fn run_tags(config: &ResolvedConfig, ctx: &OutputContext, filters: &[String]) -> Result<()> {
+    let filters = parse_task_filters(filters)?;
+    if filters.todoist_filter.is_some() {
+        bail!("Todoist metadata commands do not accept todoist.filter.");
+    }
+    let mut rows = Vec::new();
+    if matches!(filters.source, SourceSelection::Pkms | SourceSelection::All) {
+        rows.extend(pkms_tag_rows(config)?);
+    }
+    if matches!(
+        filters.source,
+        SourceSelection::Todoist | SourceSelection::All
+    ) {
+        rows.extend(todoist_label_rows(config)?);
+    }
+    sort_metadata_rows(&mut rows);
+    print_metadata_rows(ctx, "tag", &rows)
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct TaskMetadataRow {
+    source: TaskSourceKind,
+    id: String,
+    name: String,
+    count: Option<usize>,
+}
+
+fn pkms_project_rows(config: &ResolvedConfig) -> Result<Vec<TaskMetadataRow>> {
+    let mut counts = BTreeMap::new();
+    for item in collect_pkms_list_items(config)? {
+        if let Some(project) = item.project.filter(|project| !project.trim().is_empty()) {
+            *counts.entry(project).or_insert(0) += 1;
+        }
+    }
+    Ok(counts
+        .into_iter()
+        .map(|(project, count)| TaskMetadataRow {
+            source: TaskSourceKind::Pkms,
+            id: project.clone(),
+            name: project,
+            count: Some(count),
+        })
+        .collect())
+}
+
+fn pkms_tag_rows(config: &ResolvedConfig) -> Result<Vec<TaskMetadataRow>> {
+    let mut counts = BTreeMap::new();
+    for item in collect_pkms_list_items(config)? {
+        for tag in item.tags {
+            if !tag.trim().is_empty() {
+                *counts.entry(tag).or_insert(0) += 1;
+            }
+        }
+    }
+    Ok(counts
+        .into_iter()
+        .map(|(tag, count)| TaskMetadataRow {
+            source: TaskSourceKind::Pkms,
+            id: tag.clone(),
+            name: tag,
+            count: Some(count),
+        })
+        .collect())
 }
 
 #[cfg(feature = "todoist")]
-fn print_metadata<T: MetadataDisplay>(ctx: &OutputContext, kind: &str, rows: &[T]) -> Result<()> {
+fn todoist_project_rows(config: &ResolvedConfig) -> Result<Vec<TaskMetadataRow>> {
+    let token = crate::tasks::todoist::ensure_enabled(config)?;
+    let client =
+        crate::tasks::todoist::TodoistClient::with_base_url(config.todoist_api_base_url(), token);
+    Ok(client
+        .list_projects()?
+        .into_iter()
+        .map(|project| TaskMetadataRow {
+            source: TaskSourceKind::Todoist,
+            id: project.id,
+            name: project.name,
+            count: None,
+        })
+        .collect())
+}
+
+#[cfg(not(feature = "todoist"))]
+fn todoist_project_rows(_config: &ResolvedConfig) -> Result<Vec<TaskMetadataRow>> {
+    bail!("Todoist support is not available in this build. Rebuild with --features todoist.")
+}
+
+#[cfg(feature = "todoist")]
+fn todoist_label_rows(config: &ResolvedConfig) -> Result<Vec<TaskMetadataRow>> {
+    let token = crate::tasks::todoist::ensure_enabled(config)?;
+    let client =
+        crate::tasks::todoist::TodoistClient::with_base_url(config.todoist_api_base_url(), token);
+    Ok(client
+        .list_labels()?
+        .into_iter()
+        .map(|label| TaskMetadataRow {
+            source: TaskSourceKind::Todoist,
+            id: label.id,
+            name: label.name,
+            count: None,
+        })
+        .collect())
+}
+
+#[cfg(not(feature = "todoist"))]
+fn todoist_label_rows(_config: &ResolvedConfig) -> Result<Vec<TaskMetadataRow>> {
+    bail!("Todoist support is not available in this build. Rebuild with --features todoist.")
+}
+
+fn sort_metadata_rows(rows: &mut [TaskMetadataRow]) {
+    rows.sort_by(|a, b| {
+        source_sort_key(&a.source)
+            .cmp(&source_sort_key(&b.source))
+            .then_with(|| a.name.cmp(&b.name))
+            .then_with(|| a.id.cmp(&b.id))
+    });
+}
+
+fn source_sort_key(source: &TaskSourceKind) -> u8 {
+    match source {
+        TaskSourceKind::Pkms => 0,
+        TaskSourceKind::Todoist => 1,
+    }
+}
+
+fn print_metadata_rows(ctx: &OutputContext, kind: &str, rows: &[TaskMetadataRow]) -> Result<()> {
     match ctx.format {
         OutputFormat::Text => {
             if rows.is_empty() {
-                println!("No Todoist {kind}s found.");
+                println!("No task {kind}s found.");
                 return Ok(());
             }
             let mut builder = Builder::new();
-            builder.push_record(["Id", "Name"]);
+            builder.push_record(["Source", "Id", "Name", "Count"]);
             for row in rows {
-                builder.push_record([row.id(), row.name()]);
+                builder.push_record([
+                    format!("{:?}", row.source).to_ascii_lowercase(),
+                    row.id.clone(),
+                    row.name.clone(),
+                    row.count.map(|count| count.to_string()).unwrap_or_default(),
+                ]);
             }
             let mut table = builder.build();
             table.with(Style::blank());
             println!("{table}");
             println!();
-            println!("Total: {} Todoist {kind}(s)", rows.len());
+            println!("Total: {} task {kind}(s)", rows.len());
             Ok(())
         }
         OutputFormat::Json => {
             #[derive(Serialize)]
-            struct MetadataOutput<'a, T> {
+            struct MetadataOutput<'a> {
                 total: usize,
-                items: &'a [T],
+                items: &'a [TaskMetadataRow],
             }
             ctx.print_json(&MetadataOutput {
                 total: rows.len(),

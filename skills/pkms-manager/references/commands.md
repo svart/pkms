@@ -80,8 +80,8 @@ pkms task today source:all
 pkms task report --today --source all --output-format json
 pkms task plan --today --source all --output-format json
 pkms task inbox
-pkms task list projects
-pkms task list tags
+pkms task list projects source:todoist
+pkms task list tags source:todoist
 pkms task show todoist:<remote-id>
 pkms task add --source todoist "Buy milk tomorrow"
 pkms task add --source todoist --title "Call Alice" --due 2026-05-24 --priority B
