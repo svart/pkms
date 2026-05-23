@@ -30,8 +30,14 @@ jobs:
       - name: Run clippy
         run: cargo clippy --locked --all-targets -- -D warnings
 
+      - name: Check default build without features
+        run: cargo build --locked
+
       - name: Check embed feature build
         run: cargo build --locked --features embed
+
+      - name: Check todoist feature build
+        run: cargo build --locked --features todoist
 
       - name: Run tests
         run: cargo test --locked
