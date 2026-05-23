@@ -40,6 +40,7 @@ pkms task overdue source:todoist
 pkms task upcoming --days 7 source:all
 pkms task report --today --source all --output-format json
 pkms task plan --today --source all --output-format json
+pkms task clarify --source todoist --output-format json
 pkms task inbox
 pkms task projects source:todoist
 pkms task labels source:todoist
@@ -79,6 +80,12 @@ daily summary or planning context. Prefer these over raw `task list` or
 `upcoming`, `by_source`, and `by_project`. With Todoist and `--today`, report
 commands use a Todoist filter for today, overdue, no-date, and upcoming tasks
 before grouping the returned items locally.
+
+Use `task clarify --source todoist --output-format json` before planning when
+the assistant needs to identify tasks that need date, project, scope, or context.
+It is read-only and returns per-task reason codes: `no_date`, `no_project`,
+`no_context`, `vague_title`, and `stale_inbox`. Use text output for a short
+inbox review and JSON output for automated assistant decisions.
 
 Use positional text with `task add --source todoist` for Todoist Quick Add
 natural-language parsing. Use structured creation for deterministic assistant

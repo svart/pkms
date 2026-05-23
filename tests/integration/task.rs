@@ -31,6 +31,7 @@ fn test_task_help_lists_subcommands() {
     assert!(stdout.contains("add"));
     assert!(stdout.contains("report"));
     assert!(stdout.contains("plan"));
+    assert!(stdout.contains("clarify"));
 }
 
 #[test]
@@ -1087,6 +1088,72 @@ SCHEDULED: <{today} 10:30>
     assert!(v["by_source"]["pkms"]["total"].as_u64().unwrap() > 0);
     assert_eq!(v["by_source"]["todoist"]["total"], 2);
     assert_eq!(v["by_project"]["Work"]["total"], 2);
+}
+
+#[cfg(feature = "todoist")]
+#[test]
+fn test_task_clarify_todoist_reports_structured_reasons() {
+    let (_dir, root) = setup_db();
+    let (base_url, handle) = spawn_todoist_mock(vec![
+        (
+            "GET",
+            "/tasks?limit=200",
+            r#"{"results":[
+                {"id":"no-date","content":"Prepare proposal","description":"Context","project_id":"work-id","priority":1,"labels":[],"created_at":"2026-05-22T00:00:00Z"},
+                {"id":"no-project","content":"Send proposal","description":"Context","priority":1,"labels":[],"due":{"date":"2099-01-01","string":"2099-01-01"},"created_at":"2026-05-22T00:00:00Z"},
+                {"id":"vague","content":"Do it","description":"Context","project_id":"work-id","priority":1,"labels":[],"due":{"date":"2099-01-01","string":"2099-01-01"},"created_at":"2026-05-22T00:00:00Z"},
+                {"id":"no-context","content":"Contextless task","description":"","project_id":"work-id","priority":1,"labels":[],"due":{"date":"2099-01-01","string":"2099-01-01"},"created_at":"2026-05-22T00:00:00Z"},
+                {"id":"stale","content":"Inbox stale task","description":"Context","project_id":"inbox","priority":1,"labels":[],"due":{"date":"2099-01-01","string":"2099-01-01"},"created_at":"2000-01-01T00:00:00Z"}
+            ],"next_cursor":null}"#,
+        ),
+        (
+            "GET",
+            "/projects?limit=200",
+            r#"{"results":[{"id":"work-id","name":"Work"},{"id":"inbox","name":"Inbox"}],"next_cursor":null}"#,
+        ),
+    ]);
+    let output = run_with_todoist_env(
+        &[
+            "--db",
+            root.to_str().unwrap(),
+            "--output-format",
+            "json",
+            "task",
+            "clarify",
+            "--source",
+            "todoist",
+            "--stale-days",
+            "7",
+        ],
+        &base_url,
+    );
+    handle.join().unwrap();
+    assert!(output.status.success());
+    let v: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(v["total"], 5);
+    assert_clarify_reason(&v, "no-date", "no_date");
+    assert_clarify_reason(&v, "no-project", "no_project");
+    assert_clarify_reason(&v, "vague", "vague_title");
+    assert_clarify_reason(&v, "no-context", "no_context");
+    assert_clarify_reason(&v, "stale", "stale_inbox");
+}
+
+#[cfg(feature = "todoist")]
+fn assert_clarify_reason(v: &serde_json::Value, source_id: &str, code: &str) {
+    let row = v["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|row| row["item"]["source_id"] == source_id)
+        .unwrap_or_else(|| panic!("missing clarify row for {source_id}"));
+    assert!(
+        row["reasons"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|reason| reason["code"] == code),
+        "missing reason {code} for {source_id}: {row}"
+    );
 }
 
 #[cfg(feature = "todoist")]

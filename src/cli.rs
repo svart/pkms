@@ -422,6 +422,8 @@ pub enum TaskCommand {
     Report(TaskReportArgs),
     #[command(about = "Show structured daily plan sections")]
     Plan(TaskReportArgs),
+    #[command(about = "Find tasks needing clarification")]
+    Clarify(TaskClarifyArgs),
     #[command(about = "List task projects")]
     Projects(TaskMetadataArgs),
     #[command(about = "List task labels")]
@@ -520,6 +522,20 @@ pub struct TaskReportArgs {
         help = "Number of days in the upcoming section"
     )]
     pub upcoming_days: i64,
+}
+
+#[derive(Debug, Args)]
+pub struct TaskClarifyArgs {
+    #[arg(value_name = "FILTER")]
+    pub filters: Vec<String>,
+    #[arg(
+        long,
+        value_name = "SOURCE",
+        help = "Task source: todoist or all; defaults to todoist"
+    )]
+    pub source: Option<String>,
+    #[arg(long, default_value_t = 7, help = "Days before Inbox tasks are stale")]
+    pub stale_days: i64,
 }
 
 #[derive(Debug, Args)]
