@@ -162,6 +162,12 @@ pkms task add --source todoist --project Inbox "Buy milk tomorrow"
 pkms task add --source todoist --title "Call Alice" --due 2026-05-24 --label phone --priority B
 pkms task done todoist:<remote-id>
 pkms task done todoist:<remote-id> --dry-run
+pkms task postpone todoist:<remote-id> --to tomorrow
+pkms task schedule todoist:<remote-id> --due 2026-05-24
+pkms task schedule todoist:<remote-id> --due none
+pkms task update todoist:<remote-id> --title "Call Alice" --project Work --priority A
+pkms task delete todoist:<remote-id> --dry-run
+pkms task reopen todoist:<remote-id>
 ```
 
 Todoist tasks are fetched only when the source set includes Todoist. Local
@@ -228,6 +234,13 @@ name when metadata is available and keeps the raw id in `project_id`.
 stable `display_id`, `source_id`, title, description, priority, dates, labels,
 project, `project_id`, and URL when Todoist provides them. Text output stays concise but
 includes the stable id and key planning fields.
+
+Todoist mutation commands are source-specific and require stable
+`todoist:<remote-id>` ids. `postpone` and `schedule` update the due date;
+`schedule --due none` clears it. `update` can change title, project, priority,
+labels, and description. `delete` supports `--dry-run`; without `--dry-run` it
+calls Todoist delete. Changed-task JSON output returns `changed: true`, an
+`action`, and the updated source-neutral `TaskItem`.
 
 Set the token in the environment when possible. Environment variables take
 precedence over config values and avoid storing the secret in a dotfile:

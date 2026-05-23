@@ -168,9 +168,28 @@ impl TodoistClient {
         self.post_json("/tasks", request)
     }
 
+    pub fn update_task(&self, id: &str, request: &serde_json::Value) -> Result<()> {
+        let _: serde_json::Value = self.post_json(&format!("/tasks/{id}"), request)?;
+        Ok(())
+    }
+
     pub fn close_task(&self, id: &str) -> Result<()> {
         let _: serde_json::Value =
             self.post_json(&format!("/tasks/{id}/close"), &serde_json::json!({}))?;
+        Ok(())
+    }
+
+    pub fn reopen_task(&self, id: &str) -> Result<()> {
+        let _: serde_json::Value =
+            self.post_json(&format!("/tasks/{id}/reopen"), &serde_json::json!({}))?;
+        Ok(())
+    }
+
+    pub fn delete_task(&self, id: &str) -> Result<()> {
+        ureq::delete(&self.url(&format!("/tasks/{id}")))
+            .header("Authorization", &format!("Bearer {}", self.token))
+            .call()
+            .map_err(todoist_error)?;
         Ok(())
     }
 

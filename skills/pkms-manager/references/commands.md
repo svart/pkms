@@ -84,6 +84,11 @@ pkms task show todoist:<remote-id>
 pkms task add --source todoist "Buy milk tomorrow"
 pkms task add --source todoist --title "Call Alice" --due 2026-05-24 --priority B
 pkms task done todoist:<remote-id>
+pkms task postpone todoist:<remote-id> --to tomorrow
+pkms task schedule todoist:<remote-id> --due none
+pkms task update todoist:<remote-id> --title "Call Alice" --project Work --priority A
+pkms task delete todoist:<remote-id> --dry-run
+pkms task reopen todoist:<remote-id>
 ```
 
 ## Statistics

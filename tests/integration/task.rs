@@ -1328,6 +1328,236 @@ fn test_task_done_todoist_calls_mock_close_endpoint() {
 
 #[cfg(feature = "todoist")]
 #[test]
+fn test_task_postpone_todoist_updates_due_date() {
+    let (_dir, root) = setup_db();
+    let (base_url, handle) = spawn_todoist_mock_expect_bodies(vec![
+        (
+            "POST",
+            "/tasks/abc",
+            serde_json::json!({"due_date": "2026-05-24"}),
+            r#"{}"#,
+        ),
+        (
+            "GET",
+            "/tasks/abc",
+            serde_json::Value::Null,
+            r#"{"id":"abc","content":"Call Alice","description":"","priority":1,"labels":[],"due":{"date":"2026-05-24","string":"2026-05-24"}}"#,
+        ),
+    ]);
+    let output = run_with_todoist_env(
+        &[
+            "--db",
+            root.to_str().unwrap(),
+            "--output-format",
+            "json",
+            "task",
+            "postpone",
+            "todoist:abc",
+            "--to",
+            "2026-05-24",
+        ],
+        &base_url,
+    );
+    handle.join().unwrap();
+    assert!(output.status.success());
+    let v: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(v["changed"], true);
+    assert_eq!(v["action"], "postpone");
+    assert_eq!(v["item"]["display_id"], "todoist:abc");
+    assert_eq!(v["item"]["scheduled"]["date"], "2026-05-24");
+}
+
+#[cfg(feature = "todoist")]
+#[test]
+fn test_task_schedule_todoist_can_clear_due_date() {
+    let (_dir, root) = setup_db();
+    let (base_url, handle) = spawn_todoist_mock_expect_bodies(vec![
+        (
+            "POST",
+            "/tasks/abc",
+            serde_json::json!({"due_date": null}),
+            r#"{}"#,
+        ),
+        (
+            "GET",
+            "/tasks/abc",
+            serde_json::Value::Null,
+            r#"{"id":"abc","content":"Call Alice","description":"","priority":1,"labels":[]}"#,
+        ),
+    ]);
+    let output = run_with_todoist_env(
+        &[
+            "--db",
+            root.to_str().unwrap(),
+            "--output-format",
+            "json",
+            "task",
+            "schedule",
+            "todoist:abc",
+            "--due",
+            "none",
+        ],
+        &base_url,
+    );
+    handle.join().unwrap();
+    assert!(output.status.success());
+    let v: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(v["changed"], true);
+    assert_eq!(v["action"], "unschedule");
+    assert!(v["item"]["scheduled"].is_null());
+}
+
+#[cfg(feature = "todoist")]
+#[test]
+fn test_task_update_todoist_updates_fields_and_resolves_project() {
+    let (_dir, root) = setup_db();
+    let (base_url, handle) = spawn_todoist_mock_expect_bodies(vec![
+        (
+            "GET",
+            "/projects?limit=200",
+            serde_json::Value::Null,
+            r#"{"results":[{"id":"work-id","name":"Work"}],"next_cursor":null}"#,
+        ),
+        (
+            "POST",
+            "/tasks/abc",
+            serde_json::json!({
+                "content": "Call Alice",
+                "description": "Discuss launch",
+                "project_id": "work-id",
+                "priority": 4,
+                "labels": ["phone", "launch"]
+            }),
+            r#"{}"#,
+        ),
+        (
+            "GET",
+            "/tasks/abc",
+            serde_json::Value::Null,
+            r#"{"id":"abc","content":"Call Alice","description":"Discuss launch","project_id":"work-id","priority":4,"labels":["phone","launch"]}"#,
+        ),
+    ]);
+    let output = run_with_todoist_env(
+        &[
+            "--db",
+            root.to_str().unwrap(),
+            "--output-format",
+            "json",
+            "task",
+            "update",
+            "todoist:abc",
+            "--title",
+            "Call Alice",
+            "--project",
+            "Work",
+            "--priority",
+            "A",
+            "--label",
+            "phone",
+            "--label",
+            "launch",
+            "--description",
+            "Discuss launch",
+        ],
+        &base_url,
+    );
+    handle.join().unwrap();
+    assert!(output.status.success());
+    let v: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(v["changed"], true);
+    assert_eq!(v["action"], "update");
+    assert_eq!(v["item"]["title"], "Call Alice");
+    assert_eq!(v["item"]["priority"], "A");
+    assert_eq!(v["item"]["project"], "Work");
+    assert_eq!(v["item"]["project_id"], "work-id");
+    assert_eq!(v["item"]["tags"], serde_json::json!(["phone", "launch"]));
+}
+
+#[cfg(feature = "todoist")]
+#[test]
+fn test_task_delete_todoist_dry_run_does_not_call_mock_api() {
+    let (_dir, root) = setup_db();
+    let (base_url, handle) = spawn_todoist_mock(vec![]);
+    let output = run_with_todoist_env(
+        &[
+            "--db",
+            root.to_str().unwrap(),
+            "--output-format",
+            "json",
+            "task",
+            "delete",
+            "todoist:abc",
+            "--dry-run",
+        ],
+        &base_url,
+    );
+    handle.join().unwrap();
+    assert!(output.status.success());
+    let v: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(v["id"], "todoist:abc");
+    assert_eq!(v["deleted"], false);
+    assert_eq!(v["dry_run"], true);
+}
+
+#[cfg(feature = "todoist")]
+#[test]
+fn test_task_delete_todoist_calls_mock_api() {
+    let (_dir, root) = setup_db();
+    let (base_url, handle) = spawn_todoist_mock(vec![("DELETE", "/tasks/abc", r#"{}"#)]);
+    let output = run_with_todoist_env(
+        &[
+            "--db",
+            root.to_str().unwrap(),
+            "--output-format",
+            "json",
+            "task",
+            "delete",
+            "todoist:abc",
+        ],
+        &base_url,
+    );
+    handle.join().unwrap();
+    assert!(output.status.success());
+    let v: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(v["id"], "todoist:abc");
+    assert_eq!(v["deleted"], true);
+}
+
+#[cfg(feature = "todoist")]
+#[test]
+fn test_task_reopen_todoist_calls_mock_api() {
+    let (_dir, root) = setup_db();
+    let (base_url, handle) = spawn_todoist_mock_expect_bodies(vec![
+        ("POST", "/tasks/abc/reopen", serde_json::json!({}), r#"{}"#),
+        (
+            "GET",
+            "/tasks/abc",
+            serde_json::Value::Null,
+            r#"{"id":"abc","content":"Call Alice","description":"","priority":1,"labels":[]}"#,
+        ),
+    ]);
+    let output = run_with_todoist_env(
+        &[
+            "--db",
+            root.to_str().unwrap(),
+            "--output-format",
+            "json",
+            "task",
+            "reopen",
+            "todoist:abc",
+        ],
+        &base_url,
+    );
+    handle.join().unwrap();
+    assert!(output.status.success());
+    let v: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(v["changed"], true);
+    assert_eq!(v["action"], "reopen");
+    assert_eq!(v["item"]["display_id"], "todoist:abc");
+}
+
+#[cfg(feature = "todoist")]
+#[test]
 fn test_task_done_todoist_dry_run_does_not_call_mock_api() {
     let (_dir, root) = setup_db();
     let (base_url, handle) = spawn_todoist_mock(vec![]);

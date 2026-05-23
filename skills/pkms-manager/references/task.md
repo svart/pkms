@@ -46,6 +46,11 @@ pkms task show todoist:<remote-id>
 pkms task add --source todoist "Buy milk tomorrow"
 pkms task add --source todoist --title "Call Alice" --due 2026-05-24 --label phone --priority B
 pkms task done todoist:<remote-id>
+pkms task postpone todoist:<remote-id> --to tomorrow
+pkms task schedule todoist:<remote-id> --due none
+pkms task update todoist:<remote-id> --title "Call Alice" --project Work --priority A
+pkms task delete todoist:<remote-id> --dry-run
+pkms task reopen todoist:<remote-id>
 ```
 
 Use stable `todoist:<remote-id>` IDs. Do not invent view-local Todoist IDs.
@@ -90,3 +95,10 @@ Use `--dry-run` before completing Todoist tasks when operating on a real token:
 ```bash
 pkms task done todoist:<remote-id> --dry-run
 ```
+
+Use stable `todoist:<remote-id>` ids for Todoist mutations. `task postpone`
+accepts `--to tomorrow` or `--to YYYY-MM-DD`; `task schedule` accepts
+`--due tomorrow`, `--due YYYY-MM-DD`, or `--due none`; `task update` can change
+title, project, priority, labels, and description. Always use
+`task delete ... --dry-run` before deleting real Todoist tasks. `task reopen`
+reopens completed Todoist tasks.
