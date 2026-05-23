@@ -154,8 +154,8 @@ pkms task done todoist:<remote-id> --dry-run
 Todoist tasks are fetched only when the source set includes Todoist. Local
 commands such as `pkms task list source:pkms` do not make Todoist requests.
 
-Set the token in the environment. Do not store the token in notes or command
-history:
+Set the token in the environment when possible. Environment variables take
+precedence over config values and avoid storing the secret in a dotfile:
 
 ```bash
 export TODOIST_API_TOKEN=...
@@ -166,9 +166,13 @@ Optional config:
 ```toml
 [todoist]
 enabled = false
+token = "..." # optional; prefer TODOIST_API_TOKEN when practical
 token_env = "TODOIST_API_TOKEN"
 default_filter = "today | overdue"
 ```
+
+If `token` is set in config, keep `~/.config/pkms.toml` private and do not check
+it into git. `pkms info` does not print the token.
 
 `todoist.filter:` uses Todoist's server-side filter endpoint. Pagination is
 handled automatically.

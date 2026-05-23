@@ -35,6 +35,7 @@ pub struct AgendaConfig {
 pub struct TodoistConfig {
     #[serde(default)]
     pub enabled: bool,
+    pub token: Option<String>,
     pub token_env: Option<String>,
     pub default_filter: Option<String>,
 }
@@ -155,13 +156,26 @@ impl ResolvedConfig {
 
     pub fn todoist_token(&self) -> Result<String> {
         let env_name = self.todoist_token_env();
-        let token = std::env::var(env_name)
-            .map_err(|_| anyhow::anyhow!("Todoist token env var {env_name} is not set"))?;
-        let token = token.trim();
-        if token.is_empty() {
-            anyhow::bail!("Todoist token env var {env_name} is empty");
+        if let Ok(token) = std::env::var(env_name) {
+            let token = token.trim();
+            if !token.is_empty() {
+                return Ok(token.to_string());
+            }
         }
-        Ok(token.to_string())
+
+        if let Some(token) = self
+            .todoist
+            .as_ref()
+            .and_then(|todoist| todoist.token.as_deref())
+            .map(str::trim)
+            .filter(|token| !token.is_empty())
+        {
+            return Ok(token.to_string());
+        }
+
+        anyhow::bail!(
+            "Todoist token is not configured. Set env var {env_name} or [todoist].token in config"
+        )
     }
 
     pub fn todoist_api_base_url(&self) -> String {
@@ -227,6 +241,7 @@ pub fn generate_default_config(db_root: Option<&std::path::Path>) -> String {
 # Todoist is disabled by default. Prefer storing the token in the environment.
 # [todoist]
 # enabled = false
+# token = "..." # optional; env var below takes precedence
 # token_env = "TODOIST_API_TOKEN"
 # default_filter = "today | overdue"
 "#,
@@ -368,6 +383,7 @@ ignore_patterns = [".attach"]
 
 [todoist]
 enabled = true
+token = "config-token"
 token_env = "PKMS_TEST_TODOIST_TOKEN"
 default_filter = "today | overdue"
 "#;
@@ -377,6 +393,7 @@ default_filter = "today | overdue"
         assert_eq!(config.ignore_patterns, Some(vec![".attach".to_string()]));
         let todoist = config.todoist.unwrap();
         assert!(todoist.enabled);
+        assert_eq!(todoist.token.as_deref(), Some("config-token"));
         assert_eq!(
             todoist.token_env.as_deref(),
             Some("PKMS_TEST_TODOIST_TOKEN")
@@ -409,11 +426,30 @@ default_filter = "today | overdue"
             agenda: None,
             todoist: Some(TodoistConfig {
                 enabled: true,
+                token: None,
                 token_env: Some("PKMS_TEST_MISSING_TODOIST_TOKEN".to_string()),
                 default_filter: None,
             }),
         };
         let error = config.todoist_token().unwrap_err().to_string();
         assert!(error.contains("PKMS_TEST_MISSING_TODOIST_TOKEN"));
+    }
+
+    #[test]
+    fn test_todoist_token_can_come_from_config() {
+        let config = ResolvedConfig {
+            db_root: PathBuf::from("/test/root"),
+            new_notes_dir: None,
+            ignore_patterns: None,
+            columns: None,
+            agenda: None,
+            todoist: Some(TodoistConfig {
+                enabled: true,
+                token: Some(" config-token ".to_string()),
+                token_env: Some("PKMS_TEST_MISSING_TODOIST_TOKEN".to_string()),
+                default_filter: None,
+            }),
+        };
+        assert_eq!(config.todoist_token().unwrap(), "config-token");
     }
 }
