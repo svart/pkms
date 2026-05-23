@@ -432,6 +432,16 @@ pub enum TaskCommand {
     Done(TaskDoneArgs),
     #[command(about = "Add a task to an external source")]
     Add(TaskAddArgs),
+    #[command(about = "Postpone a Todoist task")]
+    Postpone(TaskPostponeArgs),
+    #[command(about = "Schedule or unschedule a Todoist task")]
+    Schedule(TaskScheduleArgs),
+    #[command(about = "Update a Todoist task")]
+    Update(TaskUpdateArgs),
+    #[command(about = "Delete a Todoist task")]
+    Delete(TaskDeleteArgs),
+    #[command(about = "Reopen a Todoist task")]
+    Reopen(TaskTargetArgs),
 }
 
 #[derive(Debug, Args)]
@@ -560,6 +570,58 @@ pub struct TaskAddArgs {
     pub description: Option<String>,
     #[arg(help = "Task text")]
     pub text: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct TaskPostponeArgs {
+    #[arg(help = "Task ID: todoist:<remote-id>")]
+    pub id: String,
+    #[arg(
+        long,
+        value_name = "DATE",
+        help = "New due date: tomorrow or YYYY-MM-DD"
+    )]
+    pub to: String,
+}
+
+#[derive(Debug, Args)]
+pub struct TaskScheduleArgs {
+    #[arg(help = "Task ID: todoist:<remote-id>")]
+    pub id: String,
+    #[arg(
+        long,
+        value_name = "DATE",
+        help = "New due date: tomorrow, YYYY-MM-DD, or none"
+    )]
+    pub due: String,
+}
+
+#[derive(Debug, Args)]
+pub struct TaskUpdateArgs {
+    #[arg(help = "Task ID: todoist:<remote-id>")]
+    pub id: String,
+    #[arg(long, value_name = "TITLE", help = "New task title")]
+    pub title: Option<String>,
+    #[arg(
+        long,
+        value_name = "PROJECT",
+        help = "Todoist project id or exact name"
+    )]
+    pub project: Option<String>,
+    #[arg(long, value_name = "PRIO", help = "Priority: A, B, or C")]
+    pub priority: Option<String>,
+    #[arg(long, value_name = "LABEL", help = "Replacement label name")]
+    pub label: Vec<String>,
+    #[arg(long, value_name = "TEXT", help = "New task description")]
+    pub description: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct TaskDeleteArgs {
+    #[arg(help = "Task ID: todoist:<remote-id>")]
+    pub id: String,
+    #[arg(long, help = "Print the planned deletion without calling Todoist")]
+    pub dry_run: bool,
 }
 
 #[derive(Debug, Args)]

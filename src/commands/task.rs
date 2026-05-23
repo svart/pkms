@@ -1,7 +1,7 @@
 use crate::cli::{
-    OutputFormat, TaskAddArgs, TaskAgendaArgs, TaskCommand, TaskDoneArgs, TaskListArgs,
-    TaskMetadataArgs, TaskOpenArgs, TaskShortcutArgs, TaskStateArgs, TaskTargetArgs,
-    TaskUpcomingArgs,
+    OutputFormat, TaskAddArgs, TaskAgendaArgs, TaskCommand, TaskDeleteArgs, TaskDoneArgs,
+    TaskListArgs, TaskMetadataArgs, TaskOpenArgs, TaskPostponeArgs, TaskScheduleArgs,
+    TaskShortcutArgs, TaskStateArgs, TaskTargetArgs, TaskUpcomingArgs, TaskUpdateArgs,
 };
 use crate::commands::open::OpenOptions;
 use crate::commands::show::{HeadingTarget, ShowOptions};
@@ -47,6 +47,11 @@ pub fn run(config: &ResolvedConfig, ctx: &OutputContext, command: &TaskCommand) 
         TaskCommand::State(args) => run_state(config, ctx, args),
         TaskCommand::Done(args) => run_done(config, ctx, args),
         TaskCommand::Add(args) => run_add(config, ctx, args),
+        TaskCommand::Postpone(args) => run_postpone(config, ctx, args),
+        TaskCommand::Schedule(args) => run_schedule(config, ctx, args),
+        TaskCommand::Update(args) => run_update(config, ctx, args),
+        TaskCommand::Delete(args) => run_delete(config, ctx, args),
+        TaskCommand::Reopen(args) => run_reopen(config, ctx, args),
     }
 }
 
@@ -510,6 +515,67 @@ fn run_add(config: &ResolvedConfig, ctx: &OutputContext, args: &TaskAddArgs) -> 
     add_todoist_task(config, ctx, args)
 }
 
+fn run_postpone(
+    config: &ResolvedConfig,
+    ctx: &OutputContext,
+    args: &TaskPostponeArgs,
+) -> Result<()> {
+    let id = todoist_only_id(&args.id)?;
+    mutate_todoist_task(
+        config,
+        ctx,
+        &id,
+        "postpone",
+        serde_json::json!({ "due_date": parse_mutation_due_date(&args.to)? }),
+    )
+}
+
+fn run_schedule(
+    config: &ResolvedConfig,
+    ctx: &OutputContext,
+    args: &TaskScheduleArgs,
+) -> Result<()> {
+    let id = todoist_only_id(&args.id)?;
+    let due = if args.due.eq_ignore_ascii_case("none") {
+        serde_json::Value::Null
+    } else {
+        serde_json::Value::String(parse_mutation_due_date(&args.due)?)
+    };
+    mutate_todoist_task(
+        config,
+        ctx,
+        &id,
+        if due.is_null() {
+            "unschedule"
+        } else {
+            "schedule"
+        },
+        serde_json::json!({ "due_date": due }),
+    )
+}
+
+fn run_update(config: &ResolvedConfig, ctx: &OutputContext, args: &TaskUpdateArgs) -> Result<()> {
+    let id = todoist_only_id(&args.id)?;
+    update_todoist_task(config, ctx, &id, args)
+}
+
+fn run_delete(config: &ResolvedConfig, ctx: &OutputContext, args: &TaskDeleteArgs) -> Result<()> {
+    let id = todoist_only_id(&args.id)?;
+    delete_todoist_task(config, ctx, &id, args.dry_run)
+}
+
+fn run_reopen(config: &ResolvedConfig, ctx: &OutputContext, args: &TaskTargetArgs) -> Result<()> {
+    let id = todoist_only_id(&args.id)?;
+    reopen_todoist_task(config, ctx, &id)
+}
+
+fn todoist_only_id(id: &str) -> Result<String> {
+    let TaskId::Todoist(id) = id.parse::<TaskId>()? else {
+        bail!("This task command currently supports Todoist task ids only.");
+    };
+    Ok(id)
+}
+
 fn set_pkms_task_state(
     config: &ResolvedConfig,
     ctx: &OutputContext,
@@ -762,6 +828,236 @@ fn print_add_output(ctx: &OutputContext, item: TaskItem) -> Result<()> {
 }
 
 #[cfg(feature = "todoist")]
+fn mutate_todoist_task(
+    config: &ResolvedConfig,
+    ctx: &OutputContext,
+    id: &str,
+    action: &'static str,
+    request: serde_json::Value,
+) -> Result<()> {
+    let token = crate::tasks::todoist::ensure_enabled(config)?;
+    let client =
+        crate::tasks::todoist::TodoistClient::with_base_url(config.todoist_api_base_url(), token);
+    client.update_task(id, &request)?;
+    let task = client.get_task(id)?;
+    let metadata = todoist_metadata_for_task(&client, &task)?;
+    print_mutation_output(
+        ctx,
+        action,
+        crate::tasks::todoist::task_to_item_with_metadata(task, metadata.as_ref()),
+    )
+}
+
+#[cfg(not(feature = "todoist"))]
+fn mutate_todoist_task(
+    _config: &ResolvedConfig,
+    _ctx: &OutputContext,
+    _id: &str,
+    _action: &'static str,
+    _request: serde_json::Value,
+) -> Result<()> {
+    bail!("Todoist support is not available in this build. Rebuild with --features todoist.")
+}
+
+#[cfg(feature = "todoist")]
+fn update_todoist_task(
+    config: &ResolvedConfig,
+    ctx: &OutputContext,
+    id: &str,
+    args: &TaskUpdateArgs,
+) -> Result<()> {
+    let priority = args
+        .priority
+        .as_deref()
+        .map(todoist_create_priority)
+        .transpose()?;
+    let token = crate::tasks::todoist::ensure_enabled(config)?;
+    let client =
+        crate::tasks::todoist::TodoistClient::with_base_url(config.todoist_api_base_url(), token);
+    let metadata = crate::tasks::todoist::TodoistMetadata::new(client.list_projects()?);
+    let mut request = serde_json::Map::new();
+    if let Some(title) = args
+        .title
+        .as_deref()
+        .filter(|title| !title.trim().is_empty())
+    {
+        request.insert(
+            "content".to_string(),
+            serde_json::Value::String(title.to_string()),
+        );
+    }
+    if let Some(project) = args.project.as_deref() {
+        request.insert(
+            "project_id".to_string(),
+            serde_json::Value::String(metadata.resolve_project_id(project)?),
+        );
+    }
+    if let Some(priority) = priority {
+        request.insert(
+            "priority".to_string(),
+            serde_json::Value::Number(priority.into()),
+        );
+    }
+    if !args.label.is_empty() {
+        request.insert(
+            "labels".to_string(),
+            serde_json::Value::Array(
+                args.label
+                    .iter()
+                    .map(|label| serde_json::Value::String(label.clone()))
+                    .collect(),
+            ),
+        );
+    }
+    if let Some(description) = args.description.as_ref() {
+        request.insert(
+            "description".to_string(),
+            serde_json::Value::String(description.clone()),
+        );
+    }
+    if request.is_empty() {
+        bail!(
+            "No Todoist update fields provided. Use --title, --project, --priority, --label, or --description."
+        );
+    }
+
+    client.update_task(id, &serde_json::Value::Object(request))?;
+    let task = client.get_task(id)?;
+    print_mutation_output(
+        ctx,
+        "update",
+        crate::tasks::todoist::task_to_item_with_metadata(task, Some(&metadata)),
+    )
+}
+
+#[cfg(not(feature = "todoist"))]
+fn update_todoist_task(
+    _config: &ResolvedConfig,
+    _ctx: &OutputContext,
+    _id: &str,
+    _args: &TaskUpdateArgs,
+) -> Result<()> {
+    bail!("Todoist support is not available in this build. Rebuild with --features todoist.")
+}
+
+#[cfg(feature = "todoist")]
+fn delete_todoist_task(
+    config: &ResolvedConfig,
+    ctx: &OutputContext,
+    id: &str,
+    dry_run: bool,
+) -> Result<()> {
+    #[derive(Serialize)]
+    struct DeleteOutput<'a> {
+        source: &'static str,
+        id: String,
+        remote_id: &'a str,
+        deleted: bool,
+        dry_run: bool,
+    }
+
+    if !dry_run {
+        let token = crate::tasks::todoist::ensure_enabled(config)?;
+        let client = crate::tasks::todoist::TodoistClient::with_base_url(
+            config.todoist_api_base_url(),
+            token,
+        );
+        client.delete_task(id)?;
+    }
+
+    let output = DeleteOutput {
+        source: "todoist",
+        id: format!("todoist:{id}"),
+        remote_id: id,
+        deleted: !dry_run,
+        dry_run,
+    };
+    match ctx.format {
+        OutputFormat::Text => {
+            if dry_run {
+                println!("Would delete Todoist task todoist:{id}");
+            } else {
+                println!("Deleted Todoist task todoist:{id}");
+            }
+            Ok(())
+        }
+        OutputFormat::Json => ctx.print_json(&output),
+        OutputFormat::Ndjson => ctx.print_ndjson(&[output]),
+    }
+}
+
+#[cfg(not(feature = "todoist"))]
+fn delete_todoist_task(
+    _config: &ResolvedConfig,
+    _ctx: &OutputContext,
+    _id: &str,
+    _dry_run: bool,
+) -> Result<()> {
+    bail!("Todoist support is not available in this build. Rebuild with --features todoist.")
+}
+
+#[cfg(feature = "todoist")]
+fn reopen_todoist_task(config: &ResolvedConfig, ctx: &OutputContext, id: &str) -> Result<()> {
+    let token = crate::tasks::todoist::ensure_enabled(config)?;
+    let client =
+        crate::tasks::todoist::TodoistClient::with_base_url(config.todoist_api_base_url(), token);
+    client.reopen_task(id)?;
+    let task = client.get_task(id)?;
+    let metadata = todoist_metadata_for_task(&client, &task)?;
+    print_mutation_output(
+        ctx,
+        "reopen",
+        crate::tasks::todoist::task_to_item_with_metadata(task, metadata.as_ref()),
+    )
+}
+
+#[cfg(not(feature = "todoist"))]
+fn reopen_todoist_task(_config: &ResolvedConfig, _ctx: &OutputContext, _id: &str) -> Result<()> {
+    bail!("Todoist support is not available in this build. Rebuild with --features todoist.")
+}
+
+#[cfg(feature = "todoist")]
+fn todoist_metadata_for_task(
+    client: &crate::tasks::todoist::TodoistClient,
+    task: &crate::tasks::todoist::TodoistTask,
+) -> Result<Option<crate::tasks::todoist::TodoistMetadata>> {
+    if task.project_id.is_some() {
+        Ok(Some(crate::tasks::todoist::TodoistMetadata::new(
+            client.list_projects()?,
+        )))
+    } else {
+        Ok(None)
+    }
+}
+
+#[cfg(feature = "todoist")]
+fn print_mutation_output(ctx: &OutputContext, action: &'static str, item: TaskItem) -> Result<()> {
+    #[derive(Serialize)]
+    struct MutationOutput {
+        changed: bool,
+        action: &'static str,
+        item: TaskItem,
+    }
+
+    let output = MutationOutput {
+        changed: true,
+        action,
+        item,
+    };
+    match ctx.format {
+        OutputFormat::Text => {
+            println!(
+                "Changed Todoist task: {} (action {}; id {})",
+                output.item.title, action, output.item.display_id
+            );
+            Ok(())
+        }
+        OutputFormat::Json => ctx.print_json(&output),
+        OutputFormat::Ndjson => ctx.print_ndjson(&[output]),
+    }
+}
+
+#[cfg(feature = "todoist")]
 fn todoist_created_task_id(response: &serde_json::Value) -> Result<String> {
     response
         .get("id")
@@ -804,6 +1100,17 @@ fn validate_date_arg(name: &str, value: Option<&str>) -> Result<Option<String>> 
                 .ok_or_else(|| anyhow::anyhow!("Invalid {name} date '{value}'. Use YYYY-MM-DD."))
         })
         .transpose()
+}
+
+fn parse_mutation_due_date(value: &str) -> Result<String> {
+    if value.eq_ignore_ascii_case("tomorrow") {
+        return Ok((Local::now().date_naive() + chrono::Duration::days(1))
+            .format("%Y-%m-%d")
+            .to_string());
+    }
+    crate::input::parse_date(Some(value))
+        .map(|date| date.format("%Y-%m-%d").to_string())
+        .ok_or_else(|| anyhow::anyhow!("Invalid due date '{value}'. Use tomorrow or YYYY-MM-DD."))
 }
 
 #[cfg(feature = "todoist")]
