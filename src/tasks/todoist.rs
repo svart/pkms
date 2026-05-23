@@ -50,6 +50,23 @@ struct QuickAddRequest<'a> {
     meta: bool,
 }
 
+#[derive(Debug, Serialize)]
+pub struct TodoistCreateTaskRequest {
+    pub content: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub project_id: Option<String>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub labels: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub priority: Option<u8>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub due_date: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub deadline_date: Option<String>,
+}
+
 #[derive(Debug, Deserialize)]
 struct Paginated<T> {
     results: Vec<T>,
@@ -83,6 +100,10 @@ impl TodoistClient {
 
     pub fn quick_add(&self, text: &str) -> Result<serde_json::Value> {
         self.post_json("/tasks/quick", &QuickAddRequest { text, meta: false })
+    }
+
+    pub fn create_task(&self, request: &TodoistCreateTaskRequest) -> Result<serde_json::Value> {
+        self.post_json("/tasks", request)
     }
 
     pub fn close_task(&self, id: &str) -> Result<()> {

@@ -532,8 +532,24 @@ pub struct TaskAddArgs {
     pub source: String,
     #[arg(long, value_name = "PROJECT", help = "External project name")]
     pub project: Option<String>,
+    #[arg(long, value_name = "TITLE", help = "Structured task title")]
+    pub title: Option<String>,
+    #[arg(long, value_name = "DATE", help = "Structured due date (YYYY-MM-DD)")]
+    pub due: Option<String>,
+    #[arg(
+        long,
+        value_name = "DATE",
+        help = "Structured deadline date (YYYY-MM-DD)"
+    )]
+    pub deadline: Option<String>,
+    #[arg(long, value_name = "LABEL", help = "Structured label name")]
+    pub label: Vec<String>,
+    #[arg(long, value_name = "PRIO", help = "Structured priority: A, B, or C")]
+    pub priority: Option<String>,
+    #[arg(long, value_name = "TEXT", help = "Structured task description")]
+    pub description: Option<String>,
     #[arg(help = "Task text")]
-    pub text: String,
+    pub text: Option<String>,
 }
 
 #[derive(Debug, Args)]

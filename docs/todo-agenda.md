@@ -157,6 +157,7 @@ pkms task list source:todoist 'todoist.filter:today | overdue'
 pkms task show todoist:<remote-id>
 pkms task add --source todoist "Buy milk tomorrow"
 pkms task add --source todoist --project Inbox "Buy milk tomorrow"
+pkms task add --source todoist --title "Call Alice" --due 2026-05-24 --label phone --priority B
 pkms task done todoist:<remote-id>
 pkms task done todoist:<remote-id> --dry-run
 ```
@@ -187,6 +188,33 @@ Use the stable shortcut commands for common assistant workflows:
 
 `task inbox` defaults to Todoist because PKMS does not yet define a local inbox
 convention.
+
+Todoist task creation supports two modes. Positional text uses Todoist Quick Add
+and lets Todoist parse natural language, labels, priorities, and projects:
+
+```bash
+pkms task add --source todoist "Buy milk tomorrow #Inbox @errand p1"
+```
+
+Structured creation uses Todoist API fields and is the safer mode for assistant
+workflows:
+
+```bash
+pkms task add --source todoist \
+  --title "Call Alice" \
+  --due 2026-05-24 \
+  --deadline 2026-05-30 \
+  --project inbox \
+  --label phone \
+  --label migration \
+  --priority B \
+  --description "Discuss migration plan"
+```
+
+Structured `--due` and `--deadline` values must be `YYYY-MM-DD`. Priorities use
+the source-neutral `A`, `B`, or `C` convention. Multiple `--label` flags are
+allowed. `--project` is sent as Todoist `project_id`; name resolution is planned
+separately.
 
 Set the token in the environment when possible. Environment variables take
 precedence over config values and avoid storing the secret in a dotfile:
