@@ -372,7 +372,7 @@ fn run_add(config: &ResolvedConfig, ctx: &OutputContext, args: &TaskAddArgs) -> 
     if !args.source.eq_ignore_ascii_case("todoist") {
         bail!("PKMS task creation is not supported");
     }
-    quick_add_todoist_task(config, ctx, args)
+    add_todoist_task(config, ctx, args)
 }
 
 fn set_pkms_task_state(
@@ -502,11 +502,94 @@ fn print_state_change(ctx: &OutputContext, output: &TaskStateChangeOutput) -> Re
 }
 
 #[cfg(feature = "todoist")]
+fn add_todoist_task(
+    config: &ResolvedConfig,
+    ctx: &OutputContext,
+    args: &TaskAddArgs,
+) -> Result<()> {
+    if is_structured_add(args) {
+        return create_structured_todoist_task(config, ctx, args);
+    }
+    quick_add_todoist_task(config, ctx, args)
+}
+
+#[cfg(not(feature = "todoist"))]
+fn add_todoist_task(
+    _config: &ResolvedConfig,
+    _ctx: &OutputContext,
+    _args: &TaskAddArgs,
+) -> Result<()> {
+    bail!("Todoist support is not available in this build. Rebuild with --features todoist.")
+}
+
+#[cfg(feature = "todoist")]
+fn is_structured_add(args: &TaskAddArgs) -> bool {
+    args.title.is_some()
+        || args.due.is_some()
+        || args.deadline.is_some()
+        || !args.label.is_empty()
+        || args.priority.is_some()
+        || args.description.is_some()
+}
+
+#[cfg(feature = "todoist")]
+fn create_structured_todoist_task(
+    config: &ResolvedConfig,
+    ctx: &OutputContext,
+    args: &TaskAddArgs,
+) -> Result<()> {
+    if args.text.is_some() {
+        bail!("Structured Todoist task creation uses --title; omit positional quick-add text.");
+    }
+    let title = args
+        .title
+        .as_deref()
+        .filter(|title| !title.trim().is_empty())
+        .ok_or_else(|| anyhow::anyhow!("Structured Todoist task creation requires --title"))?;
+    let due_date = validate_date_arg("due", args.due.as_deref())?;
+    let deadline_date = validate_date_arg("deadline", args.deadline.as_deref())?;
+    let request = crate::tasks::todoist::TodoistCreateTaskRequest {
+        content: title.to_string(),
+        description: args.description.clone(),
+        project_id: args.project.clone(),
+        labels: args.label.clone(),
+        priority: args
+            .priority
+            .as_deref()
+            .map(todoist_create_priority)
+            .transpose()?,
+        due_date,
+        deadline_date,
+    };
+
+    let token = crate::tasks::todoist::ensure_enabled(config)?;
+    let client =
+        crate::tasks::todoist::TodoistClient::with_base_url(config.todoist_api_base_url(), token);
+    let response = client.create_task(&request)?;
+    print_add_output(ctx, response)
+}
+
+#[cfg(feature = "todoist")]
 fn quick_add_todoist_task(
     config: &ResolvedConfig,
     ctx: &OutputContext,
     args: &TaskAddArgs,
 ) -> Result<()> {
+    let text = args
+        .text
+        .as_deref()
+        .filter(|text| !text.trim().is_empty())
+        .ok_or_else(|| anyhow::anyhow!("Todoist Quick Add requires task text or --title"))?;
+    let token = crate::tasks::todoist::ensure_enabled(config)?;
+    let client =
+        crate::tasks::todoist::TodoistClient::with_base_url(config.todoist_api_base_url(), token);
+    let text = quick_add_text(text, args.project.as_deref());
+    let response = client.quick_add(&text)?;
+    print_add_output(ctx, response)
+}
+
+#[cfg(feature = "todoist")]
+fn print_add_output(ctx: &OutputContext, response: serde_json::Value) -> Result<()> {
     #[derive(Serialize)]
     struct AddOutput {
         source: &'static str,
@@ -514,18 +597,12 @@ fn quick_add_todoist_task(
         created: bool,
     }
 
-    let token = crate::tasks::todoist::ensure_enabled(config)?;
-    let client =
-        crate::tasks::todoist::TodoistClient::with_base_url(config.todoist_api_base_url(), token);
-    let text = quick_add_text(&args.text, args.project.as_deref());
-    let response = client.quick_add(&text)?;
-    let remote_id = response
-        .get("id")
-        .and_then(serde_json::Value::as_str)
-        .map(str::to_string);
     let output = AddOutput {
         source: "todoist",
-        remote_id,
+        remote_id: response
+            .get("id")
+            .and_then(serde_json::Value::as_str)
+            .map(str::to_string),
         created: true,
     };
     match ctx.format {
@@ -542,13 +619,25 @@ fn quick_add_todoist_task(
     }
 }
 
-#[cfg(not(feature = "todoist"))]
-fn quick_add_todoist_task(
-    _config: &ResolvedConfig,
-    _ctx: &OutputContext,
-    _args: &TaskAddArgs,
-) -> Result<()> {
-    bail!("Todoist support is not available in this build. Rebuild with --features todoist.")
+#[cfg(feature = "todoist")]
+fn validate_date_arg(name: &str, value: Option<&str>) -> Result<Option<String>> {
+    value
+        .map(|value| {
+            crate::input::parse_date(Some(value))
+                .map(|date| date.format("%Y-%m-%d").to_string())
+                .ok_or_else(|| anyhow::anyhow!("Invalid {name} date '{value}'. Use YYYY-MM-DD."))
+        })
+        .transpose()
+}
+
+#[cfg(feature = "todoist")]
+fn todoist_create_priority(value: &str) -> Result<u8> {
+    match value.to_ascii_uppercase().as_str() {
+        "A" => Ok(4),
+        "B" => Ok(3),
+        "C" => Ok(2),
+        _ => bail!("Invalid priority '{value}'. Use A, B, or C."),
+    }
 }
 
 #[cfg(feature = "todoist")]

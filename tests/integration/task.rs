@@ -979,6 +979,122 @@ fn test_task_add_todoist_quick_add_uses_mock_api() {
 
 #[cfg(feature = "todoist")]
 #[test]
+fn test_task_add_todoist_structured_uses_field_api() {
+    let (_dir, root) = setup_db();
+    let (base_url, handle) = spawn_todoist_mock_expect_bodies(vec![(
+        "POST",
+        "/tasks",
+        serde_json::json!({
+            "content": "Call Alice",
+            "description": "Discuss migration plan",
+            "project_id": "inbox",
+            "labels": ["phone", "migration"],
+            "priority": 3,
+            "due_date": "2026-05-24",
+            "deadline_date": "2026-05-30"
+        }),
+        r#"{"id":"abc","content":"Call Alice"}"#,
+    )]);
+    let output = run_with_todoist_env(
+        &[
+            "--db",
+            root.to_str().unwrap(),
+            "--output-format",
+            "json",
+            "task",
+            "add",
+            "--source",
+            "todoist",
+            "--title",
+            "Call Alice",
+            "--due",
+            "2026-05-24",
+            "--deadline",
+            "2026-05-30",
+            "--project",
+            "inbox",
+            "--label",
+            "phone",
+            "--label",
+            "migration",
+            "--priority",
+            "B",
+            "--description",
+            "Discuss migration plan",
+        ],
+        &base_url,
+    );
+    handle.join().unwrap();
+    assert!(
+        output.status.success(),
+        "stdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let v: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(v["source"], "todoist");
+    assert_eq!(v["remote_id"], "abc");
+    assert_eq!(v["created"], true);
+}
+
+#[cfg(feature = "todoist")]
+#[test]
+fn test_task_add_todoist_invalid_structured_priority_fails_before_api() {
+    let (_dir, root) = setup_db();
+    let (base_url, handle) = spawn_todoist_mock(vec![]);
+    let output = run_with_todoist_env(
+        &[
+            "--db",
+            root.to_str().unwrap(),
+            "--output-format",
+            "json",
+            "task",
+            "add",
+            "--source",
+            "todoist",
+            "--title",
+            "Call Alice",
+            "--priority",
+            "urgent",
+        ],
+        &base_url,
+    );
+    handle.join().unwrap();
+    assert!(!output.status.success());
+    let v: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert!(v["error"].as_str().unwrap().contains("Invalid priority"));
+}
+
+#[cfg(feature = "todoist")]
+#[test]
+fn test_task_add_todoist_invalid_structured_date_fails_before_api() {
+    let (_dir, root) = setup_db();
+    let (base_url, handle) = spawn_todoist_mock(vec![]);
+    let output = run_with_todoist_env(
+        &[
+            "--db",
+            root.to_str().unwrap(),
+            "--output-format",
+            "json",
+            "task",
+            "add",
+            "--source",
+            "todoist",
+            "--title",
+            "Call Alice",
+            "--due",
+            "tomorrow",
+        ],
+        &base_url,
+    );
+    handle.join().unwrap();
+    assert!(!output.status.success());
+    let v: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert!(v["error"].as_str().unwrap().contains("Invalid due date"));
+}
+
+#[cfg(feature = "todoist")]
+#[test]
 fn test_task_done_todoist_calls_mock_close_endpoint() {
     let (_dir, root) = setup_db();
     let (base_url, handle) = spawn_todoist_mock(vec![("POST", "/tasks/abc/close", "null")]);
@@ -1069,6 +1185,64 @@ fn spawn_todoist_mock(
     responses: Vec<(&'static str, &'static str, &'static str)>,
 ) -> (String, thread::JoinHandle<()>) {
     spawn_todoist_mock_with_token(responses, "test-token")
+}
+
+#[cfg(feature = "todoist")]
+fn spawn_todoist_mock_expect_bodies(
+    responses: Vec<(&'static str, &'static str, serde_json::Value, &'static str)>,
+) -> (String, thread::JoinHandle<()>) {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let base_url = format!("http://{}", listener.local_addr().unwrap());
+    let handle = thread::spawn(move || {
+        for (method, expected_path, expected_body, body) in responses {
+            let (mut stream, _) = listener.accept().unwrap();
+            stream
+                .set_read_timeout(Some(std::time::Duration::from_secs(1)))
+                .unwrap();
+            let mut request_bytes = Vec::new();
+            let mut buffer = [0_u8; 4096];
+            loop {
+                let read = stream.read(&mut buffer).unwrap();
+                request_bytes.extend_from_slice(&buffer[..read]);
+                let request = String::from_utf8_lossy(&request_bytes);
+                if let Some((headers, body)) = request.split_once("\r\n\r\n") {
+                    let content_length = headers
+                        .lines()
+                        .find_map(|line| {
+                            line.to_ascii_lowercase()
+                                .strip_prefix("content-length:")
+                                .and_then(|value| value.trim().parse::<usize>().ok())
+                        })
+                        .unwrap_or(0);
+                    if body.len() >= content_length {
+                        break;
+                    }
+                }
+            }
+            let request = String::from_utf8_lossy(&request_bytes);
+            assert!(
+                request.starts_with(&format!("{method} {expected_path} HTTP/1.1")),
+                "unexpected request: {request}"
+            );
+            assert!(
+                request
+                    .to_ascii_lowercase()
+                    .contains("authorization: bearer test-token")
+            );
+            let (_, request_body) = request
+                .split_once("\r\n\r\n")
+                .expect("expected request body separator");
+            let actual_body: serde_json::Value = serde_json::from_str(request_body).unwrap();
+            assert_eq!(actual_body, expected_body);
+            let response = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                body.len(),
+                body
+            );
+            stream.write_all(response.as_bytes()).unwrap();
+        }
+    });
+    (base_url, handle)
 }
 
 #[cfg(feature = "todoist")]

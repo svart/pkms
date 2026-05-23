@@ -42,6 +42,7 @@ pkms task inbox
 pkms task list source:todoist 'todoist.filter:today | overdue'
 pkms task show todoist:<remote-id>
 pkms task add --source todoist "Buy milk tomorrow"
+pkms task add --source todoist --title "Call Alice" --due 2026-05-24 --label phone --priority B
 pkms task done todoist:<remote-id>
 ```
 
@@ -59,6 +60,18 @@ Prefer stable shortcuts for common assistant requests: `task today`,
 accept `source:pkms`, `source:todoist`, or `source:all`; `task inbox` defaults
 to Todoist and uses the Todoist `#Inbox` filter because PKMS has no local inbox
 convention yet.
+
+Use positional text with `task add --source todoist` for Todoist Quick Add
+natural-language parsing. Use structured creation for deterministic assistant
+tasks:
+
+```bash
+pkms task add --source todoist --title "Call Alice" --due 2026-05-24 --deadline 2026-05-30 --project inbox --label phone --priority B --description "Discuss migration plan"
+```
+
+Structured due and deadline values must be `YYYY-MM-DD`. Priority must be `A`,
+`B`, or `C`. Repeat `--label` for multiple labels. `--project` is sent as a
+Todoist `project_id` until project-name resolution is available.
 
 Use `--dry-run` before completing Todoist tasks when operating on a real token:
 
