@@ -39,6 +39,8 @@ pkms task today source:all
 pkms task overdue source:todoist
 pkms task upcoming --days 7 source:all
 pkms task inbox
+pkms task projects source:todoist
+pkms task labels source:todoist
 pkms task list source:todoist 'todoist.filter:today | overdue'
 pkms task show todoist:<remote-id>
 pkms task add --source todoist "Buy milk tomorrow"
@@ -70,8 +72,13 @@ pkms task add --source todoist --title "Call Alice" --due 2026-05-24 --deadline 
 ```
 
 Structured due and deadline values must be `YYYY-MM-DD`. Priority must be `A`,
-`B`, or `C`. Repeat `--label` for multiple labels. `--project` is sent as a
-Todoist `project_id` until project-name resolution is available.
+`B`, or `C`. Repeat `--label` for multiple labels. `--project` accepts either a
+Todoist project id or an exact project name. If a project name is duplicated
+case-insensitively, use the project id.
+
+Use `task projects source:todoist` and `task labels source:todoist` when you
+need available Todoist metadata. Todoist task output uses a human-readable
+`project` when metadata is available and keeps the raw id in `project_id`.
 
 JSON output from `task add --source todoist` is a creation wrapper with
 `created: true` and the created source-neutral `TaskItem` in `item`. Use

@@ -38,6 +38,7 @@ pub struct TaskItem {
     pub deadline: Option<TaskDate>,
     pub tags: Vec<String>,
     pub project: Option<String>,
+    pub project_id: Option<String>,
     pub note_title: Option<String>,
     pub note_uuid: Option<String>,
     pub path: Option<PathBuf>,

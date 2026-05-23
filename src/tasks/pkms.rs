@@ -30,6 +30,7 @@ pub fn record_to_task_item(config: &ResolvedConfig, record: TaskRecord) -> TaskI
         }),
         tags: combine_tags(&record.filetags, &record.heading_tags),
         project: None,
+        project_id: None,
         note_title: Some(record.title),
         note_uuid: Some(record.uuid),
         path: Some(PathBuf::from(record.path)),

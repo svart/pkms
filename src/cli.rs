@@ -418,6 +418,10 @@ pub enum TaskCommand {
     Upcoming(TaskUpcomingArgs),
     #[command(about = "Show inbox tasks")]
     Inbox(TaskShortcutArgs),
+    #[command(about = "List task projects")]
+    Projects(TaskMetadataArgs),
+    #[command(about = "List task labels")]
+    Labels(TaskMetadataArgs),
     #[command(about = "Show detailed task information")]
     Show(TaskTargetArgs),
     #[command(about = "Open a task in an editor")]
@@ -482,6 +486,12 @@ pub struct TaskUpcomingArgs {
     pub limit: Option<usize>,
     #[command(flatten)]
     pub table: TaskTableArgs,
+}
+
+#[derive(Debug, Args)]
+pub struct TaskMetadataArgs {
+    #[arg(value_name = "FILTER")]
+    pub filters: Vec<String>,
 }
 
 #[derive(Debug, Args)]
