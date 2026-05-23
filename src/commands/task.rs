@@ -60,15 +60,16 @@ fn run_list(config: &ResolvedConfig, ctx: &OutputContext, args: &TaskListArgs) -
 
 fn run_agenda(config: &ResolvedConfig, ctx: &OutputContext, args: &TaskAgendaArgs) -> Result<()> {
     let filters = parse_task_filters(&args.filters)?;
+    let todoist_filters = todoist_agenda_filters(&filters, args);
     if matches!(filters.source, SourceSelection::Todoist) {
-        let mut items = collect_todoist_items(config, &filters)?;
+        let mut items = collect_todoist_items(config, &todoist_filters)?;
         sort_task_items(&mut items, args.sort.as_deref().unwrap_or("priority"));
         return print_task_items(ctx, items, args.limit);
     }
 
     if matches!(filters.source, SourceSelection::All) {
         let mut items = collect_pkms_agenda_items(config, args)?;
-        items.extend(collect_todoist_items(config, &filters)?);
+        items.extend(collect_todoist_items(config, &todoist_filters)?);
         sort_task_items(&mut items, args.sort.as_deref().unwrap_or("priority"));
         return print_task_items(ctx, items, args.limit);
     }
@@ -135,6 +136,31 @@ fn collect_pkms_agenda_items(
         .into_iter()
         .map(|record| record_to_task_item(config, record))
         .collect())
+}
+
+fn todoist_agenda_filters(filters: &TaskFilters, args: &TaskAgendaArgs) -> TaskFilters {
+    let todoist_filter = filters
+        .todoist_filter
+        .clone()
+        .or_else(|| todoist_agenda_filter(args).map(str::to_string));
+    TaskFilters {
+        source: filters.source,
+        todoist_filter,
+    }
+}
+
+fn todoist_agenda_filter(args: &TaskAgendaArgs) -> Option<&'static str> {
+    if args.upcoming {
+        Some("due after: today")
+    } else if args.overdue {
+        Some("overdue")
+    } else if args.today {
+        Some("today")
+    } else if args.week {
+        Some("next 7 days")
+    } else {
+        None
+    }
 }
 
 fn run_show(config: &ResolvedConfig, ctx: &OutputContext, args: &TaskTargetArgs) -> Result<()> {

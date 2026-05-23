@@ -120,6 +120,8 @@ pkms task open p<id>
 pkms task state p<id> WAITING
 pkms task done p<id>
 pkms task list source:todoist
+pkms task agenda --today source:todoist
+pkms task agenda --week source:all
 pkms task show todoist:<remote-id>
 pkms task add --source todoist "Buy milk tomorrow"
 pkms task done todoist:<remote-id>
