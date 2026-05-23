@@ -47,6 +47,7 @@ pkms task list source:todoist 'todoist.filter:today | overdue'
 pkms task show todoist:<remote-id>
 pkms task add --source todoist "Buy milk tomorrow"
 pkms task add --source todoist --title "Call Alice" --due 2026-05-24 --label phone --priority B
+pkms task add --source todoist --title "Call Alice" --note "Project Alpha"
 pkms task done todoist:<remote-id>
 pkms task postpone todoist:<remote-id> --to tomorrow
 pkms task schedule todoist:<remote-id> --due none
@@ -91,6 +92,12 @@ Structured due and deadline values must be `YYYY-MM-DD`. Priority must be `A`,
 `B`, or `C`. Repeat `--label` for multiple labels. `--project` accepts either a
 Todoist project id or an exact project name. If a project name is duplicated
 case-insensitively, use the project id.
+
+Use `--note <uuid-or-title>` when a Todoist task needs durable PKMS context.
+The command appends `pkms:id:<uuid>` to the Todoist description without removing
+user-authored description text. Later `task list source:todoist` and
+`task show todoist:<remote-id>` populate `note_uuid` and `note_title` from that
+marker. Treat this as a privacy boundary: the PKMS UUID is stored in Todoist.
 
 Use `task projects source:todoist` and `task labels source:todoist` when you
 need available Todoist metadata. Todoist task output uses a human-readable

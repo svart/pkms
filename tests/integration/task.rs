@@ -1155,6 +1155,64 @@ fn test_task_show_todoist_uses_stable_remote_id() {
 
 #[cfg(feature = "todoist")]
 #[test]
+fn test_task_show_todoist_detects_pkms_note_marker() {
+    let (_dir, root) = setup_db();
+    let (base_url, handle) = spawn_todoist_mock(vec![(
+        "GET",
+        "/tasks/abc",
+        r#"{"id":"abc","content":"Remote task","description":"User context\n\npkms:id:aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa","priority":2,"labels":["remote"]}"#,
+    )]);
+    let output = run_with_todoist_env(
+        &[
+            "--db",
+            root.to_str().unwrap(),
+            "--output-format",
+            "json",
+            "task",
+            "show",
+            "todoist:abc",
+        ],
+        &base_url,
+    );
+    handle.join().unwrap();
+    assert!(output.status.success());
+    let v: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(v["note_uuid"], "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa");
+    assert_eq!(v["note_title"], "Note A");
+    assert!(v["body"].as_str().unwrap().contains("User context"));
+}
+
+#[cfg(feature = "todoist")]
+#[test]
+fn test_task_list_todoist_detects_pkms_note_marker() {
+    let (_dir, root) = setup_db();
+    let (base_url, handle) = spawn_todoist_mock(vec![(
+        "GET",
+        "/tasks?limit=200",
+        r#"{"results":[{"id":"abc","content":"Remote task","description":"pkms:id:aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa","priority":2,"labels":["remote"]}],"next_cursor":null}"#,
+    )]);
+    let output = run_with_todoist_env(
+        &[
+            "--db",
+            root.to_str().unwrap(),
+            "--output-format",
+            "json",
+            "task",
+            "list",
+            "source:todoist",
+        ],
+        &base_url,
+    );
+    handle.join().unwrap();
+    assert!(output.status.success());
+    let v: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let item = &v["items"][0];
+    assert_eq!(item["note_uuid"], "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa");
+    assert_eq!(item["note_title"], "Note A");
+}
+
+#[cfg(feature = "todoist")]
+#[test]
 fn test_task_add_todoist_quick_add_uses_mock_api() {
     let (_dir, root) = setup_db();
     let (base_url, handle) = spawn_todoist_mock(vec![
@@ -1212,6 +1270,62 @@ fn test_task_add_todoist_quick_add_uses_mock_api() {
     assert_eq!(v["item"]["project"], "Inbox");
     assert_eq!(v["item"]["project_id"], "inbox");
     assert_eq!(v["item"]["url"], "https://todoist.com/showTask?id=abc");
+}
+
+#[cfg(feature = "todoist")]
+#[test]
+fn test_task_add_todoist_note_marker_preserves_description() {
+    let (_dir, root) = setup_db();
+    let (base_url, handle) = spawn_todoist_mock_expect_bodies(vec![
+        (
+            "GET",
+            "/projects?limit=200",
+            serde_json::Value::Null,
+            r#"{"results":[],"next_cursor":null}"#,
+        ),
+        (
+            "POST",
+            "/tasks",
+            serde_json::json!({
+                "content": "Call Alice",
+                "description": "Discuss launch\n\npkms:id:aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa"
+            }),
+            r#"{"id":"abc","content":"Call Alice","description":"Discuss launch\n\npkms:id:aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa","priority":1,"labels":[]}"#,
+        ),
+    ]);
+    let output = run_with_todoist_env(
+        &[
+            "--db",
+            root.to_str().unwrap(),
+            "--output-format",
+            "json",
+            "task",
+            "add",
+            "--source",
+            "todoist",
+            "--title",
+            "Call Alice",
+            "--description",
+            "Discuss launch",
+            "--note",
+            "Note A",
+        ],
+        &base_url,
+    );
+    handle.join().unwrap();
+    assert!(output.status.success());
+    let v: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(
+        v["item"]["note_uuid"],
+        "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa"
+    );
+    assert_eq!(v["item"]["note_title"], "Note A");
+    assert!(
+        v["item"]["body"]
+            .as_str()
+            .unwrap()
+            .contains("Discuss launch")
+    );
 }
 
 #[cfg(feature = "todoist")]
