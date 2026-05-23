@@ -40,7 +40,6 @@ pkms task overdue source:todoist
 pkms task upcoming --days 7 source:all
 pkms task report --today --source all --output-format json
 pkms task plan --today --source all --output-format json
-pkms task clarify --source todoist --output-format json
 pkms task inbox
 pkms task projects source:todoist
 pkms task labels source:todoist
@@ -52,9 +51,6 @@ pkms task add --source todoist --title "Call Alice" --note "Project Alpha"
 pkms task done todoist:<remote-id>
 pkms task postpone todoist:<remote-id> --to tomorrow
 pkms task schedule todoist:<remote-id> --due none
-pkms task update todoist:<remote-id> --title "Call Alice" --project Work --priority A
-pkms task delete todoist:<remote-id> --dry-run
-pkms task reopen todoist:<remote-id>
 ```
 
 Use stable `todoist:<remote-id>` IDs. Do not invent view-local Todoist IDs.
@@ -81,12 +77,6 @@ daily summary or planning context. Prefer these over raw `task list` or
 `upcoming`, `by_source`, and `by_project`. With Todoist and `--today`, report
 commands use a Todoist filter for today, overdue, no-date, and upcoming tasks
 before grouping the returned items locally.
-
-Use `task clarify --source todoist --output-format json` before planning when
-the assistant needs to identify tasks that need date, project, scope, or context.
-It is read-only and returns per-task reason codes: `no_date`, `no_project`,
-`no_context`, `vague_title`, and `stale_inbox`. Use text output for a short
-inbox review and JSON output for automated assistant decisions.
 
 Use positional text with `task add --source todoist` for Todoist Quick Add
 natural-language parsing. Use structured creation for deterministic assistant
@@ -124,7 +114,4 @@ pkms task done todoist:<remote-id> --dry-run
 
 Use stable `todoist:<remote-id>` ids for Todoist mutations. `task postpone`
 accepts `--to tomorrow` or `--to YYYY-MM-DD`; `task schedule` accepts
-`--due tomorrow`, `--due YYYY-MM-DD`, or `--due none`; `task update` can change
-title, project, priority, labels, and description. Always use
-`task delete ... --dry-run` before deleting real Todoist tasks. `task reopen`
-reopens completed Todoist tasks.
+`--due tomorrow`, `--due YYYY-MM-DD`, or `--due none`.
