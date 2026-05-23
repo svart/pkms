@@ -216,6 +216,12 @@ the source-neutral `A`, `B`, or `C` convention. Multiple `--label` flags are
 allowed. `--project` is sent as Todoist `project_id`; name resolution is planned
 separately.
 
+`task add --source todoist --output-format json` returns a wrapper with
+`created: true` and the created source-neutral `TaskItem` under `item`, including
+stable `display_id`, `source_id`, title, description, priority, dates, labels,
+project, and URL when Todoist provides them. Text output stays concise but
+includes the stable id and key planning fields.
+
 Set the token in the environment when possible. Environment variables take
 precedence over config values and avoid storing the secret in a dotfile:
 

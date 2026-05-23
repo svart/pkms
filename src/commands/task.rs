@@ -565,8 +565,8 @@ fn create_structured_todoist_task(
     let token = crate::tasks::todoist::ensure_enabled(config)?;
     let client =
         crate::tasks::todoist::TodoistClient::with_base_url(config.todoist_api_base_url(), token);
-    let response = client.create_task(&request)?;
-    print_add_output(ctx, response)
+    let task = client.create_task(&request)?;
+    print_add_output(ctx, crate::tasks::todoist::task_to_item(task))
 }
 
 #[cfg(feature = "todoist")]
@@ -585,38 +585,65 @@ fn quick_add_todoist_task(
         crate::tasks::todoist::TodoistClient::with_base_url(config.todoist_api_base_url(), token);
     let text = quick_add_text(text, args.project.as_deref());
     let response = client.quick_add(&text)?;
-    print_add_output(ctx, response)
+    let id = todoist_created_task_id(&response)?;
+    let task = client.get_task(&id)?;
+    print_add_output(ctx, crate::tasks::todoist::task_to_item(task))
 }
 
 #[cfg(feature = "todoist")]
-fn print_add_output(ctx: &OutputContext, response: serde_json::Value) -> Result<()> {
+fn print_add_output(ctx: &OutputContext, item: TaskItem) -> Result<()> {
     #[derive(Serialize)]
     struct AddOutput {
-        source: &'static str,
-        remote_id: Option<String>,
         created: bool,
+        item: TaskItem,
     }
 
     let output = AddOutput {
-        source: "todoist",
-        remote_id: response
-            .get("id")
-            .and_then(serde_json::Value::as_str)
-            .map(str::to_string),
         created: true,
+        item,
     };
     match ctx.format {
         OutputFormat::Text => {
-            if let Some(id) = output.remote_id {
-                println!("Created Todoist task: todoist:{id}");
-            } else {
-                println!("Created Todoist task");
-            }
+            print_created_task(&output.item);
             Ok(())
         }
         OutputFormat::Json => ctx.print_json(&output),
         OutputFormat::Ndjson => ctx.print_ndjson(&[output]),
     }
+}
+
+#[cfg(feature = "todoist")]
+fn todoist_created_task_id(response: &serde_json::Value) -> Result<String> {
+    response
+        .get("id")
+        .or_else(|| response.get("task_id"))
+        .or_else(|| response.get("task").and_then(|task| task.get("id")))
+        .and_then(serde_json::Value::as_str)
+        .filter(|id| !id.is_empty())
+        .map(str::to_string)
+        .ok_or_else(|| anyhow::anyhow!("Todoist create response did not include a task id"))
+}
+
+#[cfg(feature = "todoist")]
+fn print_created_task(item: &TaskItem) {
+    let mut details = vec![format!("id {}", item.display_id)];
+    if let Some(date) = effective_date(item) {
+        details.push(format!("date {date}"));
+    }
+    if let Some(priority) = item.priority.as_deref() {
+        details.push(format!("priority {priority}"));
+    }
+    if let Some(project) = item.project.as_deref() {
+        details.push(format!("project {project}"));
+    }
+    if !item.tags.is_empty() {
+        details.push(format!("labels {}", item.tags.join(", ")));
+    }
+    println!(
+        "Created Todoist task: {} ({})",
+        item.title,
+        details.join("; ")
+    );
 }
 
 #[cfg(feature = "todoist")]

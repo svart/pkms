@@ -73,6 +73,11 @@ Structured due and deadline values must be `YYYY-MM-DD`. Priority must be `A`,
 `B`, or `C`. Repeat `--label` for multiple labels. `--project` is sent as a
 Todoist `project_id` until project-name resolution is available.
 
+JSON output from `task add --source todoist` is a creation wrapper with
+`created: true` and the created source-neutral `TaskItem` in `item`. Use
+`item.display_id` for confirmation to the user and `item.source_id` for the raw
+Todoist id.
+
 Use `--dry-run` before completing Todoist tasks when operating on a real token:
 
 ```bash

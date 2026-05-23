@@ -102,7 +102,7 @@ impl TodoistClient {
         self.post_json("/tasks/quick", &QuickAddRequest { text, meta: false })
     }
 
-    pub fn create_task(&self, request: &TodoistCreateTaskRequest) -> Result<serde_json::Value> {
+    pub fn create_task(&self, request: &TodoistCreateTaskRequest) -> Result<TodoistTask> {
         self.post_json("/tasks", request)
     }
 
