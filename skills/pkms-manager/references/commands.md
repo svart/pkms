@@ -77,6 +77,8 @@ pkms task list source:todoist
 pkms task agenda --today source:todoist
 pkms task agenda --week source:all
 pkms task today source:all
+pkms task report --today --source all --output-format json
+pkms task plan --today --source all --output-format json
 pkms task inbox
 pkms task projects source:todoist
 pkms task labels source:todoist

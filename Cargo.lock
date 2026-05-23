@@ -2051,7 +2051,7 @@ checksum = "19f132c84eca552bf34cab8ec81f1c1dcc229b811638f9d283dceabe58c5569e"
 
 [[package]]
 name = "pkms"
-version = "0.56.0"
+version = "0.57.0"
 dependencies = [
  "anyhow",
  "chrono",
