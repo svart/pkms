@@ -8,6 +8,12 @@ use std::process::Command;
 #[cfg(feature = "todoist")]
 use std::thread;
 
+fn org_date(days_from_today: i64) -> String {
+    (chrono::Local::now().date_naive() + chrono::Duration::days(days_from_today))
+        .format("%Y-%m-%d")
+        .to_string()
+}
+
 #[test]
 fn test_task_help_lists_subcommands() {
     let (stdout, stderr, status) = run(&["task", "--help"]);
@@ -112,17 +118,20 @@ fn test_task_agenda_matches_agenda_count_json() {
 #[test]
 fn test_task_today_matches_agenda_today_json() {
     let (_dir, root) = setup_db();
+    let today = org_date(0);
     std::fs::write(
         root.join("roam/common/20260523000000-shortcut-today.org"),
-        r#":PROPERTIES:
+        format!(
+            r#":PROPERTIES:
 :ID:       12121212-1212-4121-8121-121212121212
 :END:
 #+title: Shortcut Today
 #+filetags: :agenda:
 
 * TODO Shortcut today task
-SCHEDULED: <2026-05-23 Sat>
-"#,
+SCHEDULED: <{today}>
+"#
+        ),
     )
     .unwrap();
     let (shortcut, shortcut_status) = run_json(&[
@@ -150,17 +159,20 @@ SCHEDULED: <2026-05-23 Sat>
 #[test]
 fn test_task_today_ndjson() {
     let (_dir, root) = setup_db();
+    let today = org_date(0);
     std::fs::write(
         root.join("roam/common/20260523000003-shortcut-today-ndjson.org"),
-        r#":PROPERTIES:
+        format!(
+            r#":PROPERTIES:
 :ID:       45454545-4545-4454-8454-454545454545
 :END:
 #+title: Shortcut Today Ndjson
 #+filetags: :agenda:
 
 * TODO Shortcut today ndjson task
-SCHEDULED: <2026-05-23 Sat>
-"#,
+SCHEDULED: <{today}>
+"#
+        ),
     )
     .unwrap();
     let (stdout, _stderr, status) = run(&[
@@ -180,19 +192,23 @@ SCHEDULED: <2026-05-23 Sat>
 #[test]
 fn test_task_upcoming_days_filters_pkms_range() {
     let (_dir, root) = setup_db();
+    let tomorrow = org_date(1);
+    let later = org_date(8);
     std::fs::write(
         root.join("roam/common/20260523000001-shortcut-upcoming.org"),
-        r#":PROPERTIES:
+        format!(
+            r#":PROPERTIES:
 :ID:       23232323-2323-4232-8232-232323232323
 :END:
 #+title: Shortcut Upcoming
 #+filetags: :agenda:
 
 * TODO Tomorrow task
-SCHEDULED: <2026-05-24 Sun>
+SCHEDULED: <{tomorrow}>
 * TODO Later task
-SCHEDULED: <2026-05-31 Sun>
-"#,
+SCHEDULED: <{later}>
+"#
+        ),
     )
     .unwrap();
     let (v, status) = run_json(&[
@@ -750,17 +766,20 @@ fn test_task_upcoming_todoist_uses_days_filter() {
 #[test]
 fn test_task_today_all_combines_pkms_and_todoist() {
     let (_dir, root) = setup_db();
+    let today = org_date(0);
     std::fs::write(
         root.join("roam/common/20260523000002-shortcut-all-today.org"),
-        r#":PROPERTIES:
+        format!(
+            r#":PROPERTIES:
 :ID:       34343434-3434-4343-8343-343434343434
 :END:
 #+title: Shortcut All Today
 #+filetags: :agenda:
 
 * TODO Local shortcut today
-SCHEDULED: <2026-05-23 Sat>
-"#,
+SCHEDULED: <{today}>
+"#
+        ),
     )
     .unwrap();
     let (base_url, handle) = spawn_todoist_mock(vec![(
@@ -818,17 +837,20 @@ fn test_task_inbox_defaults_to_todoist_inbox_filter() {
 #[test]
 fn test_task_agenda_all_today_combines_pkms_and_filtered_todoist() {
     let (_dir, root) = setup_db();
+    let today = org_date(0);
     std::fs::write(
         root.join("roam/common/20260523000000-today-task.org"),
-        r#":PROPERTIES:
+        format!(
+            r#":PROPERTIES:
 :ID:       abababab-abab-4aba-abab-abababababab
 :END:
 #+title: Today Task
 #+filetags: :agenda:
 
 * TODO Local today task
-SCHEDULED: <2026-05-23 Sat>
-"#,
+SCHEDULED: <{today}>
+"#
+        ),
     )
     .unwrap();
     let (base_url, handle) = spawn_todoist_mock(vec![(
