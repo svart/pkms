@@ -29,6 +29,8 @@ pub struct TodoistTask {
     pub deadline: Option<TodoistDeadline>,
     #[serde(default)]
     pub url: Option<String>,
+    #[serde(default)]
+    pub created_at: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]

@@ -154,6 +154,7 @@ pkms task overdue source:todoist
 pkms task upcoming --days 7 source:all
 pkms task report --today --source all --output-format json
 pkms task plan --today --source all --output-format json
+pkms task clarify --source todoist --output-format json
 pkms task inbox
 pkms task projects source:todoist
 pkms task labels source:todoist
@@ -209,6 +210,13 @@ records and emit stable JSON with `total`, `sections`, `by_source`, and
 `--upcoming-days N` controls the upcoming section window. With Todoist and
 `--today`, the command uses a Todoist filter covering today, overdue, no-date,
 and next-`N`-days tasks before grouping the returned items locally.
+
+Use `task clarify --source todoist --output-format json` for inbox hygiene and
+pre-planning review. It does not mutate tasks. JSON output returns tasks with
+structured clarification reasons such as `no_date`, `no_project`, `no_context`,
+`vague_title`, and `stale_inbox`. Text output is intentionally short for a quick
+inbox review. The initial stale Inbox threshold is conservative and can be
+overridden with `--stale-days N`.
 
 Todoist task creation supports two modes. Positional text uses Todoist Quick Add
 and lets Todoist parse natural language, labels, priorities, and projects:

@@ -1,6 +1,6 @@
 use crate::cli::{
-    OutputFormat, TaskAddArgs, TaskAgendaArgs, TaskCommand, TaskDeleteArgs, TaskDoneArgs,
-    TaskListArgs, TaskMetadataArgs, TaskOpenArgs, TaskPostponeArgs, TaskReportArgs,
+    OutputFormat, TaskAddArgs, TaskAgendaArgs, TaskClarifyArgs, TaskCommand, TaskDeleteArgs,
+    TaskDoneArgs, TaskListArgs, TaskMetadataArgs, TaskOpenArgs, TaskPostponeArgs, TaskReportArgs,
     TaskScheduleArgs, TaskShortcutArgs, TaskStateArgs, TaskTargetArgs, TaskUpcomingArgs,
     TaskUpdateArgs,
 };
@@ -47,6 +47,7 @@ pub fn run(config: &ResolvedConfig, ctx: &OutputContext, command: &TaskCommand) 
         TaskCommand::Inbox(args) => run_shortcut(config, ctx, args, ShortcutKind::Inbox),
         TaskCommand::Report(args) => run_report(config, ctx, args, ReportKind::Report),
         TaskCommand::Plan(args) => run_report(config, ctx, args, ReportKind::Plan),
+        TaskCommand::Clarify(args) => run_clarify(config, ctx, args),
         TaskCommand::Projects(args) => run_projects(config, ctx, args),
         TaskCommand::Labels(args) => run_labels(config, ctx, args),
         TaskCommand::Show(args) => run_show(config, ctx, args),
@@ -561,6 +562,227 @@ fn print_report_section(title: &str, section: &TaskReportSection) {
     for item in &section.items {
         let date = effective_date(item).unwrap_or("no date");
         println!("- [{}] {} ({date})", item.display_id, item.title);
+    }
+}
+
+fn run_clarify(config: &ResolvedConfig, ctx: &OutputContext, args: &TaskClarifyArgs) -> Result<()> {
+    let mut filters = args.filters.clone();
+    if let Some(source) = args.source.as_deref() {
+        filters.push(format!("source:{source}"));
+    } else if !filters
+        .iter()
+        .any(|filter| filter.starts_with("source:") || filter.starts_with("src:"))
+    {
+        filters.push("source:todoist".to_string());
+    }
+
+    let filters = parse_task_filters(&filters)?;
+    if matches!(filters.source, SourceSelection::Pkms) {
+        bail!("PKMS task clarification is not supported yet. Use --source todoist.");
+    }
+    clarify_todoist_tasks(config, ctx, &filters, args.stale_days.max(0))
+}
+
+#[cfg(feature = "todoist")]
+#[derive(Debug, Serialize)]
+struct ClarifyOutput {
+    total: usize,
+    stale_inbox_days: i64,
+    items: Vec<ClarifyItem>,
+}
+
+#[cfg(feature = "todoist")]
+#[derive(Debug, Serialize)]
+struct ClarifyItem {
+    item: TaskItem,
+    reasons: Vec<ClarifyReason>,
+}
+
+#[cfg(feature = "todoist")]
+#[derive(Debug, Serialize)]
+struct ClarifyReason {
+    code: &'static str,
+    message: &'static str,
+}
+
+#[cfg(feature = "todoist")]
+fn clarify_todoist_tasks(
+    config: &ResolvedConfig,
+    ctx: &OutputContext,
+    filters: &TaskFilters,
+    stale_days: i64,
+) -> Result<()> {
+    let token = crate::tasks::todoist::ensure_enabled(config)?;
+    let client =
+        crate::tasks::todoist::TodoistClient::with_base_url(config.todoist_api_base_url(), token);
+    let tasks = match filters
+        .todoist_filter
+        .as_deref()
+        .or_else(|| config.todoist_default_filter())
+    {
+        Some(filter) => client.filter_tasks(filter)?,
+        None => client.list_tasks()?,
+    };
+    let metadata = if tasks.iter().any(|task| task.project_id.is_some()) {
+        Some(crate::tasks::todoist::TodoistMetadata::new(
+            client.list_projects()?,
+        ))
+    } else {
+        None
+    };
+
+    let mut created_at = Vec::with_capacity(tasks.len());
+    let mut items = Vec::with_capacity(tasks.len());
+    for task in tasks {
+        created_at.push(task.created_at.clone());
+        items.push(crate::tasks::todoist::task_to_item_with_metadata(
+            task,
+            metadata.as_ref(),
+        ));
+    }
+    enrich_todoist_items_with_pkms_notes(config, &mut items)?;
+
+    let rows = items
+        .into_iter()
+        .zip(created_at)
+        .filter_map(|(item, created_at)| {
+            let reasons = clarification_reasons(&item, created_at.as_deref(), stale_days);
+            (!reasons.is_empty()).then_some(ClarifyItem { item, reasons })
+        })
+        .collect::<Vec<_>>();
+    print_clarify_output(
+        ctx,
+        ClarifyOutput {
+            total: rows.len(),
+            stale_inbox_days: stale_days,
+            items: rows,
+        },
+    )
+}
+
+#[cfg(not(feature = "todoist"))]
+fn clarify_todoist_tasks(
+    _config: &ResolvedConfig,
+    _ctx: &OutputContext,
+    _filters: &TaskFilters,
+    _stale_days: i64,
+) -> Result<()> {
+    bail!("Todoist support is not available in this build. Rebuild with --features todoist.")
+}
+
+#[cfg(feature = "todoist")]
+fn clarification_reasons(
+    item: &TaskItem,
+    created_at: Option<&str>,
+    stale_days: i64,
+) -> Vec<ClarifyReason> {
+    let mut reasons = Vec::new();
+    if effective_date(item).is_none() {
+        reasons.push(ClarifyReason {
+            code: "no_date",
+            message: "Task has no due date.",
+        });
+    }
+    if item.project.is_none() && item.project_id.is_none() {
+        reasons.push(ClarifyReason {
+            code: "no_project",
+            message: "Task has no project.",
+        });
+    }
+    if item
+        .body
+        .as_deref()
+        .is_none_or(|body| body.trim().is_empty())
+        && item.note_uuid.is_none()
+    {
+        reasons.push(ClarifyReason {
+            code: "no_context",
+            message: "Task has no description or linked PKMS note.",
+        });
+    }
+    if title_needs_clarification(&item.title) {
+        reasons.push(ClarifyReason {
+            code: "vague_title",
+            message: "Task title is too short or vague.",
+        });
+    }
+    if item_is_stale_inbox(item, created_at, stale_days) {
+        reasons.push(ClarifyReason {
+            code: "stale_inbox",
+            message: "Task is in Inbox and older than the stale threshold.",
+        });
+    }
+    reasons
+}
+
+#[cfg(feature = "todoist")]
+fn title_needs_clarification(title: &str) -> bool {
+    let normalized = title.trim().to_ascii_lowercase();
+    if normalized.chars().filter(|ch| ch.is_alphanumeric()).count() <= 3 {
+        return true;
+    }
+    let words = normalized
+        .split(|ch: char| !ch.is_alphanumeric())
+        .filter(|word| !word.is_empty())
+        .collect::<Vec<_>>();
+    !words.is_empty()
+        && words.len() <= 2
+        && words.iter().all(|word| {
+            matches!(
+                *word,
+                "do" | "it" | "thing" | "stuff" | "task" | "todo" | "fix" | "check" | "update"
+            )
+        })
+}
+
+#[cfg(feature = "todoist")]
+fn item_is_stale_inbox(item: &TaskItem, created_at: Option<&str>, stale_days: i64) -> bool {
+    let is_inbox = item
+        .project
+        .as_deref()
+        .is_some_and(|project| project.eq_ignore_ascii_case("inbox"))
+        || item
+            .project_id
+            .as_deref()
+            .is_some_and(|project| project.eq_ignore_ascii_case("inbox"));
+    if !is_inbox {
+        return false;
+    }
+    let Some(created_at) = created_at.and_then(parse_todoist_created_date) else {
+        return false;
+    };
+    created_at < Local::now().date_naive() - chrono::Duration::days(stale_days)
+}
+
+#[cfg(feature = "todoist")]
+fn parse_todoist_created_date(value: &str) -> Option<NaiveDate> {
+    chrono::DateTime::parse_from_rfc3339(value)
+        .ok()
+        .map(|datetime| datetime.date_naive())
+}
+
+#[cfg(feature = "todoist")]
+fn print_clarify_output(ctx: &OutputContext, output: ClarifyOutput) -> Result<()> {
+    match ctx.format {
+        OutputFormat::Text => {
+            if output.items.is_empty() {
+                println!("No tasks need clarification.");
+                return Ok(());
+            }
+            println!("Tasks needing clarification: {}", output.total);
+            for row in &output.items {
+                let reasons = row
+                    .reasons
+                    .iter()
+                    .map(|reason| reason.code)
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                println!("- [{}] {}: {reasons}", row.item.display_id, row.item.title);
+            }
+            Ok(())
+        }
+        OutputFormat::Json => ctx.print_json(&output),
+        OutputFormat::Ndjson => ctx.print_ndjson(&output.items),
     }
 }
 
