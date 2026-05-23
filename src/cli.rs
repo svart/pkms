@@ -28,7 +28,7 @@ pub struct Cli {
         long,
         value_enum,
         value_name = "FMT",
-        help = "Output format: text, json, ndjson"
+        help = "Output format"
     )]
     pub output_format: Option<OutputFormat>,
 
