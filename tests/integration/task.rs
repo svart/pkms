@@ -714,6 +714,35 @@ fn test_task_agenda_todoist_today_uses_today_filter() {
 
 #[cfg(feature = "todoist")]
 #[test]
+fn test_task_agenda_todoist_defaults_to_scheduled_filter() {
+    let (_dir, root) = setup_db();
+    let (base_url, handle) = spawn_todoist_mock(vec![(
+        "GET",
+        "/tasks/filter?query=%21no%20date&limit=200",
+        r#"{"results":[{"id":"scheduled","content":"Scheduled task","priority":1,"labels":[],"due":{"date":"2026-05-24","string":"tomorrow"}}],"next_cursor":null}"#,
+    )]);
+    let output = run_with_todoist_env(
+        &[
+            "--db",
+            root.to_str().unwrap(),
+            "--output-format",
+            "json",
+            "task",
+            "agenda",
+            "source:todoist",
+        ],
+        &base_url,
+    );
+    handle.join().unwrap();
+    assert!(output.status.success());
+    let v: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(v["items"].as_array().unwrap().len(), 1);
+    assert_eq!(v["items"][0]["source"], "todoist");
+    assert_eq!(v["items"][0]["title"], "Scheduled task");
+}
+
+#[cfg(feature = "todoist")]
+#[test]
 fn test_task_agenda_todoist_overdue_uses_overdue_filter() {
     let (_dir, root) = setup_db();
     let (base_url, handle) = spawn_todoist_mock(vec![(

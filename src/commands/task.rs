@@ -268,7 +268,7 @@ fn todoist_agenda_filter(args: &TaskAgendaArgs) -> Option<&'static str> {
     } else if args.week {
         Some("next 7 days")
     } else {
-        None
+        Some("!no date")
     }
 }
 

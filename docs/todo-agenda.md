@@ -181,13 +181,15 @@ Todoist server-side filters:
 
 | Flag | Todoist filter |
 |------|----------------|
+| none | `!no date` |
 | `--today` | `today` |
 | `--overdue` | `overdue` |
 | `--week` | `next 7 days` |
 | `--upcoming` | `due after: today` |
 
-An explicit `todoist.filter:<query>` takes precedence over agenda flags and is
-the escape hatch for custom Todoist filter syntax.
+Without a date flag, Todoist-backed `task agenda` shows only scheduled tasks.
+An explicit `todoist.filter:<query>` takes precedence over the default agenda
+filter and date flags, and is the escape hatch for custom Todoist filter syntax.
 
 Use the stable shortcut commands for common assistant workflows:
 
