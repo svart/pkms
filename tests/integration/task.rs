@@ -507,6 +507,11 @@ fn test_task_list_todoist_uses_mock_api_and_pagination() {
             "/tasks?limit=200&cursor=next",
             r#"{"results":[{"id":"def","content":"Call Sam","description":"Discuss plan","priority":1,"labels":[]}],"next_cursor":null}"#,
         ),
+        (
+            "GET",
+            "/projects?limit=200",
+            r#"{"results":[{"id":"inbox","name":"Inbox"}],"next_cursor":null}"#,
+        ),
     ]);
     let output = run_with_todoist_env(
         &[
@@ -533,6 +538,66 @@ fn test_task_list_todoist_uses_mock_api_and_pagination() {
     assert_eq!(items[0]["source"], "todoist");
     assert_eq!(items[0]["source_id"], "abc");
     assert_eq!(items[0]["priority"], "A");
+    assert_eq!(items[0]["project"], "Inbox");
+    assert_eq!(items[0]["project_id"], "inbox");
+}
+
+#[cfg(feature = "todoist")]
+#[test]
+fn test_task_projects_todoist_lists_metadata() {
+    let (_dir, root) = setup_db();
+    let (base_url, handle) = spawn_todoist_mock(vec![(
+        "GET",
+        "/projects?limit=200",
+        r#"{"results":[{"id":"inbox","name":"Inbox"},{"id":"work","name":"Work"}],"next_cursor":null}"#,
+    )]);
+    let output = run_with_todoist_env(
+        &[
+            "--db",
+            root.to_str().unwrap(),
+            "--output-format",
+            "json",
+            "task",
+            "projects",
+            "source:todoist",
+        ],
+        &base_url,
+    );
+    handle.join().unwrap();
+    assert!(output.status.success());
+    let v: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(v["total"], 2);
+    assert_eq!(v["items"][0]["id"], "inbox");
+    assert_eq!(v["items"][0]["name"], "Inbox");
+}
+
+#[cfg(feature = "todoist")]
+#[test]
+fn test_task_labels_todoist_lists_metadata() {
+    let (_dir, root) = setup_db();
+    let (base_url, handle) = spawn_todoist_mock(vec![(
+        "GET",
+        "/labels?limit=200",
+        r#"{"results":[{"id":"phone-id","name":"phone"},{"id":"errand-id","name":"errand"}],"next_cursor":null}"#,
+    )]);
+    let output = run_with_todoist_env(
+        &[
+            "--db",
+            root.to_str().unwrap(),
+            "--output-format",
+            "json",
+            "task",
+            "labels",
+            "source:todoist",
+        ],
+        &base_url,
+    );
+    handle.join().unwrap();
+    assert!(output.status.success());
+    let v: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(v["total"], 2);
+    assert_eq!(v["items"][1]["id"], "errand-id");
+    assert_eq!(v["items"][1]["name"], "errand");
 }
 
 #[cfg(feature = "todoist")]
@@ -959,6 +1024,11 @@ fn test_task_add_todoist_quick_add_uses_mock_api() {
             "/tasks/abc",
             r#"{"id":"abc","content":"Buy milk tomorrow","description":"Get oat milk","project_id":"inbox","priority":2,"labels":["errand"],"due":{"date":"2026-05-24","string":"tomorrow"},"url":"https://todoist.com/showTask?id=abc"}"#,
         ),
+        (
+            "GET",
+            "/projects?limit=200",
+            r#"{"results":[{"id":"inbox","name":"Inbox"}],"next_cursor":null}"#,
+        ),
     ]);
     let output = run_with_todoist_env(
         &[
@@ -995,7 +1065,8 @@ fn test_task_add_todoist_quick_add_uses_mock_api() {
     assert_eq!(v["item"]["scheduled"]["date"], "2026-05-24");
     assert_eq!(v["item"]["scheduled"]["raw"], "tomorrow");
     assert_eq!(v["item"]["tags"], serde_json::json!(["errand"]));
-    assert_eq!(v["item"]["project"], "inbox");
+    assert_eq!(v["item"]["project"], "Inbox");
+    assert_eq!(v["item"]["project_id"], "inbox");
     assert_eq!(v["item"]["url"], "https://todoist.com/showTask?id=abc");
 }
 
@@ -1003,20 +1074,28 @@ fn test_task_add_todoist_quick_add_uses_mock_api() {
 #[test]
 fn test_task_add_todoist_structured_uses_field_api() {
     let (_dir, root) = setup_db();
-    let (base_url, handle) = spawn_todoist_mock_expect_bodies(vec![(
-        "POST",
-        "/tasks",
-        serde_json::json!({
-            "content": "Call Alice",
-            "description": "Discuss migration plan",
-            "project_id": "inbox",
-            "labels": ["phone", "migration"],
-            "priority": 3,
-            "due_date": "2026-05-24",
-            "deadline_date": "2026-05-30"
-        }),
-        r#"{"id":"abc","content":"Call Alice","description":"Discuss migration plan","project_id":"inbox","priority":3,"labels":["phone","migration"],"due":{"date":"2026-05-24","string":"2026-05-24"},"deadline":{"date":"2026-05-30"},"url":"https://todoist.com/showTask?id=abc"}"#,
-    )]);
+    let (base_url, handle) = spawn_todoist_mock_expect_bodies(vec![
+        (
+            "GET",
+            "/projects?limit=200",
+            serde_json::Value::Null,
+            r#"{"results":[{"id":"inbox-id","name":"Inbox"}],"next_cursor":null}"#,
+        ),
+        (
+            "POST",
+            "/tasks",
+            serde_json::json!({
+                "content": "Call Alice",
+                "description": "Discuss migration plan",
+                "project_id": "inbox-id",
+                "labels": ["phone", "migration"],
+                "priority": 3,
+                "due_date": "2026-05-24",
+                "deadline_date": "2026-05-30"
+            }),
+            r#"{"id":"abc","content":"Call Alice","description":"Discuss migration plan","project_id":"inbox-id","priority":3,"labels":["phone","migration"],"due":{"date":"2026-05-24","string":"2026-05-24"},"deadline":{"date":"2026-05-30"},"url":"https://todoist.com/showTask?id=abc"}"#,
+        ),
+    ]);
     let output = run_with_todoist_env(
         &[
             "--db",
@@ -1034,7 +1113,7 @@ fn test_task_add_todoist_structured_uses_field_api() {
             "--deadline",
             "2026-05-30",
             "--project",
-            "inbox",
+            "Inbox",
             "--label",
             "phone",
             "--label",
@@ -1067,7 +1146,8 @@ fn test_task_add_todoist_structured_uses_field_api() {
     assert_eq!(v["item"]["scheduled"]["date"], "2026-05-24");
     assert_eq!(v["item"]["deadline"]["date"], "2026-05-30");
     assert_eq!(v["item"]["tags"], serde_json::json!(["phone", "migration"]));
-    assert_eq!(v["item"]["project"], "inbox");
+    assert_eq!(v["item"]["project"], "Inbox");
+    assert_eq!(v["item"]["project_id"], "inbox-id");
     assert_eq!(v["item"]["url"], "https://todoist.com/showTask?id=abc");
 }
 
@@ -1075,17 +1155,25 @@ fn test_task_add_todoist_structured_uses_field_api() {
 #[test]
 fn test_task_add_todoist_text_output_includes_task_fields() {
     let (_dir, root) = setup_db();
-    let (base_url, handle) = spawn_todoist_mock_expect_bodies(vec![(
-        "POST",
-        "/tasks",
-        serde_json::json!({
-            "content": "Call Alice",
-            "project_id": "inbox",
-            "priority": 4,
-            "due_date": "2026-05-24"
-        }),
-        r#"{"id":"abc","content":"Call Alice","description":"","project_id":"inbox","priority":4,"labels":[],"due":{"date":"2026-05-24","string":"2026-05-24"}}"#,
-    )]);
+    let (base_url, handle) = spawn_todoist_mock_expect_bodies(vec![
+        (
+            "GET",
+            "/projects?limit=200",
+            serde_json::Value::Null,
+            r#"{"results":[{"id":"inbox-id","name":"Inbox"}],"next_cursor":null}"#,
+        ),
+        (
+            "POST",
+            "/tasks",
+            serde_json::json!({
+                "content": "Call Alice",
+                "project_id": "inbox-id",
+                "priority": 4,
+                "due_date": "2026-05-24"
+            }),
+            r#"{"id":"abc","content":"Call Alice","description":"","project_id":"inbox-id","priority":4,"labels":[],"due":{"date":"2026-05-24","string":"2026-05-24"}}"#,
+        ),
+    ]);
     let output = run_with_todoist_env(
         &[
             "--db",
@@ -1099,7 +1187,7 @@ fn test_task_add_todoist_text_output_includes_task_fields() {
             "--due",
             "2026-05-24",
             "--project",
-            "inbox",
+            "Inbox",
             "--priority",
             "A",
         ],
@@ -1117,7 +1205,44 @@ fn test_task_add_todoist_text_output_includes_task_fields() {
     assert!(stdout.contains("id todoist:abc"));
     assert!(stdout.contains("date 2026-05-24"));
     assert!(stdout.contains("priority A"));
-    assert!(stdout.contains("project inbox"));
+    assert!(stdout.contains("project Inbox"));
+}
+
+#[cfg(feature = "todoist")]
+#[test]
+fn test_task_add_todoist_duplicate_project_name_fails_before_create() {
+    let (_dir, root) = setup_db();
+    let (base_url, handle) = spawn_todoist_mock(vec![(
+        "GET",
+        "/projects?limit=200",
+        r#"{"results":[{"id":"work-1","name":"Work"},{"id":"work-2","name":"work"}],"next_cursor":null}"#,
+    )]);
+    let output = run_with_todoist_env(
+        &[
+            "--db",
+            root.to_str().unwrap(),
+            "--output-format",
+            "json",
+            "task",
+            "add",
+            "--source",
+            "todoist",
+            "--title",
+            "Call Alice",
+            "--project",
+            "Work",
+        ],
+        &base_url,
+    );
+    handle.join().unwrap();
+    assert!(!output.status.success());
+    let v: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert!(
+        v["error"]
+            .as_str()
+            .unwrap()
+            .contains("matches multiple projects")
+    );
 }
 
 #[cfg(feature = "todoist")]
@@ -1312,11 +1437,13 @@ fn spawn_todoist_mock_expect_bodies(
                     .to_ascii_lowercase()
                     .contains("authorization: bearer test-token")
             );
-            let (_, request_body) = request
-                .split_once("\r\n\r\n")
-                .expect("expected request body separator");
-            let actual_body: serde_json::Value = serde_json::from_str(request_body).unwrap();
-            assert_eq!(actual_body, expected_body);
+            if !expected_body.is_null() {
+                let (_, request_body) = request
+                    .split_once("\r\n\r\n")
+                    .expect("expected request body separator");
+                let actual_body: serde_json::Value = serde_json::from_str(request_body).unwrap();
+                assert_eq!(actual_body, expected_body);
+            }
             let response = format!(
                 "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
                 body.len(),

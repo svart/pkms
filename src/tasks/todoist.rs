@@ -2,6 +2,7 @@ use crate::tasks::id::TaskId;
 use crate::tasks::model::{TaskDate, TaskItem, TaskSourceKind, TaskStatus};
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 const DEFAULT_BASE_URL: &str = "https://api.todoist.com/api/v1";
 
@@ -42,6 +43,59 @@ pub struct TodoistDue {
 pub struct TodoistDeadline {
     #[serde(default)]
     pub date: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct TodoistProject {
+    pub id: String,
+    pub name: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct TodoistLabel {
+    pub id: String,
+    pub name: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct TodoistMetadata {
+    projects_by_id: HashMap<String, TodoistProject>,
+}
+
+impl TodoistMetadata {
+    pub fn new(projects: Vec<TodoistProject>) -> Self {
+        let projects_by_id = projects
+            .into_iter()
+            .map(|project| (project.id.clone(), project))
+            .collect();
+        TodoistMetadata { projects_by_id }
+    }
+
+    pub fn project_name(&self, id: &str) -> Option<&str> {
+        self.projects_by_id
+            .get(id)
+            .map(|project| project.name.as_str())
+    }
+
+    pub fn resolve_project_id(&self, value: &str) -> Result<String> {
+        if self.projects_by_id.contains_key(value) {
+            return Ok(value.to_string());
+        }
+
+        let matches: Vec<&TodoistProject> = self
+            .projects_by_id
+            .values()
+            .filter(|project| project.name.eq_ignore_ascii_case(value))
+            .collect();
+
+        match matches.as_slice() {
+            [project] => Ok(project.id.clone()),
+            [] => anyhow::bail!("Todoist project '{value}' was not found"),
+            _ => anyhow::bail!(
+                "Todoist project name '{value}' matches multiple projects; use the project id"
+            ),
+        }
+    }
 }
 
 #[derive(Debug, Serialize)]
@@ -96,6 +150,14 @@ impl TodoistClient {
 
     pub fn get_task(&self, id: &str) -> Result<TodoistTask> {
         self.get_json(&format!("/tasks/{id}"))
+    }
+
+    pub fn list_projects(&self) -> Result<Vec<TodoistProject>> {
+        self.get_paginated("/projects", &[])
+    }
+
+    pub fn list_labels(&self) -> Result<Vec<TodoistLabel>> {
+        self.get_paginated("/labels", &[])
     }
 
     pub fn quick_add(&self, text: &str) -> Result<serde_json::Value> {
@@ -167,9 +229,23 @@ impl TodoistClient {
 }
 
 pub fn task_to_item(task: TodoistTask) -> TaskItem {
+    task_to_item_with_metadata(task, None)
+}
+
+pub fn task_to_item_with_metadata(
+    task: TodoistTask,
+    metadata: Option<&TodoistMetadata>,
+) -> TaskItem {
     let id = TaskId::Todoist(task.id);
     let display_id = id.display_id();
     let source_id = id.source_id();
+    let project_id = task.project_id;
+    let project = project_id.as_ref().map(|id| {
+        metadata
+            .and_then(|metadata| metadata.project_name(id))
+            .unwrap_or(id)
+            .to_string()
+    });
     TaskItem {
         id,
         display_id,
@@ -189,7 +265,8 @@ pub fn task_to_item(task: TodoistTask) -> TaskItem {
             date: deadline.date,
         }),
         tags: task.labels,
-        project: task.project_id,
+        project,
+        project_id,
         note_title: None,
         note_uuid: None,
         path: None,

@@ -1,6 +1,7 @@
 use crate::cli::{
     OutputFormat, TaskAddArgs, TaskAgendaArgs, TaskCommand, TaskDoneArgs, TaskListArgs,
-    TaskOpenArgs, TaskShortcutArgs, TaskStateArgs, TaskTargetArgs, TaskUpcomingArgs,
+    TaskMetadataArgs, TaskOpenArgs, TaskShortcutArgs, TaskStateArgs, TaskTargetArgs,
+    TaskUpcomingArgs,
 };
 use crate::commands::open::OpenOptions;
 use crate::commands::show::{HeadingTarget, ShowOptions};
@@ -39,6 +40,8 @@ pub fn run(config: &ResolvedConfig, ctx: &OutputContext, command: &TaskCommand) 
         TaskCommand::Overdue(args) => run_shortcut(config, ctx, args, ShortcutKind::Overdue),
         TaskCommand::Upcoming(args) => run_upcoming(config, ctx, args),
         TaskCommand::Inbox(args) => run_shortcut(config, ctx, args, ShortcutKind::Inbox),
+        TaskCommand::Projects(args) => run_projects(config, ctx, args),
+        TaskCommand::Labels(args) => run_labels(config, ctx, args),
         TaskCommand::Show(args) => run_show(config, ctx, args),
         TaskCommand::Open(args) => run_open(config, ctx, args),
         TaskCommand::State(args) => run_state(config, ctx, args),
@@ -320,9 +323,16 @@ fn collect_todoist_items(config: &ResolvedConfig, filters: &TaskFilters) -> Resu
         Some(filter) => client.filter_tasks(filter)?,
         None => client.list_tasks()?,
     };
+    let metadata = if tasks.iter().any(|task| task.project_id.is_some()) {
+        Some(crate::tasks::todoist::TodoistMetadata::new(
+            client.list_projects()?,
+        ))
+    } else {
+        None
+    };
     Ok(tasks
         .into_iter()
-        .map(crate::tasks::todoist::task_to_item)
+        .map(|task| crate::tasks::todoist::task_to_item_with_metadata(task, metadata.as_ref()))
         .collect())
 }
 
@@ -339,7 +349,15 @@ fn show_todoist_task(config: &ResolvedConfig, ctx: &OutputContext, id: &str) -> 
     let token = crate::tasks::todoist::ensure_enabled(config)?;
     let client =
         crate::tasks::todoist::TodoistClient::with_base_url(config.todoist_api_base_url(), token);
-    let item = crate::tasks::todoist::task_to_item(client.get_task(id)?);
+    let task = client.get_task(id)?;
+    let metadata = if task.project_id.is_some() {
+        Some(crate::tasks::todoist::TodoistMetadata::new(
+            client.list_projects()?,
+        ))
+    } else {
+        None
+    };
+    let item = crate::tasks::todoist::task_to_item_with_metadata(task, metadata.as_ref());
     match ctx.format {
         OutputFormat::Text => print_task_table(&[item], 1),
         OutputFormat::Json => ctx.print_json(&item),
@@ -350,6 +368,123 @@ fn show_todoist_task(config: &ResolvedConfig, ctx: &OutputContext, id: &str) -> 
 #[cfg(not(feature = "todoist"))]
 fn show_todoist_task(_config: &ResolvedConfig, _ctx: &OutputContext, _id: &str) -> Result<()> {
     bail!("Todoist support is not available in this build. Rebuild with --features todoist.")
+}
+
+#[cfg(feature = "todoist")]
+fn run_projects(
+    config: &ResolvedConfig,
+    ctx: &OutputContext,
+    args: &TaskMetadataArgs,
+) -> Result<()> {
+    ensure_todoist_metadata_source(&args.filters)?;
+    let token = crate::tasks::todoist::ensure_enabled(config)?;
+    let client =
+        crate::tasks::todoist::TodoistClient::with_base_url(config.todoist_api_base_url(), token);
+    let projects = client.list_projects()?;
+    print_metadata(ctx, "project", &projects)
+}
+
+#[cfg(not(feature = "todoist"))]
+fn run_projects(
+    _config: &ResolvedConfig,
+    _ctx: &OutputContext,
+    _args: &TaskMetadataArgs,
+) -> Result<()> {
+    bail!("Todoist support is not available in this build. Rebuild with --features todoist.")
+}
+
+#[cfg(feature = "todoist")]
+fn run_labels(config: &ResolvedConfig, ctx: &OutputContext, args: &TaskMetadataArgs) -> Result<()> {
+    ensure_todoist_metadata_source(&args.filters)?;
+    let token = crate::tasks::todoist::ensure_enabled(config)?;
+    let client =
+        crate::tasks::todoist::TodoistClient::with_base_url(config.todoist_api_base_url(), token);
+    let labels = client.list_labels()?;
+    print_metadata(ctx, "label", &labels)
+}
+
+#[cfg(not(feature = "todoist"))]
+fn run_labels(
+    _config: &ResolvedConfig,
+    _ctx: &OutputContext,
+    _args: &TaskMetadataArgs,
+) -> Result<()> {
+    bail!("Todoist support is not available in this build. Rebuild with --features todoist.")
+}
+
+#[cfg(feature = "todoist")]
+trait MetadataDisplay: Serialize {
+    fn id(&self) -> &str;
+    fn name(&self) -> &str;
+}
+
+#[cfg(feature = "todoist")]
+impl MetadataDisplay for crate::tasks::todoist::TodoistProject {
+    fn id(&self) -> &str {
+        &self.id
+    }
+
+    fn name(&self) -> &str {
+        &self.name
+    }
+}
+
+#[cfg(feature = "todoist")]
+impl MetadataDisplay for crate::tasks::todoist::TodoistLabel {
+    fn id(&self) -> &str {
+        &self.id
+    }
+
+    fn name(&self) -> &str {
+        &self.name
+    }
+}
+
+#[cfg(feature = "todoist")]
+fn ensure_todoist_metadata_source(filters: &[String]) -> Result<()> {
+    let filters = parse_task_filters(filters)?;
+    if matches!(filters.source, SourceSelection::Pkms) {
+        bail!("PKMS task metadata is not supported yet. Use source:todoist.");
+    }
+    if filters.todoist_filter.is_some() {
+        bail!("Todoist metadata commands do not accept todoist.filter.");
+    }
+    Ok(())
+}
+
+#[cfg(feature = "todoist")]
+fn print_metadata<T: MetadataDisplay>(ctx: &OutputContext, kind: &str, rows: &[T]) -> Result<()> {
+    match ctx.format {
+        OutputFormat::Text => {
+            if rows.is_empty() {
+                println!("No Todoist {kind}s found.");
+                return Ok(());
+            }
+            let mut builder = Builder::new();
+            builder.push_record(["Id", "Name"]);
+            for row in rows {
+                builder.push_record([row.id(), row.name()]);
+            }
+            let mut table = builder.build();
+            table.with(Style::blank());
+            println!("{table}");
+            println!();
+            println!("Total: {} Todoist {kind}(s)", rows.len());
+            Ok(())
+        }
+        OutputFormat::Json => {
+            #[derive(Serialize)]
+            struct MetadataOutput<'a, T> {
+                total: usize,
+                items: &'a [T],
+            }
+            ctx.print_json(&MetadataOutput {
+                total: rows.len(),
+                items: rows,
+            })
+        }
+        OutputFormat::Ndjson => ctx.print_ndjson(rows),
+    }
 }
 
 fn run_state(config: &ResolvedConfig, ctx: &OutputContext, args: &TaskStateArgs) -> Result<()> {
@@ -548,25 +683,35 @@ fn create_structured_todoist_task(
         .ok_or_else(|| anyhow::anyhow!("Structured Todoist task creation requires --title"))?;
     let due_date = validate_date_arg("due", args.due.as_deref())?;
     let deadline_date = validate_date_arg("deadline", args.deadline.as_deref())?;
+    let priority = args
+        .priority
+        .as_deref()
+        .map(todoist_create_priority)
+        .transpose()?;
+    let token = crate::tasks::todoist::ensure_enabled(config)?;
+    let client =
+        crate::tasks::todoist::TodoistClient::with_base_url(config.todoist_api_base_url(), token);
+    let metadata = crate::tasks::todoist::TodoistMetadata::new(client.list_projects()?);
+    let project_id = args
+        .project
+        .as_deref()
+        .map(|project| metadata.resolve_project_id(project))
+        .transpose()?;
     let request = crate::tasks::todoist::TodoistCreateTaskRequest {
         content: title.to_string(),
         description: args.description.clone(),
-        project_id: args.project.clone(),
+        project_id,
         labels: args.label.clone(),
-        priority: args
-            .priority
-            .as_deref()
-            .map(todoist_create_priority)
-            .transpose()?,
+        priority,
         due_date,
         deadline_date,
     };
 
-    let token = crate::tasks::todoist::ensure_enabled(config)?;
-    let client =
-        crate::tasks::todoist::TodoistClient::with_base_url(config.todoist_api_base_url(), token);
     let task = client.create_task(&request)?;
-    print_add_output(ctx, crate::tasks::todoist::task_to_item(task))
+    print_add_output(
+        ctx,
+        crate::tasks::todoist::task_to_item_with_metadata(task, Some(&metadata)),
+    )
 }
 
 #[cfg(feature = "todoist")]
@@ -587,7 +732,11 @@ fn quick_add_todoist_task(
     let response = client.quick_add(&text)?;
     let id = todoist_created_task_id(&response)?;
     let task = client.get_task(&id)?;
-    print_add_output(ctx, crate::tasks::todoist::task_to_item(task))
+    let metadata = crate::tasks::todoist::TodoistMetadata::new(client.list_projects()?);
+    print_add_output(
+        ctx,
+        crate::tasks::todoist::task_to_item_with_metadata(task, Some(&metadata)),
+    )
 }
 
 #[cfg(feature = "todoist")]

@@ -127,6 +127,8 @@ pkms task agenda --today source:todoist
 pkms task agenda --week source:all
 pkms task today source:all
 pkms task inbox
+pkms task projects source:todoist
+pkms task labels source:todoist
 pkms task show todoist:<remote-id>
 pkms task add --source todoist "Buy milk tomorrow"
 pkms task add --source todoist --title "Call Alice" --due 2026-05-24 --priority B
