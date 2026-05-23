@@ -421,6 +421,41 @@ fn test_task_list_todoist_filter_is_passed_to_mock_api() {
 
 #[cfg(feature = "todoist")]
 #[test]
+fn test_task_list_todoist_can_use_config_token() {
+    let (_dir, root) = setup_db();
+    let (base_url, handle) = spawn_todoist_mock_with_token(
+        vec![(
+            "GET",
+            "/tasks?limit=200",
+            r#"{"results":[{"id":"abc","content":"Config token task","priority":1,"labels":[]}],"next_cursor":null}"#,
+        )],
+        "config-token",
+    );
+    let output = run_with_todoist_config_token(
+        &[
+            "--db",
+            root.to_str().unwrap(),
+            "--output-format",
+            "json",
+            "task",
+            "list",
+            "source:todoist",
+        ],
+        &base_url,
+    );
+    handle.join().unwrap();
+    assert!(
+        output.status.success(),
+        "stdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let v: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(v["items"][0]["title"], "Config token task");
+}
+
+#[cfg(feature = "todoist")]
+#[test]
 fn test_task_show_todoist_uses_stable_remote_id() {
     let (_dir, root) = setup_db();
     let (base_url, handle) = spawn_todoist_mock(vec![(
@@ -545,8 +580,40 @@ fn run_with_todoist_env(args: &[&str], base_url: &str) -> std::process::Output {
 }
 
 #[cfg(feature = "todoist")]
+fn run_with_todoist_config_token(args: &[&str], base_url: &str) -> std::process::Output {
+    let config_home = tempfile::tempdir().unwrap();
+    std::fs::write(
+        config_home.path().join("pkms.toml"),
+        format!(
+            r#"{TEST_CONFIG}
+
+[todoist]
+token = "config-token"
+"#
+        ),
+    )
+    .unwrap();
+    let mut command = Command::new(pkms_binary());
+    configure_test_command(&mut command, config_home.path());
+    command
+        .args(args)
+        .env_remove("TODOIST_API_TOKEN")
+        .env("PKMS_TODOIST_API_BASE_URL", base_url)
+        .output()
+        .unwrap()
+}
+
+#[cfg(feature = "todoist")]
 fn spawn_todoist_mock(
     responses: Vec<(&'static str, &'static str, &'static str)>,
+) -> (String, thread::JoinHandle<()>) {
+    spawn_todoist_mock_with_token(responses, "test-token")
+}
+
+#[cfg(feature = "todoist")]
+fn spawn_todoist_mock_with_token(
+    responses: Vec<(&'static str, &'static str, &'static str)>,
+    expected_token: &'static str,
 ) -> (String, thread::JoinHandle<()>) {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let base_url = format!("http://{}", listener.local_addr().unwrap());
@@ -563,7 +630,7 @@ fn spawn_todoist_mock(
             assert!(
                 request
                     .to_ascii_lowercase()
-                    .contains("authorization: bearer test-token")
+                    .contains(&format!("authorization: bearer {expected_token}"))
             );
             let response = format!(
                 "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",

@@ -37,8 +37,8 @@ pkms task done todoist:<remote-id>
 ```
 
 Use stable `todoist:<remote-id>` IDs. Do not invent view-local Todoist IDs.
-Never print or store the Todoist token; it is read from `TODOIST_API_TOKEN` by
-default.
+Never print the Todoist token. It is read from `TODOIST_API_TOKEN` by default,
+or from `[todoist].token` in config when the environment variable is unset.
 
 Use `--dry-run` before completing Todoist tasks when operating on a real token:
 

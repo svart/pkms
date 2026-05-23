@@ -128,8 +128,9 @@ pkms task done todoist:<remote-id>
 See [TODO and Agenda](todo-agenda.md) for task IDs, filtering, table columns,
 editor behavior, and task state changes.
 
-Todoist task reads require a build with `--features todoist` and a token in the
-configured environment variable.
+Todoist task reads require a build with `--features todoist` and a token from
+`TODOIST_API_TOKEN` or `[todoist].token` in config. Prefer the environment
+variable unless the config file is private and not committed.
 
 ## Configuration
 
