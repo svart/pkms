@@ -23,6 +23,9 @@ use serde::Serialize;
 use std::collections::BTreeMap;
 use tabled::builder::Builder;
 use tabled::settings::Style;
+use tabled::settings::object::{Columns, Rows};
+use tabled::settings::style::Border;
+use tabled::settings::{Modify, Width};
 
 #[cfg(feature = "todoist")]
 const PKMS_NOTE_MARKER_PREFIX: &str = "pkms:id:";
@@ -99,14 +102,36 @@ fn run_task_list(
     raw_filters: &[String],
 ) -> Result<()> {
     let filters = parse_task_filters(raw_filters)?;
+    if matches!(filters.source, SourceSelection::Pkms) {
+        let columns = input::resolve_columns(args.table.columns.as_deref(), &config.columns);
+        return crate::commands::todo::run(
+            config,
+            ctx,
+            &crate::commands::todo::TodoOptions {
+                state: None,
+                tags: None,
+                kind: None,
+                sort: args.sort.clone(),
+                limit: args.limit,
+                group: None,
+                scope: Vec::new(),
+                after: None,
+                before: None,
+                prio: None,
+                line_sep: args.table.line_sep,
+                columns,
+            },
+        );
+    }
+
     let mut items = match filters.source {
-        SourceSelection::Pkms => collect_pkms_list_items(config)?,
         SourceSelection::Todoist => collect_todoist_items(config, &filters)?,
         SourceSelection::All => {
             let mut items = collect_pkms_list_items(config)?;
             items.extend(collect_todoist_items(config, &filters)?);
             items
         }
+        SourceSelection::Pkms => unreachable!("PKMS task list is handled by todo::run"),
     };
     sort_task_items(&mut items, args.sort.as_deref().unwrap_or("priority"));
     print_task_items(ctx, filters.source, items, args.limit)
@@ -1612,31 +1637,111 @@ fn print_task_table(items: &[TaskItem], total: usize, source: SourceSelection) -
         return Ok(());
     }
 
+    const HEADERS: [&str; 9] = [
+        "Id", "Date", "State", "Type", "Prio", "Tags", "Project", "Note", "Heading",
+    ];
     let mut builder = Builder::new();
-    builder.push_record([
-        "Id", "Source", "Date", "State", "Prio", "Tags", "Project", "Task",
-    ]);
+    builder.push_record(HEADERS);
     for item in items {
-        builder.push_record([
-            task_text_id(item, source),
-            source_name(item).to_string(),
-            effective_date(item).unwrap_or("").to_string(),
-            item.state.clone().unwrap_or_default(),
-            item.priority
-                .as_deref()
-                .map(|priority| format!("[#{priority}]"))
-                .unwrap_or_default(),
-            item.tags.join(", "),
-            item.project.clone().unwrap_or_default(),
-            item.title.clone(),
-        ]);
+        for row in task_table_rows(item, source) {
+            builder.push_record(row);
+        }
     }
     let mut table = builder.build();
     table.with(Style::blank());
+    table.with(Modify::new(Rows::one(1)).with(Border::new().top('─')));
+    table.with(Modify::new(Columns::one(5)).with(Width::wrap(25).keep_words(true)));
+    table.with(Modify::new(Columns::one(6)).with(Width::wrap(20).keep_words(true)));
+    table.with(Modify::new(Columns::one(7)).with(Width::wrap(24).keep_words(true)));
+    table.with(Modify::new(Columns::one(8)).with(Width::wrap(30).keep_words(true)));
     println!("{table}");
     println!();
     println!("Shown: {}, Total: {} task(s)", items.len(), total);
     Ok(())
+}
+
+fn task_table_rows(item: &TaskItem, source: SourceSelection) -> Vec<[String; 9]> {
+    let id = task_text_id(item, source);
+    let state = item.state.clone().unwrap_or_default();
+    let prio = item
+        .priority
+        .as_deref()
+        .map(|priority| format!("[#{priority}]"))
+        .unwrap_or_default();
+    let tags = item.tags.join(", ");
+    let project = item.project.clone().unwrap_or_default();
+    let note = item.note_title.clone().unwrap_or_default();
+    let heading = item.title.clone();
+    let has_both = item.scheduled.is_some() && item.deadline.is_some();
+    let mut rows = Vec::new();
+
+    if let Some(date) = &item.scheduled {
+        rows.push([
+            id.clone(),
+            crate::commands::task_common::format_display_datetime(&date.raw),
+            state.clone(),
+            "SCHED".to_string(),
+            prio.clone(),
+            tags.clone(),
+            project.clone(),
+            note.clone(),
+            heading.clone(),
+        ]);
+    }
+
+    if let Some(date) = &item.deadline {
+        rows.push([
+            if has_both { String::new() } else { id.clone() },
+            crate::commands::task_common::format_display_datetime(&date.raw),
+            if has_both {
+                String::new()
+            } else {
+                state.clone()
+            },
+            "DEADL".to_string(),
+            if has_both {
+                String::new()
+            } else {
+                prio.clone()
+            },
+            if has_both {
+                String::new()
+            } else {
+                tags.clone()
+            },
+            if has_both {
+                String::new()
+            } else {
+                project.clone()
+            },
+            if has_both {
+                String::new()
+            } else {
+                note.clone()
+            },
+            if has_both {
+                String::new()
+            } else {
+                heading.clone()
+            },
+        ]);
+    }
+
+    if rows.is_empty() {
+        rows.push([
+            id,
+            String::new(),
+            state,
+            String::new(),
+            prio,
+            tags,
+            project,
+            note,
+            heading,
+        ]);
+    }
+
+    rows
 }
 
 fn task_text_id(item: &TaskItem, source: SourceSelection) -> String {

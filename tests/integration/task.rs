@@ -66,7 +66,7 @@ fn task_help_commands(stdout: &str) -> Vec<&str> {
 }
 
 #[test]
-fn test_task_list_matches_todo_count_json() {
+fn test_task_list_matches_todo_json() {
     let (_dir, root) = setup_db();
     let (task, task_status) = run_json(&[
         "--db",
@@ -85,25 +85,31 @@ fn test_task_list_matches_todo_count_json() {
     ]);
     assert!(task_status.success());
     assert!(todo_status.success());
-    assert_eq!(
-        task["items"].as_array().unwrap().len(),
-        todo["items"].as_array().unwrap().len()
-    );
-    assert_eq!(task["items"][0]["source"], "pkms");
+    assert_eq!(task, todo);
 }
 
 #[test]
-fn test_task_list_limit_json_preserves_total_match_count() {
+fn test_task_list_matches_todo_text() {
     let (_dir, root) = setup_db();
-    let (all_tasks, all_status) = run_json(&[
-        "--db",
-        root.to_str().unwrap(),
-        "--output-format",
-        "json",
-        "task",
-        "list",
-    ]);
-    let (limited, limited_status) = run_json(&[
+    let (task_stdout, task_stderr, task_status) =
+        run(&["--db", root.to_str().unwrap(), "task", "list"]);
+    let (todo_stdout, todo_stderr, todo_status) = run(&["--db", root.to_str().unwrap(), "todo"]);
+
+    assert!(
+        task_status.success(),
+        "task list failed:\n{task_stdout}\n{task_stderr}"
+    );
+    assert!(
+        todo_status.success(),
+        "todo failed:\n{todo_stdout}\n{todo_stderr}"
+    );
+    assert_eq!(task_stdout, todo_stdout);
+}
+
+#[test]
+fn test_task_list_limit_json_matches_todo() {
+    let (_dir, root) = setup_db();
+    let (task, task_status) = run_json(&[
         "--db",
         root.to_str().unwrap(),
         "--output-format",
@@ -113,14 +119,19 @@ fn test_task_list_limit_json_preserves_total_match_count() {
         "--limit",
         "1",
     ]);
+    let (todo, todo_status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "todo",
+        "--limit",
+        "1",
+    ]);
 
-    assert!(all_status.success());
-    assert!(limited_status.success());
-    assert_eq!(limited["items"].as_array().unwrap().len(), 1);
-    assert_eq!(
-        limited["total"],
-        all_tasks["items"].as_array().unwrap().len()
-    );
+    assert!(task_status.success());
+    assert!(todo_status.success());
+    assert_eq!(task, todo);
 }
 
 #[test]
@@ -463,7 +474,7 @@ fn assert_metadata_row(v: &serde_json::Value, source: &str, name: &str) {
 #[test]
 fn test_task_list_ndjson() {
     let (_dir, root) = setup_db();
-    let (stdout, _stderr, status) = run(&[
+    let (task_stdout, task_stderr, task_status) = run(&[
         "--db",
         root.to_str().unwrap(),
         "--output-format",
@@ -471,10 +482,22 @@ fn test_task_list_ndjson() {
         "task",
         "list",
     ]);
-    assert!(status.success());
-    let first = stdout.lines().next().expect("expected at least one task");
-    let v: serde_json::Value = serde_json::from_str(first).unwrap();
-    assert_eq!(v["source"], "pkms");
+    let (todo_stdout, todo_stderr, todo_status) = run(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "ndjson",
+        "todo",
+    ]);
+    assert!(
+        task_status.success(),
+        "task list failed:\n{task_stdout}\n{task_stderr}"
+    );
+    assert!(
+        todo_status.success(),
+        "todo failed:\n{todo_stdout}\n{todo_stderr}"
+    );
+    assert_eq!(task_stdout, todo_stdout);
 }
 
 #[test]
@@ -979,6 +1002,65 @@ fn test_task_list_todoist_filter_is_passed_to_mock_api() {
 
 #[cfg(feature = "todoist")]
 #[test]
+fn test_task_list_todoist_dates_use_pkms_display_format() {
+    let (_dir, root) = setup_db();
+    let (base_url, handle) = spawn_todoist_mock(vec![(
+        "GET",
+        "/tasks/filter?query=today&limit=200",
+        r#"{"results":[{"id":"today","content":"Today task","priority":1,"labels":[],"due":{"date":"2026-05-23","string":"today"}}],"next_cursor":null}"#,
+    )]);
+    let output = run_with_todoist_env(
+        &[
+            "--db",
+            root.to_str().unwrap(),
+            "task",
+            "list",
+            "source:todoist",
+            "todoist.filter:today",
+        ],
+        &base_url,
+    );
+    handle.join().unwrap();
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("Id") && stdout.contains("Date") && stdout.contains("Type"),
+        "stdout: {stdout}"
+    );
+    assert!(!stdout.contains("Source"), "stdout: {stdout}");
+    assert!(stdout.contains("─"), "stdout: {stdout}");
+    assert!(stdout.contains("2026-05-23 Sat"), "stdout: {stdout}");
+}
+
+#[cfg(feature = "todoist")]
+#[test]
+fn test_task_list_todoist_datetime_dates_use_pkms_display_format() {
+    let (_dir, root) = setup_db();
+    let (base_url, handle) = spawn_todoist_mock(vec![(
+        "GET",
+        "/tasks/filter?query=today&limit=200",
+        r#"{"results":[{"id":"timed","content":"Timed task","priority":1,"labels":[],"due":{"date":"2026-05-25T07:00:00","string":"May 25 7am"}}],"next_cursor":null}"#,
+    )]);
+    let output = run_with_todoist_env(
+        &[
+            "--db",
+            root.to_str().unwrap(),
+            "task",
+            "list",
+            "source:todoist",
+            "todoist.filter:today",
+        ],
+        &base_url,
+    );
+    handle.join().unwrap();
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("2026-05-25 Mon 07:00"), "stdout: {stdout}");
+    assert!(!stdout.contains("2026-05-25T07:00:00"), "stdout: {stdout}");
+}
+
+#[cfg(feature = "todoist")]
+#[test]
 fn test_task_agenda_todoist_today_uses_today_filter() {
     let (_dir, root) = setup_db();
     let (base_url, handle) = spawn_todoist_mock(vec![(
@@ -1005,6 +1087,35 @@ fn test_task_agenda_todoist_today_uses_today_filter() {
     assert_eq!(v["items"].as_array().unwrap().len(), 1);
     assert_eq!(v["items"][0]["source"], "todoist");
     assert_eq!(v["items"][0]["title"], "Today task");
+}
+
+#[cfg(feature = "todoist")]
+#[test]
+fn test_task_agenda_todoist_dates_use_pkms_json_format() {
+    let (_dir, root) = setup_db();
+    let (base_url, handle) = spawn_todoist_mock(vec![(
+        "GET",
+        "/tasks/filter?query=today&limit=200",
+        r#"{"results":[{"id":"today","content":"Today task","priority":1,"labels":[],"due":{"date":"2026-05-23","string":"today"}}],"next_cursor":null}"#,
+    )]);
+    let output = run_with_todoist_env(
+        &[
+            "--db",
+            root.to_str().unwrap(),
+            "--output-format",
+            "json",
+            "task",
+            "agenda",
+            "--today",
+            "source:todoist",
+        ],
+        &base_url,
+    );
+    handle.join().unwrap();
+    assert!(output.status.success());
+    let v: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(v["items"][0]["scheduled"]["raw"], "<2026-05-23>");
+    assert_eq!(v["items"][0]["scheduled"]["date"], "2026-05-23");
 }
 
 #[cfg(feature = "todoist")]

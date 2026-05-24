@@ -21,9 +21,12 @@ pkms task done p5 --dry-run
 PKMS task IDs can be written as bare canonical IDs, `p<ID>`, or `pkms:<ID>`.
 Top-level compatibility commands use bare numeric IDs.
 
-Text list and agenda views render IDs by selected source. With only one source,
-the `Id` column is the bare source id. With `source:all`, local PKMS ids use
-`p<ID>` and Todoist ids use `t<remote-id>`. Structured JSON keeps stable
+By default, `task list` mirrors `todo` output and `task agenda` mirrors
+`agenda` output for PKMS tasks. Explicit Todoist and mixed-source task views
+use the same table shape plus a `Project` column:
+`Id,Date,State,Type,Prio,Tags,Project,Note,Heading`. With only one source, the
+`Id` column is the bare source id. With `source:all`, local PKMS ids use
+`p<ID>` and Todoist ids use `t<remote-id>`. Source-neutral JSON keeps stable
 `display_id` and `source_id` fields.
 
 `task state` changes only the TODO keyword. Valid states come from configured

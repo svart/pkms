@@ -263,14 +263,12 @@ pub fn task_to_item_with_metadata(
         status: TaskStatus::Open,
         state: Some("open".to_string()),
         priority: task.priority.and_then(todoist_priority),
-        scheduled: task.due.map(|due| TaskDate {
-            raw: due.string.or_else(|| due.date.clone()).unwrap_or_default(),
-            date: due.date,
-        }),
-        deadline: task.deadline.map(|deadline| TaskDate {
-            raw: deadline.date.clone().unwrap_or_default(),
-            date: deadline.date,
-        }),
+        scheduled: task
+            .due
+            .map(|due| normalized_task_date(due.date, due.string)),
+        deadline: task
+            .deadline
+            .map(|deadline| normalized_task_date(deadline.date, None)),
         tags: task.labels,
         project,
         project_id,
@@ -294,6 +292,27 @@ fn todoist_priority(priority: u8) -> Option<String> {
 
 fn non_empty(value: String) -> Option<String> {
     if value.is_empty() { None } else { Some(value) }
+}
+
+fn normalized_task_date(date: Option<String>, fallback_raw: Option<String>) -> TaskDate {
+    let normalized = date.as_deref().map(normalize_todoist_date);
+    let raw = normalized
+        .as_deref()
+        .map(|date| format!("<{date}>"))
+        .or(fallback_raw)
+        .unwrap_or_default();
+    let date = date
+        .as_deref()
+        .map(|date| date.split('T').next().unwrap_or(date).to_string());
+    TaskDate { raw, date }
+}
+
+fn normalize_todoist_date(date: &str) -> String {
+    let Some((day, time)) = date.split_once('T') else {
+        return date.to_string();
+    };
+    let hour_minute = time.get(..5).unwrap_or(time);
+    format!("{day} {hour_minute}")
 }
 
 fn path_with_query(path: &str, params: &[(&str, &str)]) -> String {

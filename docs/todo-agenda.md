@@ -131,18 +131,19 @@ pkms task upcoming --days 7
 pkms task list source:pkms
 ```
 
-`task list`, `task agenda`, and task shortcut commands use source-neutral text
-columns:
+By default, `task list` mirrors `todo` output and `task agenda` mirrors
+`agenda` output for PKMS tasks. Explicit Todoist and mixed-source task views use
+source-neutral text columns:
 
 ```text
-Id,Source,Date,State,Prio,Tags,Project,Task
+Id,Date,State,Type,Prio,Tags,Project,Note,Heading
 ```
 
-Text task views render IDs for the selected source set. With only PKMS or only
-Todoist selected, `Id` is the bare source id. With `source:all`, PKMS ids are
-prefixed with `p` and Todoist ids are prefixed with `t`.
+Text task views render IDs for the selected source set. In source-neutral views
+with only one source selected, `Id` is the bare source id. With `source:all`,
+PKMS ids are prefixed with `p` and Todoist ids are prefixed with `t`.
 
-JSON and NDJSON include source-neutral fields such as `source`, `source_id`,
+Source-neutral JSON and NDJSON include fields such as `source`, `source_id`,
 `display_id`, `status`, `state`, `note_title`, `note_uuid`, `path`, and
 `line_number`.
 
