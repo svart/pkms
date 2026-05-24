@@ -27,7 +27,9 @@ use the same table shape plus a `Project` column:
 `p<ID>` and Todoist ids use `t<remote-id>`. Source-neutral JSON keeps stable
 `display_id` and `source_id` fields.
 
-Task commands accept positional string filters after the subcommand:
+Item-producing task commands accept positional string filters after the
+subcommand. Metadata commands, `task list projects` and `task list tags`, accept
+only source filters:
 
 | Filter | Syntax | Notes |
 |--------|--------|-------|

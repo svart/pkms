@@ -298,7 +298,7 @@ fn apply_task_date_filter(items: &mut Vec<TaskItem>, date_filter: &TaskDateFilte
             items.retain(|item| item_dates(item).iter().any(|item_date| item_date == date));
         }
         TaskDateFilter::Today => {
-            items.retain(|item| item_dates(item).iter().any(|item_date| *item_date == today));
+            items.retain(|item| item_dates(item).contains(&today));
         }
         TaskDateFilter::Week => {
             let cutoff = today + chrono::Duration::days(7);
@@ -770,6 +770,9 @@ fn run_projects(config: &ResolvedConfig, ctx: &OutputContext, filters: &[String]
     if filters.todoist_filter.is_some() {
         bail!("Todoist metadata commands do not accept todoist.filter.");
     }
+    if filters.has_criteria() {
+        bail!("Task metadata commands only accept source filters.");
+    }
     let mut rows = Vec::new();
     if matches!(filters.source, SourceSelection::Pkms | SourceSelection::All) {
         rows.extend(pkms_project_rows(config)?);
@@ -788,6 +791,9 @@ fn run_tags(config: &ResolvedConfig, ctx: &OutputContext, filters: &[String]) ->
     let filters = parse_task_filters(filters)?;
     if filters.todoist_filter.is_some() {
         bail!("Todoist metadata commands do not accept todoist.filter.");
+    }
+    if filters.has_criteria() {
+        bail!("Task metadata commands only accept source filters.");
     }
     let mut rows = Vec::new();
     if matches!(filters.source, SourceSelection::Pkms | SourceSelection::All) {

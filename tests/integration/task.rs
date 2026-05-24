@@ -482,6 +482,45 @@ fn test_task_list_accepts_project_filter() {
 }
 
 #[test]
+fn test_task_list_accepts_project_exclusion_filter() {
+    let (_dir, root) = setup_db();
+    add_pkms_project_metadata_note(&root);
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "task",
+        "list",
+        "project:!Heading Project",
+    ]);
+
+    assert!(status.success());
+    let titles = task_titles(&v);
+    assert!(titles.contains(&"Note project task".to_string()));
+    assert!(!titles.contains(&"Heading project task".to_string()));
+}
+
+#[test]
+fn test_task_list_accepts_tag_alias_and_exclusion_filter() {
+    let (_dir, root) = setup_db();
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "task",
+        "list",
+        "tag:project,!agenda",
+    ]);
+
+    assert!(status.success());
+    let titles = task_titles(&v);
+    assert!(titles.contains(&"Parent task".to_string()));
+    assert!(!titles.contains(&"High priority task".to_string()));
+}
+
+#[test]
 fn test_task_list_accepts_scope_after_and_before_filters() {
     let (_dir, root) = setup_db();
     let (v, status) = run_json(&[
@@ -557,6 +596,111 @@ SCHEDULED: <{today}>
     ]);
     assert!(week_status.success());
     assert!(task_titles(&week_tasks).contains(&"Parent task".to_string()));
+}
+
+#[test]
+fn test_task_agenda_accepts_exact_and_bare_date_filters() {
+    let (_dir, root) = setup_db();
+    let (exact_tasks, exact_status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "task",
+        "agenda",
+        "date:2026-05-10",
+    ]);
+    assert!(exact_status.success());
+    let exact_titles = task_titles(&exact_tasks);
+    assert!(exact_titles.contains(&"High priority task".to_string()));
+    assert!(exact_titles.contains(&"Fix this".to_string()));
+    assert!(!exact_titles.contains(&"Parent task".to_string()));
+
+    let (overdue_tasks, overdue_status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "task",
+        "agenda",
+        "overdue",
+    ]);
+    assert!(overdue_status.success());
+    assert!(task_titles(&overdue_tasks).contains(&"High priority task".to_string()));
+
+    let (upcoming_tasks, upcoming_status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "task",
+        "agenda",
+        "upcoming",
+    ]);
+    assert!(upcoming_status.success());
+    assert!(task_titles(&upcoming_tasks).contains(&"Parent task".to_string()));
+}
+
+#[test]
+fn test_task_metadata_rejects_non_source_filters() {
+    let (_dir, root) = setup_db();
+    let (stdout, _stderr, status) = run(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "task",
+        "list",
+        "projects",
+        "state:TODO",
+    ]);
+
+    assert!(!status.success());
+    let v: serde_json::Value = serde_json::from_str(stdout.trim()).unwrap();
+    assert!(
+        v["error"]
+            .as_str()
+            .unwrap()
+            .contains("metadata commands only accept source filters")
+    );
+}
+
+#[cfg(feature = "todoist")]
+#[test]
+fn test_task_list_todoist_applies_client_side_filters() {
+    let (_dir, root) = setup_db();
+    let (base_url, handle) = spawn_todoist_mock(vec![
+        (
+            "GET",
+            "/tasks?limit=200",
+            r#"{"results":[{"id":"keep","content":"Keep remote","project_id":"inbox","priority":4,"labels":["errand"],"due":{"date":"2026-06-01","string":"next week"}},{"id":"drop","content":"Drop remote","project_id":"work","priority":1,"labels":["work"],"due":{"date":"2026-06-01","string":"next week"}}],"next_cursor":null}"#,
+        ),
+        (
+            "GET",
+            "/projects?limit=200",
+            r#"{"results":[{"id":"inbox","name":"Inbox"},{"id":"work","name":"Work"}],"next_cursor":null}"#,
+        ),
+    ]);
+    let output = run_with_todoist_env(
+        &[
+            "--db",
+            root.to_str().unwrap(),
+            "--output-format",
+            "json",
+            "task",
+            "list",
+            "source:todoist",
+            "tags:errand",
+            "project:Inbox",
+            "priority:A",
+        ],
+        &base_url,
+    );
+    handle.join().unwrap();
+
+    assert!(output.status.success());
+    let v: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(task_titles(&v), vec!["Keep remote"]);
 }
 
 #[test]

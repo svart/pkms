@@ -145,9 +145,10 @@ Source-neutral JSON and NDJSON include fields such as `source`, `source_id`,
 `display_id`, `status`, `state`, `note_title`, `note_uuid`, `path`, and
 `line_number`.
 
-Task commands accept positional string filters after the subcommand. These
-filters are separate from normal command flags such as `--limit`, `--sort`, and
-`--columns`.
+Item-producing task commands accept positional string filters after the
+subcommand. These filters are separate from normal command flags such as
+`--limit`, `--sort`, and `--columns`. Metadata commands, `task list projects`
+and `task list tags`, accept only source filters.
 
 | Filter | Syntax | Notes |
 |--------|--------|-------|
