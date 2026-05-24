@@ -46,8 +46,6 @@ pkms task agenda --week source:all
 pkms task today source:all
 pkms task overdue source:todoist
 pkms task upcoming --days 7 source:all
-pkms task report --today --source all --output-format json
-pkms task plan --today --source all --output-format json
 pkms task inbox
 pkms task list projects source:todoist
 pkms task list tags source:todoist
@@ -78,15 +76,6 @@ Prefer stable shortcuts for common assistant requests: `task today`,
 accept `source:pkms`, `source:todoist`, or `source:all`; `task inbox` defaults
 to Todoist and uses the Todoist `#Inbox` filter because PKMS has no local inbox
 convention yet.
-
-Use `task report --today --source all --output-format json` or
-`task plan --today --source all --output-format json` when an assistant needs a
-daily summary or planning context. Prefer these over raw `task list` or
-`task agenda` because the JSON is pre-grouped into `overdue`, `today_timed`,
-`today_untimed`, `high_priority`, `waiting_or_blocked`, `inbox_or_no_date`,
-`upcoming`, `by_source`, and `by_project`. With Todoist and `--today`, report
-commands use a Todoist filter for today, overdue, no-date, and upcoming tasks
-before grouping the returned items locally.
 
 Use positional text with `task add --source todoist` for Todoist Quick Add
 natural-language parsing. Use structured creation for deterministic assistant

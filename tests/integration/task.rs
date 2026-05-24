@@ -29,8 +29,8 @@ fn test_task_help_lists_subcommands() {
     assert!(stdout.contains("state"));
     assert!(stdout.contains("done"));
     assert!(stdout.contains("add"));
-    assert!(stdout.contains("report"));
-    assert!(stdout.contains("plan"));
+    assert!(!stdout.contains("report"));
+    assert!(!stdout.contains("plan"));
     let commands = task_help_commands(&stdout);
     assert!(!commands.contains(&"projects"));
     assert!(!commands.contains(&"labels"));
@@ -269,57 +269,6 @@ SCHEDULED: <{today}>
     let first = stdout.lines().next().expect("expected at least one task");
     let v: serde_json::Value = serde_json::from_str(first).unwrap();
     assert_eq!(v["source"], "pkms");
-}
-
-#[test]
-fn test_task_report_pkms_json_has_stable_sections() {
-    let (_dir, root) = setup_db();
-    let today = org_date(0);
-    std::fs::write(
-        root.join("roam/common/20260523000004-report-pkms.org"),
-        format!(
-            r#":PROPERTIES:
-:ID:       56565656-5656-4565-8565-565656565656
-:END:
-#+title: Report Pkms
-#+filetags: :agenda:
-
-* TODO Report timed task
-SCHEDULED: <{today} 09:00>
-* WAITING Report blocked task :blocked:
-"#
-        ),
-    )
-    .unwrap();
-    let (v, status) = run_json(&[
-        "--db",
-        root.to_str().unwrap(),
-        "--output-format",
-        "json",
-        "task",
-        "report",
-        "--today",
-    ]);
-    assert!(status.success());
-    assert_eq!(v["kind"], "report");
-    assert_eq!(v["scope"], "today");
-    assert_eq!(v["source"], "pkms");
-    assert!(v["total"].as_u64().unwrap() > 0);
-    assert!(
-        v["sections"]["today_timed"]["items"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .any(|item| item["title"] == "Report timed task")
-    );
-    assert!(
-        v["sections"]["waiting_or_blocked"]["items"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .any(|item| item["title"] == "Report blocked task")
-    );
-    assert!(v["by_source"]["pkms"]["total"].as_u64().unwrap() > 0);
 }
 
 #[test]
@@ -1432,97 +1381,6 @@ SCHEDULED: <{today}>
     assert_eq!(items.len(), 2);
     assert!(items.iter().any(|item| item["source"] == "pkms"));
     assert!(items.iter().any(|item| item["source"] == "todoist"));
-}
-
-#[cfg(feature = "todoist")]
-#[test]
-fn test_task_report_all_groups_mixed_pkms_and_todoist() {
-    let (_dir, root) = setup_db();
-    let today = org_date(0);
-    let tomorrow = org_date(1);
-    std::fs::write(
-        root.join("roam/common/20260523000005-report-all.org"),
-        format!(
-            r#":PROPERTIES:
-:ID:       67676767-6767-4676-8676-676767676767
-:END:
-#+title: Report All
-#+filetags: :agenda:
-
-* TODO Mixed timed pkms
-SCHEDULED: <{today} 10:30>
-* WAITING Mixed waiting pkms :blocked:
-"#
-        ),
-    )
-    .unwrap();
-    let tasks_body = Box::leak(
-        format!(
-            r#"{{"results":[{{"id":"abc","content":"Mixed todoist today","description":"","project_id":"work-id","priority":4,"labels":[],"due":{{"date":"{today}","string":"today"}}}},{{"id":"def","content":"Mixed todoist upcoming","description":"","project_id":"work-id","priority":1,"labels":[],"due":{{"date":"{tomorrow}","string":"tomorrow"}}}}],"next_cursor":null}}"#
-        )
-        .into_boxed_str(),
-    );
-    let (base_url, handle) = spawn_todoist_mock(vec![
-        (
-            "GET",
-            "/tasks/filter?query=today%20%7C%20overdue%20%7C%20no%20date%20%7C%20next%207%20days&limit=200",
-            tasks_body,
-        ),
-        (
-            "GET",
-            "/projects?limit=200",
-            r#"{"results":[{"id":"work-id","name":"Work"}],"next_cursor":null}"#,
-        ),
-    ]);
-    let output = run_with_todoist_env(
-        &[
-            "--db",
-            root.to_str().unwrap(),
-            "--output-format",
-            "json",
-            "task",
-            "report",
-            "--today",
-            "--source",
-            "all",
-        ],
-        &base_url,
-    );
-    handle.join().unwrap();
-    assert!(output.status.success());
-    let v: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
-    assert_eq!(v["source"], "all");
-    assert!(
-        v["sections"]["today_timed"]["items"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .any(|item| item["title"] == "Mixed timed pkms")
-    );
-    assert!(
-        v["sections"]["today_untimed"]["items"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .any(|item| item["title"] == "Mixed todoist today")
-    );
-    assert!(
-        v["sections"]["upcoming"]["items"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .any(|item| item["title"] == "Mixed todoist upcoming")
-    );
-    assert!(
-        v["sections"]["waiting_or_blocked"]["items"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .any(|item| item["title"] == "Mixed waiting pkms")
-    );
-    assert!(v["by_source"]["pkms"]["total"].as_u64().unwrap() > 0);
-    assert_eq!(v["by_source"]["todoist"]["total"], 2);
-    assert_eq!(v["by_project"]["Work"]["total"], 2);
 }
 
 #[cfg(feature = "todoist")]
