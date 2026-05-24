@@ -124,6 +124,27 @@ fn test_task_list_limit_json_preserves_total_match_count() {
 }
 
 #[test]
+fn test_task_list_pkms_text_uses_bare_source_ids() {
+    let (_dir, root) = setup_db();
+    let (stdout, stderr, status) = run(&[
+        "--db",
+        root.to_str().unwrap(),
+        "task",
+        "list",
+        "--limit",
+        "1",
+    ]);
+
+    assert!(status.success(), "stdout:\n{stdout}\nstderr:\n{stderr}");
+    let row = stdout
+        .lines()
+        .find(|line| line.contains("High priority task"))
+        .expect("expected a task row");
+    let id = row.split_whitespace().next().unwrap();
+    assert_eq!(id, "1");
+}
+
+#[test]
 fn test_task_agenda_matches_agenda_count_json() {
     let (_dir, root) = setup_db();
     let (task, task_status) = run_json(&[
@@ -715,6 +736,79 @@ fn test_task_list_todoist_uses_mock_api_and_pagination() {
     assert_eq!(items[0]["priority"], "A");
     assert_eq!(items[0]["project"], "Inbox");
     assert_eq!(items[0]["project_id"], "inbox");
+}
+
+#[cfg(feature = "todoist")]
+#[test]
+fn test_task_list_todoist_text_uses_bare_source_ids_sorted_by_remote_id() {
+    let (_dir, root) = setup_db();
+    let (base_url, handle) = spawn_todoist_mock(vec![(
+        "GET",
+        "/tasks?limit=200",
+        r#"{"results":[{"id":"200","content":"Second remote","priority":1,"labels":[]},{"id":"100","content":"First remote","priority":1,"labels":[]}],"next_cursor":null}"#,
+    )]);
+    let output = run_with_todoist_env(
+        &[
+            "--db",
+            root.to_str().unwrap(),
+            "task",
+            "list",
+            "source:todoist",
+        ],
+        &base_url,
+    );
+    handle.join().unwrap();
+    assert!(
+        output.status.success(),
+        "stdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let first = stdout
+        .lines()
+        .find(|line| line.contains("First remote"))
+        .expect("expected first remote task");
+    let second = stdout
+        .lines()
+        .find(|line| line.contains("Second remote"))
+        .expect("expected second remote task");
+    assert_eq!(first.split_whitespace().next().unwrap(), "100");
+    assert_eq!(second.split_whitespace().next().unwrap(), "200");
+    assert!(stdout.find("First remote") < stdout.find("Second remote"));
+}
+
+#[cfg(feature = "todoist")]
+#[test]
+fn test_task_list_all_text_prefixes_each_source_id() {
+    let (_dir, root) = setup_db();
+    let (base_url, handle) = spawn_todoist_mock(vec![(
+        "GET",
+        "/tasks?limit=200",
+        r#"{"results":[{"id":"300","content":"Remote mixed","priority":1,"labels":[]}],"next_cursor":null}"#,
+    )]);
+    let output = run_with_todoist_env(
+        &["--db", root.to_str().unwrap(), "task", "list", "source:all"],
+        &base_url,
+    );
+    handle.join().unwrap();
+    assert!(
+        output.status.success(),
+        "stdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let pkms = stdout
+        .lines()
+        .find(|line| line.contains("High priority task"))
+        .expect("expected pkms task");
+    let todoist = stdout
+        .lines()
+        .find(|line| line.contains("Remote mixed"))
+        .expect("expected todoist task");
+    assert_eq!(pkms.split_whitespace().next().unwrap(), "p1");
+    assert_eq!(todoist.split_whitespace().next().unwrap(), "t300");
 }
 
 #[cfg(feature = "todoist")]

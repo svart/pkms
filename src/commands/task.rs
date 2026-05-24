@@ -108,7 +108,7 @@ fn run_task_list(
         }
     };
     sort_task_items(&mut items, args.sort.as_deref().unwrap_or("priority"));
-    print_task_items(ctx, items, args.limit)
+    print_task_items(ctx, filters.source, items, args.limit)
 }
 
 fn run_shortcut(
@@ -118,8 +118,9 @@ fn run_shortcut(
     kind: ShortcutKind,
 ) -> Result<()> {
     let mut items = collect_shortcut_items(config, &args.filters, kind)?;
+    let source = shortcut_display_source(&args.filters, kind)?;
     sort_task_items(&mut items, "priority");
-    print_task_items(ctx, items, args.limit)
+    print_task_items(ctx, source, items, args.limit)
 }
 
 fn run_upcoming(
@@ -134,8 +135,18 @@ fn run_upcoming(
             days: args.days.max(0),
         },
     )?;
+    let source =
+        shortcut_display_source(&args.filters, ShortcutKind::Upcoming { days: args.days })?;
     sort_task_items(&mut items, "priority");
-    print_task_items(ctx, items, args.limit)
+    print_task_items(ctx, source, items, args.limit)
+}
+
+fn shortcut_display_source(raw_filters: &[String], kind: ShortcutKind) -> Result<SourceSelection> {
+    let mut filters = parse_task_filters(raw_filters)?;
+    if matches!(kind, ShortcutKind::Inbox) && raw_filters.is_empty() {
+        filters.source = SourceSelection::Todoist;
+    }
+    Ok(filters.source)
 }
 
 fn collect_shortcut_items(
@@ -174,19 +185,19 @@ fn run_agenda(config: &ResolvedConfig, ctx: &OutputContext, args: &TaskAgendaArg
     if matches!(filters.source, SourceSelection::Todoist) {
         let mut items = collect_todoist_items(config, &todoist_filters)?;
         sort_task_items(&mut items, args.sort.as_deref().unwrap_or("priority"));
-        return print_task_items(ctx, items, args.limit);
+        return print_task_items(ctx, filters.source, items, args.limit);
     }
 
     if matches!(filters.source, SourceSelection::All) {
         let mut items = collect_pkms_agenda_items(config, args)?;
         items.extend(collect_todoist_items(config, &todoist_filters)?);
         sort_task_items(&mut items, args.sort.as_deref().unwrap_or("priority"));
-        return print_task_items(ctx, items, args.limit);
+        return print_task_items(ctx, filters.source, items, args.limit);
     }
 
     let mut items = collect_pkms_agenda_items(config, args)?;
     sort_task_items(&mut items, args.sort.as_deref().unwrap_or("priority"));
-    print_task_items(ctx, items, args.limit)
+    print_task_items(ctx, filters.source, items, args.limit)
 }
 
 fn collect_pkms_shortcut_items(
@@ -571,22 +582,38 @@ fn flatten_report_sections(report: &TaskReportOutput) -> Vec<ReportNdjsonRow<'_>
 fn print_task_report_text(report: &TaskReportOutput) -> Result<()> {
     println!("Task {:?} for {}", report.kind, report.date);
     println!("Total: {} task(s)", report.total);
-    print_report_section("Overdue", &report.sections.overdue);
-    print_report_section("Today timed", &report.sections.today_timed);
-    print_report_section("Today untimed", &report.sections.today_untimed);
-    print_report_section("High priority", &report.sections.high_priority);
-    print_report_section("Waiting or blocked", &report.sections.waiting_or_blocked);
-    print_report_section("Inbox or no date", &report.sections.inbox_or_no_date);
-    print_report_section("Upcoming", &report.sections.upcoming);
+    print_report_section(report.source, "Overdue", &report.sections.overdue);
+    print_report_section(report.source, "Today timed", &report.sections.today_timed);
+    print_report_section(
+        report.source,
+        "Today untimed",
+        &report.sections.today_untimed,
+    );
+    print_report_section(
+        report.source,
+        "High priority",
+        &report.sections.high_priority,
+    );
+    print_report_section(
+        report.source,
+        "Waiting or blocked",
+        &report.sections.waiting_or_blocked,
+    );
+    print_report_section(
+        report.source,
+        "Inbox or no date",
+        &report.sections.inbox_or_no_date,
+    );
+    print_report_section(report.source, "Upcoming", &report.sections.upcoming);
     Ok(())
 }
 
-fn print_report_section(title: &str, section: &TaskReportSection) {
+fn print_report_section(source: SourceSelection, title: &str, section: &TaskReportSection) {
     println!();
     println!("{title}: {}", section.total);
     for item in &section.items {
         let date = effective_date(item).unwrap_or("no date");
-        println!("- [{}] {} ({date})", item.display_id, item.title);
+        println!("- [{}] {} ({date})", task_text_id(item, source), item.title);
     }
 }
 
@@ -675,7 +702,7 @@ fn show_todoist_task(config: &ResolvedConfig, ctx: &OutputContext, id: &str) -> 
     let mut item = crate::tasks::todoist::task_to_item_with_metadata(task, metadata.as_ref());
     enrich_todoist_items_with_pkms_notes(config, std::slice::from_mut(&mut item))?;
     match ctx.format {
-        OutputFormat::Text => print_task_table(&[item], 1),
+        OutputFormat::Text => print_task_table(&[item], 1, SourceSelection::Todoist),
         OutputFormat::Json => ctx.print_json(&item),
         OutputFormat::Ndjson => ctx.print_ndjson(&[item]),
     }
@@ -1508,7 +1535,10 @@ fn sort_task_items(items: &mut [TaskItem], sort: &str) {
                 return ord;
             }
         }
-        std::cmp::Ordering::Equal
+        source_name(a)
+            .cmp(source_name(b))
+            .then_with(|| a.source_id.cmp(&b.source_id))
+            .then_with(|| a.title.cmp(&b.title))
     });
 }
 
@@ -1529,6 +1559,7 @@ fn effective_date(item: &TaskItem) -> Option<&str> {
 
 fn print_task_items(
     ctx: &OutputContext,
+    source: SourceSelection,
     mut items: Vec<TaskItem>,
     limit: Option<usize>,
 ) -> Result<()> {
@@ -1538,7 +1569,7 @@ fn print_task_items(
     }
 
     match ctx.format {
-        OutputFormat::Text => print_task_table(&items, total),
+        OutputFormat::Text => print_task_table(&items, total, source),
         OutputFormat::Json => {
             #[derive(Serialize)]
             struct TaskListOutput {
@@ -1551,7 +1582,7 @@ fn print_task_items(
     }
 }
 
-fn print_task_table(items: &[TaskItem], total: usize) -> Result<()> {
+fn print_task_table(items: &[TaskItem], total: usize, source: SourceSelection) -> Result<()> {
     if items.is_empty() {
         println!("No tasks found.");
         return Ok(());
@@ -1563,7 +1594,7 @@ fn print_task_table(items: &[TaskItem], total: usize) -> Result<()> {
     ]);
     for item in items {
         builder.push_record([
-            item.display_id.clone(),
+            task_text_id(item, source),
             source_name(item).to_string(),
             effective_date(item).unwrap_or("").to_string(),
             item.state.clone().unwrap_or_default(),
@@ -1582,6 +1613,16 @@ fn print_task_table(items: &[TaskItem], total: usize) -> Result<()> {
     println!();
     println!("Shown: {}, Total: {} task(s)", items.len(), total);
     Ok(())
+}
+
+fn task_text_id(item: &TaskItem, source: SourceSelection) -> String {
+    match source {
+        SourceSelection::All => match item.source {
+            TaskSourceKind::Pkms => format!("p{}", item.source_id),
+            TaskSourceKind::Todoist => format!("t{}", item.source_id),
+        },
+        SourceSelection::Pkms | SourceSelection::Todoist => item.source_id.clone(),
+    }
 }
 
 fn source_name(item: &TaskItem) -> &'static str {

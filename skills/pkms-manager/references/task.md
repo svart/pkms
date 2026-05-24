@@ -21,6 +21,11 @@ pkms task done p5 --dry-run
 PKMS task IDs can be written as bare canonical IDs, `p<ID>`, or `pkms:<ID>`.
 Top-level compatibility commands use bare numeric IDs.
 
+Text list and agenda views render IDs by selected source. With only one source,
+the `Id` column is the bare source id. With `source:all`, local PKMS ids use
+`p<ID>` and Todoist ids use `t<remote-id>`. Structured JSON keeps stable
+`display_id` and `source_id` fields.
+
 `task state` changes only the TODO keyword. Valid states come from configured
 `open_todo_states` and `closed_todo_states`. State input is case-insensitive,
 but the file is written with the canonical config spelling.
@@ -55,7 +60,7 @@ pkms task postpone todoist:<remote-id> --to tomorrow
 pkms task schedule todoist:<remote-id> --due none
 ```
 
-Use stable `todoist:<remote-id>` IDs. Do not invent view-local Todoist IDs.
+Use stable `todoist:<remote-id>` IDs for Todoist mutations.
 Never print the Todoist token. It is read from `TODOIST_API_TOKEN` by default,
 or from `[todoist].token` in config when the environment variable is unset.
 

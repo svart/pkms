@@ -138,6 +138,10 @@ columns:
 Id,Source,Date,State,Prio,Tags,Project,Task
 ```
 
+Text task views render IDs for the selected source set. With only PKMS or only
+Todoist selected, `Id` is the bare source id. With `source:all`, PKMS ids are
+prefixed with `p` and Todoist ids are prefixed with `t`.
+
 JSON and NDJSON include source-neutral fields such as `source`, `source_id`,
 `display_id`, `status`, `state`, `note_title`, `note_uuid`, `path`, and
 `line_number`.
