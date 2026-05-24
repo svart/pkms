@@ -127,9 +127,11 @@ pkms task agenda --today source:todoist
 pkms task agenda --week source:all
 pkms task today source:all
 pkms task inbox
+pkms task inbox source:todoist
 pkms task list projects source:todoist
 pkms task list tags source:todoist
 pkms task show todoist:<remote-id>
+pkms task add "Capture local task"
 pkms task add --source todoist "Buy milk tomorrow"
 pkms task add --source todoist --title "Call Alice" --due 2026-05-24 --priority B
 pkms task add --source todoist --title "Call Alice" --note "Project Alpha"
@@ -140,6 +142,11 @@ pkms task schedule todoist:<remote-id> --due none
 
 See [TODO and Agenda](todo-agenda.md) for task IDs, filtering, table columns,
 editor behavior, and task state changes.
+
+`pkms task inbox` and default `pkms task add` use the PKMS inbox note configured
+as `[tasks].inbox`. The value can be a note title, UUID, absolute path, or path
+relative to `db_root`. Set it to `daily` to use today's daily note and place
+new tasks under `* Inbox`.
 
 Todoist task reads require a build with `--features todoist` and a token from
 `TODOIST_API_TOKEN` or `[todoist].token` in config. Prefer the environment

@@ -36,6 +36,9 @@ db_root = "/home/user/Documents/org"
 new_notes_dir = "roam"
 ignore_patterns = [".attach", "*.bak"]
 
+[tasks]
+inbox = "Inbox"
+
 [agenda]
 open_todo_states = ["TODO", "WAITING", "IN-PROGRESS"]
 closed_todo_states = ["DONE"]

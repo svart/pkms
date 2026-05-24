@@ -1310,9 +1310,210 @@ SCHEDULED: <{today}>
     assert!(items.iter().any(|item| item["source"] == "todoist"));
 }
 
+#[test]
+fn test_task_inbox_pkms_requires_configured_inbox() {
+    let (_dir, root) = setup_db();
+    let (stdout, stderr, status) = run(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "task",
+        "inbox",
+    ]);
+    assert!(!status.success());
+    assert!(
+        stdout.contains("PKMS task inbox is not configured")
+            || stderr.contains("PKMS task inbox is not configured")
+    );
+}
+
+#[test]
+fn test_task_inbox_pkms_uses_configured_note() {
+    let (_dir, root) = setup_db();
+    let inbox_path = root.join("roam/personal/20260525000000-inbox.org");
+    std::fs::write(
+        &inbox_path,
+        r#":PROPERTIES:
+:ID:       25252525-2525-4525-8525-252525252525
+:END:
+#+title: Inbox
+
+* TODO Inbox task
+* TODO [#A] Tagged inbox task :inbox:
+"#,
+    )
+    .unwrap();
+    let config = format!("{TEST_CONFIG}\n[tasks]\ninbox = \"Inbox\"\n");
+    let (stdout, stderr, status) = run_with_config(
+        &[
+            "--db",
+            root.to_str().unwrap(),
+            "--output-format",
+            "json",
+            "task",
+            "inbox",
+        ],
+        &config,
+    );
+    assert!(status.success(), "task inbox failed:\n{stdout}\n{stderr}");
+    let v: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    let items = v["items"].as_array().unwrap();
+    assert!(items.iter().any(|item| item["title"] == "Inbox task"));
+    assert!(
+        items
+            .iter()
+            .all(|item| item["path"] == inbox_path.display().to_string())
+    );
+}
+
+#[test]
+fn test_task_add_defaults_to_pkms_inbox() {
+    let (_dir, root) = setup_db();
+    let inbox_path = root.join("roam/personal/20260525000001-capture-inbox.org");
+    std::fs::write(
+        &inbox_path,
+        r#":PROPERTIES:
+:ID:       26262626-2626-4626-8626-262626262626
+:END:
+#+title: Capture Inbox
+"#,
+    )
+    .unwrap();
+    let config = format!("{TEST_CONFIG}\n[tasks]\ninbox = \"Capture Inbox\"\n");
+    let (stdout, stderr, status) = run_with_config(
+        &[
+            "--db",
+            root.to_str().unwrap(),
+            "--output-format",
+            "json",
+            "task",
+            "add",
+            "--title",
+            "Capture new task",
+            "--due",
+            "2026-06-01",
+            "--deadline",
+            "2026-06-03",
+            "--priority",
+            "A",
+            "--label",
+            "inbox",
+        ],
+        &config,
+    );
+    assert!(status.success(), "task add failed:\n{stdout}\n{stderr}");
+    let v: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    assert_eq!(v["item"]["source"], "pkms");
+    assert_eq!(v["item"]["title"], "Capture new task");
+    assert_eq!(v["item"]["scheduled"]["date"], "2026-06-01");
+    assert_eq!(v["item"]["deadline"]["date"], "2026-06-03");
+    let content = std::fs::read_to_string(&inbox_path).unwrap();
+    assert!(content.contains("* TODO [#A] Capture new task :inbox:"));
+    assert!(content.contains("SCHEDULED: <2026-06-01"));
+    assert!(content.contains("DEADLINE: <2026-06-03"));
+}
+
+#[test]
+fn test_task_add_daily_inbox_appends_under_today_inbox_heading() {
+    let (_dir, root) = setup_db();
+    let today = chrono::Local::now().date_naive();
+    let daily_path = root
+        .join("roam/personal")
+        .join(format!("{}.org", today.format("%Y-%m-%d")));
+    std::fs::write(
+        &daily_path,
+        format!(
+            r#":PROPERTIES:
+:ID:       27272727-2727-4727-8727-272727272727
+:END:
+#+title: {}
+#+filetags: :daily:
+
+* Plan
+Existing plan
+* Inbox
+** TODO Existing inbox task
+* Notes
+"#,
+            today.format("%Y-%m-%d")
+        ),
+    )
+    .unwrap();
+    let config = format!("{TEST_CONFIG}\n[tasks]\ninbox = \"daily\"\n");
+    let (stdout, stderr, status) = run_with_config(
+        &[
+            "--db",
+            root.to_str().unwrap(),
+            "--output-format",
+            "json",
+            "task",
+            "add",
+            "Daily capture",
+        ],
+        &config,
+    );
+    assert!(status.success(), "task add failed:\n{stdout}\n{stderr}");
+    let v: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    assert_eq!(v["item"]["source"], "pkms");
+    assert_eq!(v["item"]["title"], "Daily capture");
+    let content = std::fs::read_to_string(&daily_path).unwrap();
+    let new_task = content.find("** TODO Daily capture").unwrap();
+    let notes = content.find("* Notes").unwrap();
+    assert!(new_task < notes);
+}
+
+#[test]
+fn test_task_inbox_daily_lists_only_today_inbox_section() {
+    let (_dir, root) = setup_db();
+    let today = chrono::Local::now().date_naive();
+    let daily_path = root
+        .join("roam/personal")
+        .join(format!("{}.org", today.format("%Y-%m-%d")));
+    std::fs::write(
+        &daily_path,
+        format!(
+            r#":PROPERTIES:
+:ID:       28282828-2828-4828-8828-282828282828
+:END:
+#+title: {}
+#+filetags: :daily:
+
+* TODO Outside inbox
+* Inbox
+** TODO Inside inbox
+* TODO After inbox
+"#,
+            today.format("%Y-%m-%d")
+        ),
+    )
+    .unwrap();
+    let config = format!("{TEST_CONFIG}\n[tasks]\ninbox = \"daily\"\n");
+    let (stdout, stderr, status) = run_with_config(
+        &[
+            "--db",
+            root.to_str().unwrap(),
+            "--output-format",
+            "json",
+            "task",
+            "inbox",
+        ],
+        &config,
+    );
+    assert!(status.success(), "task inbox failed:\n{stdout}\n{stderr}");
+    let v: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    let titles: Vec<&str> = v["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|item| item["title"].as_str())
+        .collect();
+    assert_eq!(titles, vec!["Inside inbox"]);
+}
+
 #[cfg(feature = "todoist")]
 #[test]
-fn test_task_inbox_defaults_to_todoist_inbox_filter() {
+fn test_task_inbox_todoist_uses_inbox_filter() {
     let (_dir, root) = setup_db();
     let (base_url, handle) = spawn_todoist_mock(vec![(
         "GET",
@@ -1327,6 +1528,7 @@ fn test_task_inbox_defaults_to_todoist_inbox_filter() {
             "json",
             "task",
             "inbox",
+            "source:todoist",
         ],
         &base_url,
     );

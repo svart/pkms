@@ -47,12 +47,14 @@ pkms task today source:all
 pkms task overdue source:todoist
 pkms task upcoming --days 7 source:all
 pkms task inbox
+pkms task inbox source:todoist
 pkms task list projects source:todoist
 pkms task list tags source:todoist
 pkms task list projects source:all
 pkms task list tags source:all
 pkms task list source:todoist 'todoist.filter:today | overdue'
 pkms task show todoist:<remote-id>
+pkms task add "Capture local task"
 pkms task add --source todoist "Buy milk tomorrow"
 pkms task add --source todoist --title "Call Alice" --due 2026-05-24 --label phone --priority B
 pkms task add --source todoist --title "Call Alice" --note "Project Alpha"
@@ -74,8 +76,18 @@ filters when the assistant needs custom Todoist syntax.
 Prefer stable shortcuts for common assistant requests: `task today`,
 `task overdue`, `task upcoming --days N`, and `task inbox`. The first three
 accept `source:pkms`, `source:todoist`, or `source:all`; `task inbox` defaults
-to Todoist and uses the Todoist `#Inbox` filter because PKMS has no local inbox
-convention yet.
+to the PKMS inbox note configured as `[tasks].inbox`. Use
+`task inbox source:todoist` for Todoist's `#Inbox` filter. When `[tasks].inbox`
+is `daily`, PKMS inbox tasks live in today's daily note under the top-level
+`* Inbox` heading.
+
+Default `task add` appends a TODO heading to the configured PKMS inbox note.
+Use positional text or structured fields:
+
+```bash
+pkms task add "Capture local task"
+pkms task add --title "Call Alice" --due 2026-05-24 --deadline 2026-05-30 --label phone --priority B
+```
 
 Use positional text with `task add --source todoist` for Todoist Quick Add
 natural-language parsing. Use structured creation for deterministic assistant

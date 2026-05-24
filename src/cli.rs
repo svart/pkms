@@ -426,11 +426,11 @@ pub enum TaskCommand {
     State(TaskStateArgs),
     #[command(about = "Set a task to the configured closed state")]
     Done(TaskDoneArgs),
-    #[command(about = "Add a task to an external source")]
+    #[command(about = "Add a task")]
     Add(TaskAddArgs),
-    #[command(about = "Postpone a Todoist task")]
+    #[command(about = "Postpone a task")]
     Postpone(TaskPostponeArgs),
-    #[command(about = "Schedule or unschedule a Todoist task")]
+    #[command(about = "Schedule or unschedule a task")]
     Schedule(TaskScheduleArgs),
 }
 
@@ -531,7 +531,8 @@ pub struct TaskAddArgs {
     #[arg(
         long,
         value_name = "SOURCE",
-        help = "Task source, initially todoist only"
+        default_value = "pkms",
+        help = "Task source: pkms or todoist"
     )]
     pub source: String,
     #[arg(long, value_name = "PROJECT", help = "External project name")]

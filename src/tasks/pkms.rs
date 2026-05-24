@@ -86,6 +86,7 @@ mod tests {
             new_notes_dir: None,
             ignore_patterns: None,
             columns: None,
+            tasks: None,
             agenda: Some(crate::config::AgendaConfig {
                 open_todo_states: vec!["TODO".to_string(), "WAITING".to_string()],
                 closed_todo_states: vec!["DONE".to_string(), "CANCELED".to_string()],

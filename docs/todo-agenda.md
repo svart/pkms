@@ -158,12 +158,15 @@ pkms task today source:all
 pkms task overdue source:todoist
 pkms task upcoming --days 7 source:all
 pkms task inbox
+pkms task inbox source:todoist
 pkms task list projects source:todoist
 pkms task list tags source:todoist
 pkms task list projects source:all
 pkms task list tags source:all
 pkms task list source:todoist 'todoist.filter:today | overdue'
 pkms task show todoist:<remote-id>
+pkms task add "Capture local task"
+pkms task add --title "Call Alice" --due 2026-05-24 --deadline 2026-05-30 --label phone --priority B
 pkms task add --source todoist "Buy milk tomorrow"
 pkms task add --source todoist --project Inbox "Buy milk tomorrow"
 pkms task add --source todoist --title "Call Alice" --due 2026-05-24 --label phone --priority B
@@ -199,10 +202,29 @@ Use the stable shortcut commands for common assistant workflows:
 | `task today` | Today's PKMS agenda tasks by default; accepts `source:todoist` or `source:all`. |
 | `task overdue` | Overdue PKMS agenda tasks by default; accepts `source:todoist` or `source:all`. |
 | `task upcoming --days N` | Upcoming tasks after today through the next `N` days; defaults to 7. |
-| `task inbox` | Todoist Inbox tasks using the `#Inbox` filter. |
+| `task inbox` | PKMS inbox-note tasks by default; accepts `source:todoist` or `source:all`. |
 
-`task inbox` defaults to Todoist because PKMS does not yet define a local inbox
-convention.
+`task inbox` and default `task add` require a configured PKMS inbox note:
+
+```toml
+[tasks]
+inbox = "Inbox"
+```
+
+The inbox value can be a note title, UUID, absolute path, or path relative to
+`db_root`. Set it to `daily` to use today's daily note and place new tasks under
+the `* Inbox` heading, creating the heading when needed. Without an inbox
+configuration, PKMS inbox commands fail. `task inbox source:todoist` continues
+to use Todoist's `#Inbox` filter.
+
+PKMS task creation appends a TODO heading to that inbox note. It accepts
+positional text or `--title`, `--due`, `--deadline`, `--label`, `--priority`,
+and `--description`:
+
+```bash
+pkms task add "Capture local task"
+pkms task add --title "Call Alice" --due 2026-05-24 --deadline 2026-05-30 --label phone --priority B
+```
 
 Todoist task creation supports two modes. Positional text uses Todoist Quick Add
 and lets Todoist parse natural language, labels, priorities, and projects:
@@ -248,7 +270,7 @@ metadata. `source:all` combines both sources. Todoist task output sets `project`
 to the display name when metadata is available and keeps the raw id in
 `project_id`.
 
-`task add --source todoist --output-format json` returns a wrapper with
+`task add --output-format json` returns a wrapper with
 `created: true` and the created source-neutral `TaskItem` under `item`, including
 stable `display_id`, `source_id`, title, description, priority, dates, labels,
 project, `project_id`, and URL when Todoist provides them. Text output stays concise but

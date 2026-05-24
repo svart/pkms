@@ -11,16 +11,17 @@ use crate::commands::task_index::{
 use crate::config::ResolvedConfig;
 use crate::input;
 use crate::output::OutputContext;
-use crate::parser::HEADING_RE;
+use crate::parser::{HEADING_RE, find_daily_file_date};
 use crate::tasks::filter::{SourceSelection, TaskFilters, parse_task_filters};
 use crate::tasks::id::TaskId;
 use crate::tasks::model::{TaskItem, TaskSourceKind};
 use crate::tasks::pkms::record_to_task_item;
 use crate::workspace::Workspace;
-use anyhow::{Result, bail};
+use anyhow::{Context, Result, bail};
 use chrono::{Local, NaiveDate};
 use serde::Serialize;
 use std::collections::BTreeMap;
+use std::path::{Path, PathBuf};
 use tabled::builder::Builder;
 use tabled::settings::Style;
 use tabled::settings::object::{Columns, Rows};
@@ -38,6 +39,12 @@ struct TaskStateChangeOutput {
     old_state: String,
     new_state: String,
     dry_run: bool,
+}
+
+#[derive(Debug, Clone)]
+enum PkmsInboxTarget {
+    Note(PathBuf),
+    Daily { path: PathBuf },
 }
 
 pub fn run(config: &ResolvedConfig, ctx: &OutputContext, command: &TaskCommand) -> Result<()> {
@@ -142,7 +149,7 @@ fn run_shortcut(
     kind: ShortcutKind,
 ) -> Result<()> {
     let mut items = collect_shortcut_items(config, &args.filters, kind)?;
-    let source = shortcut_display_source(&args.filters, kind)?;
+    let source = shortcut_display_source(&args.filters)?;
     sort_task_items(&mut items, "priority");
     print_task_items(ctx, source, items, args.limit)
 }
@@ -159,17 +166,13 @@ fn run_upcoming(
             days: args.days.max(0),
         },
     )?;
-    let source =
-        shortcut_display_source(&args.filters, ShortcutKind::Upcoming { days: args.days })?;
+    let source = shortcut_display_source(&args.filters)?;
     sort_task_items(&mut items, "priority");
     print_task_items(ctx, source, items, args.limit)
 }
 
-fn shortcut_display_source(raw_filters: &[String], kind: ShortcutKind) -> Result<SourceSelection> {
-    let mut filters = parse_task_filters(raw_filters)?;
-    if matches!(kind, ShortcutKind::Inbox) && raw_filters.is_empty() {
-        filters.source = SourceSelection::Todoist;
-    }
+fn shortcut_display_source(raw_filters: &[String]) -> Result<SourceSelection> {
+    let filters = parse_task_filters(raw_filters)?;
     Ok(filters.source)
 }
 
@@ -178,21 +181,18 @@ fn collect_shortcut_items(
     raw_filters: &[String],
     kind: ShortcutKind,
 ) -> Result<Vec<TaskItem>> {
-    let mut filters = parse_task_filters(raw_filters)?;
-    if matches!(kind, ShortcutKind::Inbox) && raw_filters.is_empty() {
-        filters.source = SourceSelection::Todoist;
-    }
-    if matches!(kind, ShortcutKind::Inbox) && matches!(filters.source, SourceSelection::Pkms) {
-        bail!("PKMS inbox tasks are not supported yet. Use source:todoist.");
-    }
+    let filters = parse_task_filters(raw_filters)?;
 
     let todoist_filters = shortcut_todoist_filters(&filters, kind);
     let items = match filters.source {
+        SourceSelection::Pkms if matches!(kind, ShortcutKind::Inbox) => {
+            collect_pkms_inbox_items(config)?
+        }
         SourceSelection::Pkms => collect_pkms_shortcut_items(config, kind)?,
         SourceSelection::Todoist => collect_todoist_items(config, &todoist_filters)?,
         SourceSelection::All => {
             let mut items = if matches!(kind, ShortcutKind::Inbox) {
-                Vec::new()
+                collect_pkms_inbox_items(config)?
             } else {
                 collect_pkms_shortcut_items(config, kind)?
             };
@@ -283,6 +283,39 @@ fn collect_pkms_list_items(config: &ResolvedConfig) -> Result<Vec<TaskItem>> {
         &no_filters,
     );
     assign_canonical_ids(config, &workspace.graph, &mut records);
+    Ok(records
+        .into_iter()
+        .map(|record| record_to_task_item(config, record))
+        .collect())
+}
+
+fn collect_pkms_inbox_items(config: &ResolvedConfig) -> Result<Vec<TaskItem>> {
+    let target = resolve_pkms_inbox_target(config, false)?;
+    let workspace = Workspace::load(config)?;
+    let graph = &workspace.graph;
+    let valid_states = config.todo_states();
+    let mut records = collect_todo_records(&workspace.corpus, &valid_states, &[], &[], &[]);
+    assign_canonical_ids(config, graph, &mut records);
+
+    let records: Vec<_> = match target {
+        PkmsInboxTarget::Note(path) => records
+            .into_iter()
+            .filter(|record| record.path == path.display().to_string())
+            .collect(),
+        PkmsInboxTarget::Daily { path } => {
+            let section = inbox_section_range(&path)?;
+            records
+                .into_iter()
+                .filter(|record| {
+                    record.path == path.display().to_string()
+                        && section.is_some_and(|(start, end)| {
+                            record.line_number > start && record.line_number < end
+                        })
+                })
+                .collect()
+        }
+    };
+
     Ok(records
         .into_iter()
         .map(|record| record_to_task_item(config, record))
@@ -670,10 +703,16 @@ fn run_done(config: &ResolvedConfig, ctx: &OutputContext, args: &TaskDoneArgs) -
 }
 
 fn run_add(config: &ResolvedConfig, ctx: &OutputContext, args: &TaskAddArgs) -> Result<()> {
-    if !args.source.eq_ignore_ascii_case("todoist") {
-        bail!("PKMS task creation is not supported");
+    if args.source.eq_ignore_ascii_case("pkms") {
+        return add_pkms_task(config, ctx, args);
     }
-    add_todoist_task(config, ctx, args)
+    if args.source.eq_ignore_ascii_case("todoist") {
+        return add_todoist_task(config, ctx, args);
+    }
+    bail!(
+        "Unknown task source '{}'. Use pkms or todoist.",
+        args.source
+    )
 }
 
 fn run_postpone(
@@ -829,6 +868,261 @@ fn canonical_state(config: &ResolvedConfig, requested_state: &str) -> Result<Str
                 states.join(", ")
             )
         })
+}
+
+fn resolve_pkms_inbox_target(
+    config: &ResolvedConfig,
+    create_daily: bool,
+) -> Result<PkmsInboxTarget> {
+    let target = config.task_inbox()?;
+    if target.eq_ignore_ascii_case("daily") {
+        return resolve_daily_inbox_target(config, create_daily);
+    }
+
+    let graph = crate::graph::Graph::load(config)?;
+    if let Some(node) = graph.find_node(target) {
+        return Ok(PkmsInboxTarget::Note(node.path.clone()));
+    }
+
+    let configured = PathBuf::from(target);
+    let candidates = if configured.is_absolute() {
+        vec![configured]
+    } else {
+        vec![config.resolved_db_root().join(&configured), configured]
+    };
+
+    candidates
+        .into_iter()
+        .find(|path| path.exists())
+        .map(PkmsInboxTarget::Note)
+        .ok_or_else(|| anyhow::anyhow!("PKMS task inbox note not found: {target}"))
+}
+
+fn resolve_daily_inbox_target(config: &ResolvedConfig, create: bool) -> Result<PkmsInboxTarget> {
+    let today = Local::now().date_naive();
+    let graph = crate::graph::Graph::load(config)?;
+    if let Some(result) = graph
+        .results
+        .iter()
+        .find(|result| find_daily_file_date(&result.path) == Some(today))
+    {
+        return Ok(PkmsInboxTarget::Daily {
+            path: result.path.clone(),
+        });
+    }
+
+    if !create {
+        return Ok(PkmsInboxTarget::Daily {
+            path: config.resolve_new_notes_dir().join(format!("{today}.org")),
+        });
+    }
+
+    let path = config.resolve_new_notes_dir().join(format!("{today}.org"));
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).with_context(|| {
+            format!(
+                "Failed to create daily note directory: {}",
+                parent.display()
+            )
+        })?;
+    }
+    if !path.exists() {
+        let title = today.format("%Y-%m-%d").to_string();
+        std::fs::write(&path, format!("#+title: {title}\n#+filetags: :daily:\n\n"))
+            .with_context(|| format!("Failed to create daily note: {}", path.display()))?;
+    }
+    Ok(PkmsInboxTarget::Daily { path })
+}
+
+fn add_pkms_task(config: &ResolvedConfig, ctx: &OutputContext, args: &TaskAddArgs) -> Result<()> {
+    let inbox_target = resolve_pkms_inbox_target(config, true)?;
+    let title = args
+        .title
+        .as_deref()
+        .or(args.text.as_deref())
+        .map(str::trim)
+        .filter(|title| !title.is_empty())
+        .ok_or_else(|| anyhow::anyhow!("PKMS task creation requires task text or --title"))?;
+
+    let state = config
+        .open_todo_states()
+        .first()
+        .cloned()
+        .unwrap_or_else(|| "TODO".to_string());
+    let priority = args
+        .priority
+        .as_deref()
+        .map(pkms_priority)
+        .transpose()?
+        .map(|priority| format!(" [#{priority}]"))
+        .unwrap_or_default();
+    let tags = if args.label.is_empty() {
+        String::new()
+    } else {
+        format!(" :{}:", args.label.join(":"))
+    };
+
+    let level = match inbox_target {
+        PkmsInboxTarget::Note(_) => "*",
+        PkmsInboxTarget::Daily { .. } => "**",
+    };
+    let mut entry = format!("{level} {state}{priority} {title}{tags}\n");
+    let due = validate_pkms_date_arg("due", args.due.as_deref())?;
+    let deadline = validate_pkms_date_arg("deadline", args.deadline.as_deref())?;
+    if due.is_some() || deadline.is_some() {
+        let mut planning = Vec::new();
+        if let Some(due) = due {
+            planning.push(format!("SCHEDULED: {}", org_date(&due)?));
+        }
+        if let Some(deadline) = deadline {
+            planning.push(format!("DEADLINE: {}", org_date(&deadline)?));
+        }
+        entry.push_str(&format!("{}\n", planning.join(" ")));
+    }
+    if let Some(description) = args
+        .description
+        .as_deref()
+        .map(str::trim)
+        .filter(|d| !d.is_empty())
+    {
+        entry.push('\n');
+        entry.push_str(description);
+        entry.push('\n');
+    }
+
+    let (inbox_path, line_number) = append_pkms_inbox_entry(&inbox_target, &entry)?;
+    let item = find_pkms_task_item(config, &inbox_path, line_number)?.with_context(|| {
+        format!(
+            "Created task but could not reload it from {}",
+            inbox_path.display()
+        )
+    })?;
+    print_add_output(ctx, item)
+}
+
+fn pkms_priority(value: &str) -> Result<char> {
+    match value.to_ascii_uppercase().as_str() {
+        "A" | "B" | "C" => Ok(value.to_ascii_uppercase().chars().next().unwrap()),
+        _ => bail!("Invalid priority '{value}'. Use A, B, or C."),
+    }
+}
+
+fn validate_pkms_date_arg(name: &str, value: Option<&str>) -> Result<Option<String>> {
+    value
+        .map(|value| {
+            crate::input::parse_date(Some(value))
+                .map(|date| date.format("%Y-%m-%d").to_string())
+                .ok_or_else(|| anyhow::anyhow!("Invalid {name} date '{value}'. Use YYYY-MM-DD."))
+        })
+        .transpose()
+}
+
+fn org_date(date: &str) -> Result<String> {
+    let date = NaiveDate::parse_from_str(date, "%Y-%m-%d")?;
+    Ok(format!("<{}>", date.format("%Y-%m-%d %a")))
+}
+
+fn append_pkms_inbox_entry(target: &PkmsInboxTarget, entry: &str) -> Result<(PathBuf, usize)> {
+    match target {
+        PkmsInboxTarget::Note(path) => {
+            append_org_entry(path, entry).map(|line| (path.clone(), line))
+        }
+        PkmsInboxTarget::Daily { path } => {
+            append_daily_inbox_entry(path, entry).map(|line| (path.clone(), line))
+        }
+    }
+}
+
+fn append_org_entry(path: &Path, entry: &str) -> Result<usize> {
+    let mut content = std::fs::read_to_string(path)
+        .with_context(|| format!("Failed to read inbox note: {}", path.display()))?;
+    if !content.ends_with('\n') {
+        content.push('\n');
+    }
+    if !content.ends_with("\n\n") {
+        content.push('\n');
+    }
+    let line_number = content.lines().count() + 1;
+    std::fs::write(path, format!("{content}{entry}"))
+        .with_context(|| format!("Failed to write inbox note: {}", path.display()))?;
+    Ok(line_number)
+}
+
+fn append_daily_inbox_entry(path: &Path, entry: &str) -> Result<usize> {
+    let mut content = std::fs::read_to_string(path)
+        .with_context(|| format!("Failed to read daily note: {}", path.display()))?;
+    normalize_trailing_newline(&mut content);
+
+    if let Some((_start, end)) = inbox_section_range_from_content(&content) {
+        let mut lines: Vec<String> = content.split_inclusive('\n').map(str::to_string).collect();
+        let insert_idx = end.saturating_sub(1);
+        lines.insert(insert_idx, entry.to_string());
+        std::fs::write(path, lines.concat())
+            .with_context(|| format!("Failed to write daily note: {}", path.display()))?;
+        return Ok(insert_idx + 1);
+    }
+
+    if !content.ends_with("\n\n") {
+        content.push('\n');
+    }
+    let inbox_heading_line = content.lines().count() + 1;
+    content.push_str("* Inbox\n");
+    content.push_str(entry);
+    std::fs::write(path, content)
+        .with_context(|| format!("Failed to write daily note: {}", path.display()))?;
+    Ok(inbox_heading_line + 1)
+}
+
+fn normalize_trailing_newline(content: &mut String) {
+    if !content.ends_with('\n') {
+        content.push('\n');
+    }
+}
+
+fn inbox_section_range(path: &Path) -> Result<Option<(usize, usize)>> {
+    let content = std::fs::read_to_string(path)
+        .with_context(|| format!("Failed to read daily note: {}", path.display()))?;
+    Ok(inbox_section_range_from_content(&content))
+}
+
+fn inbox_section_range_from_content(content: &str) -> Option<(usize, usize)> {
+    let mut start = None;
+    for (idx, line) in content.lines().enumerate() {
+        let line_number = idx + 1;
+        let Some(captures) = HEADING_RE.captures(line) else {
+            continue;
+        };
+        let level = captures.get(1).map_or("", |m| m.as_str()).len();
+        if level != 1 {
+            continue;
+        }
+        if start.is_some() {
+            return Some((start?, line_number));
+        }
+        let title = captures.get(4).map_or("", |m| m.as_str()).trim();
+        if title.eq_ignore_ascii_case("Inbox") {
+            start = Some(line_number);
+        }
+    }
+    start.map(|start| (start, content.lines().count() + 1))
+}
+
+fn find_pkms_task_item(
+    config: &ResolvedConfig,
+    path: &Path,
+    line_number: usize,
+) -> Result<Option<TaskItem>> {
+    let workspace = Workspace::load(config)?;
+    let graph = &workspace.graph;
+    let valid_states = config.todo_states();
+    let mut records = collect_todo_records(&workspace.corpus, &valid_states, &[], &[], &[]);
+    assign_canonical_ids(config, graph, &mut records);
+    Ok(records
+        .into_iter()
+        .find(|record| {
+            record.path == path.display().to_string() && record.line_number == line_number
+        })
+        .map(|record| record_to_task_item(config, record)))
 }
 
 fn replace_heading_state(
@@ -1034,7 +1328,6 @@ fn quick_add_todoist_task(
     print_add_output(ctx, item)
 }
 
-#[cfg(feature = "todoist")]
 fn print_add_output(ctx: &OutputContext, item: TaskItem) -> Result<()> {
     #[derive(Serialize)]
     struct AddOutput {
@@ -1139,7 +1432,6 @@ fn todoist_created_task_id(response: &serde_json::Value) -> Result<String> {
         .ok_or_else(|| anyhow::anyhow!("Todoist create response did not include a task id"))
 }
 
-#[cfg(feature = "todoist")]
 fn print_created_task(item: &TaskItem) {
     let mut details = vec![format!("id {}", item.display_id)];
     if let Some(date) = effective_date(item) {
@@ -1155,7 +1447,8 @@ fn print_created_task(item: &TaskItem) {
         details.push(format!("labels {}", item.tags.join(", ")));
     }
     println!(
-        "Created Todoist task: {} ({})",
+        "Created {} task: {} ({})",
+        source_name(item),
         item.title,
         details.join("; ")
     );

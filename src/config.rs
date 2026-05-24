@@ -9,6 +9,7 @@ pub struct Config {
     pub new_notes_dir: Option<PathBuf>,
     pub ignore_patterns: Option<Vec<String>>,
     pub columns: Option<Vec<String>>,
+    pub tasks: Option<TaskConfig>,
     pub agenda: Option<AgendaConfig>,
     pub todoist: Option<TodoistConfig>,
 }
@@ -19,6 +20,7 @@ pub struct ResolvedConfig {
     pub new_notes_dir: Option<PathBuf>,
     pub ignore_patterns: Option<Vec<String>>,
     pub columns: Option<Vec<String>>,
+    pub tasks: Option<TaskConfig>,
     pub agenda: Option<AgendaConfig>,
     pub todoist: Option<TodoistConfig>,
 }
@@ -38,6 +40,11 @@ pub struct TodoistConfig {
     pub token: Option<String>,
     pub token_env: Option<String>,
     pub default_filter: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TaskConfig {
+    pub inbox: Option<String>,
 }
 
 fn default_open_todo_states() -> Vec<String> {
@@ -65,6 +72,7 @@ impl Config {
                 new_notes_dir: None,
                 ignore_patterns: None,
                 columns: None,
+                tasks: None,
                 agenda: None,
                 todoist: None,
             })
@@ -86,6 +94,7 @@ impl Config {
             new_notes_dir: self.new_notes_dir,
             ignore_patterns: self.ignore_patterns,
             columns: self.columns,
+            tasks: self.tasks,
             agenda: self.agenda,
             todoist: self.todoist,
         })
@@ -183,6 +192,15 @@ impl ResolvedConfig {
             .unwrap_or_else(|_| "https://api.todoist.com/api/v1".to_string())
     }
 
+    pub fn task_inbox(&self) -> Result<&str> {
+        self.tasks
+            .as_ref()
+            .and_then(|tasks| tasks.inbox.as_deref())
+            .map(str::trim)
+            .filter(|inbox| !inbox.is_empty())
+            .ok_or_else(|| anyhow::anyhow!("PKMS task inbox is not configured. Set [tasks].inbox."))
+    }
+
     pub fn resolved_info(&self) -> ConfigInfo {
         ConfigInfo {
             db_root: self.db_root.clone(),
@@ -233,6 +251,10 @@ pub fn generate_default_config(db_root: Option<&std::path::Path>) -> String {
 # Available: Id, Date, State, Type, Prio, Tags, Note, Heading
 # columns = ["Id", "Date", "State", "Type", "Prio", "Tags", "Note", "Heading"]
 
+# Task section: configure the PKMS inbox note used by `pkms task inbox` and `pkms task add`
+# [tasks]
+# inbox = "Inbox"
+
 # Agenda section: configure TODO state keyword lists
 # [agenda]
 # open_todo_states = ["TODO"]
@@ -266,6 +288,7 @@ mod tests {
             new_notes_dir: None,
             ignore_patterns: None,
             columns: None,
+            tasks: None,
             agenda: None,
             todoist: None,
         };
@@ -282,6 +305,7 @@ mod tests {
             new_notes_dir: Some(PathBuf::from("/abs/path")),
             ignore_patterns: None,
             columns: None,
+            tasks: None,
             agenda: None,
             todoist: None,
         };
@@ -295,6 +319,7 @@ mod tests {
             new_notes_dir: Some(PathBuf::from("subdir")),
             ignore_patterns: None,
             columns: None,
+            tasks: None,
             agenda: None,
             todoist: None,
         };
@@ -311,6 +336,7 @@ mod tests {
             new_notes_dir: None,
             ignore_patterns: Some(vec!["*.bak".to_string(), ".attach".to_string()]),
             columns: None,
+            tasks: None,
             agenda: None,
             todoist: None,
         };
@@ -326,6 +352,7 @@ mod tests {
             new_notes_dir: None,
             ignore_patterns: None,
             columns: None,
+            tasks: None,
             agenda: None,
             todoist: None,
         };
@@ -365,6 +392,7 @@ mod tests {
             new_notes_dir: Some(PathBuf::from("/notes/dir")),
             ignore_patterns: Some(vec!["*.tmp".to_string()]),
             columns: None,
+            tasks: None,
             agenda: None,
             todoist: None,
         };
@@ -381,6 +409,9 @@ db_root = "/test/db"
 new_notes_dir = "notes"
 ignore_patterns = [".attach"]
 
+[tasks]
+inbox = "Inbox"
+
 [todoist]
 enabled = true
 token = "config-token"
@@ -391,6 +422,13 @@ default_filter = "today | overdue"
         assert_eq!(config.db_root, Some(PathBuf::from("/test/db")));
         assert_eq!(config.new_notes_dir, Some(PathBuf::from("notes")));
         assert_eq!(config.ignore_patterns, Some(vec![".attach".to_string()]));
+        assert_eq!(
+            config
+                .tasks
+                .as_ref()
+                .and_then(|tasks| tasks.inbox.as_deref()),
+            Some("Inbox")
+        );
         let todoist = config.todoist.unwrap();
         assert!(todoist.enabled);
         assert_eq!(todoist.token.as_deref(), Some("config-token"));
@@ -408,6 +446,7 @@ default_filter = "today | overdue"
             new_notes_dir: None,
             ignore_patterns: None,
             columns: None,
+            tasks: None,
             agenda: None,
             todoist: None,
         };
@@ -423,6 +462,7 @@ default_filter = "today | overdue"
             new_notes_dir: None,
             ignore_patterns: None,
             columns: None,
+            tasks: None,
             agenda: None,
             todoist: Some(TodoistConfig {
                 enabled: true,
@@ -442,6 +482,7 @@ default_filter = "today | overdue"
             new_notes_dir: None,
             ignore_patterns: None,
             columns: None,
+            tasks: None,
             agenda: None,
             todoist: Some(TodoistConfig {
                 enabled: true,
