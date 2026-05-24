@@ -28,6 +28,20 @@ fn test_agenda_json() {
 }
 
 #[test]
+fn test_agenda_json_defaults_to_increasing_date_order() {
+    let (_dir, root) = setup_db();
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "agenda",
+    ]);
+    assert!(status.success());
+    assert_effective_dates_increasing(v["items"].as_array().unwrap());
+}
+
+#[test]
 fn test_agenda_ndjson() {
     let (_dir, root) = setup_db();
     let (stdout, _stderr, status) = run(&[
@@ -274,4 +288,21 @@ fn test_agenda_today_and_week() {
 
     let (_, _stderr2, status2) = run(&["--db", root.to_str().unwrap(), "agenda", "--week"]);
     assert!(status2.success());
+}
+
+fn assert_effective_dates_increasing(items: &[serde_json::Value]) {
+    let dates: Vec<&str> = items
+        .iter()
+        .map(|item| {
+            item["scheduled_date"]
+                .as_str()
+                .or_else(|| item["deadline_date"].as_str())
+                .or_else(|| item["daily_file_date"].as_str())
+                .expect("agenda item should have an effective date")
+        })
+        .collect();
+    assert!(
+        dates.windows(2).all(|window| window[0] <= window[1]),
+        "expected increasing agenda dates, got {dates:?}"
+    );
 }

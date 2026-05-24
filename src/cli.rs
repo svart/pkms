@@ -301,7 +301,7 @@ pub struct AgendaArgs {
     #[arg(
         long,
         value_name = "SORT",
-        help = "Comma-separated sort fields: priority, scheduled, deadline, file, date (default: priority)"
+        help = "Comma-separated sort fields: priority, scheduled, deadline, file, date (default: date,priority)"
     )]
     pub sort: Option<String>,
     #[arg(long, help = "Maximum results")]

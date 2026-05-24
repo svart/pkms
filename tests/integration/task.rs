@@ -145,7 +145,7 @@ fn test_task_list_pkms_text_uses_bare_source_ids() {
 }
 
 #[test]
-fn test_task_agenda_matches_agenda_count_json() {
+fn test_task_agenda_matches_agenda_json() {
     let (_dir, root) = setup_db();
     let (task, task_status) = run_json(&[
         "--db",
@@ -164,14 +164,30 @@ fn test_task_agenda_matches_agenda_count_json() {
     ]);
     assert!(task_status.success());
     assert!(agenda_status.success());
-    assert_eq!(
-        task["items"].as_array().unwrap().len(),
-        agenda["items"].as_array().unwrap().len()
-    );
+    assert_eq!(task, agenda);
 }
 
 #[test]
-fn test_task_today_matches_agenda_today_json() {
+fn test_task_agenda_matches_agenda_text() {
+    let (_dir, root) = setup_db();
+    let (task_stdout, task_stderr, task_status) =
+        run(&["--db", root.to_str().unwrap(), "task", "agenda"]);
+    let (agenda_stdout, agenda_stderr, agenda_status) =
+        run(&["--db", root.to_str().unwrap(), "agenda"]);
+
+    assert!(
+        task_status.success(),
+        "task agenda failed:\n{task_stdout}\n{task_stderr}"
+    );
+    assert!(
+        agenda_status.success(),
+        "agenda failed:\n{agenda_stdout}\n{agenda_stderr}"
+    );
+    assert_eq!(task_stdout, agenda_stdout);
+}
+
+#[test]
+fn test_task_agenda_today_matches_agenda_today_json() {
     let (_dir, root) = setup_db();
     let today = org_date(0);
     std::fs::write(
@@ -189,15 +205,7 @@ SCHEDULED: <{today}>
         ),
     )
     .unwrap();
-    let (shortcut, shortcut_status) = run_json(&[
-        "--db",
-        root.to_str().unwrap(),
-        "--output-format",
-        "json",
-        "task",
-        "today",
-    ]);
-    let (agenda, agenda_status) = run_json(&[
+    let (task_agenda, task_agenda_status) = run_json(&[
         "--db",
         root.to_str().unwrap(),
         "--output-format",
@@ -206,9 +214,17 @@ SCHEDULED: <{today}>
         "agenda",
         "--today",
     ]);
-    assert!(shortcut_status.success());
+    let (agenda, agenda_status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "agenda",
+        "--today",
+    ]);
+    assert!(task_agenda_status.success());
     assert!(agenda_status.success());
-    assert_eq!(shortcut["items"], agenda["items"]);
+    assert_eq!(task_agenda, agenda);
 }
 
 #[test]

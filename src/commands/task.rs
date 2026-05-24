@@ -9,6 +9,7 @@ use crate::commands::task_index::{
     assign_canonical_ids, collect_agenda_records, collect_todo_records,
 };
 use crate::config::ResolvedConfig;
+use crate::input;
 use crate::output::OutputContext;
 use crate::parser::HEADING_RE;
 use crate::tasks::filter::{SourceSelection, TaskFilters, parse_task_filters};
@@ -181,22 +182,45 @@ fn collect_shortcut_items(
 
 fn run_agenda(config: &ResolvedConfig, ctx: &OutputContext, args: &TaskAgendaArgs) -> Result<()> {
     let filters = parse_task_filters(&args.filters)?;
+    if matches!(filters.source, SourceSelection::Pkms) {
+        let columns = input::resolve_columns(args.table.columns.as_deref(), &config.columns);
+        return crate::commands::agenda::run(
+            config,
+            ctx,
+            &crate::commands::agenda::AgendaOptions {
+                state: None,
+                tags: None,
+                kind: None,
+                prio: None,
+                overdue: args.overdue,
+                upcoming: args.upcoming,
+                date: None,
+                sort: args.sort.clone(),
+                limit: args.limit,
+                today: args.today,
+                week: args.week,
+                line_sep: args.table.line_sep,
+                columns,
+            },
+        );
+    }
+
     let todoist_filters = todoist_agenda_filters(&filters, args);
     if matches!(filters.source, SourceSelection::Todoist) {
         let mut items = collect_todoist_items(config, &todoist_filters)?;
-        sort_task_items(&mut items, args.sort.as_deref().unwrap_or("priority"));
+        sort_task_items(&mut items, args.sort.as_deref().unwrap_or("date,priority"));
         return print_task_items(ctx, filters.source, items, args.limit);
     }
 
     if matches!(filters.source, SourceSelection::All) {
         let mut items = collect_pkms_agenda_items(config, args)?;
         items.extend(collect_todoist_items(config, &todoist_filters)?);
-        sort_task_items(&mut items, args.sort.as_deref().unwrap_or("priority"));
+        sort_task_items(&mut items, args.sort.as_deref().unwrap_or("date,priority"));
         return print_task_items(ctx, filters.source, items, args.limit);
     }
 
     let mut items = collect_pkms_agenda_items(config, args)?;
-    sort_task_items(&mut items, args.sort.as_deref().unwrap_or("priority"));
+    sort_task_items(&mut items, args.sort.as_deref().unwrap_or("date,priority"));
     print_task_items(ctx, filters.source, items, args.limit)
 }
 

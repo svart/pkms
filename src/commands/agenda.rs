@@ -194,7 +194,7 @@ pub fn run(config: &ResolvedConfig, ctx: &OutputContext, opts: &AgendaOptions) -
         .sort
         .as_deref()
         .map(|s| s.split(',').map(|s| s.trim()).collect())
-        .unwrap_or_else(|| vec!["priority"]);
+        .unwrap_or_else(|| vec!["date", "priority"]);
     sort_items(&mut items, &sort_fields);
 
     let total = items.len();
