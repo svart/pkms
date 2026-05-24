@@ -2015,17 +2015,104 @@ fn print_task_table(items: &[TaskItem], total: usize, source: SourceSelection) -
             builder.push_record(row);
         }
     }
+    let wrap_widths = task_table_wrap_widths(items, source);
     let mut table = builder.build();
     table.with(Style::blank());
     table.with(Modify::new(Rows::one(1)).with(Border::new().top('─')));
-    table.with(Modify::new(Columns::one(5)).with(Width::wrap(25).keep_words(true)));
-    table.with(Modify::new(Columns::one(6)).with(Width::wrap(20).keep_words(true)));
-    table.with(Modify::new(Columns::one(7)).with(Width::wrap(24).keep_words(true)));
-    table.with(Modify::new(Columns::one(8)).with(Width::wrap(30).keep_words(true)));
+    for (column, width) in wrap_widths {
+        table.with(Modify::new(Columns::one(column)).with(Width::wrap(width).keep_words(true)));
+    }
     println!("{table}");
     println!();
     println!("Shown: {}, Total: {} task(s)", items.len(), total);
     Ok(())
+}
+
+fn task_table_wrap_widths(items: &[TaskItem], source: SourceSelection) -> Vec<(usize, usize)> {
+    const HEADERS: [&str; 9] = [
+        "Id", "Date", "State", "Type", "Prio", "Tags", "Project", "Note", "Heading",
+    ];
+    const FIXED_COLUMNS: [usize; 5] = [0, 1, 2, 3, 4];
+    const WRAP_COLUMNS: [usize; 4] = [5, 6, 7, 8];
+    const DEFAULT_WIDTHS: [(usize, usize); 4] = [(5, 25), (6, 20), (7, 24), (8, 30)];
+    const WEIGHTS: [(usize, usize); 4] = [(5, 10), (6, 15), (7, 5), (8, 70)];
+    const MIN_WIDTHS: [(usize, usize); 4] = [(5, 4), (6, 7), (7, 4), (8, 20)];
+
+    let Some(term_width) = crate::output::table::terminal_width() else {
+        return DEFAULT_WIDTHS.to_vec();
+    };
+
+    let mut max_widths = HEADERS.map(str::len);
+    for item in items {
+        for row in task_table_rows(item, source) {
+            for (idx, value) in row.iter().enumerate() {
+                let width = value
+                    .lines()
+                    .map(|line| line.chars().count())
+                    .max()
+                    .unwrap_or(0);
+                max_widths[idx] = max_widths[idx].max(width);
+            }
+        }
+    }
+
+    let padding = HEADERS.len().saturating_sub(1) + 2 * HEADERS.len();
+    let fixed_width: usize = FIXED_COLUMNS.iter().map(|idx| max_widths[*idx]).sum();
+    let available = term_width.saturating_sub(fixed_width + padding);
+    let min_total: usize = WRAP_COLUMNS
+        .iter()
+        .map(|column| task_table_lookup(&MIN_WIDTHS, *column))
+        .sum();
+    if available < min_total {
+        return DEFAULT_WIDTHS.to_vec();
+    }
+
+    let mut widths: Vec<(usize, usize)> = WRAP_COLUMNS
+        .iter()
+        .map(|column| {
+            let min = task_table_lookup(&MIN_WIDTHS, *column);
+            (*column, min.min(max_widths[*column]))
+        })
+        .collect();
+
+    let total_weight: usize = WEIGHTS.iter().map(|(_, weight)| *weight).sum();
+    loop {
+        let used: usize = widths.iter().map(|(_, width)| *width).sum();
+        let mut remaining = available.saturating_sub(used);
+        if remaining == 0 {
+            break;
+        }
+
+        let mut changed = false;
+        for (column, _) in WEIGHTS.iter().rev() {
+            let weight = task_table_lookup(&WEIGHTS, *column);
+            if let Some((_, width)) = widths.iter_mut().find(|(candidate, _)| candidate == column) {
+                let room = max_widths[*column].saturating_sub(*width);
+                let add = (remaining * weight / total_weight)
+                    .max(1)
+                    .min(room)
+                    .min(remaining);
+                *width += add;
+                remaining -= add;
+                changed |= add > 0;
+                if remaining == 0 {
+                    break;
+                }
+            }
+        }
+        if !changed {
+            break;
+        }
+    }
+
+    widths
+}
+
+fn task_table_lookup(values: &[(usize, usize)], column: usize) -> usize {
+    values
+        .iter()
+        .find_map(|(candidate, value)| (*candidate == column).then_some(*value))
+        .unwrap_or(0)
 }
 
 fn task_table_rows(item: &TaskItem, source: SourceSelection) -> Vec<[String; 9]> {

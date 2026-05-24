@@ -1048,6 +1048,39 @@ fn test_task_list_tags_all_combines_pkms_and_todoist_metadata() {
 
 #[cfg(feature = "todoist")]
 #[test]
+fn test_task_agenda_todoist_text_gives_heading_available_width() {
+    let (_dir, root) = setup_db();
+    let (base_url, handle) = spawn_todoist_mock(vec![(
+        "GET",
+        "/tasks/filter?query=%21no%20date&limit=200",
+        r#"{"results":[{"id":"abc","content":"Alpha bravo charlie delta echo foxtrot golf hotel india","priority":1,"labels":[],"due":{"date":"2026-05-23","string":"today"}}],"next_cursor":null}"#,
+    )]);
+    let output = run_with_todoist_env(
+        &[
+            "--db",
+            root.to_str().unwrap(),
+            "task",
+            "agenda",
+            "source:todoist",
+        ],
+        &base_url,
+    );
+    handle.join().unwrap();
+    assert!(
+        output.status.success(),
+        "stdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("Alpha bravo charlie delta echo foxtrot golf"),
+        "heading wrapped too early:\n{stdout}"
+    );
+}
+
+#[cfg(feature = "todoist")]
+#[test]
 fn test_task_list_todoist_filter_is_passed_to_mock_api() {
     let (_dir, root) = setup_db();
     let (base_url, handle) = spawn_todoist_mock(vec![(
@@ -2454,6 +2487,7 @@ fn run_with_todoist_env(args: &[&str], base_url: &str) -> std::process::Output {
         .args(args)
         .env("TODOIST_API_TOKEN", "test-token")
         .env("PKMS_TODOIST_API_BASE_URL", base_url)
+        .env("COLUMNS", "120")
         .output()
         .unwrap()
 }
