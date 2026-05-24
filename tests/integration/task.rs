@@ -672,7 +672,63 @@ fn test_task_state_rejects_todoist_before_todoist_support() {
     ]);
     assert!(!status.success());
     let v: serde_json::Value = serde_json::from_str(stdout.trim()).unwrap();
-    assert_eq!(v["error"], "Todoist task source is not implemented yet");
+    assert_eq!(
+        v["error"],
+        "Todoist support is not available in this build. Rebuild with --features todoist."
+    );
+}
+
+#[test]
+fn test_task_schedule_pkms_sets_and_clears_scheduled_date() {
+    let (_dir, root) = setup_db();
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "task",
+        "schedule",
+        "p1",
+        "--due",
+        "2026-07-01",
+    ]);
+    assert!(status.success());
+    assert_eq!(v["action"], "schedule");
+    assert_eq!(v["item"]["scheduled"]["date"], "2026-07-01");
+
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "task",
+        "schedule",
+        "p1",
+        "--due",
+        "none",
+    ]);
+    assert!(status.success());
+    assert_eq!(v["action"], "unschedule");
+    assert_eq!(v["item"]["scheduled"], serde_json::Value::Null);
+}
+
+#[test]
+fn test_task_deadline_pkms_sets_deadline_date() {
+    let (_dir, root) = setup_db();
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "task",
+        "deadline",
+        "p1",
+        "--deadline",
+        "2026-08-01",
+    ]);
+    assert!(status.success());
+    assert_eq!(v["action"], "deadline");
+    assert_eq!(v["item"]["deadline"]["date"], "2026-08-01");
 }
 
 #[cfg(feature = "todoist")]
@@ -704,7 +760,6 @@ fn test_task_list_todoist_uses_mock_api_and_pagination() {
             "json",
             "task",
             "list",
-            "projects",
             "source:todoist",
         ],
         &base_url,
@@ -1761,7 +1816,7 @@ fn test_task_add_todoist_quick_add_uses_mock_api() {
     assert_eq!(v["item"]["state"], "open");
     assert_eq!(v["item"]["priority"], "C");
     assert_eq!(v["item"]["scheduled"]["date"], "2026-05-24");
-    assert_eq!(v["item"]["scheduled"]["raw"], "tomorrow");
+    assert_eq!(v["item"]["scheduled"]["raw"], "<2026-05-24>");
     assert_eq!(v["item"]["tags"], serde_json::json!(["errand"]));
     assert_eq!(v["item"]["project"], "Inbox");
     assert_eq!(v["item"]["project_id"], "inbox");
@@ -2082,6 +2137,64 @@ fn test_task_done_todoist_calls_mock_close_endpoint() {
 
 #[cfg(feature = "todoist")]
 #[test]
+fn test_task_state_todoist_reopens_task() {
+    let (_dir, root) = setup_db();
+    let (base_url, handle) = spawn_todoist_mock(vec![
+        ("POST", "/tasks/abc/reopen", "null"),
+        (
+            "GET",
+            "/tasks/abc",
+            r#"{"id":"abc","content":"Call Alice","description":"","priority":1,"labels":[]}"#,
+        ),
+    ]);
+    let output = run_with_todoist_env(
+        &[
+            "--db",
+            root.to_str().unwrap(),
+            "--output-format",
+            "json",
+            "task",
+            "state",
+            "todoist:abc",
+            "open",
+        ],
+        &base_url,
+    );
+    handle.join().unwrap();
+    assert!(output.status.success());
+    let v: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(v["changed"], true);
+    assert_eq!(v["action"], "state-open");
+    assert_eq!(v["item"]["display_id"], "todoist:abc");
+}
+
+#[cfg(feature = "todoist")]
+#[test]
+fn test_task_state_todoist_rejects_other_states() {
+    let (_dir, root) = setup_db();
+    let (base_url, handle) = spawn_todoist_mock(vec![]);
+    let output = run_with_todoist_env(
+        &[
+            "--db",
+            root.to_str().unwrap(),
+            "--output-format",
+            "json",
+            "task",
+            "state",
+            "todoist:abc",
+            "waiting",
+        ],
+        &base_url,
+    );
+    handle.join().unwrap();
+    assert!(!output.status.success());
+    let v: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert!(v["error"].as_str().unwrap().contains("open"));
+    assert!(v["error"].as_str().unwrap().contains("done"));
+}
+
+#[cfg(feature = "todoist")]
+#[test]
 fn test_task_postpone_todoist_updates_due_date() {
     let (_dir, root) = setup_db();
     let (base_url, handle) = spawn_todoist_mock_expect_bodies(vec![
@@ -2159,6 +2272,46 @@ fn test_task_schedule_todoist_can_clear_due_date() {
     assert_eq!(v["changed"], true);
     assert_eq!(v["action"], "unschedule");
     assert!(v["item"]["scheduled"].is_null());
+}
+
+#[cfg(feature = "todoist")]
+#[test]
+fn test_task_deadline_todoist_sets_deadline_date() {
+    let (_dir, root) = setup_db();
+    let (base_url, handle) = spawn_todoist_mock_expect_bodies(vec![
+        (
+            "POST",
+            "/tasks/abc",
+            serde_json::json!({"deadline_date": "2026-06-01"}),
+            r#"{}"#,
+        ),
+        (
+            "GET",
+            "/tasks/abc",
+            serde_json::Value::Null,
+            r#"{"id":"abc","content":"Call Alice","description":"","priority":1,"labels":[],"deadline":{"date":"2026-06-01"}}"#,
+        ),
+    ]);
+    let output = run_with_todoist_env(
+        &[
+            "--db",
+            root.to_str().unwrap(),
+            "--output-format",
+            "json",
+            "task",
+            "deadline",
+            "todoist:abc",
+            "--deadline",
+            "2026-06-01",
+        ],
+        &base_url,
+    );
+    handle.join().unwrap();
+    assert!(output.status.success());
+    let v: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(v["changed"], true);
+    assert_eq!(v["action"], "deadline");
+    assert_eq!(v["item"]["deadline"]["date"], "2026-06-01");
 }
 
 #[cfg(feature = "todoist")]

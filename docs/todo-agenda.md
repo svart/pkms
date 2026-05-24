@@ -174,8 +174,11 @@ pkms task add --source todoist --title "Call Alice" --note "Project Alpha"
 pkms task done todoist:<remote-id>
 pkms task done todoist:<remote-id> --dry-run
 pkms task postpone todoist:<remote-id> --to tomorrow
+pkms task schedule p<id> --due 2026-05-24
 pkms task schedule todoist:<remote-id> --due 2026-05-24
 pkms task schedule todoist:<remote-id> --due none
+pkms task deadline p<id> --deadline 2026-05-30
+pkms task deadline todoist:<remote-id> --deadline none
 ```
 
 Todoist tasks are fetched only when the source set includes Todoist. Local
@@ -276,12 +279,12 @@ stable `display_id`, `source_id`, title, description, priority, dates, labels,
 project, `project_id`, and URL when Todoist provides them. Text output stays concise but
 includes the stable id and key planning fields.
 
-Todoist mutation commands are source-specific and require stable
-`todoist:<remote-id>` ids. `postpone` and `schedule` update the due date;
-`schedule --due none` clears it. `update` can change title, project, priority,
-labels, and description. `delete` supports `--dry-run`; without `--dry-run` it
-calls Todoist delete. Changed-task JSON output returns `changed: true`, an
-`action`, and the updated source-neutral `TaskItem`.
+`task schedule` and `task deadline` work for PKMS and Todoist tasks. For PKMS,
+they edit the heading planning line. For Todoist, they update `due_date` and
+`deadline_date`. Use `--due none` or `--deadline none` to clear a date.
+`postpone` currently uses Todoist recurring-date semantics and requires a
+Todoist id. Changed-task JSON output returns `changed: true`, an `action`, and
+the updated source-neutral `TaskItem`.
 
 Set the token in the environment when possible. Environment variables take
 precedence over config values and avoid storing the secret in a dotfile:
@@ -331,3 +334,6 @@ configured state.
 
 `task done` is shorthand for setting the first configured closed state. If no
 closed state is configured, it defaults to `DONE`.
+
+For Todoist tasks, `task state todoist:<remote-id> done` closes the task and
+`task state todoist:<remote-id> open` reopens it. Other Todoist states fail.

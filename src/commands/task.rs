@@ -1,7 +1,7 @@
 use crate::cli::{
-    OutputFormat, TaskAddArgs, TaskAgendaArgs, TaskCommand, TaskDoneArgs, TaskListArgs,
-    TaskOpenArgs, TaskPostponeArgs, TaskScheduleArgs, TaskShortcutArgs, TaskStateArgs,
-    TaskTargetArgs, TaskUpcomingArgs,
+    OutputFormat, TaskAddArgs, TaskAgendaArgs, TaskCommand, TaskDeadlineArgs, TaskDoneArgs,
+    TaskListArgs, TaskOpenArgs, TaskPostponeArgs, TaskScheduleArgs, TaskShortcutArgs,
+    TaskStateArgs, TaskTargetArgs, TaskUpcomingArgs,
 };
 use crate::commands::open::OpenOptions;
 use crate::commands::show::{HeadingTarget, ShowOptions};
@@ -11,7 +11,7 @@ use crate::commands::task_index::{
 use crate::config::ResolvedConfig;
 use crate::input;
 use crate::output::OutputContext;
-use crate::parser::{HEADING_RE, find_daily_file_date};
+use crate::parser::{DEADLINE_RE, HEADING_RE, SCHEDULED_RE, find_daily_file_date};
 use crate::tasks::filter::{SourceSelection, TaskFilters, parse_task_filters};
 use crate::tasks::id::TaskId;
 use crate::tasks::model::{TaskItem, TaskSourceKind};
@@ -47,6 +47,12 @@ enum PkmsInboxTarget {
     Daily { path: PathBuf },
 }
 
+#[derive(Debug, Clone, Copy)]
+enum PlanningKind {
+    Scheduled,
+    Deadline,
+}
+
 pub fn run(config: &ResolvedConfig, ctx: &OutputContext, command: &TaskCommand) -> Result<()> {
     match command {
         TaskCommand::List(args) => run_list(config, ctx, args),
@@ -62,6 +68,7 @@ pub fn run(config: &ResolvedConfig, ctx: &OutputContext, command: &TaskCommand) 
         TaskCommand::Add(args) => run_add(config, ctx, args),
         TaskCommand::Postpone(args) => run_postpone(config, ctx, args),
         TaskCommand::Schedule(args) => run_schedule(config, ctx, args),
+        TaskCommand::Deadline(args) => run_deadline(config, ctx, args),
     }
 }
 
@@ -687,7 +694,10 @@ fn print_metadata_rows(ctx: &OutputContext, kind: &str, rows: &[TaskMetadataRow]
 }
 
 fn run_state(config: &ResolvedConfig, ctx: &OutputContext, args: &TaskStateArgs) -> Result<()> {
-    set_pkms_task_state(config, ctx, &args.id, &args.state, args.dry_run)
+    match args.id.parse::<TaskId>()? {
+        TaskId::Pkms(_) => set_pkms_task_state(config, ctx, &args.id, &args.state, args.dry_run),
+        TaskId::Todoist(id) => set_todoist_task_state(config, ctx, &id, &args.state, args.dry_run),
+    }
 }
 
 fn run_done(config: &ResolvedConfig, ctx: &OutputContext, args: &TaskDoneArgs) -> Result<()> {
@@ -735,23 +745,63 @@ fn run_schedule(
     ctx: &OutputContext,
     args: &TaskScheduleArgs,
 ) -> Result<()> {
-    let id = todoist_only_id(&args.id)?;
-    let due = if args.due.eq_ignore_ascii_case("none") {
-        serde_json::Value::Null
-    } else {
-        serde_json::Value::String(parse_mutation_due_date(&args.due)?)
-    };
-    mutate_todoist_task(
-        config,
-        ctx,
-        &id,
-        if due.is_null() {
-            "unschedule"
-        } else {
-            "schedule"
-        },
-        serde_json::json!({ "due_date": due }),
-    )
+    match args.id.parse::<TaskId>()? {
+        TaskId::Pkms(canonical_id) => set_pkms_task_planning(
+            config,
+            ctx,
+            canonical_id,
+            PlanningKind::Scheduled,
+            &args.due,
+            "schedule",
+            "unschedule",
+        ),
+        TaskId::Todoist(id) => {
+            let due = mutation_date_value(&args.due)?;
+            mutate_todoist_task(
+                config,
+                ctx,
+                &id,
+                if due.is_null() {
+                    "unschedule"
+                } else {
+                    "schedule"
+                },
+                serde_json::json!({ "due_date": due }),
+            )
+        }
+    }
+}
+
+fn run_deadline(
+    config: &ResolvedConfig,
+    ctx: &OutputContext,
+    args: &TaskDeadlineArgs,
+) -> Result<()> {
+    match args.id.parse::<TaskId>()? {
+        TaskId::Pkms(canonical_id) => set_pkms_task_planning(
+            config,
+            ctx,
+            canonical_id,
+            PlanningKind::Deadline,
+            &args.deadline,
+            "deadline",
+            "clear-deadline",
+        ),
+        TaskId::Todoist(id) => {
+            let deadline = mutation_date_value(&args.deadline)?;
+            mutate_todoist_task(
+                config,
+                ctx,
+                &id,
+                if deadline.is_null() {
+                    "clear-deadline"
+                } else {
+                    "deadline"
+                },
+                serde_json::json!({ "deadline_date": deadline }),
+            )
+        }
+    }
 }
 
 fn todoist_only_id(id: &str) -> Result<String> {
@@ -853,6 +903,49 @@ fn set_pkms_task_state(
             dry_run,
         },
     )
+}
+
+#[cfg(feature = "todoist")]
+fn set_todoist_task_state(
+    config: &ResolvedConfig,
+    ctx: &OutputContext,
+    id: &str,
+    requested_state: &str,
+    dry_run: bool,
+) -> Result<()> {
+    match requested_state.to_ascii_lowercase().as_str() {
+        "done" => close_todoist_task(config, ctx, id, dry_run),
+        "open" => {
+            if dry_run {
+                println!("Would reopen Todoist task todoist:{id}");
+                return Ok(());
+            }
+            let token = crate::tasks::todoist::ensure_enabled(config)?;
+            let client = crate::tasks::todoist::TodoistClient::with_base_url(
+                config.todoist_api_base_url(),
+                token,
+            );
+            client.reopen_task(id)?;
+            let task = client.get_task(id)?;
+            let metadata = todoist_metadata_for_task(&client, &task)?;
+            let mut item =
+                crate::tasks::todoist::task_to_item_with_metadata(task, metadata.as_ref());
+            enrich_todoist_items_with_pkms_notes(config, std::slice::from_mut(&mut item))?;
+            print_mutation_output(ctx, "state-open", item)
+        }
+        _ => bail!("Todoist state supports only 'open' and 'done'."),
+    }
+}
+
+#[cfg(not(feature = "todoist"))]
+fn set_todoist_task_state(
+    _config: &ResolvedConfig,
+    _ctx: &OutputContext,
+    _id: &str,
+    _requested_state: &str,
+    _dry_run: bool,
+) -> Result<()> {
+    bail!("Todoist support is not available in this build. Rebuild with --features todoist.")
 }
 
 fn canonical_state(config: &ResolvedConfig, requested_state: &str) -> Result<String> {
@@ -1208,6 +1301,142 @@ fn print_state_change(ctx: &OutputContext, output: &TaskStateChangeOutput) -> Re
     }
 }
 
+fn set_pkms_task_planning(
+    config: &ResolvedConfig,
+    ctx: &OutputContext,
+    canonical_id: usize,
+    kind: PlanningKind,
+    value: &str,
+    set_action: &'static str,
+    clear_action: &'static str,
+) -> Result<()> {
+    let date = if value.eq_ignore_ascii_case("none") {
+        None
+    } else {
+        Some(parse_mutation_due_date(value)?)
+    };
+    let graph = crate::graph::Graph::load(config)?;
+    let (path, line_number) = graph.resolve_canonical_task_id(config, canonical_id)?;
+    update_heading_planning_date(&path, line_number, kind, date.as_deref())?;
+    let item = find_pkms_task_item(config, Path::new(&path), line_number)?.with_context(|| {
+        format!("Changed task but could not reload it from {path}:{line_number}")
+    })?;
+    print_mutation_output(
+        ctx,
+        if date.is_some() {
+            set_action
+        } else {
+            clear_action
+        },
+        item,
+    )
+}
+
+fn update_heading_planning_date(
+    path: &str,
+    line_number: usize,
+    kind: PlanningKind,
+    date: Option<&str>,
+) -> Result<()> {
+    let content = std::fs::read_to_string(path)?;
+    let mut lines: Vec<String> = content.split_inclusive('\n').map(str::to_string).collect();
+    if content.is_empty() || !content.ends_with('\n') {
+        let consumed: usize = lines.iter().map(String::len).sum();
+        if consumed < content.len() {
+            lines.push(content[consumed..].to_string());
+        }
+    }
+    let heading_idx = line_number
+        .checked_sub(1)
+        .ok_or_else(|| anyhow::anyhow!("Invalid task line number: {line_number}"))?;
+    let heading = lines
+        .get(heading_idx)
+        .ok_or_else(|| anyhow::anyhow!("Task line {line_number} no longer exists in {path}"))?;
+    if !HEADING_RE.is_match(heading.trim_end()) {
+        bail!("Task line {line_number} is no longer an org heading");
+    }
+
+    let planning_idx = find_planning_line_index(&lines, heading_idx);
+    match (planning_idx, date) {
+        (Some(idx), Some(date)) => {
+            let updated = replace_planning_token(&lines[idx], kind, Some(&org_date(date)?));
+            lines[idx] = updated;
+        }
+        (Some(idx), None) => {
+            let updated = replace_planning_token(&lines[idx], kind, None);
+            if updated.trim().is_empty() {
+                lines.remove(idx);
+            } else {
+                lines[idx] = updated;
+            }
+        }
+        (None, Some(date)) => {
+            lines.insert(
+                heading_idx + 1,
+                format!("{}: {}\n", planning_label(kind), org_date(date)?),
+            );
+        }
+        (None, None) => {}
+    }
+    std::fs::write(path, lines.concat())?;
+    Ok(())
+}
+
+fn find_planning_line_index(lines: &[String], heading_idx: usize) -> Option<usize> {
+    for (idx, line) in lines.iter().enumerate().skip(heading_idx + 1) {
+        let body = line.trim_end();
+        if HEADING_RE.is_match(body) {
+            return None;
+        }
+        if body.trim().is_empty() {
+            continue;
+        }
+        if SCHEDULED_RE.is_match(body) || DEADLINE_RE.is_match(body) {
+            return Some(idx);
+        }
+        return None;
+    }
+    None
+}
+
+fn planning_label(kind: PlanningKind) -> &'static str {
+    match kind {
+        PlanningKind::Scheduled => "SCHEDULED",
+        PlanningKind::Deadline => "DEADLINE",
+    }
+}
+
+fn replace_planning_token(line: &str, kind: PlanningKind, value: Option<&str>) -> String {
+    let newline = if line.ends_with("\r\n") {
+        "\r\n"
+    } else if line.ends_with('\n') {
+        "\n"
+    } else {
+        ""
+    };
+    let body = line.strip_suffix(newline).unwrap_or(line);
+    let regex = match kind {
+        PlanningKind::Scheduled => &*SCHEDULED_RE,
+        PlanningKind::Deadline => &*DEADLINE_RE,
+    };
+    let label = planning_label(kind);
+    let updated = if regex.is_match(body) {
+        match value {
+            Some(value) => regex
+                .replace(body, format!("{label}: {value}").as_str())
+                .to_string(),
+            None => regex.replace(body, "").to_string(),
+        }
+    } else {
+        match value {
+            Some(value) if body.trim().is_empty() => format!("{label}: {value}"),
+            Some(value) => format!("{} {label}: {value}", body.trim_end()),
+            None => body.to_string(),
+        }
+    };
+    format!("{}{}", updated.trim(), newline)
+}
+
 #[cfg(feature = "todoist")]
 fn add_todoist_task(
     config: &ResolvedConfig,
@@ -1393,7 +1622,6 @@ fn todoist_metadata_for_task(
     }
 }
 
-#[cfg(feature = "todoist")]
 fn print_mutation_output(ctx: &OutputContext, action: &'static str, item: TaskItem) -> Result<()> {
     #[derive(Serialize)]
     struct MutationOutput {
@@ -1410,8 +1638,11 @@ fn print_mutation_output(ctx: &OutputContext, action: &'static str, item: TaskIt
     match ctx.format {
         OutputFormat::Text => {
             println!(
-                "Changed Todoist task: {} (action {}; id {})",
-                output.item.title, action, output.item.display_id
+                "Changed {} task: {} (action {}; id {})",
+                source_name(&output.item),
+                output.item.title,
+                action,
+                output.item.display_id
             );
             Ok(())
         }
@@ -1448,10 +1679,17 @@ fn print_created_task(item: &TaskItem) {
     }
     println!(
         "Created {} task: {} ({})",
-        source_name(item),
+        source_display_name(item),
         item.title,
         details.join("; ")
     );
+}
+
+fn source_display_name(item: &TaskItem) -> &'static str {
+    match item.source {
+        TaskSourceKind::Pkms => "PKMS",
+        TaskSourceKind::Todoist => "Todoist",
+    }
 }
 
 #[cfg(feature = "todoist")]
@@ -1474,6 +1712,14 @@ fn parse_mutation_due_date(value: &str) -> Result<String> {
     crate::input::parse_date(Some(value))
         .map(|date| date.format("%Y-%m-%d").to_string())
         .ok_or_else(|| anyhow::anyhow!("Invalid due date '{value}'. Use tomorrow or YYYY-MM-DD."))
+}
+
+fn mutation_date_value(value: &str) -> Result<serde_json::Value> {
+    if value.eq_ignore_ascii_case("none") {
+        Ok(serde_json::Value::Null)
+    } else {
+        Ok(serde_json::Value::String(parse_mutation_due_date(value)?))
+    }
 }
 
 #[cfg(feature = "todoist")]

@@ -60,7 +60,10 @@ pkms task add --source todoist --title "Call Alice" --due 2026-05-24 --label pho
 pkms task add --source todoist --title "Call Alice" --note "Project Alpha"
 pkms task done todoist:<remote-id>
 pkms task postpone todoist:<remote-id> --to tomorrow
+pkms task schedule p<canonical-id> --due 2026-05-24
 pkms task schedule todoist:<remote-id> --due none
+pkms task deadline p<canonical-id> --deadline 2026-05-30
+pkms task deadline todoist:<remote-id> --deadline none
 ```
 
 Use stable `todoist:<remote-id>` IDs for Todoist mutations.
@@ -129,4 +132,7 @@ pkms task done todoist:<remote-id> --dry-run
 
 Use stable `todoist:<remote-id>` ids for Todoist mutations. `task postpone`
 accepts `--to tomorrow` or `--to YYYY-MM-DD`; `task schedule` accepts
-`--due tomorrow`, `--due YYYY-MM-DD`, or `--due none`.
+`--due tomorrow`, `--due YYYY-MM-DD`, or `--due none`. `task deadline` accepts
+`--deadline tomorrow`, `--deadline YYYY-MM-DD`, or `--deadline none`. Schedule
+and deadline work for PKMS and Todoist tasks. Todoist `task state` supports only
+`open` and `done`.

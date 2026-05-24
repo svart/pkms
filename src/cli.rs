@@ -432,6 +432,8 @@ pub enum TaskCommand {
     Postpone(TaskPostponeArgs),
     #[command(about = "Schedule or unschedule a task")]
     Schedule(TaskScheduleArgs),
+    #[command(about = "Set or clear a task deadline")]
+    Deadline(TaskDeadlineArgs),
 }
 
 #[derive(Debug, Args)]
@@ -577,7 +579,7 @@ pub struct TaskPostponeArgs {
 
 #[derive(Debug, Args)]
 pub struct TaskScheduleArgs {
-    #[arg(help = "Task ID: todoist:<remote-id>")]
+    #[arg(help = "Task ID: 12, p12, pkms:12, or todoist:<remote-id>")]
     pub id: String,
     #[arg(
         long,
@@ -585,6 +587,18 @@ pub struct TaskScheduleArgs {
         help = "New due date: tomorrow, YYYY-MM-DD, or none"
     )]
     pub due: String,
+}
+
+#[derive(Debug, Args)]
+pub struct TaskDeadlineArgs {
+    #[arg(help = "Task ID: 12, p12, pkms:12, or todoist:<remote-id>")]
+    pub id: String,
+    #[arg(
+        long,
+        value_name = "DATE",
+        help = "New deadline date: tomorrow, YYYY-MM-DD, or none"
+    )]
+    pub deadline: String,
 }
 
 #[derive(Debug, Args)]

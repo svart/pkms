@@ -137,7 +137,10 @@ pkms task add --source todoist --title "Call Alice" --due 2026-05-24 --priority 
 pkms task add --source todoist --title "Call Alice" --note "Project Alpha"
 pkms task done todoist:<remote-id>
 pkms task postpone todoist:<remote-id> --to tomorrow
+pkms task schedule p<id> --due 2026-05-24
 pkms task schedule todoist:<remote-id> --due none
+pkms task deadline p<id> --deadline 2026-05-30
+pkms task deadline todoist:<remote-id> --deadline none
 ```
 
 See [TODO and Agenda](todo-agenda.md) for task IDs, filtering, table columns,

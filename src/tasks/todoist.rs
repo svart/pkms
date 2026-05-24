@@ -181,6 +181,12 @@ impl TodoistClient {
         Ok(())
     }
 
+    pub fn reopen_task(&self, id: &str) -> Result<()> {
+        let _: serde_json::Value =
+            self.post_json(&format!("/tasks/{id}/reopen"), &serde_json::json!({}))?;
+        Ok(())
+    }
+
     fn get_paginated<T: for<'de> Deserialize<'de>>(
         &self,
         path: &str,
