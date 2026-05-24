@@ -136,6 +136,7 @@ pkms task add --source todoist "Buy milk tomorrow"
 pkms task add --source todoist --title "Call Alice" --due 2026-05-24 --priority B
 pkms task add --source todoist --title "Call Alice" --note "Project Alpha"
 pkms task done todoist:<remote-id>
+pkms task postpone p<id> --to 2026-06-01
 pkms task postpone todoist:<remote-id> --to tomorrow
 pkms task schedule p<id> --due 2026-05-24
 pkms task schedule todoist:<remote-id> --due none

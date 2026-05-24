@@ -731,6 +731,76 @@ fn test_task_deadline_pkms_sets_deadline_date() {
     assert_eq!(v["item"]["deadline"]["date"], "2026-08-01");
 }
 
+#[test]
+fn test_task_postpone_pkms_recurring_task_preserves_repeater() {
+    let (_dir, root) = setup_db();
+    let path = root.join("roam/common/20260525000002-recurring.org");
+    std::fs::write(
+        &path,
+        r#":PROPERTIES:
+:ID:       29292929-2929-4929-8929-292929292929
+:END:
+#+title: Recurring Tasks
+
+* TODO Recurring call
+SCHEDULED: <2026-05-24 Sun 09:30 +1w -1d>
+"#,
+    )
+    .unwrap();
+    let (list, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "task",
+        "list",
+    ]);
+    assert!(status.success());
+    let id = list["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|item| item["heading_title"] == "Recurring call")
+        .and_then(|item| item["id"].as_u64())
+        .unwrap()
+        .to_string();
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "task",
+        "postpone",
+        &id,
+        "--to",
+        "2026-06-01",
+    ]);
+    assert!(status.success());
+    assert_eq!(v["action"], "postpone");
+    assert_eq!(v["item"]["scheduled"]["date"], "2026-06-01");
+    let content = std::fs::read_to_string(path).unwrap();
+    assert!(content.contains("SCHEDULED: <2026-06-01 Mon 09:30 +1w -1d>"));
+}
+
+#[test]
+fn test_task_postpone_pkms_non_recurring_task_fails() {
+    let (_dir, root) = setup_db();
+    let (stdout, _stderr, status) = run(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "task",
+        "postpone",
+        "p1",
+        "--to",
+        "2026-06-01",
+    ]);
+    assert!(!status.success());
+    let v: serde_json::Value = serde_json::from_str(stdout.trim()).unwrap();
+    assert!(v["error"].as_str().unwrap().contains("not recurring"));
+}
+
 #[cfg(feature = "todoist")]
 #[test]
 fn test_task_list_todoist_uses_mock_api_and_pagination() {
@@ -2199,6 +2269,12 @@ fn test_task_postpone_todoist_updates_due_date() {
     let (_dir, root) = setup_db();
     let (base_url, handle) = spawn_todoist_mock_expect_bodies(vec![
         (
+            "GET",
+            "/tasks/abc",
+            serde_json::Value::Null,
+            r#"{"id":"abc","content":"Call Alice","description":"","priority":1,"labels":[],"due":{"date":"2026-05-17","string":"every week","is_recurring":true}}"#,
+        ),
+        (
             "POST",
             "/tasks/abc",
             serde_json::json!({"due_date": "2026-05-24"}),
@@ -2232,6 +2308,36 @@ fn test_task_postpone_todoist_updates_due_date() {
     assert_eq!(v["action"], "postpone");
     assert_eq!(v["item"]["display_id"], "todoist:abc");
     assert_eq!(v["item"]["scheduled"]["date"], "2026-05-24");
+}
+
+#[cfg(feature = "todoist")]
+#[test]
+fn test_task_postpone_todoist_non_recurring_fails() {
+    let (_dir, root) = setup_db();
+    let (base_url, handle) = spawn_todoist_mock_expect_bodies(vec![(
+        "GET",
+        "/tasks/abc",
+        serde_json::Value::Null,
+        r#"{"id":"abc","content":"Call Alice","description":"","priority":1,"labels":[],"due":{"date":"2026-05-17","string":"2026-05-17","is_recurring":false}}"#,
+    )]);
+    let output = run_with_todoist_env(
+        &[
+            "--db",
+            root.to_str().unwrap(),
+            "--output-format",
+            "json",
+            "task",
+            "postpone",
+            "todoist:abc",
+            "--to",
+            "2026-05-24",
+        ],
+        &base_url,
+    );
+    handle.join().unwrap();
+    assert!(!output.status.success());
+    let v: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert!(v["error"].as_str().unwrap().contains("not recurring"));
 }
 
 #[cfg(feature = "todoist")]

@@ -39,6 +39,8 @@ pub struct TodoistDue {
     pub date: Option<String>,
     #[serde(default)]
     pub string: Option<String>,
+    #[serde(default)]
+    pub is_recurring: Option<bool>,
 }
 
 #[derive(Debug, Clone, Deserialize)]

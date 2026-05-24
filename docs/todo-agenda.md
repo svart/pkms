@@ -173,6 +173,7 @@ pkms task add --source todoist --title "Call Alice" --due 2026-05-24 --label pho
 pkms task add --source todoist --title "Call Alice" --note "Project Alpha"
 pkms task done todoist:<remote-id>
 pkms task done todoist:<remote-id> --dry-run
+pkms task postpone p<id> --to 2026-06-01
 pkms task postpone todoist:<remote-id> --to tomorrow
 pkms task schedule p<id> --due 2026-05-24
 pkms task schedule todoist:<remote-id> --due 2026-05-24
@@ -282,9 +283,11 @@ includes the stable id and key planning fields.
 `task schedule` and `task deadline` work for PKMS and Todoist tasks. For PKMS,
 they edit the heading planning line. For Todoist, they update `due_date` and
 `deadline_date`. Use `--due none` or `--deadline none` to clear a date.
-`postpone` currently uses Todoist recurring-date semantics and requires a
-Todoist id. Changed-task JSON output returns `changed: true`, an `action`, and
-the updated source-neutral `TaskItem`.
+`task postpone` works only for recurring tasks. For PKMS, the task must have a
+recurring `SCHEDULED` or `DEADLINE` timestamp and the repeater/warning syntax is
+preserved. For Todoist, the Todoist due date must be recurring. Non-recurring
+tasks fail instead of being silently rescheduled. Changed-task JSON output
+returns `changed: true`, an `action`, and the updated source-neutral `TaskItem`.
 
 Set the token in the environment when possible. Environment variables take
 precedence over config values and avoid storing the secret in a dotfile:

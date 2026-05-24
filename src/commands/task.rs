@@ -730,14 +730,12 @@ fn run_postpone(
     ctx: &OutputContext,
     args: &TaskPostponeArgs,
 ) -> Result<()> {
-    let id = todoist_only_id(&args.id)?;
-    mutate_todoist_task(
-        config,
-        ctx,
-        &id,
-        "postpone",
-        serde_json::json!({ "due_date": parse_mutation_due_date(&args.to)? }),
-    )
+    match args.id.parse::<TaskId>()? {
+        TaskId::Pkms(canonical_id) => {
+            postpone_pkms_recurring_task(config, ctx, canonical_id, &args.to)
+        }
+        TaskId::Todoist(id) => postpone_todoist_recurring_task(config, ctx, &id, &args.to),
+    }
 }
 
 fn run_schedule(
@@ -802,13 +800,6 @@ fn run_deadline(
             )
         }
     }
-}
-
-fn todoist_only_id(id: &str) -> Result<String> {
-    let TaskId::Todoist(id) = id.parse::<TaskId>()? else {
-        bail!("This task command currently supports Todoist task ids only.");
-    };
-    Ok(id)
 }
 
 #[cfg(feature = "todoist")]
@@ -1332,6 +1323,22 @@ fn set_pkms_task_planning(
     )
 }
 
+fn postpone_pkms_recurring_task(
+    config: &ResolvedConfig,
+    ctx: &OutputContext,
+    canonical_id: usize,
+    to: &str,
+) -> Result<()> {
+    let date = parse_mutation_due_date(to)?;
+    let graph = crate::graph::Graph::load(config)?;
+    let (path, line_number) = graph.resolve_canonical_task_id(config, canonical_id)?;
+    update_recurring_planning_date(&path, line_number, &date)?;
+    let item = find_pkms_task_item(config, Path::new(&path), line_number)?.with_context(|| {
+        format!("Changed task but could not reload it from {path}:{line_number}")
+    })?;
+    print_mutation_output(ctx, "postpone", item)
+}
+
 fn update_heading_planning_date(
     path: &str,
     line_number: usize,
@@ -1397,6 +1404,79 @@ fn find_planning_line_index(lines: &[String], heading_idx: usize) -> Option<usiz
         return None;
     }
     None
+}
+
+fn update_recurring_planning_date(path: &str, line_number: usize, date: &str) -> Result<()> {
+    let new_date = NaiveDate::parse_from_str(date, "%Y-%m-%d")?;
+    let content = std::fs::read_to_string(path)?;
+    let mut lines: Vec<String> = content.split_inclusive('\n').map(str::to_string).collect();
+    if content.is_empty() || !content.ends_with('\n') {
+        let consumed: usize = lines.iter().map(String::len).sum();
+        if consumed < content.len() {
+            lines.push(content[consumed..].to_string());
+        }
+    }
+    let heading_idx = line_number
+        .checked_sub(1)
+        .ok_or_else(|| anyhow::anyhow!("Invalid task line number: {line_number}"))?;
+    let planning_idx = find_planning_line_index(&lines, heading_idx).ok_or_else(|| {
+        anyhow::anyhow!("Task does not have a recurring scheduled or deadline date")
+    })?;
+    lines[planning_idx] = postpone_recurring_planning_line(&lines[planning_idx], new_date)?;
+    std::fs::write(path, lines.concat())?;
+    Ok(())
+}
+
+fn postpone_recurring_planning_line(line: &str, new_date: NaiveDate) -> Result<String> {
+    if let Some(updated) = postpone_recurring_token(line, &SCHEDULED_RE, "SCHEDULED", new_date)? {
+        return Ok(updated);
+    }
+    if let Some(updated) = postpone_recurring_token(line, &DEADLINE_RE, "DEADLINE", new_date)? {
+        return Ok(updated);
+    }
+    bail!("Task does not have a recurring scheduled or deadline date")
+}
+
+fn postpone_recurring_token(
+    line: &str,
+    regex: &regex::Regex,
+    label: &str,
+    new_date: NaiveDate,
+) -> Result<Option<String>> {
+    let Some(captures) = regex.captures(line) else {
+        return Ok(None);
+    };
+    let Some(raw_match) = captures.get(1) else {
+        return Ok(None);
+    };
+    let parsed = crate::org_date::parse_org_date(raw_match.as_str())
+        .ok_or_else(|| anyhow::anyhow!("Could not parse existing {label} date"))?;
+    if parsed.repeater.is_none() {
+        bail!("Task {label} date is not recurring");
+    }
+    let replacement = format!("{label}: {}", format_org_date_like(&parsed, new_date));
+    Ok(Some(regex.replace(line, replacement.as_str()).to_string()))
+}
+
+fn format_org_date_like(existing: &crate::org_date::OrgDate, new_date: NaiveDate) -> String {
+    let open = if existing.inactive { "[" } else { "<" };
+    let close = if existing.inactive { "]" } else { ">" };
+    let mut parts = vec![new_date.format("%Y-%m-%d %a").to_string()];
+    if let Some(time) = existing.time {
+        let mut time_part = time.format("%H:%M").to_string();
+        if let Some(end) = existing.time_end {
+            time_part.push('-');
+            time_part.push_str(&end.format("%H:%M").to_string());
+        }
+        parts.push(time_part);
+    }
+    if let Some(repeater) = existing.repeater.as_deref() {
+        parts.push(repeater.to_string());
+    }
+    if let Some(warning) = existing.warning.as_deref() {
+        parts.push(warning.to_string());
+    }
+    format!("{open}{}{close}", parts.join(" "))
 }
 
 fn planning_label(kind: PlanningKind) -> &'static str {
@@ -1595,6 +1675,46 @@ fn mutate_todoist_task(
     let mut item = crate::tasks::todoist::task_to_item_with_metadata(task, metadata.as_ref());
     enrich_todoist_items_with_pkms_notes(config, std::slice::from_mut(&mut item))?;
     print_mutation_output(ctx, action, item)
+}
+
+#[cfg(feature = "todoist")]
+fn postpone_todoist_recurring_task(
+    config: &ResolvedConfig,
+    ctx: &OutputContext,
+    id: &str,
+    to: &str,
+) -> Result<()> {
+    let token = crate::tasks::todoist::ensure_enabled(config)?;
+    let client =
+        crate::tasks::todoist::TodoistClient::with_base_url(config.todoist_api_base_url(), token);
+    let existing = client.get_task(id)?;
+    let is_recurring = existing
+        .due
+        .as_ref()
+        .and_then(|due| due.is_recurring)
+        .unwrap_or(false);
+    if !is_recurring {
+        bail!("Todoist task todoist:{id} is not recurring");
+    }
+    client.update_task(
+        id,
+        &serde_json::json!({ "due_date": parse_mutation_due_date(to)? }),
+    )?;
+    let task = client.get_task(id)?;
+    let metadata = todoist_metadata_for_task(&client, &task)?;
+    let mut item = crate::tasks::todoist::task_to_item_with_metadata(task, metadata.as_ref());
+    enrich_todoist_items_with_pkms_notes(config, std::slice::from_mut(&mut item))?;
+    print_mutation_output(ctx, "postpone", item)
+}
+
+#[cfg(not(feature = "todoist"))]
+fn postpone_todoist_recurring_task(
+    _config: &ResolvedConfig,
+    _ctx: &OutputContext,
+    _id: &str,
+    _to: &str,
+) -> Result<()> {
+    bail!("Todoist support is not available in this build. Rebuild with --features todoist.")
 }
 
 #[cfg(not(feature = "todoist"))]

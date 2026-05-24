@@ -567,7 +567,7 @@ pub struct TaskAddArgs {
 
 #[derive(Debug, Args)]
 pub struct TaskPostponeArgs {
-    #[arg(help = "Task ID: todoist:<remote-id>")]
+    #[arg(help = "Task ID: 12, p12, pkms:12, or todoist:<remote-id>")]
     pub id: String,
     #[arg(
         long,
