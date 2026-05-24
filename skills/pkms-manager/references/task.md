@@ -27,6 +27,44 @@ use the same table shape plus a `Project` column:
 `p<ID>` and Todoist ids use `t<remote-id>`. Source-neutral JSON keeps stable
 `display_id` and `source_id` fields.
 
+Task commands accept positional string filters after the subcommand:
+
+| Filter | Syntax | Notes |
+|--------|--------|-------|
+| Source | `source:pkms`, `source:todoist`, `source:all` | Select local PKMS tasks, Todoist tasks, or both. Defaults to `source:pkms`. |
+| Source alias | `src:pkms`, `src:todoist`, `src:all` | Short form of `source:`. |
+| Todoist raw filter | `todoist.filter:<query>` | Uses Todoist's server-side filter endpoint. Requires `source:todoist` or `source:all`. |
+| State | `state:TODO` | Matches TODO state case-insensitively. |
+| State exclusion | `state:!DONE` | Excludes matching states. Comma-separated state filters use AND logic. |
+| Tags | `tags:tag1,tag2` | Matches combined note filetags and heading tags for PKMS, and labels for Todoist. Tags are exact. |
+| Tag alias | `tag:tag1,tag2` | Short form of `tags:`. |
+| Tag exclusion | `tags:!tag1,tag2` | Excludes `tag1` and requires `tag2`. Comma-separated tag filters use AND logic. |
+| Type | `type:SCHED`, `type:DEADL` | Matches scheduled or deadline tasks. `kind:` is an alias. |
+| Type exclusion | `type:!SCHED` | Excludes tasks with a scheduled timestamp. |
+| Priority | `prio:A`, `priority:A` | Matches priority `A`, `B`, or `C`; matching is case-insensitive. |
+| No priority | `prio:none`, `priority:none` | Matches tasks without a priority. |
+| Exact agenda date | `date:YYYY-MM-DD` | Matches scheduled or deadline dates on that day. |
+| Today | `date:today` | Same date semantics as `agenda --today`. |
+| Week | `date:week` | Same date semantics as `agenda --week`. |
+| Overdue | `date:overdue`, `overdue` | Matches overdue tasks. |
+| Upcoming | `date:upcoming`, `upcoming` | Matches non-overdue tasks after today. |
+| After | `after:YYYY-MM-DD`, `after:YYYY-MM-DD HH:MM` | Same datetime semantics as `todo --after`. |
+| Before | `before:YYYY-MM-DD`, `before:YYYY-MM-DD HH:MM` | Same datetime semantics as `todo --before`. |
+| Scope | `scope:<target>` | Restricts PKMS tasks to a note title, UUID, or path, like `todo --scope`. |
+| Project | `project:<name-or-id>` | Matches PKMS `PROJECT` properties and Todoist project names or ids. |
+| Project exclusion | `project:!<name-or-id>` | Excludes matching projects. |
+
+Examples:
+
+```bash
+pkms task list state:TODO tags:work,!blocked prio:A
+pkms task agenda week type:SCHED project:Alpha
+pkms task agenda source:all date:overdue tags:!waiting
+pkms task agenda upcoming --days 14 source:all priority:B
+pkms task list 'scope:Some Note Title' after:2026-05-01 before:"2026-05-25 18:00"
+pkms task list source:todoist 'todoist.filter:today | overdue'
+```
+
 `task state` changes only the TODO keyword. Valid states come from configured
 `open_todo_states` and `closed_todo_states`. State input is case-insensitive,
 but the file is written with the canonical config spelling.

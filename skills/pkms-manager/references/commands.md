@@ -69,6 +69,8 @@ pkms task agenda
 pkms task agenda today
 pkms task agenda overdue
 pkms task agenda upcoming --days 7
+pkms task list state:TODO tags:work,!blocked
+pkms task agenda week type:SCHED project:Alpha
 pkms task show p<canonical-id>
 pkms task open p<canonical-id>
 pkms task state p<canonical-id> WAITING
