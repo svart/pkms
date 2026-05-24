@@ -403,10 +403,7 @@ fn todoist_agenda_filters(filters: &TaskFilters, args: &TaskAgendaArgs) -> TaskF
         .todoist_filter
         .clone()
         .or_else(|| todoist_agenda_filter(args).map(str::to_string));
-    TaskFilters {
-        source: filters.source,
-        todoist_filter,
-    }
+    filters.with_todoist_filter(todoist_filter)
 }
 
 fn todoist_agenda_filter(_args: &TaskAgendaArgs) -> Option<&'static str> {
@@ -418,10 +415,7 @@ fn shortcut_todoist_filters(filters: &TaskFilters, kind: ShortcutKind) -> TaskFi
         .todoist_filter
         .clone()
         .or_else(|| shortcut_todoist_filter(kind));
-    TaskFilters {
-        source: filters.source,
-        todoist_filter,
-    }
+    filters.with_todoist_filter(todoist_filter)
 }
 
 fn shortcut_todoist_filter(kind: ShortcutKind) -> Option<String> {

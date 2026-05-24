@@ -1,4 +1,5 @@
 use anyhow::{Result, bail};
+use chrono::{NaiveDate, NaiveDateTime};
 use serde::Serialize;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -13,6 +14,29 @@ pub enum SourceSelection {
 pub struct TaskFilters {
     pub source: SourceSelection,
     pub todoist_filter: Option<String>,
+    pub criteria: TaskFilterCriteria,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct TaskFilterCriteria {
+    pub state: Option<String>,
+    pub tags: Option<String>,
+    pub kind: Option<String>,
+    pub prio: Option<String>,
+    pub date: Option<TaskDateFilter>,
+    pub after: Option<NaiveDateTime>,
+    pub before: Option<NaiveDateTime>,
+    pub scope: Vec<String>,
+    pub project: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TaskDateFilter {
+    Exact(NaiveDate),
+    Today,
+    Week,
+    Overdue,
+    Upcoming,
 }
 
 pub fn parse_source_selection(filters: &[String]) -> Result<SourceSelection> {
@@ -54,7 +78,18 @@ pub fn parse_task_filters(filters: &[String]) -> Result<TaskFilters> {
     Ok(TaskFilters {
         source,
         todoist_filter,
+        criteria: TaskFilterCriteria::default(),
     })
+}
+
+impl TaskFilters {
+    pub fn with_todoist_filter(&self, todoist_filter: Option<String>) -> Self {
+        Self {
+            source: self.source,
+            todoist_filter,
+            criteria: self.criteria.clone(),
+        }
+    }
 }
 
 fn normalize_sources(mut selected: Vec<SourceSelection>) -> SourceSelection {
