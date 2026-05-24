@@ -441,6 +441,125 @@ fn test_task_list_tags_pkms_uses_filetags_and_heading_tags() {
 }
 
 #[test]
+fn test_task_list_accepts_state_tags_type_and_prio_filters() {
+    let (_dir, root) = setup_db();
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "task",
+        "list",
+        "state:TODO,!WAITING",
+        "tags:project",
+        "type:SCHED",
+        "prio:none",
+    ]);
+
+    assert!(status.success());
+    let titles = task_titles(&v);
+    assert!(titles.contains(&"Parent task".to_string()));
+    assert!(!titles.contains(&"Child task A".to_string()));
+    assert!(!titles.contains(&"High priority task".to_string()));
+}
+
+#[test]
+fn test_task_list_accepts_project_filter() {
+    let (_dir, root) = setup_db();
+    add_pkms_project_metadata_note(&root);
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "task",
+        "list",
+        "project:Heading Project",
+    ]);
+
+    assert!(status.success());
+    assert_eq!(task_titles(&v), vec!["Heading project task"]);
+}
+
+#[test]
+fn test_task_list_accepts_scope_after_and_before_filters() {
+    let (_dir, root) = setup_db();
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "task",
+        "list",
+        "scope:Nested Todo Note",
+        "after:2026-06-01",
+        "before:2026-06-05",
+    ]);
+
+    assert!(status.success());
+    assert_eq!(task_titles(&v), vec!["Parent task"]);
+}
+
+#[test]
+fn test_task_agenda_accepts_date_filters() {
+    let (_dir, root) = setup_db();
+    let today = org_date(0);
+    std::fs::write(
+        root.join("roam/common/20260525000000-filter-today.org"),
+        format!(
+            r#":PROPERTIES:
+:ID:       57575757-5757-4757-8757-575757575757
+:END:
+#+title: Filter Today
+#+filetags: :agenda:
+
+* TODO Filter today task
+SCHEDULED: <{today}>
+"#
+        ),
+    )
+    .unwrap();
+
+    let (today_tasks, today_status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "task",
+        "agenda",
+        "date:today",
+    ]);
+    assert!(today_status.success());
+    assert!(task_titles(&today_tasks).contains(&"Filter today task".to_string()));
+
+    let (upcoming_tasks, upcoming_status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "task",
+        "agenda",
+        "date:upcoming",
+    ]);
+    assert!(upcoming_status.success());
+    let upcoming_titles = task_titles(&upcoming_tasks);
+    assert!(upcoming_titles.contains(&"Parent task".to_string()));
+    assert!(!upcoming_titles.contains(&"Filter today task".to_string()));
+
+    let (week_tasks, week_status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "task",
+        "agenda",
+        "date:week",
+    ]);
+    assert!(week_status.success());
+    assert!(task_titles(&week_tasks).contains(&"Parent task".to_string()));
+}
+
+#[test]
 fn test_task_list_metadata_text_omits_id_column() {
     let (_dir, root) = setup_db();
     add_pkms_project_metadata_note(&root);
@@ -460,6 +579,15 @@ fn test_task_list_metadata_text_omits_id_column() {
         !stdout.lines().next().unwrap_or_default().contains("Id"),
         "metadata table should not include Id column:\n{stdout}"
     );
+}
+
+fn task_titles(v: &serde_json::Value) -> Vec<String> {
+    v["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|item| item["title"].as_str().map(str::to_string))
+        .collect()
 }
 
 fn add_pkms_project_metadata_note(root: &std::path::Path) {

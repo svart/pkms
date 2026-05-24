@@ -10,15 +10,18 @@ use crate::commands::task_index::{
 };
 use crate::config::ResolvedConfig;
 use crate::input;
+use crate::org_date::parse_org_date;
 use crate::output::{Column, OutputContext};
 use crate::parser::{DEADLINE_RE, HEADING_RE, SCHEDULED_RE, find_daily_file_date};
-use crate::tasks::filter::{SourceSelection, TaskFilters, parse_task_filters};
+use crate::tasks::filter::{
+    SourceSelection, TaskDateFilter, TaskFilterCriteria, TaskFilters, parse_task_filters,
+};
 use crate::tasks::id::TaskId;
 use crate::tasks::model::{TaskItem, TaskSourceKind};
 use crate::tasks::pkms::record_to_task_item;
 use crate::workspace::Workspace;
 use anyhow::{Context, Result, bail};
-use chrono::{Local, NaiveDate};
+use chrono::{Local, NaiveDate, NaiveDateTime, NaiveTime};
 use serde::Serialize;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -112,7 +115,7 @@ fn run_task_list(
     raw_filters: &[String],
 ) -> Result<()> {
     let filters = parse_task_filters(raw_filters)?;
-    if matches!(filters.source, SourceSelection::Pkms) {
+    if matches!(filters.source, SourceSelection::Pkms) && !filters.has_criteria() {
         let columns = input::resolve_columns(args.table.columns.as_deref(), &config.columns);
         return crate::commands::todo::run(
             config,
@@ -135,14 +138,15 @@ fn run_task_list(
     }
 
     let mut items = match filters.source {
+        SourceSelection::Pkms => collect_pkms_list_items(config)?,
         SourceSelection::Todoist => collect_todoist_items(config, &filters)?,
         SourceSelection::All => {
             let mut items = collect_pkms_list_items(config)?;
             items.extend(collect_todoist_items(config, &filters)?);
             items
         }
-        SourceSelection::Pkms => unreachable!("PKMS task list is handled by todo::run"),
     };
+    apply_task_filter_criteria(config, &mut items, &filters.criteria)?;
     sort_task_items(&mut items, args.sort.as_deref().unwrap_or("priority"));
     let columns = resolve_task_table_columns(config, args.table.columns.as_deref());
     print_task_items(ctx, filters.source, items, args.limit, columns.as_deref())
@@ -199,7 +203,7 @@ fn collect_shortcut_items(
     let filters = parse_task_filters(raw_filters)?;
 
     let todoist_filters = shortcut_todoist_filters(&filters, kind);
-    let items = match filters.source {
+    let mut items = match filters.source {
         SourceSelection::Pkms if matches!(kind, ShortcutKind::Inbox) => {
             collect_pkms_inbox_items(config)?
         }
@@ -215,7 +219,241 @@ fn collect_shortcut_items(
             items
         }
     };
+    apply_task_filter_criteria(config, &mut items, &filters.criteria)?;
     Ok(items)
+}
+
+fn apply_task_filter_criteria(
+    config: &ResolvedConfig,
+    items: &mut Vec<TaskItem>,
+    criteria: &TaskFilterCriteria,
+) -> Result<()> {
+    let state_filters = crate::commands::task_common::parse_filters(criteria.state.as_deref());
+    if !state_filters.is_empty() {
+        items.retain(|item| {
+            crate::commands::task_common::apply_state_filter(item.state.as_deref(), &state_filters)
+        });
+    }
+
+    let tags_filters = crate::commands::task_common::parse_filters(criteria.tags.as_deref());
+    if !tags_filters.is_empty() {
+        items.retain(|item| {
+            crate::commands::task_common::apply_tags_filter(&item.tags, &tags_filters)
+        });
+    }
+
+    let type_filters = crate::commands::task_common::parse_filters(criteria.kind.as_deref());
+    if !type_filters.is_empty() {
+        items.retain(|item| {
+            crate::commands::task_common::apply_type_filter(
+                item.scheduled.is_some(),
+                item.deadline.is_some(),
+                &type_filters,
+            )
+        });
+    }
+
+    if let Some(prio) = &criteria.prio {
+        if prio.is_empty() {
+            items.retain(|item| item.priority.is_none());
+        } else if let Some(target) = prio.chars().next().map(|p| p.to_ascii_uppercase()) {
+            items.retain(|item| {
+                item.priority
+                    .as_deref()
+                    .and_then(|priority| priority.chars().next())
+                    .is_some_and(|priority| priority.to_ascii_uppercase() == target)
+            });
+        }
+    }
+
+    if let Some(date_filter) = &criteria.date {
+        apply_task_date_filter(items, date_filter);
+    }
+
+    if let Some(after) = criteria.after {
+        items.retain(|item| item_datetimes(item).iter().any(|dt| dt >= &after));
+    }
+
+    if let Some(before) = criteria.before {
+        items.retain(|item| item_datetimes(item).iter().any(|dt| dt <= &before));
+    }
+
+    let project_filters = crate::commands::task_common::parse_filters(criteria.project.as_deref());
+    if !project_filters.is_empty() {
+        items.retain(|item| apply_project_filter(item, &project_filters));
+    }
+
+    if !criteria.scope.is_empty() {
+        let scope_paths = resolve_task_scope_paths(config, &criteria.scope)?;
+        items.retain(|item| task_item_in_scope(item, &criteria.scope, &scope_paths));
+    }
+
+    Ok(())
+}
+
+fn apply_task_date_filter(items: &mut Vec<TaskItem>, date_filter: &TaskDateFilter) {
+    let today = Local::now().date_naive();
+    match date_filter {
+        TaskDateFilter::Exact(date) => {
+            items.retain(|item| item_dates(item).iter().any(|item_date| item_date == date));
+        }
+        TaskDateFilter::Today => {
+            items.retain(|item| item_dates(item).iter().any(|item_date| *item_date == today));
+        }
+        TaskDateFilter::Week => {
+            let cutoff = today + chrono::Duration::days(7);
+            items.retain(|item| {
+                item_dates(item)
+                    .iter()
+                    .any(|item_date| *item_date <= cutoff)
+            });
+        }
+        TaskDateFilter::Overdue => items.retain(|item| item.is_overdue),
+        TaskDateFilter::Upcoming => {
+            items.retain(|item| {
+                !item.is_overdue && item_dates(item).iter().any(|item_date| *item_date > today)
+            });
+        }
+    }
+}
+
+fn item_dates(item: &TaskItem) -> Vec<NaiveDate> {
+    item_datetimes(item)
+        .into_iter()
+        .map(|dt| dt.date())
+        .collect()
+}
+
+fn item_datetimes(item: &TaskItem) -> Vec<NaiveDateTime> {
+    [item.scheduled.as_ref(), item.deadline.as_ref()]
+        .into_iter()
+        .flatten()
+        .filter_map(|date| {
+            parse_org_date(&date.raw).map(|parsed| {
+                let time = parsed
+                    .time
+                    .unwrap_or_else(|| NaiveTime::from_hms_opt(0, 0, 0).unwrap());
+                parsed.base_date.and_time(time)
+            })
+        })
+        .collect()
+}
+
+fn apply_project_filter(item: &TaskItem, filters: &[crate::commands::task_common::Filter]) -> bool {
+    for filter in filters {
+        match filter {
+            crate::commands::task_common::Filter::Include(value) => {
+                if !task_item_project_matches(item, value) {
+                    return false;
+                }
+            }
+            crate::commands::task_common::Filter::Exclude(value) => {
+                if task_item_project_matches(item, value) {
+                    return false;
+                }
+            }
+        }
+    }
+    true
+}
+
+fn task_item_project_matches(item: &TaskItem, value: &str) -> bool {
+    item.project
+        .as_deref()
+        .is_some_and(|project| project.eq_ignore_ascii_case(value))
+        || item
+            .project_id
+            .as_deref()
+            .is_some_and(|project_id| project_id.eq_ignore_ascii_case(value))
+}
+
+fn resolve_task_scope_paths(
+    config: &ResolvedConfig,
+    scope: &[String],
+) -> Result<std::collections::HashSet<String>> {
+    let workspace = Workspace::load(config)?;
+    let db_root = config.resolved_db_root();
+    let mut scope_paths = Vec::new();
+    for target in scope {
+        if let Some(node) = workspace.graph.find_node(target) {
+            scope_paths.push(node.path.clone());
+            continue;
+        }
+
+        let expanded = if let Some(rest) = target.strip_prefix("~/") {
+            dirs::home_dir().map(|home| home.join(rest))
+        } else {
+            None
+        };
+        let mut matched = false;
+        for candidate in [Some(Path::new(target)), expanded.as_deref()]
+            .into_iter()
+            .flatten()
+        {
+            for path in [candidate.to_path_buf()]
+                .into_iter()
+                .chain(candidate.canonicalize().ok())
+            {
+                if workspace
+                    .graph
+                    .results
+                    .iter()
+                    .any(|result| result.path == path)
+                {
+                    scope_paths.push(path);
+                    matched = true;
+                    break;
+                }
+            }
+            if matched {
+                break;
+            }
+        }
+        if matched {
+            continue;
+        }
+
+        let joined = db_root.join(target);
+        for path in [joined.clone()]
+            .into_iter()
+            .chain(joined.canonicalize().ok())
+        {
+            if workspace
+                .graph
+                .results
+                .iter()
+                .any(|result| result.path == path)
+            {
+                scope_paths.push(path);
+                break;
+            }
+        }
+    }
+
+    Ok(scope_paths
+        .iter()
+        .map(|path| path.display().to_string())
+        .collect())
+}
+
+fn task_item_in_scope(
+    item: &TaskItem,
+    raw_scope: &[String],
+    scope_paths: &std::collections::HashSet<String>,
+) -> bool {
+    let path = item.path.as_ref().map(|path| path.display().to_string());
+    if path.as_ref().is_some_and(|path| {
+        scope_paths.contains(path) || raw_scope.iter().any(|scope| scope == path)
+    }) {
+        return true;
+    }
+
+    raw_scope.iter().any(|scope| {
+        item.note_uuid.as_deref() == Some(scope.as_str())
+            || item.note_title.as_deref() == Some(scope.as_str())
+            || item.source_id == *scope
+            || item.display_id == *scope
+    })
 }
 
 fn run_agenda(config: &ResolvedConfig, ctx: &OutputContext, args: &TaskAgendaArgs) -> Result<()> {
@@ -234,7 +472,7 @@ fn run_agenda(config: &ResolvedConfig, ctx: &OutputContext, args: &TaskAgendaArg
     }
 
     let filters = parse_task_filters(&args.filters)?;
-    if matches!(filters.source, SourceSelection::Pkms) {
+    if matches!(filters.source, SourceSelection::Pkms) && !filters.has_criteria() {
         let columns = input::resolve_columns(args.table.columns.as_deref(), &config.columns);
         return crate::commands::agenda::run(
             config,
@@ -260,6 +498,7 @@ fn run_agenda(config: &ResolvedConfig, ctx: &OutputContext, args: &TaskAgendaArg
     let todoist_filters = todoist_agenda_filters(&filters, args);
     if matches!(filters.source, SourceSelection::Todoist) {
         let mut items = collect_todoist_items(config, &todoist_filters)?;
+        apply_task_filter_criteria(config, &mut items, &filters.criteria)?;
         sort_task_items(&mut items, args.sort.as_deref().unwrap_or("date,priority"));
         let columns = resolve_task_table_columns(config, args.table.columns.as_deref());
         return print_task_items(ctx, filters.source, items, args.limit, columns.as_deref());
@@ -268,12 +507,14 @@ fn run_agenda(config: &ResolvedConfig, ctx: &OutputContext, args: &TaskAgendaArg
     if matches!(filters.source, SourceSelection::All) {
         let mut items = collect_pkms_agenda_items(config, args)?;
         items.extend(collect_todoist_items(config, &todoist_filters)?);
+        apply_task_filter_criteria(config, &mut items, &filters.criteria)?;
         sort_task_items(&mut items, args.sort.as_deref().unwrap_or("date,priority"));
         let columns = resolve_task_table_columns(config, args.table.columns.as_deref());
         return print_task_items(ctx, filters.source, items, args.limit, columns.as_deref());
     }
 
     let mut items = collect_pkms_agenda_items(config, args)?;
+    apply_task_filter_criteria(config, &mut items, &filters.criteria)?;
     sort_task_items(&mut items, args.sort.as_deref().unwrap_or("date,priority"));
     let columns = resolve_task_table_columns(config, args.table.columns.as_deref());
     print_task_items(ctx, filters.source, items, args.limit, columns.as_deref())
