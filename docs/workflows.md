@@ -63,7 +63,7 @@ state changes:
 
 ```bash
 pkms task list
-pkms task agenda --today
+pkms task agenda today
 pkms task show p5
 pkms task state p5 WAITING
 pkms task done p5 --dry-run

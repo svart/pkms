@@ -1,6 +1,6 @@
 use crate::cli::{
-    OutputFormat, TaskAddArgs, TaskAgendaArgs, TaskCommand, TaskDeadlineArgs, TaskDoneArgs,
-    TaskListArgs, TaskOpenArgs, TaskPostponeArgs, TaskScheduleArgs, TaskShortcutArgs,
+    OutputFormat, TaskAddArgs, TaskAgendaArgs, TaskAgendaCommand, TaskCommand, TaskDeadlineArgs,
+    TaskDoneArgs, TaskListArgs, TaskOpenArgs, TaskPostponeArgs, TaskScheduleArgs, TaskShortcutArgs,
     TaskStateArgs, TaskTargetArgs, TaskUpcomingArgs,
 };
 use crate::commands::open::OpenOptions;
@@ -57,9 +57,6 @@ pub fn run(config: &ResolvedConfig, ctx: &OutputContext, command: &TaskCommand) 
     match command {
         TaskCommand::List(args) => run_list(config, ctx, args),
         TaskCommand::Agenda(args) => run_agenda(config, ctx, args),
-        TaskCommand::Today(args) => run_shortcut(config, ctx, args, ShortcutKind::Today),
-        TaskCommand::Overdue(args) => run_shortcut(config, ctx, args, ShortcutKind::Overdue),
-        TaskCommand::Upcoming(args) => run_upcoming(config, ctx, args),
         TaskCommand::Inbox(args) => run_shortcut(config, ctx, args, ShortcutKind::Inbox),
         TaskCommand::Show(args) => run_show(config, ctx, args),
         TaskCommand::Open(args) => run_open(config, ctx, args),
@@ -75,6 +72,7 @@ pub fn run(config: &ResolvedConfig, ctx: &OutputContext, command: &TaskCommand) 
 #[derive(Debug, Clone, Copy)]
 enum ShortcutKind {
     Today,
+    Week,
     Overdue,
     Upcoming { days: i64 },
     Inbox,
@@ -211,6 +209,20 @@ fn collect_shortcut_items(
 }
 
 fn run_agenda(config: &ResolvedConfig, ctx: &OutputContext, args: &TaskAgendaArgs) -> Result<()> {
+    match &args.command {
+        Some(TaskAgendaCommand::Today(args)) => {
+            return run_shortcut(config, ctx, args, ShortcutKind::Today);
+        }
+        Some(TaskAgendaCommand::Week(args)) => {
+            return run_shortcut(config, ctx, args, ShortcutKind::Week);
+        }
+        Some(TaskAgendaCommand::Overdue(args)) => {
+            return run_shortcut(config, ctx, args, ShortcutKind::Overdue);
+        }
+        Some(TaskAgendaCommand::Upcoming(args)) => return run_upcoming(config, ctx, args),
+        None => {}
+    }
+
     let filters = parse_task_filters(&args.filters)?;
     if matches!(filters.source, SourceSelection::Pkms) {
         let columns = input::resolve_columns(args.table.columns.as_deref(), &config.columns);
@@ -222,13 +234,13 @@ fn run_agenda(config: &ResolvedConfig, ctx: &OutputContext, args: &TaskAgendaArg
                 tags: None,
                 kind: None,
                 prio: None,
-                overdue: args.overdue,
-                upcoming: args.upcoming,
+                overdue: false,
+                upcoming: false,
                 date: None,
                 sort: args.sort.clone(),
                 limit: args.limit,
-                today: args.today,
-                week: args.week,
+                today: false,
+                week: false,
                 line_sep: args.table.line_sep,
                 columns,
             },
@@ -258,20 +270,13 @@ fn collect_pkms_shortcut_items(
     config: &ResolvedConfig,
     kind: ShortcutKind,
 ) -> Result<Vec<TaskItem>> {
-    let args = TaskAgendaArgs {
-        filters: Vec::new(),
-        today: matches!(kind, ShortcutKind::Today),
-        week: false,
-        overdue: matches!(kind, ShortcutKind::Overdue),
-        upcoming: matches!(kind, ShortcutKind::Upcoming { .. }),
-        sort: None,
-        limit: None,
-        table: crate::cli::TaskTableArgs {
-            line_sep: false,
-            columns: None,
-        },
-    };
-    let mut items = collect_pkms_agenda_items(config, &args)?;
+    let mut items = collect_pkms_agenda_items_for(
+        config,
+        matches!(kind, ShortcutKind::Today),
+        matches!(kind, ShortcutKind::Week),
+        matches!(kind, ShortcutKind::Overdue),
+        matches!(kind, ShortcutKind::Upcoming { .. }),
+    )?;
     if let ShortcutKind::Upcoming { days } = kind {
         retain_upcoming_task_items(&mut items, days);
     }
@@ -331,7 +336,17 @@ fn collect_pkms_inbox_items(config: &ResolvedConfig) -> Result<Vec<TaskItem>> {
 
 fn collect_pkms_agenda_items(
     config: &ResolvedConfig,
-    args: &TaskAgendaArgs,
+    _args: &TaskAgendaArgs,
+) -> Result<Vec<TaskItem>> {
+    collect_pkms_agenda_items_for(config, false, false, false, false)
+}
+
+fn collect_pkms_agenda_items_for(
+    config: &ResolvedConfig,
+    today_only: bool,
+    week: bool,
+    overdue: bool,
+    upcoming: bool,
 ) -> Result<Vec<TaskItem>> {
     let workspace = Workspace::load(config)?;
     let today = Local::now().date_naive();
@@ -348,18 +363,18 @@ fn collect_pkms_agenda_items(
         &no_filters,
     );
 
-    if args.week {
+    if week {
         let cutoff = today + chrono::Duration::days(7);
         records.retain(|item| item_date(item).is_some_and(|date| date <= cutoff));
-    } else if args.today {
+    } else if today_only {
         records.retain(|item| item_date(item).is_some_and(|date| date == today));
     }
 
-    if args.overdue {
+    if overdue {
         records.retain(|item| item.is_overdue);
     }
 
-    if args.upcoming {
+    if upcoming {
         records.retain(|item| !item.is_overdue && item_date(item).is_some_and(|date| date > today));
     }
 
@@ -381,18 +396,8 @@ fn todoist_agenda_filters(filters: &TaskFilters, args: &TaskAgendaArgs) -> TaskF
     }
 }
 
-fn todoist_agenda_filter(args: &TaskAgendaArgs) -> Option<&'static str> {
-    if args.upcoming {
-        Some("due after: today")
-    } else if args.overdue {
-        Some("overdue")
-    } else if args.today {
-        Some("today")
-    } else if args.week {
-        Some("next 7 days")
-    } else {
-        Some("!no date")
-    }
+fn todoist_agenda_filter(_args: &TaskAgendaArgs) -> Option<&'static str> {
+    Some("!no date")
 }
 
 fn shortcut_todoist_filters(filters: &TaskFilters, kind: ShortcutKind) -> TaskFilters {
@@ -409,6 +414,7 @@ fn shortcut_todoist_filters(filters: &TaskFilters, kind: ShortcutKind) -> TaskFi
 fn shortcut_todoist_filter(kind: ShortcutKind) -> Option<String> {
     match kind {
         ShortcutKind::Today => Some("today".to_string()),
+        ShortcutKind::Week => Some("next 7 days".to_string()),
         ShortcutKind::Overdue => Some("overdue".to_string()),
         ShortcutKind::Upcoming { days } => Some(format!("due after: today & next {days} days")),
         ShortcutKind::Inbox => Some("#Inbox".to_string()),

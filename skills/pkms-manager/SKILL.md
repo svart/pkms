@@ -94,7 +94,7 @@ pkms agenda --today
 pkms show 5
 pkms open 5
 pkms task list
-pkms task agenda --today
+pkms task agenda today
 pkms task state p5 WAITING
 pkms task done p5 --dry-run
 ```

@@ -5,12 +5,10 @@ Task-first namespace for local PKMS tasks.
 ```bash
 pkms task list
 pkms task agenda
-pkms task agenda --today
-pkms task agenda --week
-pkms task agenda --overdue
-pkms task today
-pkms task overdue
-pkms task upcoming --days 7
+pkms task agenda today
+pkms task agenda week
+pkms task agenda overdue
+pkms task agenda upcoming --days 7
 pkms task show p5
 pkms task open p5
 pkms task state p5 WAITING
@@ -41,11 +39,11 @@ Todoist read support is available only in builds made with `--features todoist`:
 ```bash
 pkms task list source:todoist
 pkms task list source:all
-pkms task agenda --today source:todoist
-pkms task agenda --week source:all
-pkms task today source:all
-pkms task overdue source:todoist
-pkms task upcoming --days 7 source:all
+pkms task agenda today source:todoist
+pkms task agenda week source:all
+pkms task agenda today source:all
+pkms task agenda overdue source:todoist
+pkms task agenda upcoming --days 7 source:all
 pkms task inbox
 pkms task inbox source:todoist
 pkms task list projects source:todoist
@@ -72,13 +70,13 @@ Never print the Todoist token. It is read from `TODOIST_API_TOKEN` by default,
 or from `[todoist].token` in config when the environment variable is unset.
 
 For Todoist-backed agenda views, bare `task agenda source:todoist` uses the
-Todoist `!no date` filter to show only scheduled tasks. `--today` uses `today`,
-`--overdue` uses `overdue`, `--week` uses `next 7 days`, and `--upcoming` uses
-`due after: today`. `todoist.filter:<query>` overrides those generated agenda
+Todoist `!no date` filter to show only scheduled tasks. `today` uses `today`,
+`overdue` uses `overdue`, `week` uses `next 7 days`, and `upcoming --days N` uses
+`due after: today & next N days`. `todoist.filter:<query>` overrides those generated agenda
 filters when the assistant needs custom Todoist syntax.
 
-Prefer stable shortcuts for common assistant requests: `task today`,
-`task overdue`, `task upcoming --days N`, and `task inbox`. The first three
+Prefer stable shortcuts for common assistant requests: `task agenda today`,
+`task agenda overdue`, `task agenda upcoming --days N`, and `task inbox`. The first three
 accept `source:pkms`, `source:todoist`, or `source:all`; `task inbox` defaults
 to the PKMS inbox note configured as `[tasks].inbox`. Use
 `task inbox source:todoist` for Todoist's `#Inbox` filter. When `[tasks].inbox`

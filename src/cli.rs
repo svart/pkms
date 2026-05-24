@@ -410,12 +410,6 @@ pub enum TaskCommand {
     List(TaskListArgs),
     #[command(about = "Show scheduled and deadline tasks")]
     Agenda(TaskAgendaArgs),
-    #[command(about = "Show today's tasks")]
-    Today(TaskShortcutArgs),
-    #[command(about = "Show overdue tasks")]
-    Overdue(TaskShortcutArgs),
-    #[command(about = "Show upcoming tasks")]
-    Upcoming(TaskUpcomingArgs),
     #[command(about = "Show inbox tasks")]
     Inbox(TaskShortcutArgs),
     #[command(about = "Show detailed task information")]
@@ -450,22 +444,28 @@ pub struct TaskListArgs {
 
 #[derive(Debug, Args)]
 pub struct TaskAgendaArgs {
+    #[command(subcommand)]
+    pub command: Option<TaskAgendaCommand>,
     #[arg(value_name = "FILTER")]
     pub filters: Vec<String>,
-    #[arg(long, help = "Show today's agenda items")]
-    pub today: bool,
-    #[arg(long, help = "Show this week's agenda items")]
-    pub week: bool,
-    #[arg(long, help = "Only show overdue items")]
-    pub overdue: bool,
-    #[arg(long, help = "Show only upcoming items")]
-    pub upcoming: bool,
     #[arg(long, value_name = "SORT")]
     pub sort: Option<String>,
     #[arg(long, help = "Maximum results")]
     pub limit: Option<usize>,
     #[command(flatten)]
     pub table: TaskTableArgs,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum TaskAgendaCommand {
+    #[command(about = "Show today's tasks")]
+    Today(TaskShortcutArgs),
+    #[command(about = "Show this week's tasks")]
+    Week(TaskShortcutArgs),
+    #[command(about = "Show overdue tasks")]
+    Overdue(TaskShortcutArgs),
+    #[command(about = "Show upcoming tasks")]
+    Upcoming(TaskUpcomingArgs),
 }
 
 #[derive(Debug, Args)]

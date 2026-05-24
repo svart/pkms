@@ -115,17 +115,17 @@ pkms show <id>
 pkms open <id>
 pkms task list
 pkms task agenda
-pkms task today
-pkms task overdue
-pkms task upcoming --days 7
+pkms task agenda today
+pkms task agenda overdue
+pkms task agenda upcoming --days 7
 pkms task show p<id>
 pkms task open p<id>
 pkms task state p<id> WAITING
 pkms task done p<id>
 pkms task list source:todoist
-pkms task agenda --today source:todoist
-pkms task agenda --week source:all
-pkms task today source:all
+pkms task agenda today source:todoist
+pkms task agenda week source:all
+pkms task agenda today source:all
 pkms task inbox
 pkms task inbox source:todoist
 pkms task list projects source:todoist

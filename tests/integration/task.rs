@@ -20,9 +20,6 @@ fn test_task_help_lists_subcommands() {
     assert!(status.success(), "task --help failed:\n{stdout}\n{stderr}");
     assert!(stdout.contains("list"));
     assert!(stdout.contains("agenda"));
-    assert!(stdout.contains("today"));
-    assert!(stdout.contains("overdue"));
-    assert!(stdout.contains("upcoming"));
     assert!(stdout.contains("inbox"));
     assert!(stdout.contains("show"));
     assert!(stdout.contains("open"));
@@ -43,12 +40,41 @@ fn test_task_help_lists_subcommands() {
 #[test]
 fn test_removed_task_subcommands_are_rejected() {
     for subcommand in [
-        "projects", "labels", "clarify", "update", "delete", "reopen",
+        "today", "overdue", "upcoming", "projects", "labels", "clarify", "update", "delete",
+        "reopen",
     ] {
         let (stdout, stderr, status) = run(&["task", subcommand, "--help"]);
         assert!(
             !status.success(),
             "task {subcommand} unexpectedly succeeded:\n{stdout}\n{stderr}"
+        );
+    }
+}
+
+#[test]
+fn test_task_agenda_help_lists_shortcut_subcommands() {
+    let (stdout, stderr, status) = run(&["task", "agenda", "--help"]);
+    assert!(
+        status.success(),
+        "task agenda --help failed:\n{stdout}\n{stderr}"
+    );
+    assert!(stdout.contains("today"));
+    assert!(stdout.contains("week"));
+    assert!(stdout.contains("overdue"));
+    assert!(stdout.contains("upcoming"));
+    assert!(!stdout.contains("--today"));
+    assert!(!stdout.contains("--week"));
+    assert!(!stdout.contains("--overdue"));
+    assert!(!stdout.contains("--upcoming"));
+}
+
+#[test]
+fn test_task_agenda_shortcut_flags_are_rejected() {
+    for flag in ["--today", "--week", "--overdue", "--upcoming"] {
+        let (stdout, stderr, status) = run(&["task", "agenda", flag, "--help"]);
+        assert!(
+            !status.success(),
+            "task agenda {flag} unexpectedly succeeded:\n{stdout}\n{stderr}"
         );
     }
 }
@@ -198,7 +224,7 @@ fn test_task_agenda_matches_agenda_text() {
 }
 
 #[test]
-fn test_task_agenda_today_matches_agenda_today_json() {
+fn test_task_agenda_today_returns_source_neutral_json() {
     let (_dir, root) = setup_db();
     let today = org_date(0);
     std::fs::write(
@@ -216,26 +242,40 @@ SCHEDULED: <{today}>
         ),
     )
     .unwrap();
-    let (task_agenda, task_agenda_status) = run_json(&[
+    let (v, status) = run_json(&[
         "--db",
         root.to_str().unwrap(),
         "--output-format",
         "json",
         "task",
         "agenda",
-        "--today",
+        "today",
     ]);
-    let (agenda, agenda_status) = run_json(&[
+    assert!(status.success());
+    let items = v["items"].as_array().unwrap();
+    assert!(
+        items
+            .iter()
+            .any(|item| { item["source"] == "pkms" && item["title"] == "Shortcut today task" })
+    );
+}
+
+#[test]
+fn test_task_agenda_week_returns_source_neutral_json() {
+    let (_dir, root) = setup_db();
+    let (v, status) = run_json(&[
         "--db",
         root.to_str().unwrap(),
         "--output-format",
         "json",
+        "task",
         "agenda",
-        "--today",
+        "week",
     ]);
-    assert!(task_agenda_status.success());
-    assert!(agenda_status.success());
-    assert_eq!(task_agenda, agenda);
+    assert!(status.success());
+    let items = v["items"].as_array().unwrap();
+    assert!(!items.is_empty());
+    assert!(items.iter().all(|item| item["source"] == "pkms"));
 }
 
 #[test]
@@ -263,6 +303,7 @@ SCHEDULED: <{today}>
         "--output-format",
         "ndjson",
         "task",
+        "agenda",
         "today",
     ]);
     assert!(status.success());
@@ -299,6 +340,7 @@ SCHEDULED: <{later}>
         "--output-format",
         "json",
         "task",
+        "agenda",
         "upcoming",
         "--days",
         "3",
@@ -323,6 +365,7 @@ fn test_task_overdue_accepts_limit_json() {
         "--output-format",
         "json",
         "task",
+        "agenda",
         "overdue",
         "--limit",
         "1",
@@ -1183,7 +1226,7 @@ fn test_task_agenda_todoist_today_uses_today_filter() {
             "json",
             "task",
             "agenda",
-            "--today",
+            "today",
             "source:todoist",
         ],
         &base_url,
@@ -1213,7 +1256,7 @@ fn test_task_agenda_todoist_dates_use_pkms_json_format() {
             "json",
             "task",
             "agenda",
-            "--today",
+            "today",
             "source:todoist",
         ],
         &base_url,
@@ -1271,7 +1314,7 @@ fn test_task_agenda_todoist_overdue_uses_overdue_filter() {
             "json",
             "task",
             "agenda",
-            "--overdue",
+            "overdue",
             "source:todoist",
         ],
         &base_url,
@@ -1299,7 +1342,7 @@ fn test_task_agenda_todoist_week_uses_next_seven_days_filter() {
             "json",
             "task",
             "agenda",
-            "--week",
+            "week",
             "source:todoist",
         ],
         &base_url,
@@ -1316,7 +1359,7 @@ fn test_task_agenda_todoist_upcoming_excludes_today_and_overdue() {
     let (_dir, root) = setup_db();
     let (base_url, handle) = spawn_todoist_mock(vec![(
         "GET",
-        "/tasks/filter?query=due%20after%3A%20today&limit=200",
+        "/tasks/filter?query=due%20after%3A%20today%20%26%20next%207%20days&limit=200",
         r#"{"results":[{"id":"future","content":"Future task","priority":1,"labels":[],"due":{"date":"2026-05-24","string":"tomorrow"}}],"next_cursor":null}"#,
     )]);
     let output = run_with_todoist_env(
@@ -1327,7 +1370,7 @@ fn test_task_agenda_todoist_upcoming_excludes_today_and_overdue() {
             "json",
             "task",
             "agenda",
-            "--upcoming",
+            "upcoming",
             "source:todoist",
         ],
         &base_url,
@@ -1355,7 +1398,7 @@ fn test_task_agenda_todoist_explicit_filter_overrides_agenda_filter() {
             "json",
             "task",
             "agenda",
-            "--today",
+            "today",
             "source:todoist",
             "todoist.filter:p1",
         ],
@@ -1383,6 +1426,7 @@ fn test_task_today_todoist_uses_today_filter() {
             "--output-format",
             "json",
             "task",
+            "agenda",
             "today",
             "source:todoist",
         ],
@@ -1410,6 +1454,7 @@ fn test_task_upcoming_todoist_uses_days_filter() {
             "--output-format",
             "json",
             "task",
+            "agenda",
             "upcoming",
             "--days",
             "3",
@@ -1455,6 +1500,7 @@ SCHEDULED: <{today}>
             "--output-format",
             "json",
             "task",
+            "agenda",
             "today",
             "source:all",
         ],
@@ -1729,7 +1775,7 @@ SCHEDULED: <{today}>
             "json",
             "task",
             "agenda",
-            "--today",
+            "today",
             "source:all",
         ],
         &base_url,
