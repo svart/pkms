@@ -279,6 +279,34 @@ fn test_task_agenda_week_returns_source_neutral_json() {
 }
 
 #[test]
+fn test_task_agenda_week_honors_columns() {
+    let (_dir, root) = setup_db();
+    let (stdout, stderr, status) = run(&[
+        "--db",
+        root.to_str().unwrap(),
+        "task",
+        "agenda",
+        "week",
+        "--columns=id,date,state,prio,tags,heading",
+    ]);
+
+    assert!(
+        status.success(),
+        "task agenda week --columns failed:\n{stdout}\n{stderr}"
+    );
+    let header = stdout.lines().next().unwrap_or_default();
+    assert!(header.contains("Id"), "stdout:\n{stdout}");
+    assert!(header.contains("Date"), "stdout:\n{stdout}");
+    assert!(header.contains("State"), "stdout:\n{stdout}");
+    assert!(header.contains("Prio"), "stdout:\n{stdout}");
+    assert!(header.contains("Tags"), "stdout:\n{stdout}");
+    assert!(header.contains("Heading"), "stdout:\n{stdout}");
+    assert!(!header.contains("Type"), "stdout:\n{stdout}");
+    assert!(!header.contains("Project"), "stdout:\n{stdout}");
+    assert!(!header.contains("Note"), "stdout:\n{stdout}");
+}
+
+#[test]
 fn test_task_today_ndjson() {
     let (_dir, root) = setup_db();
     let today = org_date(0);

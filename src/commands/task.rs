@@ -10,7 +10,7 @@ use crate::commands::task_index::{
 };
 use crate::config::ResolvedConfig;
 use crate::input;
-use crate::output::OutputContext;
+use crate::output::{Column, OutputContext};
 use crate::parser::{DEADLINE_RE, HEADING_RE, SCHEDULED_RE, find_daily_file_date};
 use crate::tasks::filter::{SourceSelection, TaskFilters, parse_task_filters};
 use crate::tasks::id::TaskId;
@@ -144,7 +144,8 @@ fn run_task_list(
         SourceSelection::Pkms => unreachable!("PKMS task list is handled by todo::run"),
     };
     sort_task_items(&mut items, args.sort.as_deref().unwrap_or("priority"));
-    print_task_items(ctx, filters.source, items, args.limit)
+    let columns = resolve_task_table_columns(config, args.table.columns.as_deref());
+    print_task_items(ctx, filters.source, items, args.limit, columns.as_deref())
 }
 
 fn run_shortcut(
@@ -156,7 +157,8 @@ fn run_shortcut(
     let mut items = collect_shortcut_items(config, &args.filters, kind)?;
     let source = shortcut_display_source(&args.filters)?;
     sort_task_items(&mut items, "priority");
-    print_task_items(ctx, source, items, args.limit)
+    let columns = resolve_task_table_columns(config, args.table.columns.as_deref());
+    print_task_items(ctx, source, items, args.limit, columns.as_deref())
 }
 
 fn run_upcoming(
@@ -173,12 +175,20 @@ fn run_upcoming(
     )?;
     let source = shortcut_display_source(&args.filters)?;
     sort_task_items(&mut items, "priority");
-    print_task_items(ctx, source, items, args.limit)
+    let columns = resolve_task_table_columns(config, args.table.columns.as_deref());
+    print_task_items(ctx, source, items, args.limit, columns.as_deref())
 }
 
 fn shortcut_display_source(raw_filters: &[String]) -> Result<SourceSelection> {
     let filters = parse_task_filters(raw_filters)?;
     Ok(filters.source)
+}
+
+fn resolve_task_table_columns(
+    config: &ResolvedConfig,
+    raw_columns: Option<&str>,
+) -> Option<Vec<Column>> {
+    raw_columns.map(|columns| input::resolve_columns(Some(columns), &config.columns))
 }
 
 fn collect_shortcut_items(
@@ -251,19 +261,22 @@ fn run_agenda(config: &ResolvedConfig, ctx: &OutputContext, args: &TaskAgendaArg
     if matches!(filters.source, SourceSelection::Todoist) {
         let mut items = collect_todoist_items(config, &todoist_filters)?;
         sort_task_items(&mut items, args.sort.as_deref().unwrap_or("date,priority"));
-        return print_task_items(ctx, filters.source, items, args.limit);
+        let columns = resolve_task_table_columns(config, args.table.columns.as_deref());
+        return print_task_items(ctx, filters.source, items, args.limit, columns.as_deref());
     }
 
     if matches!(filters.source, SourceSelection::All) {
         let mut items = collect_pkms_agenda_items(config, args)?;
         items.extend(collect_todoist_items(config, &todoist_filters)?);
         sort_task_items(&mut items, args.sort.as_deref().unwrap_or("date,priority"));
-        return print_task_items(ctx, filters.source, items, args.limit);
+        let columns = resolve_task_table_columns(config, args.table.columns.as_deref());
+        return print_task_items(ctx, filters.source, items, args.limit, columns.as_deref());
     }
 
     let mut items = collect_pkms_agenda_items(config, args)?;
     sort_task_items(&mut items, args.sort.as_deref().unwrap_or("date,priority"));
-    print_task_items(ctx, filters.source, items, args.limit)
+    let columns = resolve_task_table_columns(config, args.table.columns.as_deref());
+    print_task_items(ctx, filters.source, items, args.limit, columns.as_deref())
 }
 
 fn collect_pkms_shortcut_items(
@@ -506,7 +519,7 @@ fn show_todoist_task(config: &ResolvedConfig, ctx: &OutputContext, id: &str) -> 
     let mut item = crate::tasks::todoist::task_to_item_with_metadata(task, metadata.as_ref());
     enrich_todoist_items_with_pkms_notes(config, std::slice::from_mut(&mut item))?;
     match ctx.format {
-        OutputFormat::Text => print_task_table(&[item], 1, SourceSelection::Todoist),
+        OutputFormat::Text => print_task_table(&[item], 1, SourceSelection::Todoist, None),
         OutputFormat::Json => ctx.print_json(&item),
         OutputFormat::Ndjson => ctx.print_ndjson(&[item]),
     }
@@ -1985,6 +1998,7 @@ fn print_task_items(
     source: SourceSelection,
     mut items: Vec<TaskItem>,
     limit: Option<usize>,
+    columns: Option<&[Column]>,
 ) -> Result<()> {
     let total = items.len();
     if let Some(limit) = limit {
@@ -1992,7 +2006,7 @@ fn print_task_items(
     }
 
     match ctx.format {
-        OutputFormat::Text => print_task_table(&items, total, source),
+        OutputFormat::Text => print_task_table(&items, total, source, columns),
         OutputFormat::Json => {
             #[derive(Serialize)]
             struct TaskListOutput {
@@ -2005,7 +2019,12 @@ fn print_task_items(
     }
 }
 
-fn print_task_table(items: &[TaskItem], total: usize, source: SourceSelection) -> Result<()> {
+fn print_task_table(
+    items: &[TaskItem],
+    total: usize,
+    source: SourceSelection,
+    columns: Option<&[Column]>,
+) -> Result<()> {
     if items.is_empty() {
         println!("No tasks found.");
         return Ok(());
@@ -2014,14 +2033,25 @@ fn print_task_table(items: &[TaskItem], total: usize, source: SourceSelection) -
     const HEADERS: [&str; 9] = [
         "Id", "Date", "State", "Type", "Prio", "Tags", "Project", "Note", "Heading",
     ];
+    let selected_columns = task_table_selected_columns(columns);
     let mut builder = Builder::new();
-    builder.push_record(HEADERS);
+    builder.push_record(
+        selected_columns
+            .iter()
+            .map(|column| HEADERS[*column])
+            .collect::<Vec<_>>(),
+    );
     for item in items {
         for row in task_table_rows(item, source) {
-            builder.push_record(row);
+            builder.push_record(
+                selected_columns
+                    .iter()
+                    .map(|column| row[*column].clone())
+                    .collect::<Vec<_>>(),
+            );
         }
     }
-    let wrap_widths = task_table_wrap_widths(items, source);
+    let wrap_widths = task_table_wrap_widths(items, source, &selected_columns);
     let mut table = builder.build();
     table.with(Style::blank());
     table.with(Modify::new(Rows::one(1)).with(Border::new().top('─')));
@@ -2034,7 +2064,31 @@ fn print_task_table(items: &[TaskItem], total: usize, source: SourceSelection) -
     Ok(())
 }
 
-fn task_table_wrap_widths(items: &[TaskItem], source: SourceSelection) -> Vec<(usize, usize)> {
+fn task_table_selected_columns(columns: Option<&[Column]>) -> Vec<usize> {
+    match columns {
+        Some(columns) => columns.iter().map(task_table_column_index).collect(),
+        None => (0..9).collect(),
+    }
+}
+
+fn task_table_column_index(column: &Column) -> usize {
+    match column {
+        Column::Id => 0,
+        Column::Date => 1,
+        Column::State => 2,
+        Column::Type => 3,
+        Column::Prio => 4,
+        Column::Tags => 5,
+        Column::Note => 7,
+        Column::Heading => 8,
+    }
+}
+
+fn task_table_wrap_widths(
+    items: &[TaskItem],
+    source: SourceSelection,
+    selected_columns: &[usize],
+) -> Vec<(usize, usize)> {
     const HEADERS: [&str; 9] = [
         "Id", "Date", "State", "Type", "Prio", "Tags", "Project", "Note", "Heading",
     ];
@@ -2045,7 +2099,7 @@ fn task_table_wrap_widths(items: &[TaskItem], source: SourceSelection) -> Vec<(u
     const MIN_WIDTHS: [(usize, usize); 4] = [(5, 4), (6, 7), (7, 4), (8, 20)];
 
     let Some(term_width) = crate::output::table::terminal_width() else {
-        return DEFAULT_WIDTHS.to_vec();
+        return selected_task_table_default_widths(selected_columns, &DEFAULT_WIDTHS);
     };
 
     let mut max_widths = HEADERS.map(str::len);
@@ -2062,19 +2116,29 @@ fn task_table_wrap_widths(items: &[TaskItem], source: SourceSelection) -> Vec<(u
         }
     }
 
-    let padding = HEADERS.len().saturating_sub(1) + 2 * HEADERS.len();
-    let fixed_width: usize = FIXED_COLUMNS.iter().map(|idx| max_widths[*idx]).sum();
+    let padding = selected_columns.len().saturating_sub(1) + 2 * selected_columns.len();
+    let fixed_width: usize = selected_columns
+        .iter()
+        .filter(|column| FIXED_COLUMNS.contains(column))
+        .map(|idx| max_widths[*idx])
+        .sum();
     let available = term_width.saturating_sub(fixed_width + padding);
-    let min_total: usize = WRAP_COLUMNS
+    let selected_wrap_columns: Vec<usize> = selected_columns
+        .iter()
+        .copied()
+        .filter(|column| WRAP_COLUMNS.contains(column))
+        .collect();
+    let min_total: usize = selected_wrap_columns
         .iter()
         .map(|column| task_table_lookup(&MIN_WIDTHS, *column))
         .sum();
     if available < min_total {
-        return DEFAULT_WIDTHS.to_vec();
+        return selected_task_table_default_widths(selected_columns, &DEFAULT_WIDTHS);
     }
 
     let mut widths: Vec<(usize, usize)> = WRAP_COLUMNS
         .iter()
+        .filter(|column| selected_columns.contains(column))
         .map(|column| {
             let min = task_table_lookup(&MIN_WIDTHS, *column);
             (*column, min.min(max_widths[*column]))
@@ -2112,6 +2176,29 @@ fn task_table_wrap_widths(items: &[TaskItem], source: SourceSelection) -> Vec<(u
     }
 
     widths
+        .into_iter()
+        .filter_map(|(column, width)| {
+            selected_columns
+                .iter()
+                .position(|selected| *selected == column)
+                .map(|display_column| (display_column, width))
+        })
+        .collect()
+}
+
+fn selected_task_table_default_widths(
+    selected_columns: &[usize],
+    default_widths: &[(usize, usize)],
+) -> Vec<(usize, usize)> {
+    default_widths
+        .iter()
+        .filter_map(|(column, width)| {
+            selected_columns
+                .iter()
+                .position(|selected| selected == column)
+                .map(|display_column| (display_column, *width))
+        })
+        .collect()
 }
 
 fn task_table_lookup(values: &[(usize, usize)], column: usize) -> usize {
