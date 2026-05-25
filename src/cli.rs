@@ -348,6 +348,9 @@ pub enum TaskCommand {
 }
 
 #[derive(Debug, Args)]
+#[command(
+    after_help = "Filters:\n  source:pkms|todoist|all, src:pkms|todoist|all\n  state:TODO, tags:tag,!other, type:SCHED,DEADL, prio:A, project:Name\n  date:today|week|overdue|upcoming|YYYY-MM-DD, after:YYYY-MM-DD, before:YYYY-MM-DD\n  todoist.filter:<query> (requires source:todoist or source:all)\n\nExamples:\n  pkms task list source:todoist tag:phone prio:A\n  pkms task list source:all date:today project:Inbox"
+)]
 pub struct TaskListArgs {
     #[arg(value_name = "MODE_OR_FILTER")]
     pub filters: Vec<String>,
@@ -367,6 +370,9 @@ pub struct TaskListArgs {
 }
 
 #[derive(Debug, Args)]
+#[command(
+    after_help = "Filters:\n  source:pkms|todoist|all, src:pkms|todoist|all\n  state:TODO, tags:tag,!other, type:SCHED,DEADL, prio:A, project:Name\n  date:today|week|overdue|upcoming|YYYY-MM-DD, after:YYYY-MM-DD, before:YYYY-MM-DD\n  todoist.filter:<query> (requires source:todoist or source:all)\n\nExamples:\n  pkms task agenda source:todoist\n  pkms task agenda source:all date:overdue tag:waiting\n  pkms task agenda today source:todoist"
+)]
 pub struct TaskAgendaArgs {
     #[command(subcommand)]
     pub command: Option<TaskAgendaCommand>,
@@ -393,6 +399,9 @@ pub enum TaskAgendaCommand {
 }
 
 #[derive(Debug, Args)]
+#[command(
+    after_help = "Filters:\n  source:pkms|todoist|all, src:pkms|todoist|all\n  state:TODO, tags:tag,!other, type:SCHED,DEADL, prio:A, project:Name\n  todoist.filter:<query> (requires source:todoist or source:all)\n\nExamples:\n  pkms task agenda today source:todoist\n  pkms task inbox source:all project:Inbox"
+)]
 pub struct TaskShortcutArgs {
     #[arg(value_name = "FILTER")]
     pub filters: Vec<String>,
@@ -403,6 +412,9 @@ pub struct TaskShortcutArgs {
 }
 
 #[derive(Debug, Args)]
+#[command(
+    after_help = "Filters:\n  source:pkms|todoist|all, src:pkms|todoist|all\n  state:TODO, tags:tag,!other, type:SCHED,DEADL, prio:A, project:Name\n  todoist.filter:<query> (requires source:todoist or source:all)\n\nExamples:\n  pkms task agenda upcoming --days 14 source:all tag:phone\n  pkms task agenda upcoming source:todoist prio:B"
+)]
 pub struct TaskUpcomingArgs {
     #[arg(value_name = "FILTER")]
     pub filters: Vec<String>,
@@ -453,40 +465,14 @@ pub struct TaskDoneArgs {
 }
 
 #[derive(Debug, Args)]
+#[command(
+    after_help = "Add modifiers:\n  title:<text>              Task title; non-modifier words are task text\n  tag:<label>, tags:<a,b>   Labels/tags; repeat or comma-separate\n  schedule:<date>, sch:<date>, due:<date>\n  deadline:<date>, dead:<date>, dl:<date>\n  project:<name-or-id>, prio:A|B|C, desc:<text>, source:pkms|todoist\n  note:<uuid-title-or-path> PKMS only; choose the note to append into\n\nDate shortcuts for schedule/deadline: today, tomorrow, tod, tom, or YYYY-MM-DD.\n\nExamples:\n  pkms task add title:\"This is title\" sch:tod dead:tom prio:a tag:phone\n  pkms task add source:todoist title:\"Call Alice\" project:Inbox tag:phone prio:b\n  pkms task add note:\"Project Alpha\" title:\"Follow up\""
+)]
 pub struct TaskAddArgs {
     #[arg(
-        long,
-        value_name = "SOURCE",
-        default_value = "pkms",
-        help = "Task source: pkms or todoist"
+        help = "Task text and add modifiers such as title:, tag:, sch:, dead:, prio:, project:, note:"
     )]
-    pub source: String,
-    #[arg(long, value_name = "PROJECT", help = "External project name")]
-    pub project: Option<String>,
-    #[arg(long, value_name = "TITLE", help = "Structured task title")]
-    pub title: Option<String>,
-    #[arg(long, value_name = "DATE", help = "Structured due date (YYYY-MM-DD)")]
-    pub due: Option<String>,
-    #[arg(
-        long,
-        value_name = "DATE",
-        help = "Structured deadline date (YYYY-MM-DD)"
-    )]
-    pub deadline: Option<String>,
-    #[arg(long, value_name = "LABEL", help = "Structured label name")]
-    pub label: Vec<String>,
-    #[arg(long, value_name = "PRIO", help = "Structured priority: A, B, or C")]
-    pub priority: Option<String>,
-    #[arg(long, value_name = "TEXT", help = "Structured task description")]
-    pub description: Option<String>,
-    #[arg(
-        long,
-        value_name = "NOTE",
-        help = "PKMS note UUID, title, or alias to link from the Todoist description"
-    )]
-    pub note: Option<String>,
-    #[arg(help = "Task text")]
-    pub text: Option<String>,
+    pub text: Vec<String>,
 }
 
 #[derive(Debug, Args)]

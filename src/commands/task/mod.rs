@@ -63,6 +63,20 @@ enum PlanningKind {
     Deadline,
 }
 
+#[derive(Debug, Clone)]
+struct TaskAddSpec {
+    source: String,
+    project: Option<String>,
+    title: Option<String>,
+    due: Option<String>,
+    deadline: Option<String>,
+    labels: Vec<String>,
+    priority: Option<String>,
+    description: Option<String>,
+    note: Option<String>,
+    text: Option<String>,
+}
+
 pub fn run(config: &ResolvedConfig, ctx: &OutputContext, command: &TaskCommand) -> Result<()> {
     match command {
         TaskCommand::List(args) => run_list(config, ctx, args),
@@ -1222,16 +1236,91 @@ fn run_done(config: &ResolvedConfig, ctx: &OutputContext, args: &TaskDoneArgs) -
 }
 
 fn run_add(config: &ResolvedConfig, ctx: &OutputContext, args: &TaskAddArgs) -> Result<()> {
-    if args.source.eq_ignore_ascii_case("pkms") {
-        return add_pkms_task(config, ctx, args);
+    let spec = parse_task_add_spec(args)?;
+    if spec.source.eq_ignore_ascii_case("pkms") {
+        return add_pkms_task(config, ctx, &spec);
     }
-    if args.source.eq_ignore_ascii_case("todoist") {
-        return add_todoist_task(config, ctx, args);
+    if spec.source.eq_ignore_ascii_case("todoist") {
+        return add_todoist_task(config, ctx, &spec);
     }
     bail!(
         "Unknown task source '{}'. Use pkms or todoist.",
-        args.source
+        spec.source
     )
+}
+
+fn parse_task_add_spec(args: &TaskAddArgs) -> Result<TaskAddSpec> {
+    let mut spec = TaskAddSpec {
+        source: "pkms".to_string(),
+        project: None,
+        title: None,
+        due: None,
+        deadline: None,
+        labels: Vec::new(),
+        priority: None,
+        description: None,
+        note: None,
+        text: None,
+    };
+    let mut text = Vec::new();
+
+    for token in &args.text {
+        if apply_task_add_modifier(&mut spec, token)? {
+            continue;
+        }
+        text.push(token.clone());
+    }
+
+    if !text.is_empty() {
+        set_task_add_option(&mut spec.text, "text", text.join(" "))?;
+    }
+
+    Ok(spec)
+}
+
+fn apply_task_add_modifier(spec: &mut TaskAddSpec, token: &str) -> Result<bool> {
+    let Some((key, value)) = token.split_once(':') else {
+        return Ok(false);
+    };
+    let key = key.trim().to_ascii_lowercase();
+    let value = value.trim();
+    match key.as_str() {
+        "source" | "src" => spec.source = value.to_string(),
+        "title" => set_task_add_option(&mut spec.title, "title", value.to_string())?,
+        "tag" | "tags" | "label" | "labels" => spec.labels.extend(split_task_add_list(value)),
+        "due" | "schedule" | "scheduled" | "sched" | "sch" => {
+            set_task_add_option(&mut spec.due, "schedule", value.to_string())?;
+        }
+        "deadline" | "dead" | "dl" => {
+            set_task_add_option(&mut spec.deadline, "deadline", value.to_string())?;
+        }
+        "project" | "proj" => set_task_add_option(&mut spec.project, "project", value.to_string())?,
+        "priority" | "prio" | "pri" => {
+            set_task_add_option(&mut spec.priority, "priority", value.to_string())?;
+        }
+        "description" | "desc" | "body" => {
+            set_task_add_option(&mut spec.description, "description", value.to_string())?;
+        }
+        "note" => set_task_add_option(&mut spec.note, "note", value.to_string())?,
+        _ => return Ok(false),
+    }
+    Ok(true)
+}
+
+fn split_task_add_list(value: &str) -> impl Iterator<Item = String> + '_ {
+    value
+        .split(',')
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string)
+}
+
+fn set_task_add_option<T>(target: &mut Option<T>, name: &str, value: T) -> Result<()> {
+    if target.is_some() {
+        bail!("task add {name} was provided more than once");
+    }
+    *target = Some(value);
+    Ok(())
 }
 
 fn run_postpone(
@@ -1311,36 +1400,6 @@ fn run_deadline(
             )
         }
         TaskId::External { source, .. } => unsupported_task_source(&source),
-    }
-}
-
-#[cfg(feature = "todoist")]
-#[derive(Debug, Clone)]
-struct PkmsNoteLink {
-    uuid: String,
-    title: String,
-}
-
-#[cfg(feature = "todoist")]
-fn resolve_pkms_note_link(config: &ResolvedConfig, target: &str) -> Result<PkmsNoteLink> {
-    let graph = crate::graph::Graph::load(config)?;
-    let node = graph.resolve_target(target)?;
-    Ok(PkmsNoteLink {
-        uuid: node.uuid.clone(),
-        title: node.title.clone(),
-    })
-}
-
-#[cfg(feature = "todoist")]
-fn description_with_pkms_note_marker(description: Option<&str>, uuid: &str) -> String {
-    let marker = format!("{PKMS_NOTE_MARKER_PREFIX}{uuid}");
-    match description
-        .map(str::trim_end)
-        .filter(|value| !value.is_empty())
-    {
-        Some(description) if description.contains(&marker) => description.to_string(),
-        Some(description) => format!("{description}\n\n{marker}"),
-        None => marker,
     }
 }
 
@@ -1498,6 +1557,26 @@ fn resolve_pkms_inbox_target(
         .ok_or_else(|| anyhow::anyhow!("PKMS task inbox note not found: {target}"))
 }
 
+fn resolve_pkms_note_task_target(config: &ResolvedConfig, target: &str) -> Result<PkmsInboxTarget> {
+    let graph = crate::graph::Graph::load(config)?;
+    if let Some(node) = graph.find_node(target) {
+        return Ok(PkmsInboxTarget::Note(node.path.clone()));
+    }
+
+    let configured = PathBuf::from(target);
+    let candidates = if configured.is_absolute() {
+        vec![configured]
+    } else {
+        vec![config.resolved_db_root().join(&configured), configured]
+    };
+
+    candidates
+        .into_iter()
+        .find(|path| path.exists())
+        .map(PkmsInboxTarget::Note)
+        .ok_or_else(|| anyhow::anyhow!("PKMS task target note not found: {target}"))
+}
+
 fn resolve_daily_inbox_target(config: &ResolvedConfig, create: bool) -> Result<PkmsInboxTarget> {
     let today = Local::now().date_naive();
     let graph = crate::graph::Graph::load(config)?;
@@ -1534,32 +1613,35 @@ fn resolve_daily_inbox_target(config: &ResolvedConfig, create: bool) -> Result<P
     Ok(PkmsInboxTarget::Daily { path })
 }
 
-fn add_pkms_task(config: &ResolvedConfig, ctx: &OutputContext, args: &TaskAddArgs) -> Result<()> {
-    let inbox_target = resolve_pkms_inbox_target(config, true)?;
-    let title = args
+fn add_pkms_task(config: &ResolvedConfig, ctx: &OutputContext, spec: &TaskAddSpec) -> Result<()> {
+    let inbox_target = match spec.note.as_deref() {
+        Some(note) => resolve_pkms_note_task_target(config, note)?,
+        None => resolve_pkms_inbox_target(config, true)?,
+    };
+    let title = spec
         .title
         .as_deref()
-        .or(args.text.as_deref())
+        .or(spec.text.as_deref())
         .map(str::trim)
         .filter(|title| !title.is_empty())
-        .ok_or_else(|| anyhow::anyhow!("PKMS task creation requires task text or --title"))?;
+        .ok_or_else(|| anyhow::anyhow!("PKMS task creation requires task text or title:"))?;
 
     let state = config
         .open_todo_states()
         .first()
         .cloned()
         .unwrap_or_else(|| "TODO".to_string());
-    let priority = args
+    let priority = spec
         .priority
         .as_deref()
         .map(pkms_priority)
         .transpose()?
         .map(|priority| format!(" [#{priority}]"))
         .unwrap_or_default();
-    let tags = if args.label.is_empty() {
+    let tags = if spec.labels.is_empty() {
         String::new()
     } else {
-        format!(" :{}:", args.label.join(":"))
+        format!(" :{}:", spec.labels.join(":"))
     };
 
     let level = match inbox_target {
@@ -1567,8 +1649,8 @@ fn add_pkms_task(config: &ResolvedConfig, ctx: &OutputContext, args: &TaskAddArg
         PkmsInboxTarget::Daily { .. } => "**",
     };
     let mut entry = format!("{level} {state}{priority} {title}{tags}\n");
-    let due = validate_pkms_date_arg("due", args.due.as_deref())?;
-    let deadline = validate_pkms_date_arg("deadline", args.deadline.as_deref())?;
+    let due = validate_pkms_date_arg("due", spec.due.as_deref())?;
+    let deadline = validate_pkms_date_arg("deadline", spec.deadline.as_deref())?;
     if due.is_some() || deadline.is_some() {
         let mut planning = Vec::new();
         if let Some(due) = due {
@@ -1579,7 +1661,7 @@ fn add_pkms_task(config: &ResolvedConfig, ctx: &OutputContext, args: &TaskAddArg
         }
         entry.push_str(&format!("{}\n", planning.join(" ")));
     }
-    if let Some(description) = args
+    if let Some(description) = spec
         .description
         .as_deref()
         .map(str::trim)
@@ -1609,12 +1691,26 @@ fn pkms_priority(value: &str) -> Result<char> {
 
 fn validate_pkms_date_arg(name: &str, value: Option<&str>) -> Result<Option<String>> {
     value
-        .map(|value| {
-            crate::input::parse_date(Some(value))
-                .map(|date| date.format("%Y-%m-%d").to_string())
-                .ok_or_else(|| anyhow::anyhow!("Invalid {name} date '{value}'. Use YYYY-MM-DD."))
-        })
+        .map(|value| parse_add_date_arg(name, value))
         .transpose()
+}
+
+fn parse_add_date_arg(name: &str, value: &str) -> Result<String> {
+    if value.eq_ignore_ascii_case("today") || value.eq_ignore_ascii_case("tod") {
+        return Ok(Local::now().date_naive().format("%Y-%m-%d").to_string());
+    }
+    if value.eq_ignore_ascii_case("tomorrow") || value.eq_ignore_ascii_case("tom") {
+        return Ok((Local::now().date_naive() + chrono::Duration::days(1))
+            .format("%Y-%m-%d")
+            .to_string());
+    }
+    crate::input::parse_date(Some(value))
+        .map(|date| date.format("%Y-%m-%d").to_string())
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "Invalid {name} date '{value}'. Use today, tomorrow, tod, tom, or YYYY-MM-DD."
+            )
+        })
 }
 
 fn org_date(date: &str) -> Result<String> {
@@ -2037,64 +2133,55 @@ fn replace_planning_token(line: &str, kind: PlanningKind, value: Option<&str>) -
 fn add_todoist_task(
     config: &ResolvedConfig,
     ctx: &OutputContext,
-    args: &TaskAddArgs,
+    spec: &TaskAddSpec,
 ) -> Result<()> {
-    if is_structured_add(args) {
-        return create_structured_todoist_task(config, ctx, args);
+    if spec.note.is_some() {
+        bail!("note is available only for PKMS task creation.");
     }
-    quick_add_todoist_task(config, ctx, args)
+    if is_structured_add(spec) {
+        return create_structured_todoist_task(config, ctx, spec);
+    }
+    quick_add_todoist_task(config, ctx, spec)
 }
 
 #[cfg(not(feature = "todoist"))]
 fn add_todoist_task(
     _config: &ResolvedConfig,
     _ctx: &OutputContext,
-    _args: &TaskAddArgs,
+    _spec: &TaskAddSpec,
 ) -> Result<()> {
     bail!("Todoist support is not available in this build. Rebuild with --features todoist.")
 }
 
 #[cfg(feature = "todoist")]
-fn is_structured_add(args: &TaskAddArgs) -> bool {
-    args.title.is_some()
-        || args.due.is_some()
-        || args.deadline.is_some()
-        || !args.label.is_empty()
-        || args.priority.is_some()
-        || args.description.is_some()
-        || args.note.is_some()
+fn is_structured_add(spec: &TaskAddSpec) -> bool {
+    spec.title.is_some()
+        || spec.due.is_some()
+        || spec.deadline.is_some()
+        || !spec.labels.is_empty()
+        || spec.priority.is_some()
+        || spec.description.is_some()
 }
 
 #[cfg(feature = "todoist")]
 fn create_structured_todoist_task(
     config: &ResolvedConfig,
     ctx: &OutputContext,
-    args: &TaskAddArgs,
+    spec: &TaskAddSpec,
 ) -> Result<()> {
-    if args.title.is_some() && args.text.is_some() {
-        bail!("Structured Todoist task creation uses --title or positional text, not both.");
+    if spec.title.is_some() && spec.text.is_some() {
+        bail!("Structured Todoist task creation uses title: or positional text, not both.");
     }
-    let title = args
+    let title = spec
         .title
         .as_deref()
-        .or(args.text.as_deref())
+        .or(spec.text.as_deref())
         .filter(|title| !title.trim().is_empty())
-        .ok_or_else(|| anyhow::anyhow!("Structured Todoist task creation requires --title"))?;
-    let linked_note = args
-        .note
-        .as_deref()
-        .map(|target| resolve_pkms_note_link(config, target))
-        .transpose()?;
-    let description = match linked_note.as_ref() {
-        Some(note) => Some(description_with_pkms_note_marker(
-            args.description.as_deref(),
-            &note.uuid,
-        )),
-        None => args.description.clone(),
-    };
-    let due_date = validate_date_arg("due", args.due.as_deref())?;
-    let deadline_date = validate_date_arg("deadline", args.deadline.as_deref())?;
-    let priority = args
+        .ok_or_else(|| anyhow::anyhow!("Structured Todoist task creation requires title:"))?;
+    let description = spec.description.clone();
+    let due_date = validate_date_arg("due", spec.due.as_deref())?;
+    let deadline_date = validate_date_arg("deadline", spec.deadline.as_deref())?;
+    let priority = spec
         .priority
         .as_deref()
         .map(todoist_create_priority)
@@ -2103,7 +2190,7 @@ fn create_structured_todoist_task(
     let client =
         crate::tasks::todoist::TodoistClient::with_base_url(config.todoist_api_base_url(), token);
     let metadata = crate::tasks::todoist::TodoistMetadata::new(client.list_projects()?);
-    let project_id = args
+    let project_id = spec
         .project
         .as_deref()
         .map(|project| metadata.resolve_project_id(project))
@@ -2112,7 +2199,7 @@ fn create_structured_todoist_task(
         content: title.to_string(),
         description,
         project_id,
-        labels: args.label.clone(),
+        labels: spec.labels.clone(),
         priority,
         due_date,
         deadline_date,
@@ -2120,12 +2207,7 @@ fn create_structured_todoist_task(
 
     let task = client.create_task(&request)?;
     let mut item = crate::tasks::todoist::task_to_item_with_metadata(task, Some(&metadata));
-    if let Some(note) = linked_note {
-        item.note_uuid = Some(note.uuid);
-        item.note_title = Some(note.title);
-    } else {
-        enrich_todoist_items_with_pkms_notes(config, std::slice::from_mut(&mut item))?;
-    }
+    enrich_todoist_items_with_pkms_notes(config, std::slice::from_mut(&mut item))?;
     print_add_output(ctx, item)
 }
 
@@ -2133,17 +2215,17 @@ fn create_structured_todoist_task(
 fn quick_add_todoist_task(
     config: &ResolvedConfig,
     ctx: &OutputContext,
-    args: &TaskAddArgs,
+    spec: &TaskAddSpec,
 ) -> Result<()> {
-    let text = args
+    let text = spec
         .text
         .as_deref()
         .filter(|text| !text.trim().is_empty())
-        .ok_or_else(|| anyhow::anyhow!("Todoist Quick Add requires task text or --title"))?;
+        .ok_or_else(|| anyhow::anyhow!("Todoist Quick Add requires task text or title:"))?;
     let token = crate::tasks::todoist::ensure_enabled(config)?;
     let client =
         crate::tasks::todoist::TodoistClient::with_base_url(config.todoist_api_base_url(), token);
-    let text = quick_add_text(text, args.project.as_deref());
+    let text = quick_add_text(text, spec.project.as_deref());
     let response = client.quick_add(&text)?;
     let id = todoist_created_task_id(&response)?;
     let task = client.get_task(&id)?;
@@ -2331,23 +2413,12 @@ fn source_display_name(item: &TaskItem) -> &'static str {
 #[cfg(feature = "todoist")]
 fn validate_date_arg(name: &str, value: Option<&str>) -> Result<Option<String>> {
     value
-        .map(|value| {
-            crate::input::parse_date(Some(value))
-                .map(|date| date.format("%Y-%m-%d").to_string())
-                .ok_or_else(|| anyhow::anyhow!("Invalid {name} date '{value}'. Use YYYY-MM-DD."))
-        })
+        .map(|value| parse_add_date_arg(name, value))
         .transpose()
 }
 
 fn parse_mutation_due_date(value: &str) -> Result<String> {
-    if value.eq_ignore_ascii_case("tomorrow") {
-        return Ok((Local::now().date_naive() + chrono::Duration::days(1))
-            .format("%Y-%m-%d")
-            .to_string());
-    }
-    crate::input::parse_date(Some(value))
-        .map(|date| date.format("%Y-%m-%d").to_string())
-        .ok_or_else(|| anyhow::anyhow!("Invalid due date '{value}'. Use tomorrow or YYYY-MM-DD."))
+    parse_add_date_arg("due", value)
 }
 
 fn mutation_date_value(value: &str) -> Result<serde_json::Value> {

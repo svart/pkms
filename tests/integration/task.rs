@@ -80,6 +80,33 @@ fn test_task_agenda_help_lists_shortcut_subcommands() {
 }
 
 #[test]
+fn test_task_list_help_shows_filters() {
+    let (stdout, stderr, status) = run(&["task", "list", "--help"]);
+    assert!(
+        status.success(),
+        "task list --help failed:\n{stdout}\n{stderr}"
+    );
+    assert!(stdout.contains("Filters:"));
+    assert!(stdout.contains("source:pkms|todoist|all"));
+    assert!(stdout.contains("todoist.filter:<query>"));
+}
+
+#[test]
+fn test_task_add_help_shows_modifiers() {
+    let (stdout, stderr, status) = run(&["task", "add", "--help"]);
+    assert!(
+        status.success(),
+        "task add --help failed:\n{stdout}\n{stderr}"
+    );
+    assert!(stdout.contains("Add modifiers:"));
+    assert!(stdout.contains("sch:<date>"));
+    assert!(stdout.contains("dead:<date>"));
+    assert!(stdout.contains("note:<uuid-title-or-path> PKMS only"));
+    assert!(!stdout.contains("--title"));
+    assert!(!stdout.contains("--source"));
+}
+
+#[test]
 fn test_task_agenda_shortcut_flags_are_rejected() {
     for flag in ["--today", "--week", "--overdue", "--upcoming"] {
         let (stdout, stderr, status) = run(&["task", "agenda", flag, "--help"]);
@@ -2017,16 +2044,11 @@ fn test_task_add_defaults_to_pkms_inbox() {
             "json",
             "task",
             "add",
-            "--title",
-            "Capture new task",
-            "--due",
-            "2026-06-01",
-            "--deadline",
-            "2026-06-03",
-            "--priority",
-            "A",
-            "--label",
-            "inbox",
+            "title:Capture new task",
+            "due:2026-06-01",
+            "deadline:2026-06-03",
+            "priority:A",
+            "label:inbox",
         ],
         &config,
     );
@@ -2040,6 +2062,52 @@ fn test_task_add_defaults_to_pkms_inbox() {
     assert!(content.contains("* TODO [#A] Capture new task :inbox:"));
     assert!(content.contains("SCHEDULED: <2026-06-01"));
     assert!(content.contains("DEADLINE: <2026-06-03"));
+}
+
+#[test]
+fn test_task_add_pkms_accepts_modifiers_and_note_target() {
+    let (_dir, root) = setup_db();
+    let target_path = root.join("roam/personal/20260525000001-capture-target.org");
+    std::fs::write(
+        &target_path,
+        r#":PROPERTIES:
+:ID:       26262626-2626-4626-8626-262626262626
+:END:
+#+title: Capture Target
+"#,
+    )
+    .unwrap();
+    let today = org_date(0);
+    let tomorrow = org_date(1);
+    let (stdout, stderr, status) = run_with_config(
+        &[
+            "--db",
+            root.to_str().unwrap(),
+            "--output-format",
+            "json",
+            "task",
+            "add",
+            "title:Modifier task",
+            "sch:tod",
+            "dead:tom",
+            "prio:a",
+            "tag:inbox,phone",
+            "note:Capture Target",
+            "desc:Body text",
+        ],
+        TEST_CONFIG,
+    );
+    assert!(status.success(), "task add failed:\n{stdout}\n{stderr}");
+    let v: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    assert_eq!(v["item"]["source"], "pkms");
+    assert_eq!(v["item"]["title"], "Modifier task");
+    assert_eq!(v["item"]["scheduled"]["date"], today);
+    assert_eq!(v["item"]["deadline"]["date"], tomorrow);
+    let content = std::fs::read_to_string(&target_path).unwrap();
+    assert!(content.contains("* TODO [#A] Modifier task :inbox:phone:"));
+    assert!(content.contains("SCHEDULED: <"));
+    assert!(content.contains("DEADLINE: <"));
+    assert!(content.contains("Body text"));
 }
 
 #[test]
@@ -2364,10 +2432,8 @@ fn test_task_add_todoist_quick_add_uses_mock_api() {
             "json",
             "task",
             "add",
-            "--source",
-            "todoist",
-            "--project",
-            "Inbox",
+            "source:todoist",
+            "project:Inbox",
             "Buy milk tomorrow",
         ],
         &base_url,
@@ -2398,25 +2464,9 @@ fn test_task_add_todoist_quick_add_uses_mock_api() {
 
 #[cfg(feature = "todoist")]
 #[test]
-fn test_task_add_todoist_note_marker_preserves_description() {
+fn test_task_add_todoist_note_modifier_is_rejected_before_api() {
     let (_dir, root) = setup_db();
-    let (base_url, handle) = spawn_todoist_mock_expect_bodies(vec![
-        (
-            "GET",
-            "/projects?limit=200",
-            serde_json::Value::Null,
-            r#"{"results":[],"next_cursor":null}"#,
-        ),
-        (
-            "POST",
-            "/tasks",
-            serde_json::json!({
-                "content": "Call Alice",
-                "description": "Discuss launch\n\npkms:id:aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa"
-            }),
-            r#"{"id":"abc","content":"Call Alice","description":"Discuss launch\n\npkms:id:aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa","priority":1,"labels":[]}"#,
-        ),
-    ]);
+    let (base_url, handle) = spawn_todoist_mock(vec![]);
     let output = run_with_todoist_env(
         &[
             "--db",
@@ -2425,30 +2475,19 @@ fn test_task_add_todoist_note_marker_preserves_description() {
             "json",
             "task",
             "add",
-            "--source",
-            "todoist",
-            "--title",
-            "Call Alice",
-            "--description",
-            "Discuss launch",
-            "--note",
-            "Note A",
+            "source:todoist",
+            "title:Call Alice",
+            "description:Discuss launch",
+            "note:Note A",
         ],
         &base_url,
     );
     handle.join().unwrap();
-    assert!(output.status.success());
+    assert!(!output.status.success());
     let v: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
     assert_eq!(
-        v["item"]["note_uuid"],
-        "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa"
-    );
-    assert_eq!(v["item"]["note_title"], "Note A");
-    assert!(
-        v["item"]["body"]
-            .as_str()
-            .unwrap()
-            .contains("Discuss launch")
+        v["error"].as_str().unwrap(),
+        "note is available only for PKMS task creation."
     );
 }
 
@@ -2486,24 +2525,15 @@ fn test_task_add_todoist_structured_uses_field_api() {
             "json",
             "task",
             "add",
-            "--source",
-            "todoist",
-            "--title",
-            "Call Alice",
-            "--due",
-            "2026-05-24",
-            "--deadline",
-            "2026-05-30",
-            "--project",
-            "Inbox",
-            "--label",
-            "phone",
-            "--label",
-            "migration",
-            "--priority",
-            "B",
-            "--description",
-            "Discuss migration plan",
+            "source:todoist",
+            "title:Call Alice",
+            "due:2026-05-24",
+            "deadline:2026-05-30",
+            "project:Inbox",
+            "label:phone",
+            "label:migration",
+            "priority:B",
+            "description:Discuss migration plan",
         ],
         &base_url,
     );
@@ -2535,6 +2565,75 @@ fn test_task_add_todoist_structured_uses_field_api() {
 
 #[cfg(feature = "todoist")]
 #[test]
+fn test_task_add_todoist_accepts_modifiers_and_date_shortcuts() {
+    let (_dir, root) = setup_db();
+    let today = org_date(0);
+    let tomorrow = org_date(1);
+    let body = Box::leak(
+        format!(
+            r#"{{"id":"abc","content":"Call Alice","description":"Discuss migration plan","project_id":"inbox-id","priority":3,"labels":["phone","migration"],"due":{{"date":"{today}","string":"today"}},"deadline":{{"date":"{tomorrow}"}},"url":"https://todoist.com/showTask?id=abc"}}"#
+        )
+        .into_boxed_str(),
+    );
+    let (base_url, handle) = spawn_todoist_mock_expect_bodies(vec![
+        (
+            "GET",
+            "/projects?limit=200",
+            serde_json::Value::Null,
+            r#"{"results":[{"id":"inbox-id","name":"Inbox"}],"next_cursor":null}"#,
+        ),
+        (
+            "POST",
+            "/tasks",
+            serde_json::json!({
+                "content": "Call Alice",
+                "description": "Discuss migration plan",
+                "project_id": "inbox-id",
+                "labels": ["phone", "migration"],
+                "priority": 3,
+                "due_date": today,
+                "deadline_date": tomorrow
+            }),
+            body,
+        ),
+    ]);
+    let output = run_with_todoist_env(
+        &[
+            "--db",
+            root.to_str().unwrap(),
+            "--output-format",
+            "json",
+            "task",
+            "add",
+            "src:todoist",
+            "title:Call Alice",
+            "sch:tod",
+            "dead:tom",
+            "project:Inbox",
+            "tag:phone,migration",
+            "prio:b",
+            "desc:Discuss migration plan",
+        ],
+        &base_url,
+    );
+    handle.join().unwrap();
+    assert!(
+        output.status.success(),
+        "stdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let v: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(v["item"]["source"], "todoist");
+    assert_eq!(v["item"]["title"], "Call Alice");
+    assert_eq!(v["item"]["priority"], "B");
+    assert_eq!(v["item"]["scheduled"]["date"], today);
+    assert_eq!(v["item"]["deadline"]["date"], tomorrow);
+    assert_eq!(v["item"]["tags"], serde_json::json!(["phone", "migration"]));
+}
+
+#[cfg(feature = "todoist")]
+#[test]
 fn test_task_add_todoist_text_output_includes_task_fields() {
     let (_dir, root) = setup_db();
     let (base_url, handle) = spawn_todoist_mock_expect_bodies(vec![
@@ -2562,16 +2661,11 @@ fn test_task_add_todoist_text_output_includes_task_fields() {
             root.to_str().unwrap(),
             "task",
             "add",
-            "--source",
-            "todoist",
-            "--title",
-            "Call Alice",
-            "--due",
-            "2026-05-24",
-            "--project",
-            "Inbox",
-            "--priority",
-            "A",
+            "source:todoist",
+            "title:Call Alice",
+            "due:2026-05-24",
+            "project:Inbox",
+            "priority:A",
         ],
         &base_url,
     );
@@ -2607,12 +2701,9 @@ fn test_task_add_todoist_duplicate_project_name_fails_before_create() {
             "json",
             "task",
             "add",
-            "--source",
-            "todoist",
-            "--title",
-            "Call Alice",
-            "--project",
-            "Work",
+            "source:todoist",
+            "title:Call Alice",
+            "project:Work",
         ],
         &base_url,
     );
@@ -2640,12 +2731,9 @@ fn test_task_add_todoist_invalid_structured_priority_fails_before_api() {
             "json",
             "task",
             "add",
-            "--source",
-            "todoist",
-            "--title",
-            "Call Alice",
-            "--priority",
-            "urgent",
+            "source:todoist",
+            "title:Call Alice",
+            "priority:urgent",
         ],
         &base_url,
     );
@@ -2668,12 +2756,9 @@ fn test_task_add_todoist_invalid_structured_date_fails_before_api() {
             "json",
             "task",
             "add",
-            "--source",
-            "todoist",
-            "--title",
-            "Call Alice",
-            "--due",
-            "tomorrow",
+            "source:todoist",
+            "title:Call Alice",
+            "due:next-week",
         ],
         &base_url,
     );

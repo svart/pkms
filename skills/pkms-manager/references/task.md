@@ -94,9 +94,10 @@ pkms task list tags source:all
 pkms task list source:todoist 'todoist.filter:today | overdue'
 pkms task todoist:<remote-id> show
 pkms task add "Capture local task"
-pkms task add --source todoist "Buy milk tomorrow"
-pkms task add --source todoist --title "Call Alice" --due 2026-05-24 --label phone --priority B
-pkms task add --source todoist --title "Call Alice" --note "Project Alpha"
+pkms task add note:"Project Alpha" title:"Follow up"
+pkms task add source:todoist "Buy milk tomorrow"
+pkms task add source:todoist title:"Call Alice" due:2026-05-24 tag:phone priority:B
+pkms task add source:todoist title:"Call Alice" sch:tod tag:phone prio:B
 pkms task todoist:<remote-id> done
 pkms task p<canonical-id> postpone --to 2026-06-01
 pkms task todoist:<remote-id> postpone --to tomorrow
@@ -125,31 +126,38 @@ is `daily`, PKMS inbox tasks live in today's daily note under the top-level
 `* Inbox` heading.
 
 Default `task add` appends a TODO heading to the configured PKMS inbox note.
-Use positional text or structured fields:
+Use positional text or add modifiers. `note:` is PKMS-only and chooses the note
+to append into:
 
 ```bash
 pkms task add "Capture local task"
-pkms task add --title "Call Alice" --due 2026-05-24 --deadline 2026-05-30 --label phone --priority B
+pkms task add title:"Call Alice" due:2026-05-24 deadline:2026-05-30 tag:phone priority:B
+pkms task add title:"Call Alice" sch:tod dead:tom tag:phone prio:B
+pkms task add note:"Project Alpha" title:"Follow up" schedule:tomorrow
 ```
 
-Use positional text with `task add --source todoist` for Todoist Quick Add
+Use positional text with `task add source:todoist` for Todoist Quick Add
 natural-language parsing. Use structured creation for deterministic assistant
 tasks:
 
 ```bash
-pkms task add --source todoist --title "Call Alice" --due 2026-05-24 --deadline 2026-05-30 --project inbox --label phone --priority B --description "Discuss migration plan"
+pkms task add source:todoist title:"Call Alice" due:2026-05-24 deadline:2026-05-30 project:inbox tag:phone priority:B desc:"Discuss migration plan"
+pkms task add source:todoist title:"Call Alice" sch:tod dead:tom project:inbox tag:phone,migration prio:B desc:"Discuss migration plan"
 ```
 
-Structured due and deadline values must be `YYYY-MM-DD`. Priority must be `A`,
-`B`, or `C`. Repeat `--label` for multiple labels. `--project` accepts either a
-Todoist project id or an exact project name. If a project name is duplicated
-case-insensitively, use the project id.
+Add modifiers: `source:`/`src:`, `title:`, `tag:`/`tags:`/`label:`/`labels:`,
+`schedule:`/`sch:`/`sched:`/`due:`, `deadline:`/`dead:`/`dl:`,
+`project:`/`proj:`, `prio:`/`priority:`/`pri:`, `desc:`/`description:`/`body:`,
+and PKMS-only `note:`.
 
-Use `--note <uuid-or-title>` when a Todoist task needs durable PKMS context.
-The command appends `pkms:id:<uuid>` to the Todoist description without removing
-user-authored description text. Later `task list source:todoist` and
-`task todoist:<remote-id> show` populate `note_uuid` and `note_title` from that
-marker. Treat this as a privacy boundary: the PKMS UUID is stored in Todoist.
+Structured due and deadline values accept `today`, `tomorrow`, `tod`, `tom`, or
+`YYYY-MM-DD`. Priority must be `A`, `B`, or `C`. Repeat or comma-separate tag
+modifiers for multiple labels. `project:` accepts either a Todoist project id or
+an exact project name. If a project name is duplicated case-insensitively, use
+the project id. Todoist task creation rejects `note:`.
+
+Legacy Todoist descriptions containing `pkms:id:<uuid>` are still detected by
+`task list source:todoist` and `task todoist:<remote-id> show`.
 
 Use `task list projects` and `task list tags` when you need task metadata. With
 `source:pkms`, projects come from note-level or heading-level `PROJECT`
@@ -159,7 +167,7 @@ metadata. `source:all` combines both sources. Todoist task output uses a
 human-readable `project` when metadata is available and keeps the raw id in
 `project_id`.
 
-JSON output from `task add --source todoist` is a creation wrapper with
+JSON output from `task add source:todoist` is a creation wrapper with
 `created: true` and the created source-neutral `TaskItem` in `item`. Use
 `item.display_id` for confirmation to the user and `item.source_id` for the raw
 Todoist id.

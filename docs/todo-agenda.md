@@ -209,11 +209,12 @@ pkms task list tags source:all
 pkms task list source:todoist 'todoist.filter:today | overdue'
 pkms task todoist:<remote-id> show
 pkms task add "Capture local task"
-pkms task add --title "Call Alice" --due 2026-05-24 --deadline 2026-05-30 --label phone --priority B
-pkms task add --source todoist "Buy milk tomorrow"
-pkms task add --source todoist --project Inbox "Buy milk tomorrow"
-pkms task add --source todoist --title "Call Alice" --due 2026-05-24 --label phone --priority B
-pkms task add --source todoist --title "Call Alice" --note "Project Alpha"
+pkms task add title:"Call Alice" due:2026-05-24 deadline:2026-05-30 tag:phone priority:B
+pkms task add note:"Project Alpha" title:"Follow up"
+pkms task add source:todoist "Buy milk tomorrow"
+pkms task add source:todoist project:Inbox "Buy milk tomorrow"
+pkms task add source:todoist title:"Call Alice" due:2026-05-24 tag:phone priority:B
+pkms task add source:todoist title:"Call Alice" sch:tod tag:phone prio:B
 pkms task todoist:<remote-id> done
 pkms task todoist:<remote-id> done --dry-run
 pkms task p<id> postpone --to 2026-06-01
@@ -267,50 +268,56 @@ the `* Inbox` heading, creating the heading when needed. Without an inbox
 configuration, PKMS inbox commands fail. `task inbox source:todoist` continues
 to use Todoist's `#Inbox` filter.
 
-PKMS task creation appends a TODO heading to that inbox note. It accepts
-positional text or `--title`, `--due`, `--deadline`, `--label`, `--priority`,
-and `--description`:
+PKMS task creation appends a TODO heading to that inbox note by default. It
+accepts positional text or add modifiers. `note:` is PKMS-only and chooses the
+note to append into:
 
 ```bash
 pkms task add "Capture local task"
-pkms task add --title "Call Alice" --due 2026-05-24 --deadline 2026-05-30 --label phone --priority B
+pkms task add title:"Call Alice" due:2026-05-24 deadline:2026-05-30 tag:phone priority:B
+pkms task add title:"Call Alice" sch:tod dead:tom tag:phone prio:B
+pkms task add note:"Project Alpha" title:"Follow up" schedule:tomorrow
 ```
 
 Todoist task creation supports two modes. Positional text uses Todoist Quick Add
 and lets Todoist parse natural language, labels, priorities, and projects:
 
 ```bash
-pkms task add --source todoist "Buy milk tomorrow #Inbox @errand p1"
+pkms task add source:todoist "Buy milk tomorrow #Inbox @errand p1"
 ```
 
 Structured creation uses Todoist API fields and is the safer mode for assistant
 workflows:
 
 ```bash
-pkms task add --source todoist \
-  --title "Call Alice" \
-  --due 2026-05-24 \
-  --deadline 2026-05-30 \
-  --project inbox \
-  --label phone \
-  --label migration \
-  --priority B \
-  --description "Discuss migration plan"
+pkms task add source:todoist title:"Call Alice" due:2026-05-24 deadline:2026-05-30 project:inbox tag:phone,migration priority:B desc:"Discuss migration plan"
+pkms task add source:todoist title:"Call Alice" sch:tod dead:tom project:inbox tag:phone,migration prio:B desc:"Discuss migration plan"
 ```
 
-Structured `--due` and `--deadline` values must be `YYYY-MM-DD`. Priorities use
-the source-neutral `A`, `B`, or `C` convention. Multiple `--label` flags are
-allowed. `--project` accepts either a Todoist project id or an exact project
-name. If a name matches multiple projects case-insensitively, `pkms` fails before
-creating the task and asks for the project id.
+Add modifiers mirror task filters where practical:
 
-Use `--note <uuid-or-title>` when a Todoist task should keep PKMS context.
-`pkms` resolves the note and appends a durable marker to the Todoist description:
-`pkms:id:<uuid>`. Existing descriptions are preserved and the marker is appended
-after a blank line. Listing or showing Todoist tasks detects this marker and
-populates `note_uuid` and `note_title` when the note exists locally. The marker
-reveals a PKMS note UUID to Todoist; avoid `--note` for tasks where even that
-identifier should not leave the local database.
+| Modifier | Aliases | Meaning |
+|----------|---------|---------|
+| `source:<pkms-or-todoist>` | `src:` | Select task source. |
+| `title:<text>` | | Structured task title. Non-modifier words are task text. |
+| `tag:<label>` | `tags:`, `label:`, `labels:` | Add labels/tags. Values can be comma-separated. |
+| `schedule:<date>` | `sch:`, `sched:`, `due:` | Set scheduled/due date. |
+| `deadline:<date>` | `dead:`, `dl:` | Set deadline date. |
+| `project:<name-or-id>` | `proj:` | Set project for Todoist tasks. |
+| `prio:<A-B-C>` | `priority:`, `pri:` | Set source-neutral priority. |
+| `desc:<text>` | `description:`, `body:` | Set description/body text. |
+| `note:<target>` | | PKMS only; append to this note instead of the configured inbox. |
+
+`schedule:`/`deadline:` values accept `today`, `tomorrow`, `tod`, `tom`, or
+`YYYY-MM-DD`. Priorities use the source-neutral `A`, `B`, or `C` convention.
+Label modifiers can be repeated or comma-separated. `project:` accepts either a
+Todoist project id or an exact project name. If a name matches multiple projects
+case-insensitively, `pkms` fails before creating the task and asks for the
+project id. Todoist task creation rejects `note:`.
+
+Listing or showing Todoist tasks still detects legacy `pkms:id:<uuid>` markers in
+Todoist descriptions and populates `note_uuid` and `note_title` when the note
+exists locally.
 
 Use `task list projects` and `task list tags` to inspect task metadata. With
 `source:pkms`, projects come from note-level or heading-level `PROJECT`
@@ -363,9 +370,9 @@ it into git. `pkms info` does not print the token.
 `todoist.filter:` uses Todoist's server-side filter endpoint. Pagination is
 handled automatically.
 
-Todoist writes are explicit. `task add --source todoist` uses Todoist Quick Add
+Todoist writes are explicit. `task add source:todoist` uses Todoist Quick Add
 semantics, including natural language dates, labels, priorities, and project
-syntax. `--project NAME` appends `#NAME` to the Quick Add text.
+syntax. `project:NAME` appends `#NAME` to the Quick Add text.
 
 `task todoist:<remote-id> done` calls Todoist's close endpoint. Use `--dry-run`
 to print the planned completion without sending a Todoist request.

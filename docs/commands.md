@@ -132,9 +132,11 @@ pkms task list projects source:todoist
 pkms task list tags source:todoist
 pkms task todoist:<remote-id> show
 pkms task add "Capture local task"
-pkms task add --source todoist "Buy milk tomorrow"
-pkms task add --source todoist --title "Call Alice" --due 2026-05-24 --priority B
-pkms task add --source todoist --title "Call Alice" --note "Project Alpha"
+pkms task add title:"Call Alice" sch:tom dead:2026-05-30 tag:phone prio:B
+pkms task add note:"Project Alpha" title:"Follow up"
+pkms task add source:todoist "Buy milk tomorrow"
+pkms task add source:todoist title:"Call Alice" due:2026-05-24 priority:B
+pkms task add source:todoist title:"Call Alice" sch:tod tag:phone prio:B
 pkms task todoist:<remote-id> done
 pkms task p<id> postpone --to 2026-06-01
 pkms task todoist:<remote-id> postpone --to tomorrow
