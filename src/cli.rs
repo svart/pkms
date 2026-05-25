@@ -443,6 +443,19 @@ pub struct TaskListArgs {
     pub sort: Option<String>,
     #[arg(long, help = "Maximum results")]
     pub limit: Option<usize>,
+    #[arg(
+        long,
+        help = "Group PKMS tasks by priority, state, or file. Matches `todo --group` for source:pkms."
+    )]
+    pub group: Option<String>,
+    #[arg(long, help = "Read UUIDs from NDJSON stdin to use as PKMS scope")]
+    pub from_stdin: bool,
+    #[arg(
+        long,
+        value_name = "SCHEMA",
+        help = "Output schema: task or legacy. Legacy is available for source:pkms."
+    )]
+    pub output_schema: Option<String>,
     #[command(flatten)]
     pub table: TaskTableArgs,
 }
@@ -457,6 +470,12 @@ pub struct TaskAgendaArgs {
     pub sort: Option<String>,
     #[arg(long, help = "Maximum results")]
     pub limit: Option<usize>,
+    #[arg(
+        long,
+        value_name = "SCHEMA",
+        help = "Output schema: task or legacy. Legacy is available for source:pkms."
+    )]
+    pub output_schema: Option<String>,
     #[command(flatten)]
     pub table: TaskTableArgs,
 }

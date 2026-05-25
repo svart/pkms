@@ -161,6 +161,108 @@ fn test_task_list_limit_json_matches_todo() {
 }
 
 #[test]
+fn test_task_list_group_state_matches_todo_json() {
+    let (_dir, root) = setup_db();
+    let (task, task_status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "task",
+        "list",
+        "--group",
+        "state",
+    ]);
+    let (todo, todo_status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "todo",
+        "--group",
+        "state",
+    ]);
+    assert!(task_status.success());
+    assert!(todo_status.success());
+    assert_eq!(task, todo);
+}
+
+#[test]
+fn test_task_list_from_stdin_matches_todo_scope() {
+    let (_dir, root) = setup_db();
+    let (task_stdout, task_stderr, task_status) = run_pipe(
+        &[
+            "--db",
+            root.to_str().unwrap(),
+            "resolve",
+            "--title",
+            "Agenda Item",
+            "--output-format",
+            "ndjson",
+        ],
+        &[
+            "--db",
+            root.to_str().unwrap(),
+            "--output-format",
+            "json",
+            "task",
+            "list",
+            "--from-stdin",
+        ],
+    );
+    assert!(
+        task_status.success(),
+        "task list --from-stdin failed:\n{task_stdout}\n{task_stderr}"
+    );
+    let task: serde_json::Value = serde_json::from_str(task_stdout.trim()).unwrap();
+    let (todo, todo_status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "todo",
+        "--scope",
+        "Agenda Item",
+    ]);
+    assert!(todo_status.success());
+    assert_eq!(task, todo);
+}
+
+#[test]
+fn test_task_list_legacy_schema_matches_todo_for_filters() {
+    let (_dir, root) = setup_db();
+    let (task, task_status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "task",
+        "list",
+        "--output-schema",
+        "legacy",
+        "state:TODO",
+        "tags:agenda",
+        "prio:A",
+    ]);
+    let (todo, todo_status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "todo",
+        "--state",
+        "TODO",
+        "--tags",
+        "agenda",
+        "--prio",
+        "A",
+    ]);
+    assert!(task_status.success());
+    assert!(todo_status.success());
+    assert_eq!(task, todo);
+}
+
+#[test]
 fn test_task_list_pkms_text_uses_bare_source_ids() {
     let (_dir, root) = setup_db();
     let (stdout, stderr, status) = run(&[

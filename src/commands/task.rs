@@ -19,6 +19,7 @@ use crate::tasks::filter::{
 use crate::tasks::id::TaskId;
 use crate::tasks::model::{TaskItem, TaskSourceKind};
 use crate::tasks::pkms::record_to_task_item;
+use crate::util;
 use crate::workspace::Workspace;
 use anyhow::{Context, Result, bail};
 use chrono::{Local, NaiveDate, NaiveDateTime, NaiveTime};
@@ -271,22 +272,32 @@ fn run_task_list(
     raw_filters: &[String],
 ) -> Result<()> {
     let filters = parse_task_filters(raw_filters)?;
-    if matches!(filters.source, SourceSelection::Pkms) && !filters.has_criteria() {
+    let legacy_schema = output_schema_is_legacy(args.output_schema.as_deref())?;
+    let scope = task_scope(config, args.from_stdin, &filters.criteria.scope)?;
+    if (args.group.is_some() || legacy_schema) && !matches!(filters.source, SourceSelection::Pkms) {
+        bail!("task list --group and --output-schema legacy are available only for source:pkms");
+    }
+    if args.from_stdin && !matches!(filters.source, SourceSelection::Pkms) {
+        bail!("task list --from-stdin is available only for source:pkms");
+    }
+    if matches!(filters.source, SourceSelection::Pkms)
+        && (!filters.has_criteria() || args.group.is_some() || legacy_schema || args.from_stdin)
+    {
         let columns = input::resolve_columns(args.table.columns.as_deref(), &config.columns);
         return crate::commands::todo::run(
             config,
             ctx,
             &crate::commands::todo::TodoOptions {
-                state: None,
-                tags: None,
-                kind: None,
+                state: filters.criteria.state.clone(),
+                tags: filters.criteria.tags.clone(),
+                kind: filters.criteria.kind.clone(),
                 sort: args.sort.clone(),
                 limit: args.limit,
-                group: None,
-                scope: Vec::new(),
-                after: None,
-                before: None,
-                prio: None,
+                group: args.group.clone(),
+                scope,
+                after: filters.criteria.after,
+                before: filters.criteria.before,
+                prio: filters.criteria.prio.clone(),
                 line_sep: args.table.line_sep,
                 columns,
             },
@@ -306,6 +317,25 @@ fn run_task_list(
     sort_task_items(&mut items, args.sort.as_deref().unwrap_or("priority"));
     let columns = resolve_task_table_columns(config, args.table.columns.as_deref());
     print_task_items(ctx, filters.source, items, args.limit, columns.as_deref())
+}
+
+fn output_schema_is_legacy(raw: Option<&str>) -> Result<bool> {
+    match raw {
+        None | Some("task") => Ok(false),
+        Some("legacy") => Ok(true),
+        Some(other) => bail!("Unknown task output schema '{other}'. Use task or legacy."),
+    }
+}
+
+fn task_scope(
+    _config: &ResolvedConfig,
+    from_stdin: bool,
+    filter_scope: &[String],
+) -> Result<Vec<String>> {
+    if from_stdin {
+        return util::read_stdin_ndjson();
+    }
+    Ok(filter_scope.to_vec())
 }
 
 fn run_shortcut(
