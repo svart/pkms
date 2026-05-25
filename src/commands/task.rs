@@ -649,42 +649,52 @@ fn task_item_in_scope(
 }
 
 fn run_agenda(config: &ResolvedConfig, ctx: &OutputContext, args: &TaskAgendaArgs) -> Result<()> {
+    let legacy_schema = output_schema_is_legacy(args.output_schema.as_deref())?;
     match &args.command {
         Some(TaskAgendaCommand::Today(args)) => {
+            if legacy_schema {
+                bail!(
+                    "task agenda --output-schema legacy must be used without shortcut subcommands; use date:today instead"
+                );
+            }
             return run_shortcut(config, ctx, args, ShortcutKind::Today);
         }
         Some(TaskAgendaCommand::Week(args)) => {
+            if legacy_schema {
+                bail!(
+                    "task agenda --output-schema legacy must be used without shortcut subcommands; use date:week instead"
+                );
+            }
             return run_shortcut(config, ctx, args, ShortcutKind::Week);
         }
         Some(TaskAgendaCommand::Overdue(args)) => {
+            if legacy_schema {
+                bail!(
+                    "task agenda --output-schema legacy must be used without shortcut subcommands; use date:overdue instead"
+                );
+            }
             return run_shortcut(config, ctx, args, ShortcutKind::Overdue);
         }
-        Some(TaskAgendaCommand::Upcoming(args)) => return run_upcoming(config, ctx, args),
+        Some(TaskAgendaCommand::Upcoming(args)) => {
+            if legacy_schema {
+                bail!(
+                    "task agenda --output-schema legacy must be used without shortcut subcommands; use date:upcoming instead"
+                );
+            }
+            return run_upcoming(config, ctx, args);
+        }
         None => {}
     }
 
     let filters = parse_task_filters(&args.filters)?;
-    if matches!(filters.source, SourceSelection::Pkms) && !filters.has_criteria() {
+    if legacy_schema && !matches!(filters.source, SourceSelection::Pkms) {
+        bail!("task agenda --output-schema legacy is available only for source:pkms");
+    }
+    if matches!(filters.source, SourceSelection::Pkms) && (!filters.has_criteria() || legacy_schema)
+    {
         let columns = input::resolve_columns(args.table.columns.as_deref(), &config.columns);
-        return crate::commands::agenda::run(
-            config,
-            ctx,
-            &crate::commands::agenda::AgendaOptions {
-                state: None,
-                tags: None,
-                kind: None,
-                prio: None,
-                overdue: false,
-                upcoming: false,
-                date: None,
-                sort: args.sort.clone(),
-                limit: args.limit,
-                today: false,
-                week: false,
-                line_sep: args.table.line_sep,
-                columns,
-            },
-        );
+        let legacy_options = legacy_agenda_options(args, &filters.criteria, columns)?;
+        return crate::commands::agenda::run(config, ctx, &legacy_options);
     }
 
     let todoist_filters = todoist_agenda_filters(&filters, args);
@@ -710,6 +720,48 @@ fn run_agenda(config: &ResolvedConfig, ctx: &OutputContext, args: &TaskAgendaArg
     sort_task_items(&mut items, args.sort.as_deref().unwrap_or("date,priority"))?;
     let columns = resolve_task_table_columns(config, args.table.columns.as_deref());
     print_task_items(ctx, filters.source, items, args.limit, columns.as_deref())
+}
+
+fn legacy_agenda_options(
+    args: &TaskAgendaArgs,
+    criteria: &TaskFilterCriteria,
+    columns: Vec<Column>,
+) -> Result<crate::commands::agenda::AgendaOptions> {
+    if criteria.after.is_some() || criteria.before.is_some() || !criteria.scope.is_empty() {
+        bail!("Legacy agenda schema does not support after, before, or scope filters");
+    }
+    if criteria.project.is_some() {
+        bail!("Legacy agenda schema does not support project filters");
+    }
+    let mut date = None;
+    let mut today = false;
+    let mut week = false;
+    let mut overdue = false;
+    let mut upcoming = false;
+    if let Some(date_filter) = &criteria.date {
+        match date_filter {
+            TaskDateFilter::Exact(value) => date = Some(*value),
+            TaskDateFilter::Today => today = true,
+            TaskDateFilter::Week => week = true,
+            TaskDateFilter::Overdue => overdue = true,
+            TaskDateFilter::Upcoming => upcoming = true,
+        }
+    }
+    Ok(crate::commands::agenda::AgendaOptions {
+        state: criteria.state.clone(),
+        tags: criteria.tags.clone(),
+        kind: criteria.kind.clone(),
+        prio: criteria.prio.clone(),
+        overdue,
+        upcoming,
+        date,
+        sort: args.sort.clone(),
+        limit: args.limit,
+        today,
+        week,
+        line_sep: args.table.line_sep,
+        columns,
+    })
 }
 
 fn collect_pkms_shortcut_items(

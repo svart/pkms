@@ -326,6 +326,70 @@ fn test_task_agenda_matches_agenda_text() {
 }
 
 #[test]
+fn test_task_agenda_legacy_schema_matches_agenda_for_filters() {
+    let (_dir, root) = setup_db();
+    let (task, task_status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "task",
+        "agenda",
+        "--output-schema",
+        "legacy",
+        "state:TODO",
+        "tags:agenda",
+        "type:SCHED",
+        "prio:A",
+    ]);
+    let (agenda, agenda_status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "agenda",
+        "--state",
+        "TODO",
+        "--tags",
+        "agenda",
+        "--type",
+        "SCHED",
+        "--prio",
+        "A",
+    ]);
+    assert!(task_status.success());
+    assert!(agenda_status.success());
+    assert_eq!(task, agenda);
+}
+
+#[test]
+fn test_task_agenda_date_upcoming_legacy_schema_matches_agenda_upcoming() {
+    let (_dir, root) = setup_db();
+    let (task, task_status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "task",
+        "agenda",
+        "--output-schema",
+        "legacy",
+        "date:upcoming",
+    ]);
+    let (agenda, agenda_status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "agenda",
+        "--upcoming",
+    ]);
+    assert!(task_status.success());
+    assert!(agenda_status.success());
+    assert_eq!(task, agenda);
+}
+
+#[test]
 fn test_task_agenda_today_returns_source_neutral_json() {
     let (_dir, root) = setup_db();
     let today = org_date(0);
