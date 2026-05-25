@@ -48,3 +48,20 @@ top-level `* Inbox` heading.
 `open_todo_states` define headings treated as active tasks by `task list`.
 `closed_todo_states` define completed task states. These state lists also affect
 canonical task ID ordering.
+
+Default task table columns can be configured with the global top-level
+`columns` array, or per source and view:
+
+```toml
+[columns.pkms]
+tasks = ["Id", "State", "Prio", "Tags", "Note", "Heading"]
+agenda = ["Id", "Date", "State", "Type", "Prio", "Tags", "Note", "Heading"]
+
+[columns.todoist]
+tasks = ["Id", "State", "Prio", "Tags", "Project", "Heading"]
+agenda = ["Id", "Date", "State", "Type", "Prio", "Tags", "Project", "Heading"]
+```
+
+Available task columns are `Id`, `Date`, `State`, `Type`, `Prio`, `Tags`,
+`Project`, `Note`, and `Heading`. For `source:all`, source-specific defaults
+must resolve to the same column set; otherwise pass `--columns` explicitly.

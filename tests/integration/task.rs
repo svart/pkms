@@ -358,6 +358,117 @@ fn test_task_agenda_week_honors_columns() {
 }
 
 #[test]
+fn test_task_list_uses_pkms_task_columns_config() {
+    let (_dir, root) = setup_db();
+    let (stdout, stderr, status) = run_with_config(
+        &["--db", root.to_str().unwrap(), "task", "list", "prio:none"],
+        r#"
+[columns.pkms]
+tasks = ["Id", "Heading"]
+"#,
+    );
+
+    assert!(status.success(), "stdout:\n{stdout}\nstderr:\n{stderr}");
+    let header = stdout.lines().next().unwrap_or_default();
+    assert!(header.contains("Id"), "stdout:\n{stdout}");
+    assert!(header.contains("Heading"), "stdout:\n{stdout}");
+    assert!(!header.contains("Date"), "stdout:\n{stdout}");
+    assert!(!header.contains("Project"), "stdout:\n{stdout}");
+}
+
+#[test]
+fn test_task_agenda_uses_pkms_agenda_columns_config() {
+    let (_dir, root) = setup_db();
+    let (stdout, stderr, status) = run_with_config(
+        &["--db", root.to_str().unwrap(), "task", "agenda", "week"],
+        r#"
+[columns.pkms]
+agenda = ["Id", "Date", "Heading"]
+"#,
+    );
+
+    assert!(status.success(), "stdout:\n{stdout}\nstderr:\n{stderr}");
+    let header = stdout.lines().next().unwrap_or_default();
+    assert!(header.contains("Id"), "stdout:\n{stdout}");
+    assert!(header.contains("Date"), "stdout:\n{stdout}");
+    assert!(header.contains("Heading"), "stdout:\n{stdout}");
+    assert!(!header.contains("Project"), "stdout:\n{stdout}");
+    assert!(!header.contains("Note"), "stdout:\n{stdout}");
+}
+
+#[test]
+fn test_task_columns_can_adjust_current_default_set() {
+    let (_dir, root) = setup_db();
+    let (stdout, stderr, status) = run_with_config(
+        &[
+            "--db",
+            root.to_str().unwrap(),
+            "task",
+            "list",
+            "prio:none",
+            "--columns=+project",
+        ],
+        r#"
+[columns.pkms]
+tasks = ["Id", "Heading"]
+"#,
+    );
+
+    assert!(status.success(), "stdout:\n{stdout}\nstderr:\n{stderr}");
+    let header = stdout.lines().next().unwrap_or_default();
+    assert!(header.contains("Id"), "stdout:\n{stdout}");
+    assert!(header.contains("Project"), "stdout:\n{stdout}");
+    assert!(header.contains("Heading"), "stdout:\n{stdout}");
+
+    let (stdout, stderr, status) = run_with_config(
+        &[
+            "--db",
+            root.to_str().unwrap(),
+            "task",
+            "list",
+            "prio:none",
+            "--columns=-project",
+        ],
+        r#"
+[columns.pkms]
+tasks = ["Id", "Project", "Heading"]
+"#,
+    );
+
+    assert!(status.success(), "stdout:\n{stdout}\nstderr:\n{stderr}");
+    let header = stdout.lines().next().unwrap_or_default();
+    assert!(header.contains("Id"), "stdout:\n{stdout}");
+    assert!(!header.contains("Project"), "stdout:\n{stdout}");
+    assert!(header.contains("Heading"), "stdout:\n{stdout}");
+}
+
+#[test]
+fn test_task_columns_report_ambiguous_or_invalid_columns() {
+    let (_dir, root) = setup_db();
+    let (_stdout, stderr, status) = run(&[
+        "--db",
+        root.to_str().unwrap(),
+        "task",
+        "list",
+        "prio:none",
+        "--columns=+project,heading",
+    ]);
+    assert!(!status.success());
+    assert!(stderr.contains("cannot mix"), "stderr:\n{stderr}");
+
+    let (_stdout, stderr, status) = run(&[
+        "--db",
+        root.to_str().unwrap(),
+        "task",
+        "list",
+        "prio:none",
+        "--columns=unknown",
+    ]);
+    assert!(!status.success());
+    assert!(stderr.contains("Unknown column"), "stderr:\n{stderr}");
+}
+
+#[test]
 fn test_task_today_ndjson() {
     let (_dir, root) = setup_db();
     let today = org_date(0);

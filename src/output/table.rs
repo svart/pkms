@@ -23,12 +23,16 @@ fn is_fixed_column(col: Column) -> bool {
 }
 
 fn is_wrap_column(col: Column) -> bool {
-    matches!(col, Column::Tags | Column::Note | Column::Heading)
+    matches!(
+        col,
+        Column::Tags | Column::Project | Column::Note | Column::Heading
+    )
 }
 
 fn wrap_weight(col: Column) -> f64 {
     match col {
         Column::Tags => TAG_WEIGHT,
+        Column::Project => NOTE_WEIGHT,
         Column::Note => NOTE_WEIGHT,
         Column::Heading => HEADING_WEIGHT,
         _ => 0.0,
@@ -215,7 +219,7 @@ mod tests {
     #[test]
     fn test_adaptive_column_widths_only_fixed() {
         let cols = [Column::Id, Column::State];
-        let max_widths = [5, 0, 10, 0, 0, 0, 0, 0];
+        let max_widths = [5, 0, 10, 0, 0, 0, 0, 0, 0];
         let result = compute_widths(&cols, &max_widths, 120);
         assert!(result.is_some());
         let widths = result.unwrap();
@@ -227,7 +231,7 @@ mod tests {
     #[test]
     fn test_adaptive_column_widths_term_too_small() {
         let cols = [Column::Id, Column::State, Column::Tags, Column::Heading];
-        let max_widths = [5, 0, 10, 0, 0, 30, 0, 50];
+        let max_widths = [5, 0, 10, 0, 0, 30, 0, 0, 50];
         let result = compute_widths(&cols, &max_widths, 20);
         assert!(result.is_none());
     }
@@ -241,7 +245,7 @@ mod tests {
             Column::Note,
             Column::Heading,
         ];
-        let max_widths = [5, 0, 10, 0, 6, 0, 60, 60];
+        let max_widths = [5, 0, 10, 0, 6, 0, 0, 60, 60];
         let result = compute_widths(&cols, &max_widths, 200);
         assert!(result.is_some());
         let widths = result.unwrap();
@@ -260,7 +264,7 @@ mod tests {
             Column::Note,
             Column::Heading,
         ];
-        let max_widths = [3, 10, 5, 5, 4, 36, 42, 70];
+        let max_widths = [3, 10, 5, 5, 4, 36, 0, 42, 70];
         let widths = compute_widths(&cols, &max_widths, 120).unwrap();
 
         assert_eq!(widths.iter().map(|(col, _)| *col).collect::<Vec<_>>(), cols);
@@ -279,7 +283,7 @@ mod tests {
     #[test]
     fn test_adaptive_column_widths_respects_user_selected_column_order() {
         let cols = [Column::Heading, Column::Id, Column::Note];
-        let max_widths = [3, 0, 0, 0, 0, 0, 50, 80];
+        let max_widths = [3, 0, 0, 0, 0, 0, 0, 50, 80];
         let widths = compute_widths(&cols, &max_widths, 100).unwrap();
 
         assert_eq!(
@@ -292,7 +296,7 @@ mod tests {
     #[test]
     fn test_adaptive_column_widths_weights_heading_more_than_note_and_tags() {
         let cols = [Column::Tags, Column::Note, Column::Heading];
-        let max_widths = [0, 0, 0, 0, 0, 100, 100, 100];
+        let max_widths = [0, 0, 0, 0, 0, 100, 0, 100, 100];
         let widths = compute_widths(&cols, &max_widths, 108).unwrap();
 
         assert!(width_for(&widths, Column::Tags) < width_for(&widths, Column::Note));
@@ -303,7 +307,7 @@ mod tests {
     #[test]
     fn test_adaptive_column_widths_caps_short_content_columns() {
         let cols = [Column::Tags, Column::Note, Column::Heading];
-        let max_widths = [0, 0, 0, 0, 0, 18, 80, 80];
+        let max_widths = [0, 0, 0, 0, 0, 18, 0, 80, 80];
         let widths = compute_widths(&cols, &max_widths, 120).unwrap();
 
         assert_eq!(width_for(&widths, Column::Tags), 18);
@@ -315,7 +319,7 @@ mod tests {
     #[test]
     fn test_adaptive_column_widths_uses_minimum_for_each_wrapped_column() {
         let cols = [Column::Tags, Column::Note, Column::Heading];
-        let max_widths = [0, 0, 0, 0, 0, 100, 100, 100];
+        let max_widths = [0, 0, 0, 0, 0, 100, 0, 100, 100];
         let widths = compute_widths(&cols, &max_widths, 53).unwrap();
 
         assert_eq!(width_for(&widths, Column::Tags), MIN_COLUMN_WIDTH);

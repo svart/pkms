@@ -13,17 +13,19 @@ pub enum Column {
     Type,
     Prio,
     Tags,
+    Project,
     Note,
     Heading,
 }
 
-pub const ALL_COLUMNS: &[Column; 8] = &[
+pub const ALL_COLUMNS: &[Column; 9] = &[
     Column::Id,
     Column::Date,
     Column::State,
     Column::Type,
     Column::Prio,
     Column::Tags,
+    Column::Project,
     Column::Note,
     Column::Heading,
 ];
@@ -37,6 +39,7 @@ impl Column {
             "type" => Some(Column::Type),
             "prio" => Some(Column::Prio),
             "tags" => Some(Column::Tags),
+            "project" => Some(Column::Project),
             "note" => Some(Column::Note),
             "heading" => Some(Column::Heading),
             _ => None,
@@ -51,6 +54,7 @@ impl Column {
             Column::Type => "Type",
             Column::Prio => "Prio",
             Column::Tags => "Tags",
+            Column::Project => "Project",
             Column::Note => "Note",
             Column::Heading => "Heading",
         }
@@ -98,6 +102,7 @@ mod tests {
         assert_eq!(Column::from_str("id"), Some(Column::Id));
         assert_eq!(Column::from_str("DATE"), Some(Column::Date));
         assert_eq!(Column::from_str("Tags"), Some(Column::Tags));
+        assert_eq!(Column::from_str("project"), Some(Column::Project));
         assert_eq!(Column::from_str("heading"), Some(Column::Heading));
     }
 
@@ -111,6 +116,7 @@ mod tests {
     fn test_column_name() {
         assert_eq!(Column::Id.name(), "Id");
         assert_eq!(Column::Date.name(), "Date");
+        assert_eq!(Column::Project.name(), "Project");
         assert_eq!(Column::Heading.name(), "Heading");
     }
 }

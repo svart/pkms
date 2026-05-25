@@ -31,7 +31,7 @@ execution unless that provider is configured in the current build.
 
 ```bash
 pkms task list
-pkms task list --columns Id,Date,State,Type,Prio,Tags,Note,Heading
+pkms task list --columns Id,Date,State,Type,Prio,Tags,Project,Note,Heading
 pkms task list --group state
 pkms task list --sort file
 pkms task list --from-stdin
@@ -63,7 +63,7 @@ pkms task agenda upcoming --days 7
 pkms task agenda date:upcoming
 pkms task agenda date:2026-01-01
 pkms task agenda date:today,overdue
-pkms task agenda --columns Id,Date,State,Type,Prio,Tags,Note,Heading
+pkms task agenda --columns Id,Date,State,Type,Prio,Tags,Project,Note,Heading
 pkms task agenda state:TODO
 pkms task agenda tags:!device,agenda
 pkms task agenda type:SCHED,DEADL
@@ -91,8 +91,15 @@ pkms task agenda type:SCHED,DEADL
 Available table columns:
 
 ```text
-Id,Date,State,Type,Prio,Tags,Note,Heading
+Id,Date,State,Type,Prio,Tags,Project,Note,Heading
 ```
+
+`--columns` can replace the active set or adjust it. For example,
+`--columns Id,Heading` shows exactly those columns, `--columns +Project` adds
+`Project` to the configured/default set, and `--columns -Project` removes it.
+Unknown columns, duplicate columns, mixed replacement/adjustment syntax, adding
+an already enabled column, and removing a disabled column are reported as
+errors.
 
 Use `--line-sep` for row separator lines in text output.
 
@@ -134,8 +141,7 @@ pkms task agenda upcoming --days 7
 pkms task list source:pkms
 ```
 
-PKMS task views use the standard task table columns. Explicit Todoist and
-mixed-source task views add a `Project` column:
+PKMS, Todoist, and mixed-source task views use the standard task table columns:
 
 ```text
 Id,Date,State,Type,Prio,Tags,Project,Note,Heading

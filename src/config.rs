@@ -8,7 +8,7 @@ pub struct Config {
     pub db_root: Option<PathBuf>,
     pub new_notes_dir: Option<PathBuf>,
     pub ignore_patterns: Option<Vec<String>>,
-    pub columns: Option<Vec<String>>,
+    pub columns: Option<ColumnsConfig>,
     pub tasks: Option<TaskConfig>,
     pub agenda: Option<AgendaConfig>,
     pub todoist: Option<TodoistConfig>,
@@ -19,7 +19,7 @@ pub struct ResolvedConfig {
     pub db_root: PathBuf,
     pub new_notes_dir: Option<PathBuf>,
     pub ignore_patterns: Option<Vec<String>>,
-    pub columns: Option<Vec<String>>,
+    pub columns: Option<ColumnsConfig>,
     pub tasks: Option<TaskConfig>,
     pub agenda: Option<AgendaConfig>,
     pub todoist: Option<TodoistConfig>,
@@ -45,6 +45,77 @@ pub struct TodoistConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TaskConfig {
     pub inbox: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(untagged)]
+pub enum ColumnsConfig {
+    Global(Vec<String>),
+    Matrix(ColumnMatrixConfig),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct ColumnMatrixConfig {
+    pub pkms: Option<SourceColumnConfig>,
+    pub todoist: Option<SourceColumnConfig>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct SourceColumnConfig {
+    pub tasks: Option<Vec<String>>,
+    pub agenda: Option<Vec<String>>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ColumnSource {
+    Pkms,
+    Todoist,
+    All,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ColumnView {
+    Tasks,
+    Agenda,
+}
+
+impl ColumnsConfig {
+    pub fn default_for(&self, source: ColumnSource, view: ColumnView) -> Result<Option<&[String]>> {
+        match self {
+            ColumnsConfig::Global(columns) => Ok(Some(columns.as_slice())),
+            ColumnsConfig::Matrix(matrix) => matrix.default_for(source, view),
+        }
+    }
+}
+
+impl ColumnMatrixConfig {
+    fn default_for(&self, source: ColumnSource, view: ColumnView) -> Result<Option<&[String]>> {
+        match source {
+            ColumnSource::Pkms => Ok(source_default(self.pkms.as_ref(), view)),
+            ColumnSource::Todoist => Ok(source_default(self.todoist.as_ref(), view)),
+            ColumnSource::All => {
+                let pkms = source_default(self.pkms.as_ref(), view);
+                let todoist = source_default(self.todoist.as_ref(), view);
+                if pkms == todoist {
+                    Ok(pkms)
+                } else {
+                    anyhow::bail!(
+                        "Ambiguous default columns for source:all. Configure matching pkms and \
+                         todoist defaults for this view or pass --columns explicitly."
+                    )
+                }
+            }
+        }
+    }
+}
+
+fn source_default(source: Option<&SourceColumnConfig>, view: ColumnView) -> Option<&[String]> {
+    source.and_then(|source| match view {
+        ColumnView::Tasks => source.tasks.as_deref(),
+        ColumnView::Agenda => source.agenda.as_deref(),
+    })
 }
 
 fn default_open_todo_states() -> Vec<String> {
@@ -201,6 +272,18 @@ impl ResolvedConfig {
             .ok_or_else(|| anyhow::anyhow!("PKMS task inbox is not configured. Set [tasks].inbox."))
     }
 
+    pub fn default_columns(
+        &self,
+        source: ColumnSource,
+        view: ColumnView,
+    ) -> Result<Option<&[String]>> {
+        self.columns
+            .as_ref()
+            .map(|columns| columns.default_for(source, view))
+            .transpose()
+            .map(Option::flatten)
+    }
+
     pub fn resolved_info(&self) -> ConfigInfo {
         ConfigInfo {
             db_root: self.db_root.clone(),
@@ -247,9 +330,19 @@ pub fn generate_default_config(db_root: Option<&std::path::Path>) -> String {
 # Glob patterns to ignore during file discovery
 # ignore_patterns = [".attach", "*.bak"]
 
-# Default columns for todo and agenda commands (overridable by --columns flag)
-# Available: Id, Date, State, Type, Prio, Tags, Note, Heading
-# columns = ["Id", "Date", "State", "Type", "Prio", "Tags", "Note", "Heading"]
+# Default task table columns (overridable by --columns flag)
+# Available: Id, Date, State, Type, Prio, Tags, Project, Note, Heading
+# Global default:
+# columns = ["Id", "Date", "State", "Type", "Prio", "Tags", "Project", "Note", "Heading"]
+#
+# Source/view-specific defaults:
+# [columns.pkms]
+# tasks = ["Id", "State", "Prio", "Tags", "Note", "Heading"]
+# agenda = ["Id", "Date", "State", "Type", "Prio", "Tags", "Note", "Heading"]
+#
+# [columns.todoist]
+# tasks = ["Id", "State", "Prio", "Tags", "Project", "Heading"]
+# agenda = ["Id", "Date", "State", "Type", "Prio", "Tags", "Project", "Heading"]
 
 # Task section: configure the PKMS inbox note used by `pkms task inbox` and `pkms task add`
 # [tasks]
@@ -437,6 +530,88 @@ default_filter = "today | overdue"
             Some("PKMS_TEST_TODOIST_TOKEN")
         );
         assert_eq!(todoist.default_filter.as_deref(), Some("today | overdue"));
+    }
+
+    #[test]
+    fn test_global_columns_config_parses() {
+        let config: Config = toml::from_str(
+            r#"
+db_root = "/test/db"
+columns = ["Id", "Heading"]
+"#,
+        )
+        .unwrap();
+        assert_eq!(
+            config
+                .columns
+                .as_ref()
+                .and_then(|columns| columns
+                    .default_for(ColumnSource::Pkms, ColumnView::Tasks)
+                    .ok())
+                .flatten(),
+            Some(["Id".to_string(), "Heading".to_string()].as_slice())
+        );
+    }
+
+    #[test]
+    fn test_source_view_columns_config_parses() {
+        let config: Config = toml::from_str(
+            r#"
+db_root = "/test/db"
+
+[columns.pkms]
+tasks = ["Id", "Heading"]
+agenda = ["Id", "Date", "Heading"]
+
+[columns.todoist]
+tasks = ["Id", "Project", "Heading"]
+agenda = ["Id", "Date", "Project", "Heading"]
+"#,
+        )
+        .unwrap();
+        let columns = config.columns.as_ref().unwrap();
+        assert_eq!(
+            columns
+                .default_for(ColumnSource::Pkms, ColumnView::Tasks)
+                .unwrap(),
+            Some(["Id".to_string(), "Heading".to_string()].as_slice())
+        );
+        assert_eq!(
+            columns
+                .default_for(ColumnSource::Todoist, ColumnView::Agenda)
+                .unwrap(),
+            Some(
+                [
+                    "Id".to_string(),
+                    "Date".to_string(),
+                    "Project".to_string(),
+                    "Heading".to_string()
+                ]
+                .as_slice()
+            )
+        );
+    }
+
+    #[test]
+    fn test_source_all_columns_error_when_source_defaults_differ() {
+        let config: Config = toml::from_str(
+            r#"
+db_root = "/test/db"
+
+[columns.pkms]
+tasks = ["Id", "Heading"]
+
+[columns.todoist]
+tasks = ["Id", "Project", "Heading"]
+"#,
+        )
+        .unwrap();
+        let columns = config.columns.as_ref().unwrap();
+        assert!(
+            columns
+                .default_for(ColumnSource::All, ColumnView::Tasks)
+                .is_err()
+        );
     }
 
     #[test]

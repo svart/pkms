@@ -8,7 +8,7 @@ use crate::commands::show::{HeadingTarget, ShowOptions};
 use crate::commands::task_index::{
     assign_canonical_ids, collect_agenda_records, collect_todo_records,
 };
-use crate::config::ResolvedConfig;
+use crate::config::{ColumnSource, ColumnView, ResolvedConfig};
 use crate::input;
 use crate::org_date::parse_org_date;
 use crate::output::{Column, OutputContext};
@@ -401,7 +401,12 @@ fn run_task_list(
     if matches!(filters.source, SourceSelection::Pkms)
         && (!filters.has_criteria() || args.group.is_some() || args.from_stdin)
     {
-        let columns = input::resolve_columns(args.table.columns.as_deref(), &config.columns);
+        let columns = resolve_task_columns(
+            config,
+            SourceSelection::Pkms,
+            ColumnView::Tasks,
+            args.table.columns.as_deref(),
+        )?;
         return todo::run(
             config,
             ctx,
@@ -425,7 +430,12 @@ fn run_task_list(
     let mut items = collect_task_items(config, &filters, TaskListView::All)?;
     apply_task_filter_criteria(config, &mut items, &filters.criteria)?;
     sort_task_items(&mut items, args.sort.as_deref().unwrap_or("priority"))?;
-    let columns = resolve_task_table_columns(config, args.table.columns.as_deref());
+    let columns = resolve_task_table_columns(
+        config,
+        filters.source,
+        ColumnView::Tasks,
+        args.table.columns.as_deref(),
+    )?;
     print_task_items(ctx, filters.source, items, args.limit, columns.as_deref())
 }
 
@@ -472,7 +482,12 @@ fn run_shortcut(
     let mut items = collect_shortcut_items(config, &args.filters, kind)?;
     let source = shortcut_display_source(&args.filters)?;
     sort_task_items(&mut items, "priority")?;
-    let columns = resolve_task_table_columns(config, args.table.columns.as_deref());
+    let columns = resolve_task_table_columns(
+        config,
+        source,
+        shortcut_column_view(kind),
+        args.table.columns.as_deref(),
+    )?;
     print_task_items(ctx, source, items, args.limit, columns.as_deref())
 }
 
@@ -490,7 +505,12 @@ fn run_upcoming(
     )?;
     let source = shortcut_display_source(&args.filters)?;
     sort_task_items(&mut items, "priority")?;
-    let columns = resolve_task_table_columns(config, args.table.columns.as_deref());
+    let columns = resolve_task_table_columns(
+        config,
+        source,
+        ColumnView::Agenda,
+        args.table.columns.as_deref(),
+    )?;
     print_task_items(ctx, source, items, args.limit, columns.as_deref())
 }
 
@@ -501,9 +521,40 @@ fn shortcut_display_source(raw_filters: &[String]) -> Result<SourceSelection> {
 
 fn resolve_task_table_columns(
     config: &ResolvedConfig,
+    source: SourceSelection,
+    view: ColumnView,
     raw_columns: Option<&str>,
-) -> Option<Vec<Column>> {
-    raw_columns.map(|columns| input::resolve_columns(Some(columns), &config.columns))
+) -> Result<Option<Vec<Column>>> {
+    if let Some(raw_columns) = raw_columns
+        && !input::columns_has_adjustment(raw_columns)
+    {
+        return input::resolve_columns(Some(raw_columns), None).map(Some);
+    }
+
+    let source = match source {
+        SourceSelection::Pkms => ColumnSource::Pkms,
+        SourceSelection::Todoist => ColumnSource::Todoist,
+        SourceSelection::All => ColumnSource::All,
+    };
+    let default_columns = config.default_columns(source, view)?;
+    if raw_columns.is_none() && default_columns.is_none() {
+        return Ok(None);
+    }
+    input::resolve_columns(raw_columns, default_columns).map(Some)
+}
+
+fn resolve_task_columns(
+    config: &ResolvedConfig,
+    source: SourceSelection,
+    view: ColumnView,
+    raw_columns: Option<&str>,
+) -> Result<Vec<Column>> {
+    let source = match source {
+        SourceSelection::Pkms => ColumnSource::Pkms,
+        SourceSelection::Todoist => ColumnSource::Todoist,
+        SourceSelection::All => ColumnSource::All,
+    };
+    input::resolve_columns(raw_columns, config.default_columns(source, view)?)
 }
 
 fn collect_shortcut_items(
@@ -524,6 +575,16 @@ fn shortcut_task_view(kind: ShortcutKind) -> TaskListView {
         ShortcutKind::Overdue => TaskListView::Overdue,
         ShortcutKind::Upcoming { days } => TaskListView::Upcoming { days },
         ShortcutKind::Inbox => TaskListView::Inbox,
+    }
+}
+
+fn shortcut_column_view(kind: ShortcutKind) -> ColumnView {
+    match kind {
+        ShortcutKind::Today
+        | ShortcutKind::Week
+        | ShortcutKind::Overdue
+        | ShortcutKind::Upcoming { .. } => ColumnView::Agenda,
+        ShortcutKind::Inbox => ColumnView::Tasks,
     }
 }
 
@@ -785,7 +846,12 @@ fn run_agenda(config: &ResolvedConfig, ctx: &OutputContext, args: &TaskAgendaArg
 
     let filters = parse_task_filters(&args.filters)?;
     if matches!(filters.source, SourceSelection::Pkms) && !filters.has_criteria() {
-        let columns = input::resolve_columns(args.table.columns.as_deref(), &config.columns);
+        let columns = resolve_task_columns(
+            config,
+            SourceSelection::Pkms,
+            ColumnView::Agenda,
+            args.table.columns.as_deref(),
+        )?;
         return agenda::run(
             config,
             ctx,
@@ -810,7 +876,12 @@ fn run_agenda(config: &ResolvedConfig, ctx: &OutputContext, args: &TaskAgendaArg
     let mut items = collect_task_items(config, &filters, TaskListView::Agenda)?;
     apply_task_filter_criteria(config, &mut items, &filters.criteria)?;
     sort_task_items(&mut items, args.sort.as_deref().unwrap_or("date,priority"))?;
-    let columns = resolve_task_table_columns(config, args.table.columns.as_deref());
+    let columns = resolve_task_table_columns(
+        config,
+        filters.source,
+        ColumnView::Agenda,
+        args.table.columns.as_deref(),
+    )?;
     print_agenda_task_items(ctx, filters.source, items, args.limit, columns.as_deref())
 }
 
@@ -2790,6 +2861,7 @@ fn task_table_column_index(column: &Column) -> usize {
         Column::Type => 3,
         Column::Prio => 4,
         Column::Tags => 5,
+        Column::Project => 6,
         Column::Note => 7,
         Column::Heading => 8,
     }

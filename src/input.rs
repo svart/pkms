@@ -1,6 +1,6 @@
 use crate::output::{ALL_COLUMNS, Column};
 use crate::util::{is_stdin_piped, read_stdin_ndjson};
-use anyhow::Result;
+use anyhow::{Result, bail};
 use chrono::NaiveDate;
 #[cfg(test)]
 use chrono::NaiveDateTime;
@@ -39,23 +39,114 @@ pub fn resolve_targets(target: &Option<String>, from_stdin: bool) -> Result<Vec<
     }
 }
 
-pub fn resolve_columns(cli_cols: Option<&str>, config_cols: &Option<Vec<String>>) -> Vec<Column> {
-    if let Some(s) = cli_cols {
-        let cols: Vec<Column> = s
-            .split(',')
-            .filter_map(|c| Column::from_str(c.trim()))
-            .collect();
-        if !cols.is_empty() {
-            return cols;
+pub fn resolve_columns(
+    cli_cols: Option<&str>,
+    config_cols: Option<&[String]>,
+) -> Result<Vec<Column>> {
+    if let Some(raw_cli_cols) = cli_cols
+        && !columns_has_adjustment(raw_cli_cols)
+    {
+        let tokens = split_column_tokens(raw_cli_cols)?;
+        return parse_column_names(tokens.iter().copied());
+    }
+
+    let base = match config_cols {
+        Some(names) => parse_column_names(names.iter().map(String::as_str))?,
+        None => ALL_COLUMNS.to_vec(),
+    };
+
+    let Some(raw_cli_cols) = cli_cols else {
+        return Ok(base);
+    };
+
+    let tokens = split_column_tokens(raw_cli_cols)?;
+    if tokens.is_empty() {
+        bail!("--columns must specify at least one column");
+    }
+
+    if tokens
+        .iter()
+        .any(|token| !(token.starts_with('+') || token.starts_with('-')))
+    {
+        bail!("--columns cannot mix replacement columns with + or - adjustments");
+    }
+
+    let mut columns = base;
+    for token in tokens {
+        let (op, name) = token.split_at(1);
+        if name.trim().is_empty() {
+            bail!("--columns adjustment '{token}' is missing a column name");
+        }
+        let column = parse_column_name(name)?;
+        match op {
+            "+" => {
+                if columns.contains(&column) {
+                    bail!("Column '{}' is already enabled", column.name());
+                }
+                columns.push(column);
+            }
+            "-" => {
+                let Some(index) = columns.iter().position(|existing| *existing == column) else {
+                    bail!("Column '{}' is not enabled", column.name());
+                };
+                columns.remove(index);
+            }
+            _ => unreachable!("adjustment operator was validated above"),
         }
     }
-    if let Some(names) = config_cols {
-        let cols: Vec<Column> = names.iter().filter_map(|c| Column::from_str(c)).collect();
-        if !cols.is_empty() {
-            return cols;
-        }
+
+    if columns.is_empty() {
+        bail!("--columns removed all columns");
     }
-    ALL_COLUMNS.to_vec()
+    Ok(columns)
+}
+
+pub fn columns_has_adjustment(raw: &str) -> bool {
+    raw.split(',')
+        .map(str::trim)
+        .any(|token| token.starts_with('+') || token.starts_with('-'))
+}
+
+fn split_column_tokens(raw: &str) -> Result<Vec<&str>> {
+    let tokens: Vec<_> = raw
+        .split(',')
+        .map(str::trim)
+        .filter(|token| !token.is_empty())
+        .collect();
+    if tokens.is_empty() {
+        bail!("--columns must specify at least one column");
+    }
+    Ok(tokens)
+}
+
+fn parse_column_names<'a>(names: impl Iterator<Item = &'a str>) -> Result<Vec<Column>> {
+    let mut columns = Vec::new();
+    for name in names {
+        let column = parse_column_name(name)?;
+        if columns.contains(&column) {
+            bail!("Column '{}' is specified more than once", column.name());
+        }
+        columns.push(column);
+    }
+    if columns.is_empty() {
+        bail!("At least one column must be configured");
+    }
+    Ok(columns)
+}
+
+fn parse_column_name(name: &str) -> Result<Column> {
+    let trimmed = name.trim();
+    Column::from_str(trimmed).ok_or_else(|| {
+        anyhow::anyhow!(
+            "Unknown column '{}'. Available columns: {}",
+            trimmed,
+            ALL_COLUMNS
+                .iter()
+                .map(Column::name)
+                .collect::<Vec<_>>()
+                .join(",")
+        )
+    })
 }
 
 #[cfg(test)]
@@ -114,27 +205,54 @@ mod tests {
     fn resolve_columns_prefers_valid_cli_columns_over_config() {
         let config_cols = Some(vec!["State".to_string(), "Note".to_string()]);
         assert_eq!(
-            resolve_columns(Some("id, HEADING"), &config_cols),
+            resolve_columns(Some("id, HEADING"), config_cols.as_deref()).unwrap(),
             vec![Column::Id, Column::Heading]
         );
     }
 
     #[test]
-    fn resolve_columns_uses_config_when_cli_is_missing_or_invalid() {
+    fn resolve_columns_uses_config_when_cli_is_missing() {
         let config_cols = Some(vec!["state".to_string(), "heading".to_string()]);
         assert_eq!(
-            resolve_columns(None, &config_cols),
-            vec![Column::State, Column::Heading]
-        );
-        assert_eq!(
-            resolve_columns(Some("unknown"), &config_cols),
+            resolve_columns(None, config_cols.as_deref()).unwrap(),
             vec![Column::State, Column::Heading]
         );
     }
 
     #[test]
-    fn resolve_columns_falls_back_to_all_columns_when_no_valid_column_is_configured() {
+    fn resolve_columns_errors_on_unknown_columns() {
         let config_cols = Some(vec!["unknown".to_string()]);
-        assert_eq!(resolve_columns(None, &config_cols), ALL_COLUMNS.to_vec());
+        assert!(resolve_columns(None, config_cols.as_deref()).is_err());
+        assert!(resolve_columns(Some("unknown"), None).is_err());
+    }
+
+    #[test]
+    fn resolve_columns_exact_cli_overrides_invalid_config() {
+        let config_cols = Some(vec!["unknown".to_string()]);
+        assert_eq!(
+            resolve_columns(Some("id,heading"), config_cols.as_deref()).unwrap(),
+            vec![Column::Id, Column::Heading]
+        );
+    }
+
+    #[test]
+    fn resolve_columns_adjusts_current_column_set() {
+        let config_cols = Some(vec!["id".to_string(), "heading".to_string()]);
+        assert_eq!(
+            resolve_columns(Some("+project"), config_cols.as_deref()).unwrap(),
+            vec![Column::Id, Column::Heading, Column::Project]
+        );
+        assert_eq!(
+            resolve_columns(Some("-id"), config_cols.as_deref()).unwrap(),
+            vec![Column::Heading]
+        );
+    }
+
+    #[test]
+    fn resolve_columns_rejects_ambiguous_adjustments() {
+        let config_cols = Some(vec!["id".to_string(), "heading".to_string()]);
+        assert!(resolve_columns(Some("+project,heading"), config_cols.as_deref()).is_err());
+        assert!(resolve_columns(Some("+id"), config_cols.as_deref()).is_err());
+        assert!(resolve_columns(Some("-project"), config_cols.as_deref()).is_err());
     }
 }

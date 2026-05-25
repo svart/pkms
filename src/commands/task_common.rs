@@ -186,7 +186,7 @@ pub trait RowItem {
         }
     }
 
-    fn format_rows(&self) -> Vec<[String; 8]> {
+    fn format_rows(&self) -> Vec<[String; 9]> {
         let id = if self.id() > 0 {
             self.id().to_string()
         } else {
@@ -211,6 +211,7 @@ pub trait RowItem {
                 "SCHED".to_string(),
                 prio.clone(),
                 tags.clone(),
+                String::new(),
                 title.clone(),
                 heading.clone(),
             ]);
@@ -236,6 +237,7 @@ pub trait RowItem {
                 } else {
                     tags.clone()
                 },
+                String::new(),
                 if has_both {
                     String::new()
                 } else {
@@ -258,6 +260,7 @@ pub trait RowItem {
                 String::new(),
                 prio,
                 tags,
+                String::new(),
                 title,
                 heading,
             ]);
@@ -267,7 +270,7 @@ pub trait RowItem {
     }
 }
 
-pub fn filter_row(row: &[String; 8], cols: &[Column]) -> Vec<String> {
+pub fn filter_row(row: &[String; 9], cols: &[Column]) -> Vec<String> {
     cols.iter().map(|c| row[*c as usize].clone()).collect()
 }
 
@@ -294,7 +297,7 @@ pub fn print_table<T: RowItem>(
         return;
     }
 
-    let mut max_widths: [usize; 8] = ALL_COLUMNS.map(|c| c.name().len());
+    let mut max_widths: [usize; 9] = ALL_COLUMNS.map(|c| c.name().len());
     for (_, items) in sections {
         for item in *items {
             for row in item.format_rows() {

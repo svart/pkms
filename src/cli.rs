@@ -305,7 +305,7 @@ pub struct TaskTableArgs {
     #[arg(
         long,
         value_name = "COLS",
-        help = "Comma-separated column names: Id,Date,State,Type,Prio,Tags,Note,Heading"
+        help = "Comma-separated column names, or +/- adjustments: Id,Date,State,Type,Prio,Tags,Project,Note,Heading"
     )]
     pub columns: Option<String>,
 }
