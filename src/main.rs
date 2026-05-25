@@ -123,6 +123,9 @@ fn dispatch(cli: &Cli, cfg: &config::ResolvedConfig, ctx: &OutputContext) -> Res
             commands::query::run(cfg, ctx, &args.try_into()?).map(|()| ExitCode::SUCCESS)?
         }
         Command::Todo(args) => {
+            eprintln!(
+                "Warning: `pkms todo` is deprecated; use `pkms task list` instead. Use `pkms task list --output-schema legacy` for legacy JSON/NDJSON schema."
+            );
             let resolved_scope = if args.from_stdin {
                 util::read_stdin_ndjson()?
             } else {
@@ -150,6 +153,9 @@ fn dispatch(cli: &Cli, cfg: &config::ResolvedConfig, ctx: &OutputContext) -> Res
             .map(|()| ExitCode::SUCCESS)?
         }
         Command::Agenda(args) => {
+            eprintln!(
+                "Warning: `pkms agenda` is deprecated; use `pkms task agenda` instead. Use `pkms task agenda --output-schema legacy` for legacy JSON/NDJSON schema."
+            );
             let agenda_cols = input::resolve_columns(args.table.columns.as_deref(), &cfg.columns);
             commands::agenda::run(
                 cfg,

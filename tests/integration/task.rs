@@ -470,6 +470,36 @@ fn test_task_agenda_compatibility_filter_flags_match_agenda() {
 }
 
 #[test]
+fn test_legacy_task_commands_warn_on_stderr_only() {
+    let (_dir, root) = setup_db();
+    let (todo_stdout, todo_stderr, todo_status) = run(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "todo",
+        "--limit",
+        "1",
+    ]);
+    assert!(todo_status.success());
+    assert!(todo_stdout.trim_start().starts_with('{'));
+    assert!(todo_stderr.contains("`pkms todo` is deprecated"));
+
+    let (agenda_stdout, agenda_stderr, agenda_status) = run(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "agenda",
+        "--limit",
+        "1",
+    ]);
+    assert!(agenda_status.success());
+    assert!(agenda_stdout.trim_start().starts_with('{'));
+    assert!(agenda_stderr.contains("`pkms agenda` is deprecated"));
+}
+
+#[test]
 fn test_task_agenda_today_returns_source_neutral_json() {
     let (_dir, root) = setup_db();
     let today = org_date(0);
