@@ -222,9 +222,11 @@ pub fn run(config: &ResolvedConfig, ctx: &OutputContext, opts: &TodoOptions) -> 
     if let Some(ref prio) = opts.prio {
         if prio.is_empty() {
             items.retain(|item| item.priority.is_none());
-        } else if let Some(p) = prio.chars().next() {
-            let target = p.to_ascii_uppercase();
-            items.retain(|item| item.priority == Some(target));
+        } else {
+            let targets = crate::commands::task_common::priority_filter_targets(prio);
+            items.retain(|item| {
+                crate::commands::task_common::priority_matches_filter(item.priority, &targets)
+            });
         }
     }
 

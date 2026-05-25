@@ -172,7 +172,13 @@ fn parse_priority_filter(value: &str) -> String {
     if value.eq_ignore_ascii_case("none") {
         String::new()
     } else {
-        value.to_ascii_uppercase()
+        value
+            .split(',')
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(str::to_ascii_uppercase)
+            .collect::<Vec<_>>()
+            .join(",")
     }
 }
 
@@ -274,6 +280,12 @@ mod tests {
         assert!(filters.criteria.before.is_some());
         assert_eq!(filters.criteria.scope, vec!["Project Note"]);
         assert_eq!(filters.criteria.project.as_deref(), Some("Alpha"));
+    }
+
+    #[test]
+    fn parses_comma_separated_priority_filters() {
+        let filters = parse_task_filters(&["prio:a,b,c".to_string()]).unwrap();
+        assert_eq!(filters.criteria.prio.as_deref(), Some("A,B,C"));
     }
 
     #[test]

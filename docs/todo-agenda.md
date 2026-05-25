@@ -167,7 +167,7 @@ and `task list tags`, accept only source filters.
 | Tag exclusion | `tags:!tag1,tag2` | Excludes `tag1` and requires `tag2`. Comma-separated tag filters use AND logic. |
 | Type | `type:SCHED`, `type:DEADL` | Matches scheduled or deadline tasks. `kind:` is an alias. |
 | Type exclusion | `type:!SCHED` | Excludes tasks with a scheduled timestamp. |
-| Priority | `prio:A`, `priority:A` | Matches priority `A`, `B`, or `C`; matching is case-insensitive. |
+| Priority | `prio:A`, `priority:A`, `prio:A,B,C` | Matches one or more priorities; matching is case-insensitive. |
 | No priority | `prio:none`, `priority:none` | Matches tasks without a priority. |
 | Exact agenda date | `date:YYYY-MM-DD` | Matches scheduled or deadline dates on that day. |
 | Today | `date:today` | Matches scheduled or deadline dates today. |

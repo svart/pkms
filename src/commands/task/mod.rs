@@ -560,12 +560,15 @@ fn apply_task_filter_criteria(
     if let Some(prio) = &criteria.prio {
         if prio.is_empty() {
             items.retain(|item| item.priority.is_none());
-        } else if let Some(target) = prio.chars().next().map(|p| p.to_ascii_uppercase()) {
+        } else {
+            let targets = crate::commands::task_common::priority_filter_targets(prio);
             items.retain(|item| {
-                item.priority
-                    .as_deref()
-                    .and_then(|priority| priority.chars().next())
-                    .is_some_and(|priority| priority.to_ascii_uppercase() == target)
+                crate::commands::task_common::priority_matches_filter(
+                    item.priority
+                        .as_deref()
+                        .and_then(|priority| priority.chars().next()),
+                    &targets,
+                )
             });
         }
     }

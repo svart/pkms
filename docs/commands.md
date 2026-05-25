@@ -117,6 +117,7 @@ pkms task agenda upcoming --days 7
 pkms task list --group state
 pkms task list --from-stdin
 pkms task list state:TODO tags:work,!blocked
+pkms task list prio:A,B,C
 pkms task agenda week type:SCHED project:Alpha
 pkms task p<id> show
 pkms task p<id> open

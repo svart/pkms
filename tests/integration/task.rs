@@ -515,6 +515,44 @@ fn test_task_list_accepts_state_tags_type_and_prio_filters() {
 }
 
 #[test]
+fn test_task_list_accepts_comma_separated_prio_filter() {
+    let (_dir, root) = setup_db();
+    std::fs::write(
+        root.join("roam/common/20260525000000-priority_filters.org"),
+        r#":PROPERTIES:
+:ID:       88888888-8888-4888-8888-888888888888
+:END:
+#+title: Priority Filter Tasks
+
+* TODO [#A] Priority A task
+* TODO [#B] Priority B task
+* TODO [#C] Priority C task
+* TODO No priority task
+"#,
+    )
+    .unwrap();
+
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "task",
+        "list",
+        "prio:a,b,c",
+    ]);
+
+    assert!(status.success());
+    let titles = task_titles(&v);
+    assert!(titles.contains(&"Priority A task".to_string()));
+    assert!(titles.contains(&"Priority B task".to_string()));
+    assert!(titles.contains(&"Priority C task".to_string()));
+    assert!(titles.contains(&"High priority task".to_string()));
+    assert!(!titles.contains(&"No priority task".to_string()));
+    assert!(!titles.contains(&"Low priority task".to_string()));
+}
+
+#[test]
 fn test_task_list_accepts_project_filter() {
     let (_dir, root) = setup_db();
     add_pkms_project_metadata_note(&root);
