@@ -9,6 +9,7 @@ const DEFAULT_BASE_URL: &str = "https://api.todoist.com/api/v1";
 pub struct TodoistClient {
     base_url: String,
     token: String,
+    agent: ureq::Agent,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -141,6 +142,7 @@ impl TodoistClient {
         TodoistClient {
             base_url: base_url.into().trim_end_matches('/').to_string(),
             token,
+            agent: todoist_agent(),
         }
     }
 
@@ -213,7 +215,9 @@ impl TodoistClient {
     }
 
     fn get_json<T: for<'de> Deserialize<'de>>(&self, path: &str) -> Result<T> {
-        let mut response = ureq::get(&self.url(path))
+        let mut response = self
+            .agent
+            .get(&self.url(path))
             .header("Authorization", &format!("Bearer {}", self.token))
             .call()
             .map_err(todoist_error)?;
@@ -228,7 +232,9 @@ impl TodoistClient {
         path: &str,
         body: &B,
     ) -> Result<T> {
-        let mut response = ureq::post(&self.url(path))
+        let mut response = self
+            .agent
+            .post(&self.url(path))
             .header("Authorization", &format!("Bearer {}", self.token))
             .send_json(body)
             .map_err(todoist_error)?;
@@ -241,6 +247,16 @@ impl TodoistClient {
     fn url(&self, path: &str) -> String {
         format!("{}{}", self.base_url, path)
     }
+}
+
+fn todoist_agent() -> ureq::Agent {
+    let tls_config = ureq::tls::TlsConfig::builder()
+        .root_certs(ureq::tls::RootCerts::PlatformVerifier)
+        .build();
+    ureq::Agent::config_builder()
+        .tls_config(tls_config)
+        .build()
+        .new_agent()
 }
 
 pub fn task_to_item(task: TodoistTask) -> TaskItem {

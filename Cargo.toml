@@ -1,12 +1,12 @@
 [package]
 name = "pkms"
-version = "0.61.0"
+version = "0.61.1"
 edition = "2024"
 
 [features]
 default = []
 embed = ["dep:fastembed"]
-todoist = ["dep:ureq"]
+todoist = ["dep:ureq", "ureq/platform-verifier"]
 
 [dependencies]
 clap = { version = "4", features = ["derive"] }

@@ -154,7 +154,9 @@ new tasks under `* Inbox`.
 
 Todoist task reads require a build with `--features todoist` and a token from
 `TODOIST_API_TOKEN` or `[todoist].token` in config. Prefer the environment
-variable unless the config file is private and not committed.
+variable unless the config file is private and not committed. HTTPS uses the
+platform certificate verifier, so system trust-store corporate proxy roots are
+honored.
 
 ## Configuration
 

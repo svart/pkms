@@ -337,6 +337,10 @@ precedence over config values and avoid storing the secret in a dotfile:
 export TODOIST_API_TOKEN=...
 ```
 
+Todoist HTTPS requests use the platform certificate verifier, so corporate proxy
+root certificates installed in the system trust store are honored without
+disabling certificate validation.
+
 Optional config:
 
 ```toml
