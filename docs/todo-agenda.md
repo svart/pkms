@@ -2,7 +2,7 @@
 
 `todo`, `agenda`, `show`, `open`, and the local `task` namespace share one
 canonical task ID space. The ID shown by `todo` is the same ID used by
-`agenda`, `show <ID>`, `open <ID>`, `task show p<ID>`, and `task open p<ID>`.
+`agenda`, `show <ID>`, `open <ID>`, `task p<ID> show`, and `task p<ID> open`.
 
 IDs are assigned globally using a deterministic sort:
 
@@ -92,15 +92,15 @@ Inspect a task by canonical ID:
 
 ```bash
 pkms show 5
-pkms task show p5
-pkms task show pkms:5
+pkms task p5 show
+pkms task pkms:5 show
 ```
 
 Open a task at its source heading:
 
 ```bash
 pkms open 5
-pkms task open p5
+pkms task p5 open
 ```
 
 By default, `open` runs `emacsclient -n`. Override it with `--editor` or open a
@@ -203,22 +203,22 @@ pkms task list tags source:todoist
 pkms task list projects source:all
 pkms task list tags source:all
 pkms task list source:todoist 'todoist.filter:today | overdue'
-pkms task show todoist:<remote-id>
+pkms task todoist:<remote-id> show
 pkms task add "Capture local task"
 pkms task add --title "Call Alice" --due 2026-05-24 --deadline 2026-05-30 --label phone --priority B
 pkms task add --source todoist "Buy milk tomorrow"
 pkms task add --source todoist --project Inbox "Buy milk tomorrow"
 pkms task add --source todoist --title "Call Alice" --due 2026-05-24 --label phone --priority B
 pkms task add --source todoist --title "Call Alice" --note "Project Alpha"
-pkms task done todoist:<remote-id>
-pkms task done todoist:<remote-id> --dry-run
-pkms task postpone p<id> --to 2026-06-01
-pkms task postpone todoist:<remote-id> --to tomorrow
-pkms task schedule p<id> --due 2026-05-24
-pkms task schedule todoist:<remote-id> --due 2026-05-24
-pkms task schedule todoist:<remote-id> --due none
-pkms task deadline p<id> --deadline 2026-05-30
-pkms task deadline todoist:<remote-id> --deadline none
+pkms task todoist:<remote-id> done
+pkms task todoist:<remote-id> done --dry-run
+pkms task p<id> postpone --to 2026-06-01
+pkms task todoist:<remote-id> postpone --to tomorrow
+pkms task p<id> schedule --due 2026-05-24
+pkms task todoist:<remote-id> schedule --due 2026-05-24
+pkms task todoist:<remote-id> schedule --due none
+pkms task p<id> deadline --deadline 2026-05-30
+pkms task todoist:<remote-id> deadline --deadline none
 ```
 
 Todoist tasks are fetched only when the source set includes Todoist. Local
@@ -320,14 +320,15 @@ stable `display_id`, `source_id`, title, description, priority, dates, labels,
 project, `project_id`, and URL when Todoist provides them. Text output stays concise but
 includes the stable id and key planning fields.
 
-`task schedule` and `task deadline` work for PKMS and Todoist tasks. For PKMS,
-they edit the heading planning line. For Todoist, they update `due_date` and
-`deadline_date`. Use `--due none` or `--deadline none` to clear a date.
-`task postpone` works only for recurring tasks. For PKMS, the task must have a
-recurring `SCHEDULED` or `DEADLINE` timestamp and the repeater/warning syntax is
-preserved. For Todoist, the Todoist due date must be recurring. Non-recurring
-tasks fail instead of being silently rescheduled. Changed-task JSON output
-returns `changed: true`, an `action`, and the updated source-neutral `TaskItem`.
+ID-first `task <ID> schedule` and `task <ID> deadline` work for PKMS and Todoist
+tasks. For PKMS, they edit the heading planning line. For Todoist, they update
+`due_date` and `deadline_date`. Use `--due none` or `--deadline none` to clear a
+date. ID-first `task <ID> postpone` works only for recurring tasks. For PKMS,
+the task must have a recurring `SCHEDULED` or `DEADLINE` timestamp and the
+repeater/warning syntax is preserved. For Todoist, the Todoist due date must be
+recurring. Non-recurring tasks fail instead of being silently rescheduled.
+Changed-task JSON output returns `changed: true`, an `action`, and the updated
+source-neutral `TaskItem`.
 
 Set the token in the environment when possible. Environment variables take
 precedence over config values and avoid storing the secret in a dotfile:
@@ -356,27 +357,27 @@ Todoist writes are explicit. `task add --source todoist` uses Todoist Quick Add
 semantics, including natural language dates, labels, priorities, and project
 syntax. `--project NAME` appends `#NAME` to the Quick Add text.
 
-`task done todoist:<remote-id>` calls Todoist's close endpoint. Use `--dry-run`
+`task todoist:<remote-id> done` calls Todoist's close endpoint. Use `--dry-run`
 to print the planned completion without sending a Todoist request.
 
 ## State Changes
 
-`task state` changes only the TODO keyword on the target heading. Valid states
-come from `open_todo_states` and `closed_todo_states` in config.
+`task <ID> state` changes only the TODO keyword on the target heading. Valid
+states come from `open_todo_states` and `closed_todo_states` in config.
 
 ```bash
-pkms task state p5 WAITING
-pkms task state pkms:5 done
-pkms task done p5
-pkms task done p5 --dry-run
+pkms task p5 state WAITING
+pkms task pkms:5 state done
+pkms task p5 done
+pkms task p5 done --dry-run
 ```
 
 State input is case-insensitive. The file is written with the canonical spelling
 from config, so `done`, `Done`, and `DONE` all write `DONE` when `DONE` is the
 configured state.
 
-`task done` is shorthand for setting the first configured closed state. If no
-closed state is configured, it defaults to `DONE`.
+`task <ID> done` is shorthand for setting the first configured closed state. If
+no closed state is configured, it defaults to `DONE`.
 
-For Todoist tasks, `task state todoist:<remote-id> done` closes the task and
-`task state todoist:<remote-id> open` reopens it. Other Todoist states fail.
+For Todoist tasks, `task todoist:<remote-id> state done` closes the task and
+`task todoist:<remote-id> state open` reopens it. Other Todoist states fail.

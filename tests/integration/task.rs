@@ -870,8 +870,8 @@ fn test_task_show_accepts_pkms_id_forms() {
             "--output-format",
             "json",
             "task",
-            "show",
             id,
+            "show",
         ]);
         assert!(status.success(), "task show {id} failed");
         assert!(v.get("heading_title").is_some());
@@ -885,8 +885,8 @@ fn test_task_open_accepts_pkms_id_form() {
         "--db",
         root.to_str().unwrap(),
         "task",
-        "open",
         "p1",
+        "open",
         "--editor",
         "true",
     ]);
@@ -904,8 +904,8 @@ fn test_task_show_todoist_source_rejected_before_todoist_support() {
         "--output-format",
         "json",
         "task",
-        "show",
         "todoist:123",
+        "show",
     ]);
     assert!(!status.success());
     let v: serde_json::Value = serde_json::from_str(stdout.trim()).unwrap();
@@ -924,8 +924,8 @@ fn test_task_state_dry_run_does_not_edit_file() {
         "--output-format",
         "json",
         "task",
-        "state",
         "p1",
+        "state",
         "waiting",
         "--dry-run",
     ]);
@@ -950,8 +950,8 @@ fn test_task_state_writes_canonical_config_spelling() {
         "--output-format",
         "json",
         "task",
-        "state",
         "p1",
+        "state",
         "waiting",
     ]);
     assert!(status.success());
@@ -973,8 +973,8 @@ fn test_task_done_writes_closed_state() {
         "--output-format",
         "json",
         "task",
-        "done",
         "pkms:1",
+        "done",
     ]);
     assert!(status.success());
     assert_eq!(v["old_state"], "TODO");
@@ -990,8 +990,8 @@ fn test_task_state_rejects_unknown_state() {
         "--output-format",
         "json",
         "task",
-        "state",
         "p1",
+        "state",
         "UNKNOWN",
     ]);
     assert!(!status.success());
@@ -1009,8 +1009,8 @@ fn test_task_state_rejects_todoist_before_todoist_support() {
         "--output-format",
         "json",
         "task",
-        "state",
         "todoist:123",
+        "state",
         "DONE",
     ]);
     assert!(!status.success());
@@ -1030,8 +1030,8 @@ fn test_task_schedule_pkms_sets_and_clears_scheduled_date() {
         "--output-format",
         "json",
         "task",
-        "schedule",
         "p1",
+        "schedule",
         "--due",
         "2026-07-01",
     ]);
@@ -1045,8 +1045,8 @@ fn test_task_schedule_pkms_sets_and_clears_scheduled_date() {
         "--output-format",
         "json",
         "task",
-        "schedule",
         "p1",
+        "schedule",
         "--due",
         "none",
     ]);
@@ -1064,8 +1064,8 @@ fn test_task_deadline_pkms_sets_deadline_date() {
         "--output-format",
         "json",
         "task",
-        "deadline",
         "p1",
+        "deadline",
         "--deadline",
         "2026-08-01",
     ]);
@@ -1113,8 +1113,8 @@ SCHEDULED: <2026-05-24 Sun 09:30 +1w -1d>
         "--output-format",
         "json",
         "task",
-        "postpone",
         &id,
+        "postpone",
         "--to",
         "2026-06-01",
     ]);
@@ -1134,8 +1134,8 @@ fn test_task_postpone_pkms_non_recurring_task_fails() {
         "--output-format",
         "json",
         "task",
-        "postpone",
         "p1",
+        "postpone",
         "--to",
         "2026-06-01",
     ]);
@@ -2140,8 +2140,8 @@ fn test_task_show_todoist_uses_stable_remote_id() {
             "--output-format",
             "json",
             "task",
-            "show",
             "todoist:abc",
+            "show",
         ],
         &base_url,
     );
@@ -2169,8 +2169,8 @@ fn test_task_show_todoist_detects_pkms_note_marker() {
             "--output-format",
             "json",
             "task",
-            "show",
             "todoist:abc",
+            "show",
         ],
         &base_url,
     );
@@ -2571,8 +2571,8 @@ fn test_task_done_todoist_calls_mock_close_endpoint() {
             "--output-format",
             "json",
             "task",
-            "done",
             "todoist:abc",
+            "done",
         ],
         &base_url,
     );
@@ -2603,8 +2603,8 @@ fn test_task_state_todoist_reopens_task() {
             "--output-format",
             "json",
             "task",
-            "state",
             "todoist:abc",
+            "state",
             "open",
         ],
         &base_url,
@@ -2629,8 +2629,8 @@ fn test_task_state_todoist_rejects_other_states() {
             "--output-format",
             "json",
             "task",
-            "state",
             "todoist:abc",
+            "state",
             "waiting",
         ],
         &base_url,
@@ -2673,8 +2673,8 @@ fn test_task_postpone_todoist_updates_due_date() {
             "--output-format",
             "json",
             "task",
-            "postpone",
             "todoist:abc",
+            "postpone",
             "--to",
             "2026-05-24",
         ],
@@ -2706,8 +2706,8 @@ fn test_task_postpone_todoist_non_recurring_fails() {
             "--output-format",
             "json",
             "task",
-            "postpone",
             "todoist:abc",
+            "postpone",
             "--to",
             "2026-05-24",
         ],
@@ -2744,8 +2744,8 @@ fn test_task_schedule_todoist_can_clear_due_date() {
             "--output-format",
             "json",
             "task",
-            "schedule",
             "todoist:abc",
+            "schedule",
             "--due",
             "none",
         ],
@@ -2784,8 +2784,8 @@ fn test_task_deadline_todoist_sets_deadline_date() {
             "--output-format",
             "json",
             "task",
-            "deadline",
             "todoist:abc",
+            "deadline",
             "--deadline",
             "2026-06-01",
         ],
@@ -2811,8 +2811,8 @@ fn test_task_done_todoist_dry_run_does_not_call_mock_api() {
             "--output-format",
             "json",
             "task",
-            "done",
             "todoist:abc",
+            "done",
             "--dry-run",
         ],
         &base_url,

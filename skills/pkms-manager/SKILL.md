@@ -95,8 +95,8 @@ pkms show 5
 pkms open 5
 pkms task list
 pkms task agenda today
-pkms task state p5 WAITING
-pkms task done p5 --dry-run
+pkms task p5 state WAITING
+pkms task p5 done --dry-run
 ```
 
 See the TODO/agenda references before changing task workflows.

@@ -9,11 +9,11 @@ pkms task agenda today
 pkms task agenda week
 pkms task agenda overdue
 pkms task agenda upcoming --days 7
-pkms task show p5
-pkms task open p5
-pkms task state p5 WAITING
-pkms task done p5
-pkms task done p5 --dry-run
+pkms task p5 show
+pkms task p5 open
+pkms task p5 state WAITING
+pkms task p5 done
+pkms task p5 done --dry-run
 ```
 
 PKMS task IDs can be written as bare canonical IDs, `p<ID>`, or `pkms:<ID>`.
@@ -67,12 +67,12 @@ pkms task list 'scope:Some Note Title' after:2026-05-01 before:"2026-05-25 18:00
 pkms task list source:todoist 'todoist.filter:today | overdue'
 ```
 
-`task state` changes only the TODO keyword. Valid states come from configured
-`open_todo_states` and `closed_todo_states`. State input is case-insensitive,
-but the file is written with the canonical config spelling.
+`task <ID> state` changes only the TODO keyword. Valid states come from
+configured `open_todo_states` and `closed_todo_states`. State input is
+case-insensitive, but the file is written with the canonical config spelling.
 
-`task done` is shorthand for the first configured closed state, defaulting to
-`DONE` if none is configured.
+`task <ID> done` is shorthand for the first configured closed state, defaulting
+to `DONE` if none is configured.
 
 Todoist read support is available only in builds made with `--features todoist`:
 
@@ -91,18 +91,18 @@ pkms task list tags source:todoist
 pkms task list projects source:all
 pkms task list tags source:all
 pkms task list source:todoist 'todoist.filter:today | overdue'
-pkms task show todoist:<remote-id>
+pkms task todoist:<remote-id> show
 pkms task add "Capture local task"
 pkms task add --source todoist "Buy milk tomorrow"
 pkms task add --source todoist --title "Call Alice" --due 2026-05-24 --label phone --priority B
 pkms task add --source todoist --title "Call Alice" --note "Project Alpha"
-pkms task done todoist:<remote-id>
-pkms task postpone p<canonical-id> --to 2026-06-01
-pkms task postpone todoist:<remote-id> --to tomorrow
-pkms task schedule p<canonical-id> --due 2026-05-24
-pkms task schedule todoist:<remote-id> --due none
-pkms task deadline p<canonical-id> --deadline 2026-05-30
-pkms task deadline todoist:<remote-id> --deadline none
+pkms task todoist:<remote-id> done
+pkms task p<canonical-id> postpone --to 2026-06-01
+pkms task todoist:<remote-id> postpone --to tomorrow
+pkms task p<canonical-id> schedule --due 2026-05-24
+pkms task todoist:<remote-id> schedule --due none
+pkms task p<canonical-id> deadline --deadline 2026-05-30
+pkms task todoist:<remote-id> deadline --deadline none
 ```
 
 Use stable `todoist:<remote-id>` IDs for Todoist mutations.
@@ -147,7 +147,7 @@ case-insensitively, use the project id.
 Use `--note <uuid-or-title>` when a Todoist task needs durable PKMS context.
 The command appends `pkms:id:<uuid>` to the Todoist description without removing
 user-authored description text. Later `task list source:todoist` and
-`task show todoist:<remote-id>` populate `note_uuid` and `note_title` from that
+`task todoist:<remote-id> show` populate `note_uuid` and `note_title` from that
 marker. Treat this as a privacy boundary: the PKMS UUID is stored in Todoist.
 
 Use `task list projects` and `task list tags` when you need task metadata. With
@@ -166,13 +166,13 @@ Todoist id.
 Use `--dry-run` before completing Todoist tasks when operating on a real token:
 
 ```bash
-pkms task done todoist:<remote-id> --dry-run
+pkms task todoist:<remote-id> done --dry-run
 ```
 
-Use stable `todoist:<remote-id>` ids for Todoist mutations. `task postpone`
-accepts `--to tomorrow` or `--to YYYY-MM-DD` and works only for recurring PKMS
-or Todoist tasks; non-recurring tasks fail. `task schedule` accepts `--due
-tomorrow`, `--due YYYY-MM-DD`, or `--due none`. `task deadline` accepts
-`--deadline tomorrow`, `--deadline YYYY-MM-DD`, or `--deadline none`. Schedule
-and deadline work for PKMS and Todoist tasks. Todoist `task state` supports only
-`open` and `done`.
+Use stable `todoist:<remote-id>` ids for Todoist mutations. `task <ID>
+postpone` accepts `--to tomorrow` or `--to YYYY-MM-DD` and works only for
+recurring PKMS or Todoist tasks; non-recurring tasks fail. `task <ID> schedule`
+accepts `--due tomorrow`, `--due YYYY-MM-DD`, or `--due none`. `task <ID>
+deadline` accepts `--deadline tomorrow`, `--deadline YYYY-MM-DD`, or
+`--deadline none`. Schedule and deadline work for PKMS and Todoist tasks.
+Todoist `task <ID> state` supports only `open` and `done`.

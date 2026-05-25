@@ -120,10 +120,10 @@ pkms task agenda overdue
 pkms task agenda upcoming --days 7
 pkms task list state:TODO tags:work,!blocked
 pkms task agenda week type:SCHED project:Alpha
-pkms task show p<id>
-pkms task open p<id>
-pkms task state p<id> WAITING
-pkms task done p<id>
+pkms task p<id> show
+pkms task p<id> open
+pkms task p<id> state WAITING
+pkms task p<id> done
 pkms task list source:todoist
 pkms task agenda today source:todoist
 pkms task agenda week source:all
@@ -132,18 +132,18 @@ pkms task inbox
 pkms task inbox source:todoist
 pkms task list projects source:todoist
 pkms task list tags source:todoist
-pkms task show todoist:<remote-id>
+pkms task todoist:<remote-id> show
 pkms task add "Capture local task"
 pkms task add --source todoist "Buy milk tomorrow"
 pkms task add --source todoist --title "Call Alice" --due 2026-05-24 --priority B
 pkms task add --source todoist --title "Call Alice" --note "Project Alpha"
-pkms task done todoist:<remote-id>
-pkms task postpone p<id> --to 2026-06-01
-pkms task postpone todoist:<remote-id> --to tomorrow
-pkms task schedule p<id> --due 2026-05-24
-pkms task schedule todoist:<remote-id> --due none
-pkms task deadline p<id> --deadline 2026-05-30
-pkms task deadline todoist:<remote-id> --deadline none
+pkms task todoist:<remote-id> done
+pkms task p<id> postpone --to 2026-06-01
+pkms task todoist:<remote-id> postpone --to tomorrow
+pkms task p<id> schedule --due 2026-05-24
+pkms task todoist:<remote-id> schedule --due none
+pkms task p<id> deadline --deadline 2026-05-30
+pkms task todoist:<remote-id> deadline --deadline none
 ```
 
 See [TODO and Agenda](todo-agenda.md) for task IDs, filtering, table columns,

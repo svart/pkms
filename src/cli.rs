@@ -399,6 +399,9 @@ pub struct TaskTableArgs {
 }
 
 #[derive(Debug, Args)]
+#[command(
+    after_help = "ID-first actions:\n  pkms task <ID> show\n  pkms task <ID> open [--editor <COMMAND>] [--line <LINE>]\n  pkms task <ID> state <STATE> [--dry-run]\n  pkms task <ID> done [--dry-run]\n  pkms task <ID> postpone --to <DATE>\n  pkms task <ID> schedule --due <DATE>\n  pkms task <ID> deadline --deadline <DATE>"
+)]
 pub struct TaskArgs {
     #[command(subcommand)]
     pub command: TaskCommand,
@@ -412,22 +415,24 @@ pub enum TaskCommand {
     Agenda(TaskAgendaArgs),
     #[command(about = "Show inbox tasks")]
     Inbox(TaskShortcutArgs),
-    #[command(about = "Show detailed task information")]
+    #[command(about = "Show detailed task information", hide = true)]
     Show(TaskTargetArgs),
-    #[command(about = "Open a task in an editor")]
+    #[command(about = "Open a task in an editor", hide = true)]
     Open(TaskOpenArgs),
-    #[command(about = "Set a task TODO state")]
+    #[command(about = "Set a task TODO state", hide = true)]
     State(TaskStateArgs),
-    #[command(about = "Set a task to the configured closed state")]
+    #[command(about = "Set a task to the configured closed state", hide = true)]
     Done(TaskDoneArgs),
     #[command(about = "Add a task")]
     Add(TaskAddArgs),
-    #[command(about = "Postpone a task")]
+    #[command(about = "Postpone a task", hide = true)]
     Postpone(TaskPostponeArgs),
-    #[command(about = "Schedule or unschedule a task")]
+    #[command(about = "Schedule or unschedule a task", hide = true)]
     Schedule(TaskScheduleArgs),
-    #[command(about = "Set or clear a task deadline")]
+    #[command(about = "Set or clear a task deadline", hide = true)]
     Deadline(TaskDeadlineArgs),
+    #[command(external_subcommand)]
+    Target(Vec<String>),
 }
 
 #[derive(Debug, Args)]

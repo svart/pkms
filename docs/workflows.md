@@ -64,10 +64,10 @@ state changes:
 ```bash
 pkms task list
 pkms task agenda today
-pkms task show p5
-pkms task state p5 WAITING
-pkms task done p5 --dry-run
-pkms task done p5
+pkms task p5 show
+pkms task p5 state WAITING
+pkms task p5 done --dry-run
+pkms task p5 done
 ```
 
 Use `todo` and `agenda` when you need the older compatibility flags such as
@@ -84,7 +84,7 @@ pkms task list source:all
 Use stable remote IDs for Todoist task inspection:
 
 ```bash
-pkms task show todoist:<remote-id>
+pkms task todoist:<remote-id> show
 ```
 
 Capture to Todoist from the terminal when phone capture is the intended
@@ -92,6 +92,6 @@ cross-device workflow:
 
 ```bash
 pkms task add --source todoist "Buy milk tomorrow"
-pkms task done todoist:<remote-id> --dry-run
-pkms task done todoist:<remote-id>
+pkms task todoist:<remote-id> done --dry-run
+pkms task todoist:<remote-id> done
 ```
