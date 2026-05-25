@@ -146,10 +146,20 @@ pub fn is_overdue(raw: Option<&String>) -> bool {
 
 pub trait RowItem {
     fn id(&self) -> usize;
+    fn display_id(&self) -> String {
+        if self.id() > 0 {
+            self.id().to_string()
+        } else {
+            String::new()
+        }
+    }
     fn todo_state(&self) -> Option<&str>;
     fn priority(&self) -> Option<char>;
     fn title(&self) -> &str;
     fn heading_title(&self) -> &str;
+    fn project(&self) -> Option<&str> {
+        None
+    }
     fn filetags(&self) -> &[String];
     fn heading_tags(&self) -> &[String];
     fn scheduled(&self) -> Option<&str>;
@@ -187,11 +197,7 @@ pub trait RowItem {
     }
 
     fn format_rows(&self) -> Vec<[String; 9]> {
-        let id = if self.id() > 0 {
-            self.id().to_string()
-        } else {
-            String::new()
-        };
+        let id = self.display_id();
         let state = self.todo_state().unwrap_or("").to_string();
         let prio = self
             .priority()
@@ -199,6 +205,7 @@ pub trait RowItem {
             .unwrap_or_default();
         let title = self.title().to_string();
         let heading = self.heading_title().to_string();
+        let project = self.project().unwrap_or_default().to_string();
         let tags = combine_tags(self.filetags(), self.heading_tags());
         let has_both = self.scheduled().is_some() && self.deadline().is_some();
         let mut rows = Vec::new();
@@ -211,7 +218,7 @@ pub trait RowItem {
                 "SCHED".to_string(),
                 prio.clone(),
                 tags.clone(),
-                String::new(),
+                project.clone(),
                 title.clone(),
                 heading.clone(),
             ]);
@@ -237,7 +244,11 @@ pub trait RowItem {
                 } else {
                     tags.clone()
                 },
-                String::new(),
+                if has_both {
+                    String::new()
+                } else {
+                    project.clone()
+                },
                 if has_both {
                     String::new()
                 } else {
@@ -260,7 +271,7 @@ pub trait RowItem {
                 String::new(),
                 prio,
                 tags,
-                String::new(),
+                project,
                 title,
                 heading,
             ]);
@@ -292,8 +303,18 @@ pub fn print_table<T: RowItem>(
     line_sep: bool,
     footer: &str,
 ) {
+    print_table_with_empty_message(sections, cols, line_sep, footer, "No items found.");
+}
+
+pub fn print_table_with_empty_message<T: RowItem>(
+    sections: &[(&str, &[T])],
+    cols: &[Column],
+    line_sep: bool,
+    footer: &str,
+    empty_message: &str,
+) {
     if sections.iter().all(|(_, items)| items.is_empty()) {
-        println!("No items found.");
+        println!("{empty_message}");
         return;
     }
 

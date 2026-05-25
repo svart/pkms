@@ -5,13 +5,14 @@ use crate::cli::{
 };
 use crate::commands::open::OpenOptions;
 use crate::commands::show::{HeadingTarget, ShowOptions};
+use crate::commands::task_common::{RowItem, print_table_with_empty_message};
 use crate::commands::task_index::{
     assign_canonical_ids, collect_agenda_records, collect_todo_records,
 };
 use crate::config::{ColumnSource, ColumnView, ResolvedConfig};
 use crate::input;
 use crate::org_date::parse_org_date;
-use crate::output::{Column, OutputContext};
+use crate::output::{ALL_COLUMNS, Column, OutputContext};
 use crate::parser::{DEADLINE_RE, HEADING_RE, SCHEDULED_RE, find_daily_file_date};
 use crate::tasks::filter::{
     SourceSelection, TaskDateFilter, TaskFilterCriteria, TaskFilters, parse_task_filters,
@@ -31,9 +32,6 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use tabled::builder::Builder;
 use tabled::settings::Style;
-use tabled::settings::object::{Columns, Rows};
-use tabled::settings::style::Border;
-use tabled::settings::{Modify, Width};
 
 mod agenda;
 mod todo;
@@ -75,6 +73,85 @@ struct TaskAddSpec {
     description: Option<String>,
     note: Option<String>,
     text: Option<String>,
+}
+
+#[derive(Clone, Copy)]
+struct TaskRow<'a> {
+    item: &'a TaskItem,
+    source: SourceSelection,
+}
+
+impl RowItem for TaskRow<'_> {
+    fn id(&self) -> usize {
+        0
+    }
+
+    fn display_id(&self) -> String {
+        match self.source {
+            SourceSelection::All => match self.item.source {
+                TaskSourceKind::Pkms => format!("p{}", self.item.source_id),
+                TaskSourceKind::Todoist => format!("t{}", self.item.source_id),
+            },
+            SourceSelection::Pkms | SourceSelection::Todoist => self.item.source_id.clone(),
+        }
+    }
+
+    fn todo_state(&self) -> Option<&str> {
+        self.item.state.as_deref()
+    }
+
+    fn priority(&self) -> Option<char> {
+        self.item
+            .priority
+            .as_deref()
+            .and_then(|priority| priority.chars().next())
+    }
+
+    fn title(&self) -> &str {
+        self.item.note_title.as_deref().unwrap_or_default()
+    }
+
+    fn heading_title(&self) -> &str {
+        &self.item.title
+    }
+
+    fn project(&self) -> Option<&str> {
+        self.item.project.as_deref()
+    }
+
+    fn filetags(&self) -> &[String] {
+        &self.item.tags
+    }
+
+    fn heading_tags(&self) -> &[String] {
+        &[]
+    }
+
+    fn scheduled(&self) -> Option<&str> {
+        self.item.scheduled.as_ref().map(|date| date.raw.as_str())
+    }
+
+    fn deadline(&self) -> Option<&str> {
+        self.item.deadline.as_ref().map(|date| date.raw.as_str())
+    }
+
+    fn daily_file_date(&self) -> Option<&str> {
+        self.item.daily_file_date.as_deref()
+    }
+
+    fn scheduled_date_str(&self) -> Option<&str> {
+        self.item
+            .scheduled
+            .as_ref()
+            .and_then(|date| date.date.as_deref())
+    }
+
+    fn deadline_date_str(&self) -> Option<&str> {
+        self.item
+            .deadline
+            .as_ref()
+            .and_then(|date| date.date.as_deref())
+    }
 }
 
 pub fn run(config: &ResolvedConfig, ctx: &OutputContext, command: &TaskCommand) -> Result<()> {
@@ -2731,7 +2808,17 @@ fn print_task_table(
     source: SourceSelection,
     columns: Option<&[Column]>,
 ) -> Result<()> {
-    print_task_table_sections(&[("", items)], total, source, columns)
+    let rows = task_rows(items, source);
+    let sections = [("", rows.as_slice())];
+    let footer = format!("Shown: {}, Total: {} task(s)", rows.len(), total);
+    print_table_with_empty_message(
+        &sections,
+        task_columns(columns),
+        false,
+        &footer,
+        "No tasks found.",
+    );
+    Ok(())
 }
 
 fn print_agenda_task_table(
@@ -2759,330 +2846,32 @@ fn print_agenda_task_table(
     today_items.sort_by(|a, b| effective_date(a).cmp(&effective_date(b)));
     upcoming.sort_by(|a, b| effective_date(a).cmp(&effective_date(b)));
 
+    let overdue_rows = task_rows(&overdue, source);
+    let today_rows = task_rows(&today_items, source);
+    let upcoming_rows = task_rows(&upcoming, source);
     let sections = [
-        ("=== Overdue ===", overdue.as_slice()),
-        ("=== Today ===", today_items.as_slice()),
-        ("=== Upcoming ===", upcoming.as_slice()),
+        ("=== Overdue ===", overdue_rows.as_slice()),
+        ("=== Today ===", today_rows.as_slice()),
+        ("=== Upcoming ===", upcoming_rows.as_slice()),
     ];
-    print_task_table_sections(&sections, total, source, columns)
-}
-
-fn print_task_table_sections(
-    sections: &[(&str, &[TaskItem])],
-    total: usize,
-    source: SourceSelection,
-    columns: Option<&[Column]>,
-) -> Result<()> {
-    let item_count: usize = sections.iter().map(|(_, items)| items.len()).sum();
-    if item_count == 0 {
-        println!("No tasks found.");
-        return Ok(());
-    }
-
-    const HEADERS: [&str; 9] = [
-        "Id", "Date", "State", "Type", "Prio", "Tags", "Project", "Note", "Heading",
-    ];
-    let selected_columns = task_table_selected_columns(columns);
-    let mut builder = Builder::new();
-    builder.push_record(
-        selected_columns
-            .iter()
-            .map(|column| HEADERS[*column])
-            .collect::<Vec<_>>(),
+    let item_count = overdue_rows.len() + today_rows.len() + upcoming_rows.len();
+    let footer = format!("Shown: {}, Total: {} task(s)", item_count, total);
+    print_table_with_empty_message(
+        &sections,
+        task_columns(columns),
+        false,
+        &footer,
+        "No tasks found.",
     );
-    let n_cols = selected_columns.len();
-    let empty_row: Vec<String> = std::iter::repeat_n(String::new(), n_cols).collect();
-    let mut section_rows = Vec::new();
-    let mut row_idx = 1;
-    let mut need_sep = false;
-
-    for (label, items) in sections {
-        if items.is_empty() {
-            continue;
-        }
-        if need_sep {
-            builder.push_record(empty_row.clone());
-            row_idx += 1;
-        }
-        if !label.is_empty() {
-            let mut label_row = empty_row.clone();
-            label_row[0] = label.to_string();
-            builder.push_record(label_row);
-            section_rows.push(row_idx);
-            row_idx += 1;
-        }
-        for item in *items {
-            for row in task_table_rows(item, source) {
-                builder.push_record(
-                    selected_columns
-                        .iter()
-                        .map(|column| row[*column].clone())
-                        .collect::<Vec<_>>(),
-                );
-                row_idx += 1;
-            }
-        }
-        need_sep = true;
-    }
-    let all_items = sections
-        .iter()
-        .flat_map(|(_, items)| items.iter())
-        .collect::<Vec<_>>();
-    let wrap_widths = task_table_wrap_widths(&all_items, source, &selected_columns);
-    let mut table = builder.build();
-    table.with(Style::blank());
-    table.with(Modify::new(Rows::one(1)).with(Border::new().top('─')));
-    for (column, width) in wrap_widths {
-        table.with(Modify::new(Columns::one(column)).with(Width::wrap(width).keep_words(true)));
-    }
-    for section_row in section_rows {
-        table.with(
-            Modify::new((section_row, 0)).with(tabled::settings::Span::column(n_cols as isize)),
-        );
-    }
-    println!("{table}");
-    println!();
-    println!("Shown: {}, Total: {} task(s)", item_count, total);
     Ok(())
 }
 
-fn task_table_selected_columns(columns: Option<&[Column]>) -> Vec<usize> {
-    match columns {
-        Some(columns) => columns.iter().map(task_table_column_index).collect(),
-        None => (0..9).collect(),
-    }
+fn task_rows(items: &[TaskItem], source: SourceSelection) -> Vec<TaskRow<'_>> {
+    items.iter().map(|item| TaskRow { item, source }).collect()
 }
 
-fn task_table_column_index(column: &Column) -> usize {
-    match column {
-        Column::Id => 0,
-        Column::Date => 1,
-        Column::State => 2,
-        Column::Type => 3,
-        Column::Prio => 4,
-        Column::Tags => 5,
-        Column::Project => 6,
-        Column::Note => 7,
-        Column::Heading => 8,
-    }
-}
-
-fn task_table_wrap_widths(
-    items: &[&TaskItem],
-    source: SourceSelection,
-    selected_columns: &[usize],
-) -> Vec<(usize, usize)> {
-    const HEADERS: [&str; 9] = [
-        "Id", "Date", "State", "Type", "Prio", "Tags", "Project", "Note", "Heading",
-    ];
-    const FIXED_COLUMNS: [usize; 5] = [0, 1, 2, 3, 4];
-    const WRAP_COLUMNS: [usize; 4] = [5, 6, 7, 8];
-    const DEFAULT_WIDTHS: [(usize, usize); 4] = [(5, 25), (6, 20), (7, 24), (8, 30)];
-    const WEIGHTS: [(usize, usize); 4] = [(5, 10), (6, 15), (7, 5), (8, 70)];
-    const MIN_WIDTHS: [(usize, usize); 4] = [(5, 4), (6, 7), (7, 4), (8, 20)];
-
-    let Some(term_width) = crate::output::table::terminal_width() else {
-        return selected_task_table_default_widths(selected_columns, &DEFAULT_WIDTHS);
-    };
-
-    let mut max_widths = HEADERS.map(str::len);
-    for item in items {
-        for row in task_table_rows(item, source) {
-            for (idx, value) in row.iter().enumerate() {
-                let width = value
-                    .lines()
-                    .map(|line| line.chars().count())
-                    .max()
-                    .unwrap_or(0);
-                max_widths[idx] = max_widths[idx].max(width);
-            }
-        }
-    }
-
-    let padding = selected_columns.len().saturating_sub(1) + 2 * selected_columns.len();
-    let fixed_width: usize = selected_columns
-        .iter()
-        .filter(|column| FIXED_COLUMNS.contains(column))
-        .map(|idx| max_widths[*idx])
-        .sum();
-    let available = term_width.saturating_sub(fixed_width + padding);
-    let selected_wrap_columns: Vec<usize> = selected_columns
-        .iter()
-        .copied()
-        .filter(|column| WRAP_COLUMNS.contains(column))
-        .collect();
-    let min_total: usize = selected_wrap_columns
-        .iter()
-        .map(|column| task_table_lookup(&MIN_WIDTHS, *column))
-        .sum();
-    if available < min_total {
-        return selected_task_table_default_widths(selected_columns, &DEFAULT_WIDTHS);
-    }
-
-    let mut widths: Vec<(usize, usize)> = WRAP_COLUMNS
-        .iter()
-        .filter(|column| selected_columns.contains(column))
-        .map(|column| {
-            let min = task_table_lookup(&MIN_WIDTHS, *column);
-            (*column, min.min(max_widths[*column]))
-        })
-        .collect();
-
-    let total_weight: usize = WEIGHTS.iter().map(|(_, weight)| *weight).sum();
-    loop {
-        let used: usize = widths.iter().map(|(_, width)| *width).sum();
-        let mut remaining = available.saturating_sub(used);
-        if remaining == 0 {
-            break;
-        }
-
-        let mut changed = false;
-        for (column, _) in WEIGHTS.iter().rev() {
-            let weight = task_table_lookup(&WEIGHTS, *column);
-            if let Some((_, width)) = widths.iter_mut().find(|(candidate, _)| candidate == column) {
-                let room = max_widths[*column].saturating_sub(*width);
-                let add = (remaining * weight / total_weight)
-                    .max(1)
-                    .min(room)
-                    .min(remaining);
-                *width += add;
-                remaining -= add;
-                changed |= add > 0;
-                if remaining == 0 {
-                    break;
-                }
-            }
-        }
-        if !changed {
-            break;
-        }
-    }
-
-    widths
-        .into_iter()
-        .filter_map(|(column, width)| {
-            selected_columns
-                .iter()
-                .position(|selected| *selected == column)
-                .map(|display_column| (display_column, width))
-        })
-        .collect()
-}
-
-fn selected_task_table_default_widths(
-    selected_columns: &[usize],
-    default_widths: &[(usize, usize)],
-) -> Vec<(usize, usize)> {
-    default_widths
-        .iter()
-        .filter_map(|(column, width)| {
-            selected_columns
-                .iter()
-                .position(|selected| selected == column)
-                .map(|display_column| (display_column, *width))
-        })
-        .collect()
-}
-
-fn task_table_lookup(values: &[(usize, usize)], column: usize) -> usize {
-    values
-        .iter()
-        .find_map(|(candidate, value)| (*candidate == column).then_some(*value))
-        .unwrap_or(0)
-}
-
-fn task_table_rows(item: &TaskItem, source: SourceSelection) -> Vec<[String; 9]> {
-    let id = task_text_id(item, source);
-    let state = item.state.clone().unwrap_or_default();
-    let prio = item
-        .priority
-        .as_deref()
-        .map(|priority| format!("[#{priority}]"))
-        .unwrap_or_default();
-    let tags = item.tags.join(", ");
-    let project = item.project.clone().unwrap_or_default();
-    let note = item.note_title.clone().unwrap_or_default();
-    let heading = item.title.clone();
-    let has_both = item.scheduled.is_some() && item.deadline.is_some();
-    let mut rows = Vec::new();
-
-    if let Some(date) = &item.scheduled {
-        rows.push([
-            id.clone(),
-            crate::commands::task_common::format_display_datetime(&date.raw),
-            state.clone(),
-            "SCHED".to_string(),
-            prio.clone(),
-            tags.clone(),
-            project.clone(),
-            note.clone(),
-            heading.clone(),
-        ]);
-    }
-
-    if let Some(date) = &item.deadline {
-        rows.push([
-            if has_both { String::new() } else { id.clone() },
-            crate::commands::task_common::format_display_datetime(&date.raw),
-            if has_both {
-                String::new()
-            } else {
-                state.clone()
-            },
-            "DEADL".to_string(),
-            if has_both {
-                String::new()
-            } else {
-                prio.clone()
-            },
-            if has_both {
-                String::new()
-            } else {
-                tags.clone()
-            },
-            if has_both {
-                String::new()
-            } else {
-                project.clone()
-            },
-            if has_both {
-                String::new()
-            } else {
-                note.clone()
-            },
-            if has_both {
-                String::new()
-            } else {
-                heading.clone()
-            },
-        ]);
-    }
-
-    if rows.is_empty() {
-        rows.push([
-            id,
-            item.daily_file_date.clone().unwrap_or_default(),
-            state,
-            String::new(),
-            prio,
-            tags,
-            project,
-            note,
-            heading,
-        ]);
-    }
-
-    rows
-}
-
-fn task_text_id(item: &TaskItem, source: SourceSelection) -> String {
-    match source {
-        SourceSelection::All => match item.source {
-            TaskSourceKind::Pkms => format!("p{}", item.source_id),
-            TaskSourceKind::Todoist => format!("t{}", item.source_id),
-        },
-        SourceSelection::Pkms | SourceSelection::Todoist => item.source_id.clone(),
-    }
+fn task_columns(columns: Option<&[Column]>) -> &[Column] {
+    columns.unwrap_or(ALL_COLUMNS.as_slice())
 }
 
 fn source_name(item: &TaskItem) -> &'static str {
