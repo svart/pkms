@@ -79,7 +79,8 @@ tests/
 ## Add a Command
 
 1. Add a variant to `Command` in `src/cli.rs`.
-2. Create `src/commands/<name>.rs`.
+2. Create `src/commands/<name>.rs`, or `src/commands/<name>/` for a command
+   namespace with subcommands.
 3. Export it from `src/commands/mod.rs`.
 4. Dispatch it from `src/main.rs`.
 5. Add integration tests under `tests/integration/`.

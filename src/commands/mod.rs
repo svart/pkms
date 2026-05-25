@@ -5,7 +5,6 @@
 //! stateless — they load the graph from disk on every invocation, compute results, and
 //! dispatch output via [`OutputContext`](crate::output::OutputContext).
 
-pub mod agenda;
 pub mod check;
 pub mod context;
 pub mod fix;
@@ -23,5 +22,4 @@ pub mod suggest;
 pub mod task;
 pub mod task_common;
 pub mod task_index;
-pub mod todo;
 pub mod validate;

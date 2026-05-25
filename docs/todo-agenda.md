@@ -21,6 +21,10 @@ p12
 pkms:12
 ```
 
+Provider-backed tasks use stable `<source>:<remote-id>` IDs, such as
+`todoist:<remote-id>`. Unknown provider IDs parse as task IDs but fail at
+execution unless that provider is configured in the current build.
+
 ## Task List
 
 `task list` lists TODO headings.

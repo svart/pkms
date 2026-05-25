@@ -58,7 +58,7 @@ src/
   parser.rs           # org parser for note metadata, links, headings, tasks
   org_date.rs         # org timestamp parser
   graph/              # in-memory graph build, search, traversal, validation
-  commands/           # one module per subcommand plus task helpers
+  commands/           # one module per subcommand; task/ owns task subcommands
   input.rs            # target/stdin/date/column parsing helpers
   output.rs           # OutputContext and output format helpers
   output/table.rs     # adaptive table layout
@@ -97,7 +97,8 @@ When adding or changing commands, follow the existing shape:
 
 1. Define CLI args in `src/cli.rs`.
 2. Dispatch from `src/main.rs`.
-3. Put behavior in `src/commands/<name>.rs`.
+3. Put behavior in `src/commands/<name>.rs`, or in `src/commands/<name>/`
+   when the command is a namespace with subcommands.
 4. Use option structs for command input when more than trivial args are needed.
 5. Accept `&ResolvedConfig` and `&OutputContext`.
 6. Load the graph with `Graph::load(config)` only when the command needs graph

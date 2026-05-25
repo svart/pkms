@@ -8,6 +8,7 @@ use std::str::FromStr;
 pub enum TaskId {
     Pkms(usize),
     Todoist(String),
+    External { source: String, id: String },
 }
 
 impl TaskId {
@@ -15,6 +16,7 @@ impl TaskId {
         match self {
             TaskId::Pkms(id) => format!("p{id}"),
             TaskId::Todoist(id) => format!("todoist:{id}"),
+            TaskId::External { source, id } => format!("{source}:{id}"),
         }
     }
 
@@ -22,6 +24,7 @@ impl TaskId {
         match self {
             TaskId::Pkms(id) => id.to_string(),
             TaskId::Todoist(id) => id.clone(),
+            TaskId::External { id, .. } => id.clone(),
         }
     }
 }
@@ -31,6 +34,7 @@ impl fmt::Display for TaskId {
         match self {
             TaskId::Pkms(id) => write!(f, "pkms:{id}"),
             TaskId::Todoist(id) => write!(f, "todoist:{id}"),
+            TaskId::External { source, id } => write!(f, "{source}:{id}"),
         }
     }
 }
@@ -59,11 +63,20 @@ impl FromStr for TaskId {
             return Ok(TaskId::Todoist(rest.to_string()));
         }
 
+        if let Some((source, id)) = trimmed.split_once(':') {
+            validate_external_part("source", source)?;
+            validate_external_part("id", id)?;
+            return Ok(TaskId::External {
+                source: source.to_ascii_lowercase(),
+                id: id.to_string(),
+            });
+        }
+
         if trimmed.chars().all(|c| c.is_ascii_digit()) {
             return parse_pkms_id(trimmed);
         }
 
-        bail!("Unsupported task ID '{trimmed}'. Use 12, p12, pkms:12, or todoist:<remote-id>.")
+        bail!("Unsupported task ID '{trimmed}'. Use 12, p12, pkms:12, or <source>:<remote-id>.")
     }
 }
 
@@ -75,6 +88,17 @@ fn parse_pkms_id(raw: &str) -> Result<TaskId> {
         bail!("PKMS task ID must be greater than zero");
     }
     Ok(TaskId::Pkms(id))
+}
+
+fn validate_external_part(name: &str, value: &str) -> Result<()> {
+    let value = value.trim();
+    if value.is_empty() {
+        bail!("Task ID {name} cannot be empty");
+    }
+    if value.chars().any(char::is_whitespace) {
+        bail!("Task ID {name} cannot contain whitespace");
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -97,9 +121,21 @@ mod tests {
     }
 
     #[test]
+    fn parses_external_provider_id() {
+        assert_eq!(
+            "linear:ABC-123".parse::<TaskId>().unwrap(),
+            TaskId::External {
+                source: "linear".to_string(),
+                id: "ABC-123".to_string()
+            }
+        );
+    }
+
+    #[test]
     fn rejects_view_local_and_invalid_ids() {
         assert!("t4".parse::<TaskId>().is_err());
         assert!("pkms:0".parse::<TaskId>().is_err());
         assert!("todoist:".parse::<TaskId>().is_err());
+        assert!("linear:".parse::<TaskId>().is_err());
     }
 }

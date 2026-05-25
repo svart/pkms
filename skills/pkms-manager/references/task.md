@@ -17,6 +17,9 @@ pkms task p5 done --dry-run
 ```
 
 PKMS task IDs can be written as bare canonical IDs, `p<ID>`, or `pkms:<ID>`.
+Provider-backed tasks use stable `<source>:<remote-id>` IDs, such as
+`todoist:<remote-id>`. Unknown provider IDs fail unless that provider is
+configured in the current build.
 
 Explicit Todoist and mixed-source task views use the same table shape plus a
 `Project` column:

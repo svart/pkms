@@ -19,6 +19,9 @@ use crate::tasks::filter::{
 use crate::tasks::id::TaskId;
 use crate::tasks::model::{TaskItem, TaskSourceKind};
 use crate::tasks::pkms::record_to_task_item;
+use crate::tasks::provider::{
+    TaskListView, TaskMetadataRow, TaskProvider, TaskProviderContext, TaskQuery,
+};
 use crate::util;
 use crate::workspace::Workspace;
 use anyhow::{Context, Result, bail};
@@ -31,6 +34,9 @@ use tabled::settings::Style;
 use tabled::settings::object::{Columns, Rows};
 use tabled::settings::style::Border;
 use tabled::settings::{Modify, Width};
+
+mod agenda;
+mod todo;
 
 #[cfg(feature = "todoist")]
 const PKMS_NOTE_MARKER_PREFIX: &str = "pkms:id:";
@@ -245,6 +251,105 @@ enum TaskListMode {
     Tags,
 }
 
+struct PkmsTaskProvider<'a> {
+    context: TaskProviderContext<'a>,
+}
+
+struct TodoistTaskProvider<'a> {
+    context: TaskProviderContext<'a>,
+}
+
+impl<'a> PkmsTaskProvider<'a> {
+    fn new(config: &'a ResolvedConfig) -> Self {
+        Self {
+            context: TaskProviderContext { config },
+        }
+    }
+}
+
+impl<'a> TodoistTaskProvider<'a> {
+    fn new(config: &'a ResolvedConfig) -> Self {
+        Self {
+            context: TaskProviderContext { config },
+        }
+    }
+}
+
+impl TaskProvider for PkmsTaskProvider<'_> {
+    fn source(&self) -> TaskSourceKind {
+        TaskSourceKind::Pkms
+    }
+
+    fn list(&self, query: &TaskQuery) -> Result<Vec<TaskItem>> {
+        match query.view {
+            TaskListView::All => collect_pkms_list_items(self.context.config),
+            TaskListView::Agenda => collect_pkms_agenda_items(self.context.config),
+            TaskListView::Today => {
+                collect_pkms_agenda_items_for(self.context.config, true, false, false, false)
+            }
+            TaskListView::Week => {
+                collect_pkms_agenda_items_for(self.context.config, false, true, false, false)
+            }
+            TaskListView::Overdue => {
+                collect_pkms_agenda_items_for(self.context.config, false, false, true, false)
+            }
+            TaskListView::Upcoming { days } => {
+                let mut items =
+                    collect_pkms_agenda_items_for(self.context.config, false, false, false, true)?;
+                retain_upcoming_task_items(&mut items, days);
+                Ok(items)
+            }
+            TaskListView::Inbox => collect_pkms_inbox_items(self.context.config),
+        }
+    }
+
+    fn projects(&self) -> Result<Vec<TaskMetadataRow>> {
+        pkms_project_rows(self.context.config)
+    }
+
+    fn tags(&self) -> Result<Vec<TaskMetadataRow>> {
+        pkms_tag_rows(self.context.config)
+    }
+}
+
+impl TaskProvider for TodoistTaskProvider<'_> {
+    fn source(&self) -> TaskSourceKind {
+        TaskSourceKind::Todoist
+    }
+
+    fn list(&self, query: &TaskQuery) -> Result<Vec<TaskItem>> {
+        let filters = match query.view {
+            TaskListView::All => query.filters.clone(),
+            TaskListView::Agenda => query.filters.with_todoist_filter(
+                query
+                    .filters
+                    .todoist_filter
+                    .clone()
+                    .or_else(|| task_view_todoist_filter(TaskListView::Agenda)),
+            ),
+            TaskListView::Today
+            | TaskListView::Week
+            | TaskListView::Overdue
+            | TaskListView::Upcoming { .. }
+            | TaskListView::Inbox => {
+                let shortcut = task_view_todoist_filter(query.view);
+                query
+                    .filters
+                    .with_todoist_filter(query.filters.todoist_filter.clone().or(shortcut))
+            }
+        };
+        collect_todoist_items(self.context.config, &filters)
+    }
+
+    fn projects(&self) -> Result<Vec<TaskMetadataRow>> {
+        todoist_project_rows(self.context.config)
+    }
+
+    fn tags(&self) -> Result<Vec<TaskMetadataRow>> {
+        todoist_label_rows(self.context.config)
+    }
+}
+
 fn run_list(config: &ResolvedConfig, ctx: &OutputContext, args: &TaskListArgs) -> Result<()> {
     let (mode, filters) = split_task_list_mode(&args.filters);
     match mode {
@@ -283,10 +388,10 @@ fn run_task_list(
         && (!filters.has_criteria() || args.group.is_some() || args.from_stdin)
     {
         let columns = input::resolve_columns(args.table.columns.as_deref(), &config.columns);
-        return crate::commands::todo::run(
+        return todo::run(
             config,
             ctx,
-            &crate::commands::todo::TodoOptions {
+            &todo::TodoOptions {
                 state: filters.criteria.state.clone(),
                 tags: filters.criteria.tags.clone(),
                 kind: filters.criteria.kind.clone(),
@@ -303,15 +408,7 @@ fn run_task_list(
         );
     }
 
-    let mut items = match filters.source {
-        SourceSelection::Pkms => collect_pkms_list_items(config)?,
-        SourceSelection::Todoist => collect_todoist_items(config, &filters)?,
-        SourceSelection::All => {
-            let mut items = collect_pkms_list_items(config)?;
-            items.extend(collect_todoist_items(config, &filters)?);
-            items
-        }
-    };
+    let mut items = collect_task_items(config, &filters, TaskListView::All)?;
     apply_task_filter_criteria(config, &mut items, &filters.criteria)?;
     sort_task_items(&mut items, args.sort.as_deref().unwrap_or("priority"))?;
     let columns = resolve_task_table_columns(config, args.table.columns.as_deref());
@@ -327,6 +424,29 @@ fn task_scope(
         return util::read_stdin_ndjson();
     }
     Ok(filter_scope.to_vec())
+}
+
+fn collect_task_items(
+    config: &ResolvedConfig,
+    filters: &TaskFilters,
+    view: TaskListView,
+) -> Result<Vec<TaskItem>> {
+    let query = TaskQuery {
+        filters: filters.clone(),
+        view,
+    };
+    let pkms = PkmsTaskProvider::new(config);
+    let todoist = TodoistTaskProvider::new(config);
+
+    match filters.source {
+        SourceSelection::Pkms => pkms.list(&query),
+        SourceSelection::Todoist => todoist.list(&query),
+        SourceSelection::All => {
+            let mut items = pkms.list(&query)?;
+            items.extend(todoist.list(&query)?);
+            Ok(items)
+        }
+    }
 }
 
 fn run_shortcut(
@@ -378,26 +498,19 @@ fn collect_shortcut_items(
     kind: ShortcutKind,
 ) -> Result<Vec<TaskItem>> {
     let filters = parse_task_filters(raw_filters)?;
-
-    let todoist_filters = shortcut_todoist_filters(&filters, kind);
-    let mut items = match filters.source {
-        SourceSelection::Pkms if matches!(kind, ShortcutKind::Inbox) => {
-            collect_pkms_inbox_items(config)?
-        }
-        SourceSelection::Pkms => collect_pkms_shortcut_items(config, kind)?,
-        SourceSelection::Todoist => collect_todoist_items(config, &todoist_filters)?,
-        SourceSelection::All => {
-            let mut items = if matches!(kind, ShortcutKind::Inbox) {
-                collect_pkms_inbox_items(config)?
-            } else {
-                collect_pkms_shortcut_items(config, kind)?
-            };
-            items.extend(collect_todoist_items(config, &todoist_filters)?);
-            items
-        }
-    };
+    let mut items = collect_task_items(config, &filters, shortcut_task_view(kind))?;
     apply_task_filter_criteria(config, &mut items, &filters.criteria)?;
     Ok(items)
+}
+
+fn shortcut_task_view(kind: ShortcutKind) -> TaskListView {
+    match kind {
+        ShortcutKind::Today => TaskListView::Today,
+        ShortcutKind::Week => TaskListView::Week,
+        ShortcutKind::Overdue => TaskListView::Overdue,
+        ShortcutKind::Upcoming { days } => TaskListView::Upcoming { days },
+        ShortcutKind::Inbox => TaskListView::Inbox,
+    }
 }
 
 fn apply_task_filter_criteria(
@@ -657,10 +770,10 @@ fn run_agenda(config: &ResolvedConfig, ctx: &OutputContext, args: &TaskAgendaArg
     let filters = parse_task_filters(&args.filters)?;
     if matches!(filters.source, SourceSelection::Pkms) && !filters.has_criteria() {
         let columns = input::resolve_columns(args.table.columns.as_deref(), &config.columns);
-        return crate::commands::agenda::run(
+        return agenda::run(
             config,
             ctx,
-            &crate::commands::agenda::AgendaOptions {
+            &agenda::AgendaOptions {
                 state: None,
                 tags: None,
                 kind: None,
@@ -678,46 +791,11 @@ fn run_agenda(config: &ResolvedConfig, ctx: &OutputContext, args: &TaskAgendaArg
         );
     }
 
-    let todoist_filters = todoist_agenda_filters(&filters, args);
-    if matches!(filters.source, SourceSelection::Todoist) {
-        let mut items = collect_todoist_items(config, &todoist_filters)?;
-        apply_task_filter_criteria(config, &mut items, &filters.criteria)?;
-        sort_task_items(&mut items, args.sort.as_deref().unwrap_or("date,priority"))?;
-        let columns = resolve_task_table_columns(config, args.table.columns.as_deref());
-        return print_task_items(ctx, filters.source, items, args.limit, columns.as_deref());
-    }
-
-    if matches!(filters.source, SourceSelection::All) {
-        let mut items = collect_pkms_agenda_items(config, args)?;
-        items.extend(collect_todoist_items(config, &todoist_filters)?);
-        apply_task_filter_criteria(config, &mut items, &filters.criteria)?;
-        sort_task_items(&mut items, args.sort.as_deref().unwrap_or("date,priority"))?;
-        let columns = resolve_task_table_columns(config, args.table.columns.as_deref());
-        return print_task_items(ctx, filters.source, items, args.limit, columns.as_deref());
-    }
-
-    let mut items = collect_pkms_agenda_items(config, args)?;
+    let mut items = collect_task_items(config, &filters, TaskListView::Agenda)?;
     apply_task_filter_criteria(config, &mut items, &filters.criteria)?;
     sort_task_items(&mut items, args.sort.as_deref().unwrap_or("date,priority"))?;
     let columns = resolve_task_table_columns(config, args.table.columns.as_deref());
     print_task_items(ctx, filters.source, items, args.limit, columns.as_deref())
-}
-
-fn collect_pkms_shortcut_items(
-    config: &ResolvedConfig,
-    kind: ShortcutKind,
-) -> Result<Vec<TaskItem>> {
-    let mut items = collect_pkms_agenda_items_for(
-        config,
-        matches!(kind, ShortcutKind::Today),
-        matches!(kind, ShortcutKind::Week),
-        matches!(kind, ShortcutKind::Overdue),
-        matches!(kind, ShortcutKind::Upcoming { .. }),
-    )?;
-    if let ShortcutKind::Upcoming { days } = kind {
-        retain_upcoming_task_items(&mut items, days);
-    }
-    Ok(items)
 }
 
 fn collect_pkms_list_items(config: &ResolvedConfig) -> Result<Vec<TaskItem>> {
@@ -771,10 +849,7 @@ fn collect_pkms_inbox_items(config: &ResolvedConfig) -> Result<Vec<TaskItem>> {
         .collect())
 }
 
-fn collect_pkms_agenda_items(
-    config: &ResolvedConfig,
-    _args: &TaskAgendaArgs,
-) -> Result<Vec<TaskItem>> {
+fn collect_pkms_agenda_items(config: &ResolvedConfig) -> Result<Vec<TaskItem>> {
     collect_pkms_agenda_items_for(config, false, false, false, false)
 }
 
@@ -822,33 +897,15 @@ fn collect_pkms_agenda_items_for(
         .collect())
 }
 
-fn todoist_agenda_filters(filters: &TaskFilters, args: &TaskAgendaArgs) -> TaskFilters {
-    let todoist_filter = filters
-        .todoist_filter
-        .clone()
-        .or_else(|| todoist_agenda_filter(args).map(str::to_string));
-    filters.with_todoist_filter(todoist_filter)
-}
-
-fn todoist_agenda_filter(_args: &TaskAgendaArgs) -> Option<&'static str> {
-    Some("!no date")
-}
-
-fn shortcut_todoist_filters(filters: &TaskFilters, kind: ShortcutKind) -> TaskFilters {
-    let todoist_filter = filters
-        .todoist_filter
-        .clone()
-        .or_else(|| shortcut_todoist_filter(kind));
-    filters.with_todoist_filter(todoist_filter)
-}
-
-fn shortcut_todoist_filter(kind: ShortcutKind) -> Option<String> {
-    match kind {
-        ShortcutKind::Today => Some("today".to_string()),
-        ShortcutKind::Week => Some("next 7 days".to_string()),
-        ShortcutKind::Overdue => Some("overdue".to_string()),
-        ShortcutKind::Upcoming { days } => Some(format!("due after: today & next {days} days")),
-        ShortcutKind::Inbox => Some("#Inbox".to_string()),
+fn task_view_todoist_filter(view: TaskListView) -> Option<String> {
+    match view {
+        TaskListView::All => None,
+        TaskListView::Agenda => Some("!no date".to_string()),
+        TaskListView::Today => Some("today".to_string()),
+        TaskListView::Week => Some("next 7 days".to_string()),
+        TaskListView::Overdue => Some("overdue".to_string()),
+        TaskListView::Upcoming { days } => Some(format!("due after: today & next {days} days")),
+        TaskListView::Inbox => Some("#Inbox".to_string()),
     }
 }
 
@@ -865,22 +922,24 @@ fn run_show(config: &ResolvedConfig, ctx: &OutputContext, args: &TaskTargetArgs)
             },
         ),
         TaskId::Todoist(id) => show_todoist_task(config, ctx, &id),
+        TaskId::External { source, .. } => unsupported_task_source(&source),
     }
 }
 
 fn run_open(config: &ResolvedConfig, ctx: &OutputContext, args: &TaskOpenArgs) -> Result<()> {
-    let TaskId::Pkms(id) = args.id.parse::<TaskId>()? else {
-        bail!("Todoist task source is not implemented yet");
-    };
-    crate::commands::open::run(
-        config,
-        ctx,
-        &OpenOptions {
-            targets: vec![id.to_string()],
-            editor: args.editor.clone(),
-            line: args.line,
-        },
-    )
+    match args.id.parse::<TaskId>()? {
+        TaskId::Pkms(id) => crate::commands::open::run(
+            config,
+            ctx,
+            &OpenOptions {
+                targets: vec![id.to_string()],
+                editor: args.editor.clone(),
+                line: args.line,
+            },
+        ),
+        TaskId::Todoist(_) => bail!("Todoist task source is not implemented yet"),
+        TaskId::External { source, .. } => unsupported_task_source(&source),
+    }
 }
 
 #[cfg(feature = "todoist")]
@@ -956,16 +1015,7 @@ fn run_projects(config: &ResolvedConfig, ctx: &OutputContext, filters: &[String]
     if filters.has_criteria() {
         bail!("Task metadata commands only accept source filters.");
     }
-    let mut rows = Vec::new();
-    if matches!(filters.source, SourceSelection::Pkms | SourceSelection::All) {
-        rows.extend(pkms_project_rows(config)?);
-    }
-    if matches!(
-        filters.source,
-        SourceSelection::Todoist | SourceSelection::All
-    ) {
-        rows.extend(todoist_project_rows(config)?);
-    }
+    let mut rows = collect_task_metadata(config, filters.source, MetadataKind::Projects)?;
     sort_metadata_rows(&mut rows);
     print_metadata_rows(ctx, "project", &rows)
 }
@@ -978,26 +1028,39 @@ fn run_tags(config: &ResolvedConfig, ctx: &OutputContext, filters: &[String]) ->
     if filters.has_criteria() {
         bail!("Task metadata commands only accept source filters.");
     }
-    let mut rows = Vec::new();
-    if matches!(filters.source, SourceSelection::Pkms | SourceSelection::All) {
-        rows.extend(pkms_tag_rows(config)?);
-    }
-    if matches!(
-        filters.source,
-        SourceSelection::Todoist | SourceSelection::All
-    ) {
-        rows.extend(todoist_label_rows(config)?);
-    }
+    let mut rows = collect_task_metadata(config, filters.source, MetadataKind::Tags)?;
     sort_metadata_rows(&mut rows);
     print_metadata_rows(ctx, "tag", &rows)
 }
 
-#[derive(Debug, Clone, Serialize)]
-struct TaskMetadataRow {
-    source: TaskSourceKind,
-    id: String,
-    name: String,
-    count: Option<usize>,
+#[derive(Debug, Clone, Copy)]
+enum MetadataKind {
+    Projects,
+    Tags,
+}
+
+fn collect_task_metadata(
+    config: &ResolvedConfig,
+    source: SourceSelection,
+    kind: MetadataKind,
+) -> Result<Vec<TaskMetadataRow>> {
+    let pkms = PkmsTaskProvider::new(config);
+    let todoist = TodoistTaskProvider::new(config);
+
+    let collect = |provider: &dyn TaskProvider| match kind {
+        MetadataKind::Projects => provider.projects(),
+        MetadataKind::Tags => provider.tags(),
+    };
+
+    match source {
+        SourceSelection::Pkms => collect(&pkms),
+        SourceSelection::Todoist => collect(&todoist),
+        SourceSelection::All => {
+            let mut rows = collect(&pkms)?;
+            rows.extend(collect(&todoist)?);
+            Ok(rows)
+        }
+    }
 }
 
 fn pkms_project_rows(config: &ResolvedConfig) -> Result<Vec<TaskMetadataRow>> {
@@ -1140,12 +1203,15 @@ fn run_state(config: &ResolvedConfig, ctx: &OutputContext, args: &TaskStateArgs)
     match args.id.parse::<TaskId>()? {
         TaskId::Pkms(_) => set_pkms_task_state(config, ctx, &args.id, &args.state, args.dry_run),
         TaskId::Todoist(id) => set_todoist_task_state(config, ctx, &id, &args.state, args.dry_run),
+        TaskId::External { source, .. } => unsupported_task_source(&source),
     }
 }
 
 fn run_done(config: &ResolvedConfig, ctx: &OutputContext, args: &TaskDoneArgs) -> Result<()> {
-    if let TaskId::Todoist(id) = args.id.parse::<TaskId>()? {
-        return close_todoist_task(config, ctx, &id, args.dry_run);
+    match args.id.parse::<TaskId>()? {
+        TaskId::Todoist(id) => return close_todoist_task(config, ctx, &id, args.dry_run),
+        TaskId::External { source, .. } => return unsupported_task_source(&source),
+        TaskId::Pkms(_) => {}
     }
     let closed_state = config
         .closed_todo_states()
@@ -1178,6 +1244,7 @@ fn run_postpone(
             postpone_pkms_recurring_task(config, ctx, canonical_id, &args.to)
         }
         TaskId::Todoist(id) => postpone_todoist_recurring_task(config, ctx, &id, &args.to),
+        TaskId::External { source, .. } => unsupported_task_source(&source),
     }
 }
 
@@ -1210,6 +1277,7 @@ fn run_schedule(
                 serde_json::json!({ "due_date": due }),
             )
         }
+        TaskId::External { source, .. } => unsupported_task_source(&source),
     }
 }
 
@@ -1242,6 +1310,7 @@ fn run_deadline(
                 serde_json::json!({ "deadline_date": deadline }),
             )
         }
+        TaskId::External { source, .. } => unsupported_task_source(&source),
     }
 }
 
@@ -1320,7 +1389,11 @@ fn set_pkms_task_state(
 ) -> Result<()> {
     let task_id = id.parse::<TaskId>()?;
     let TaskId::Pkms(canonical_id) = task_id else {
-        bail!("Todoist task source is not implemented yet");
+        return match task_id {
+            TaskId::Todoist(_) => bail!("Todoist task source is not implemented yet"),
+            TaskId::External { source, .. } => unsupported_task_source(&source),
+            TaskId::Pkms(_) => unreachable!(),
+        };
     };
     let new_state = canonical_state(config, requested_state)?;
     let graph = crate::graph::Graph::load(config)?;
@@ -2762,4 +2835,8 @@ fn source_name(item: &TaskItem) -> &'static str {
         crate::tasks::model::TaskSourceKind::Pkms => "pkms",
         crate::tasks::model::TaskSourceKind::Todoist => "todoist",
     }
+}
+
+fn unsupported_task_source(source: &str) -> Result<()> {
+    bail!("Task source '{source}' is not configured in this build.")
 }
