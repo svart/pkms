@@ -62,19 +62,21 @@ fn test_task_agenda_help_lists_shortcut_subcommands() {
     assert!(stdout.contains("week"));
     assert!(stdout.contains("overdue"));
     assert!(stdout.contains("upcoming"));
-    assert!(!stdout.contains("--today"));
-    assert!(!stdout.contains("--week"));
-    assert!(!stdout.contains("--overdue"));
-    assert!(!stdout.contains("--upcoming"));
+    assert!(stdout.contains("--today"));
+    assert!(stdout.contains("--week"));
+    assert!(stdout.contains("--overdue"));
+    assert!(stdout.contains("--upcoming"));
 }
 
 #[test]
-fn test_task_agenda_shortcut_flags_are_rejected() {
+fn test_task_agenda_shortcut_flags_are_accepted_as_compatibility_aliases() {
+    let (_dir, root) = setup_db();
     for flag in ["--today", "--week", "--overdue", "--upcoming"] {
-        let (stdout, stderr, status) = run(&["task", "agenda", flag, "--help"]);
+        let (stdout, stderr, status) =
+            run(&["--db", root.to_str().unwrap(), "task", "agenda", flag]);
         assert!(
-            !status.success(),
-            "task agenda {flag} unexpectedly succeeded:\n{stdout}\n{stderr}"
+            status.success(),
+            "task agenda {flag} failed:\n{stdout}\n{stderr}"
         );
     }
 }
