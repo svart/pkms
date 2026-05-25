@@ -87,6 +87,7 @@ pkms query "rust" --output-format ndjson | pkms get --links --from-stdin
 - [Notes Database Format](docs/database-format.md)
 - [Command Reference](docs/commands.md)
 - [TODO and Agenda](docs/todo-agenda.md)
+- [Task System Design](docs/task-system.md)
 - [Pipelining](docs/pipelining.md)
 - [JSON and NDJSON Output](docs/json-output.md)
 - [Maintenance Workflows](docs/workflows.md)

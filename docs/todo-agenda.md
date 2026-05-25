@@ -1,5 +1,9 @@
 # TODO and Agenda
 
+This page is the user-facing guide for task commands. For implementation
+guardrails and source-model decisions, see
+[Task System Design](task-system.md).
+
 `task list`, `task agenda`, and task ID actions share one canonical task ID
 space. The ID shown by `task list` is the same ID used by `task agenda`,
 `task p<ID> show`, and `task p<ID> open`.

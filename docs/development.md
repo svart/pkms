@@ -86,6 +86,9 @@ tests/
 5. Add integration tests under `tests/integration/`.
 6. Update user docs and `skills/pkms-manager/` references when behavior changes.
 
+For task-command changes, also update [Task System Design](task-system.md) when
+the source model, ID strategy, mutation boundaries, or non-goals change.
+
 ## Output Conventions
 
 All user-facing command output should support `--output-format json`. Streamable
