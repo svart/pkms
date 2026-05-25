@@ -314,7 +314,7 @@ fn run_task_list(
         }
     };
     apply_task_filter_criteria(config, &mut items, &filters.criteria)?;
-    sort_task_items(&mut items, args.sort.as_deref().unwrap_or("priority"));
+    sort_task_items(&mut items, args.sort.as_deref().unwrap_or("priority"))?;
     let columns = resolve_task_table_columns(config, args.table.columns.as_deref());
     print_task_items(ctx, filters.source, items, args.limit, columns.as_deref())
 }
@@ -346,7 +346,7 @@ fn run_shortcut(
 ) -> Result<()> {
     let mut items = collect_shortcut_items(config, &args.filters, kind)?;
     let source = shortcut_display_source(&args.filters)?;
-    sort_task_items(&mut items, "priority");
+    sort_task_items(&mut items, "priority")?;
     let columns = resolve_task_table_columns(config, args.table.columns.as_deref());
     print_task_items(ctx, source, items, args.limit, columns.as_deref())
 }
@@ -364,7 +364,7 @@ fn run_upcoming(
         },
     )?;
     let source = shortcut_display_source(&args.filters)?;
-    sort_task_items(&mut items, "priority");
+    sort_task_items(&mut items, "priority")?;
     let columns = resolve_task_table_columns(config, args.table.columns.as_deref());
     print_task_items(ctx, source, items, args.limit, columns.as_deref())
 }
@@ -691,7 +691,7 @@ fn run_agenda(config: &ResolvedConfig, ctx: &OutputContext, args: &TaskAgendaArg
     if matches!(filters.source, SourceSelection::Todoist) {
         let mut items = collect_todoist_items(config, &todoist_filters)?;
         apply_task_filter_criteria(config, &mut items, &filters.criteria)?;
-        sort_task_items(&mut items, args.sort.as_deref().unwrap_or("date,priority"));
+        sort_task_items(&mut items, args.sort.as_deref().unwrap_or("date,priority"))?;
         let columns = resolve_task_table_columns(config, args.table.columns.as_deref());
         return print_task_items(ctx, filters.source, items, args.limit, columns.as_deref());
     }
@@ -700,14 +700,14 @@ fn run_agenda(config: &ResolvedConfig, ctx: &OutputContext, args: &TaskAgendaArg
         let mut items = collect_pkms_agenda_items(config, args)?;
         items.extend(collect_todoist_items(config, &todoist_filters)?);
         apply_task_filter_criteria(config, &mut items, &filters.criteria)?;
-        sort_task_items(&mut items, args.sort.as_deref().unwrap_or("date,priority"));
+        sort_task_items(&mut items, args.sort.as_deref().unwrap_or("date,priority"))?;
         let columns = resolve_task_table_columns(config, args.table.columns.as_deref());
         return print_task_items(ctx, filters.source, items, args.limit, columns.as_deref());
     }
 
     let mut items = collect_pkms_agenda_items(config, args)?;
     apply_task_filter_criteria(config, &mut items, &filters.criteria)?;
-    sort_task_items(&mut items, args.sort.as_deref().unwrap_or("date,priority"));
+    sort_task_items(&mut items, args.sort.as_deref().unwrap_or("date,priority"))?;
     let columns = resolve_task_table_columns(config, args.table.columns.as_deref());
     print_task_items(ctx, filters.source, items, args.limit, columns.as_deref())
 }
@@ -2388,16 +2388,20 @@ fn retain_upcoming_task_items(items: &mut Vec<TaskItem>, days: i64) {
     });
 }
 
-fn sort_task_items(items: &mut [TaskItem], sort: &str) {
-    let fields: Vec<&str> = sort.split(',').map(|field| field.trim()).collect();
+fn sort_task_items(items: &mut [TaskItem], sort: &str) -> Result<()> {
+    let fields = parse_task_sort_fields(sort)?;
     items.sort_by(|a, b| {
         for field in &fields {
             let ord = match *field {
                 "priority" => priority_sort_value(a).cmp(&priority_sort_value(b)),
                 "date" => effective_date(a).cmp(&effective_date(b)),
+                "scheduled" => task_date_value(&a.scheduled).cmp(&task_date_value(&b.scheduled)),
+                "deadline" => task_date_value(&a.deadline).cmp(&task_date_value(&b.deadline)),
+                "file" => a.note_title.cmp(&b.note_title),
                 "source" => source_name(a).cmp(source_name(b)),
                 "state" => a.state.cmp(&b.state),
                 "task" | "title" => a.title.cmp(&b.title),
+                "project" => a.project.cmp(&b.project),
                 _ => std::cmp::Ordering::Equal,
             };
             if ord != std::cmp::Ordering::Equal {
@@ -2409,6 +2413,32 @@ fn sort_task_items(items: &mut [TaskItem], sort: &str) {
             .then_with(|| a.source_id.cmp(&b.source_id))
             .then_with(|| a.title.cmp(&b.title))
     });
+    Ok(())
+}
+
+fn parse_task_sort_fields(sort: &str) -> Result<Vec<&str>> {
+    let fields: Vec<&str> = sort
+        .split(',')
+        .map(|field| field.trim())
+        .filter(|field| !field.is_empty())
+        .collect();
+    if fields.is_empty() {
+        bail!("Task sort must include at least one field");
+    }
+    for field in &fields {
+        match *field {
+            "priority" | "date" | "scheduled" | "deadline" | "file" | "source" | "state"
+            | "task" | "title" | "project" => {}
+            other => bail!(
+                "Unknown task sort field '{other}'. Use priority, date, scheduled, deadline, file, source, state, task, title, or project."
+            ),
+        }
+    }
+    Ok(fields)
+}
+
+fn task_date_value(date: &Option<crate::tasks::model::TaskDate>) -> Option<&str> {
+    date.as_ref().and_then(|date| date.date.as_deref())
 }
 
 fn priority_sort_value(item: &TaskItem) -> u8 {

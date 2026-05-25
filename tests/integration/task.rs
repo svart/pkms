@@ -642,6 +642,71 @@ fn test_task_list_accepts_scope_after_and_before_filters() {
 }
 
 #[test]
+fn test_task_list_source_neutral_sort_supports_legacy_file_field() {
+    let (_dir, root) = setup_db();
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "task",
+        "list",
+        "state:TODO",
+        "--sort",
+        "file",
+    ]);
+
+    assert!(status.success());
+    let items = v["items"].as_array().unwrap();
+    assert!(!items.is_empty());
+    assert_eq!(items[0]["note_title"].as_str(), Some("Agenda Item"));
+}
+
+#[test]
+fn test_task_list_rejects_unknown_sort_field() {
+    let (_dir, root) = setup_db();
+    let (stdout, _stderr, status) = run(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "task",
+        "list",
+        "state:TODO",
+        "--sort",
+        "unknown",
+    ]);
+
+    assert!(!status.success());
+    let v: serde_json::Value = serde_json::from_str(stdout.trim()).unwrap();
+    assert!(
+        v["error"]
+            .as_str()
+            .unwrap()
+            .contains("Unknown task sort field 'unknown'")
+    );
+}
+
+#[test]
+fn test_task_agenda_source_neutral_sort_supports_legacy_fields() {
+    let (_dir, root) = setup_db();
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "task",
+        "agenda",
+        "state:TODO",
+        "--sort",
+        "scheduled,deadline,file",
+    ]);
+
+    assert!(status.success());
+    assert!(v["items"].is_array());
+}
+
+#[test]
 fn test_task_agenda_accepts_date_filters() {
     let (_dir, root) = setup_db();
     let today = org_date(0);
