@@ -3,5 +3,6 @@ pub mod id;
 pub mod model;
 pub mod pkms;
 pub mod provider;
+pub mod scope;
 #[cfg(feature = "todoist")]
 pub mod todoist;

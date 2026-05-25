@@ -2,15 +2,14 @@ use crate::cli::OutputFormat;
 use crate::commands::task_common::*;
 use crate::commands::task_index::{TaskRecord, assign_canonical_ids, collect_todo_records};
 use crate::config::ResolvedConfig;
-use crate::graph::Graph;
 use crate::org_date::parse_org_date;
 use crate::output::{Column, OutputContext};
+use crate::tasks::scope::ResolvedScope;
 use crate::workspace::Workspace;
 use anyhow::Result;
 use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
 use serde::Serialize;
 use std::collections::BTreeMap;
-use std::path::Path;
 
 impl RowItem for TodoItem {
     fn id(&self) -> usize {
@@ -139,61 +138,6 @@ fn item_datetimes(item: &TodoItem) -> Vec<NaiveDateTime> {
     result
 }
 
-fn resolve_scope_paths(
-    graph: &Graph,
-    scope: &[String],
-    db_root: &Path,
-) -> std::collections::HashSet<String> {
-    let mut scope_paths: Vec<std::path::PathBuf> = Vec::new();
-    for s in scope {
-        if let Some(node) = graph.find_node(s) {
-            scope_paths.push(node.path.clone());
-            continue;
-        }
-        let expanded = if let Some(rest) = s.strip_prefix("~/") {
-            dirs::home_dir().map(|h| h.join(rest))
-        } else {
-            None
-        };
-        let mut matched = false;
-        for candidate in [Some(std::path::Path::new(s)), expanded.as_deref()]
-            .into_iter()
-            .flatten()
-        {
-            for p in [candidate.to_path_buf()]
-                .into_iter()
-                .chain(candidate.canonicalize().ok())
-            {
-                if graph.results.iter().any(|r| r.path == p) {
-                    scope_paths.push(p);
-                    matched = true;
-                    break;
-                }
-            }
-            if matched {
-                break;
-            }
-        }
-        if matched {
-            continue;
-        }
-        let joined = db_root.join(s);
-        for p in [joined.clone()]
-            .into_iter()
-            .chain(joined.canonicalize().ok())
-        {
-            if graph.results.iter().any(|r| r.path == p) {
-                scope_paths.push(p);
-                break;
-            }
-        }
-    }
-    scope_paths
-        .iter()
-        .map(|p| p.display().to_string())
-        .collect()
-}
-
 pub fn run(config: &ResolvedConfig, ctx: &OutputContext, opts: &TodoOptions) -> Result<()> {
     let workspace = Workspace::load(config)?;
     let graph = &workspace.graph;
@@ -215,8 +159,8 @@ pub fn run(config: &ResolvedConfig, ctx: &OutputContext, opts: &TodoOptions) -> 
 
     if !opts.scope.is_empty() {
         let db_root = config.resolved_db_root();
-        let item_paths = resolve_scope_paths(graph, &opts.scope, db_root);
-        items.retain(|item| item_paths.contains(&item.path));
+        let scope = ResolvedScope::resolve(graph, db_root, &opts.scope);
+        items.retain(|item| scope.matches_path(&item.path));
     }
 
     if let Some(ref prio) = opts.prio {

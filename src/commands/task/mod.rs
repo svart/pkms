@@ -15,7 +15,7 @@ use crate::org_edit;
 use crate::output::{ALL_COLUMNS, Column, OutputContext};
 use crate::parser::{DEADLINE_RE, HEADING_RE, SCHEDULED_RE, find_daily_file_date};
 use crate::tasks::filter::{
-    SourceSelection, TaskDateFilter, TaskFilterCriteria, TaskFilters, parse_task_filters,
+    SourceSelection, TaskFilterContext, TaskFilterCriteria, TaskFilters, parse_task_filters,
 };
 use crate::tasks::id::TaskId;
 use crate::tasks::model::{TaskItem, TaskSourceKind};
@@ -23,6 +23,7 @@ use crate::tasks::pkms::record_to_task_item;
 use crate::tasks::provider::{
     TaskListView, TaskMetadataRow, TaskProvider, TaskProviderContext, TaskQuery,
 };
+use crate::tasks::scope::ResolvedScope;
 use crate::util;
 use crate::workspace::Workspace;
 use anyhow::{Context, Result, bail};
@@ -661,210 +662,23 @@ fn apply_task_filter_criteria(
     items: &mut Vec<TaskItem>,
     criteria: &TaskFilterCriteria,
 ) -> Result<()> {
-    let state_filters = crate::commands::task_common::parse_filters(criteria.state.as_deref());
-    if !state_filters.is_empty() {
-        items.retain(|item| {
-            crate::commands::task_common::apply_state_filter(item.state.as_deref(), &state_filters)
-        });
-    }
-
-    let tags_filters = crate::commands::task_common::parse_filters(criteria.tags.as_deref());
-    if !tags_filters.is_empty() {
-        items.retain(|item| {
-            crate::commands::task_common::apply_tags_filter(&item.tags, &tags_filters)
-        });
-    }
-
-    let type_filters = crate::commands::task_common::parse_filters(criteria.kind.as_deref());
-    if !type_filters.is_empty() {
-        items.retain(|item| {
-            crate::commands::task_common::apply_type_filter(
-                item.scheduled.is_some(),
-                item.deadline.is_some(),
-                &type_filters,
-            )
-        });
-    }
-
-    if let Some(prio) = &criteria.prio {
-        if prio.is_empty() {
-            items.retain(|item| item.priority.is_none());
-        } else {
-            let targets = crate::commands::task_common::priority_filter_targets(prio);
-            items.retain(|item| {
-                crate::commands::task_common::priority_matches_filter(
-                    item.priority
-                        .as_deref()
-                        .and_then(|priority| priority.chars().next()),
-                    &targets,
-                )
-            });
-        }
-    }
-
-    if let Some(date_filter) = &criteria.date {
-        apply_task_date_filter(items, date_filter);
-    }
-
-    if let Some(after) = criteria.after {
-        items.retain(|item| item.datetimes().iter().any(|dt| dt >= &after));
-    }
-
-    if let Some(before) = criteria.before {
-        items.retain(|item| item.datetimes().iter().any(|dt| dt <= &before));
-    }
-
-    let project_filters = crate::commands::task_common::parse_filters(criteria.project.as_deref());
-    if !project_filters.is_empty() {
-        items.retain(|item| apply_project_filter(item, &project_filters));
-    }
-
-    if !criteria.scope.is_empty() {
-        let scope_paths = resolve_task_scope_paths(config, &criteria.scope)?;
-        items.retain(|item| task_item_in_scope(item, &criteria.scope, &scope_paths));
-    }
+    let scope = if criteria.scope.is_empty() {
+        None
+    } else {
+        let workspace = Workspace::load(config)?;
+        Some(ResolvedScope::resolve(
+            &workspace.graph,
+            config.resolved_db_root(),
+            &criteria.scope,
+        ))
+    };
+    let context = TaskFilterContext {
+        today: Local::now().date_naive(),
+        scope: scope.as_ref(),
+    };
+    items.retain(|item| criteria.matches_item(item, &context));
 
     Ok(())
-}
-
-fn apply_task_date_filter(items: &mut Vec<TaskItem>, date_filter: &TaskDateFilter) {
-    items.retain(|item| task_item_matches_date_filter(item, date_filter));
-}
-
-fn task_item_matches_date_filter(item: &TaskItem, date_filter: &TaskDateFilter) -> bool {
-    let today = Local::now().date_naive();
-    match date_filter {
-        TaskDateFilter::Exact(date) => item.dates().iter().any(|item_date| item_date == date),
-        TaskDateFilter::Today => item.dates().contains(&today),
-        TaskDateFilter::Week => {
-            let cutoff = today + chrono::Duration::days(7);
-            item.dates().iter().any(|item_date| *item_date <= cutoff)
-        }
-        TaskDateFilter::Overdue => item.is_overdue,
-        TaskDateFilter::Upcoming => {
-            !item.is_overdue && item.dates().iter().any(|item_date| *item_date > today)
-        }
-        TaskDateFilter::Any(filters) => filters
-            .iter()
-            .any(|filter| task_item_matches_date_filter(item, filter)),
-    }
-}
-
-fn apply_project_filter(item: &TaskItem, filters: &[crate::commands::task_common::Filter]) -> bool {
-    for filter in filters {
-        match filter {
-            crate::commands::task_common::Filter::Include(value) => {
-                if !task_item_project_matches(item, value) {
-                    return false;
-                }
-            }
-            crate::commands::task_common::Filter::Exclude(value) => {
-                if task_item_project_matches(item, value) {
-                    return false;
-                }
-            }
-        }
-    }
-    true
-}
-
-fn task_item_project_matches(item: &TaskItem, value: &str) -> bool {
-    item.project
-        .as_deref()
-        .is_some_and(|project| project.eq_ignore_ascii_case(value))
-        || item
-            .project_id
-            .as_deref()
-            .is_some_and(|project_id| project_id.eq_ignore_ascii_case(value))
-}
-
-fn resolve_task_scope_paths(
-    config: &ResolvedConfig,
-    scope: &[String],
-) -> Result<std::collections::HashSet<String>> {
-    let workspace = Workspace::load(config)?;
-    let db_root = config.resolved_db_root();
-    let mut scope_paths = Vec::new();
-    for target in scope {
-        if let Some(node) = workspace.graph.find_node(target) {
-            scope_paths.push(node.path.clone());
-            continue;
-        }
-
-        let expanded = if let Some(rest) = target.strip_prefix("~/") {
-            dirs::home_dir().map(|home| home.join(rest))
-        } else {
-            None
-        };
-        let mut matched = false;
-        for candidate in [Some(Path::new(target)), expanded.as_deref()]
-            .into_iter()
-            .flatten()
-        {
-            for path in [candidate.to_path_buf()]
-                .into_iter()
-                .chain(candidate.canonicalize().ok())
-            {
-                if workspace
-                    .graph
-                    .results
-                    .iter()
-                    .any(|result| result.path == path)
-                {
-                    scope_paths.push(path);
-                    matched = true;
-                    break;
-                }
-            }
-            if matched {
-                break;
-            }
-        }
-        if matched {
-            continue;
-        }
-
-        let joined = db_root.join(target);
-        for path in [joined.clone()]
-            .into_iter()
-            .chain(joined.canonicalize().ok())
-        {
-            if workspace
-                .graph
-                .results
-                .iter()
-                .any(|result| result.path == path)
-            {
-                scope_paths.push(path);
-                break;
-            }
-        }
-    }
-
-    Ok(scope_paths
-        .iter()
-        .map(|path| path.display().to_string())
-        .collect())
-}
-
-fn task_item_in_scope(
-    item: &TaskItem,
-    raw_scope: &[String],
-    scope_paths: &std::collections::HashSet<String>,
-) -> bool {
-    let path = item.path.as_ref().map(|path| path.display().to_string());
-    if path.as_ref().is_some_and(|path| {
-        scope_paths.contains(path) || raw_scope.iter().any(|scope| scope == path)
-    }) {
-        return true;
-    }
-
-    raw_scope.iter().any(|scope| {
-        item.note_uuid.as_deref() == Some(scope.as_str())
-            || item.note_title.as_deref() == Some(scope.as_str())
-            || item.source_id == *scope
-            || item.display_id == *scope
-    })
 }
 
 fn run_agenda(config: &ResolvedConfig, ctx: &OutputContext, args: &TaskAgendaArgs) -> Result<()> {

@@ -1,6 +1,9 @@
 use anyhow::{Result, bail};
-use chrono::{NaiveDate, NaiveDateTime};
+use chrono::{Duration, NaiveDate, NaiveDateTime};
 use serde::Serialize;
+
+use crate::tasks::model::TaskItem;
+use crate::tasks::scope::ResolvedScope;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
@@ -136,6 +139,151 @@ impl TaskFilterCriteria {
             || !self.scope.is_empty()
             || self.project.is_some()
     }
+
+    pub fn matches_item(&self, item: &TaskItem, context: &TaskFilterContext<'_>) -> bool {
+        matches_text_filter(item.state.as_deref(), self.state.as_deref())
+            && matches_tags_filter(self.tags.as_deref(), &item.tags)
+            && matches_type_filter(self.kind.as_deref(), item)
+            && matches_priority_filter(self.prio.as_deref(), item)
+            && self
+                .date
+                .as_ref()
+                .is_none_or(|filter| filter.matches_item(item, context.today))
+            && self
+                .after
+                .is_none_or(|after| item.datetimes().iter().any(|dt| dt >= &after))
+            && self
+                .before
+                .is_none_or(|before| item.datetimes().iter().any(|dt| dt <= &before))
+            && matches_project_filter(self.project.as_deref(), item)
+            && matches_scope_filter(&self.scope, item, context.scope)
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct TaskFilterContext<'a> {
+    pub today: NaiveDate,
+    pub scope: Option<&'a ResolvedScope>,
+}
+
+impl TaskDateFilter {
+    pub fn matches_item(&self, item: &TaskItem, today: NaiveDate) -> bool {
+        match self {
+            TaskDateFilter::Exact(date) => item.dates().iter().any(|item_date| item_date == date),
+            TaskDateFilter::Today => item.dates().contains(&today),
+            TaskDateFilter::Week => {
+                let cutoff = today + Duration::days(7);
+                item.dates().iter().any(|item_date| *item_date <= cutoff)
+            }
+            TaskDateFilter::Overdue => item.is_overdue,
+            TaskDateFilter::Upcoming => {
+                !item.is_overdue && item.dates().iter().any(|item_date| *item_date > today)
+            }
+            TaskDateFilter::Any(filters) => filters
+                .iter()
+                .any(|filter| filter.matches_item(item, today)),
+        }
+    }
+}
+
+enum TextFilter<'a> {
+    Include(&'a str),
+    Exclude(&'a str),
+}
+
+fn parse_text_filters(value: Option<&str>) -> Vec<TextFilter<'_>> {
+    value
+        .map(|value| {
+            value
+                .split(',')
+                .map(str::trim)
+                .filter(|part| !part.is_empty())
+                .map(|part| {
+                    part.strip_prefix('!')
+                        .map(TextFilter::Exclude)
+                        .unwrap_or(TextFilter::Include(part))
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+fn matches_text_filter(value: Option<&str>, filters: Option<&str>) -> bool {
+    parse_text_filters(filters)
+        .iter()
+        .all(|filter| match filter {
+            TextFilter::Include(target) => {
+                value.is_some_and(|value| value.eq_ignore_ascii_case(target))
+            }
+            TextFilter::Exclude(target) => {
+                !value.is_some_and(|value| value.eq_ignore_ascii_case(target))
+            }
+        })
+}
+
+fn matches_tags_filter(filters: Option<&str>, tags: &[String]) -> bool {
+    parse_text_filters(filters)
+        .iter()
+        .all(|filter| match filter {
+            TextFilter::Include(target) => tags.iter().any(|tag| tag == target),
+            TextFilter::Exclude(target) => !tags.iter().any(|tag| tag == target),
+        })
+}
+
+fn matches_type_filter(filters: Option<&str>, item: &TaskItem) -> bool {
+    parse_text_filters(filters).iter().all(|filter| {
+        let matched = match filter {
+            TextFilter::Include(target) | TextFilter::Exclude(target) => match *target {
+                "SCHED" => item.scheduled.is_some(),
+                "DEADL" => item.deadline.is_some(),
+                _ => false,
+            },
+        };
+        matches!(filter, TextFilter::Include(_)) == matched
+    })
+}
+
+fn matches_priority_filter(filter: Option<&str>, item: &TaskItem) -> bool {
+    let Some(filter) = filter else {
+        return true;
+    };
+    if filter.is_empty() {
+        return item.priority.is_none();
+    }
+    let targets: Vec<char> = filter
+        .split(',')
+        .filter_map(|value| value.trim().chars().next())
+        .map(|priority| priority.to_ascii_uppercase())
+        .collect();
+    item.priority_char()
+        .is_some_and(|priority| targets.contains(&priority.to_ascii_uppercase()))
+}
+
+fn matches_project_filter(filters: Option<&str>, item: &TaskItem) -> bool {
+    parse_text_filters(filters)
+        .iter()
+        .all(|filter| match filter {
+            TextFilter::Include(target) => task_item_project_matches(item, target),
+            TextFilter::Exclude(target) => !task_item_project_matches(item, target),
+        })
+}
+
+fn task_item_project_matches(item: &TaskItem, value: &str) -> bool {
+    item.project
+        .as_deref()
+        .is_some_and(|project| project.eq_ignore_ascii_case(value))
+        || item
+            .project_id
+            .as_deref()
+            .is_some_and(|project_id| project_id.eq_ignore_ascii_case(value))
+}
+
+fn matches_scope_filter(
+    raw_scope: &[String],
+    item: &TaskItem,
+    scope: Option<&ResolvedScope>,
+) -> bool {
+    raw_scope.is_empty() || scope.is_some_and(|scope| scope.matches_task_item(item))
 }
 
 fn normalize_sources(mut selected: Vec<SourceSelection>) -> SourceSelection {
