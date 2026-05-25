@@ -1,8 +1,9 @@
 # TODO and Agenda
 
-`todo`, `agenda`, `show`, `open`, and the local `task` namespace share one
-canonical task ID space. The ID shown by `todo` is the same ID used by
-`agenda`, `show <ID>`, `open <ID>`, `task p<ID> show`, and `task p<ID> open`.
+`task list`, `task agenda`, `show`, `open`, and the local `task` namespace
+share one canonical task ID space. The ID shown by `task list` is the same ID
+used by `task agenda`, `show <ID>`, `open <ID>`, `task p<ID> show`, and
+`task p<ID> open`.
 
 IDs are assigned globally using a deterministic sort:
 
@@ -23,7 +24,39 @@ pkms:12
 
 Top-level compatibility commands keep accepting bare numeric IDs.
 
-## TODO
+## Task List
+
+`task list` is the preferred TODO listing command.
+
+```bash
+pkms task list
+pkms task list --columns Id,Date,State,Type,Prio,Tags,Note,Heading
+pkms task list --group state
+pkms task list --sort file
+pkms task list --state "TODO"
+pkms task list --state "!DONE"
+pkms task list --tags "agenda,project"
+pkms task list --type "SCHED"
+pkms task list --prio A
+pkms task list --after 2026-01-01
+pkms task list --before 2026-01-31
+pkms task list --scope <uuid-or-title>
+pkms task list --from-stdin
+pkms task list --line-sep
+```
+
+Positional task filters are also supported:
+
+```bash
+pkms task list state:TODO tags:work,!blocked prio:A
+pkms task list 'scope:Some Note Title' after:2026-05-01 before:"2026-05-25 18:00"
+```
+
+By default, `task list` mirrors legacy `todo` output for unfiltered PKMS tasks.
+Use `--output-schema legacy` when a filtered task-list script still needs the
+old `todo` JSON/NDJSON shape.
+
+## Compatibility TODO
 
 ```bash
 pkms todo
@@ -41,10 +74,37 @@ pkms todo --scope <uuid-or-title>
 pkms todo --line-sep
 ```
 
-`todo` lists headings in configured open TODO states unless filters select other
-states.
+`todo` is deprecated and kept as a compatibility command. It lists headings in
+configured open TODO states unless filters select other states.
 
 ## Agenda
+
+`task agenda` is the preferred agenda command.
+
+```bash
+pkms task agenda
+pkms task agenda today
+pkms task agenda week
+pkms task agenda overdue
+pkms task agenda upcoming --days 7
+pkms task agenda date:upcoming
+pkms task agenda --date 2026-01-01
+pkms task agenda --columns Id,Date,State,Type,Prio,Tags,Note,Heading
+pkms task agenda --state "TODO"
+pkms task agenda --tags "!device,agenda"
+pkms task agenda --type "SCHED,DEADL"
+pkms task agenda --prio A
+pkms task agenda --sort "date,priority"
+```
+
+Use `date:upcoming` for the unbounded legacy upcoming view. Use
+`task agenda upcoming --days N` for a bounded upcoming window.
+
+By default, `task agenda` mirrors legacy `agenda` output for unfiltered PKMS
+tasks. Use `--output-schema legacy` when a filtered agenda script still needs
+the old `agenda` JSON/NDJSON shape.
+
+## Compatibility Agenda
 
 ```bash
 pkms agenda
@@ -61,8 +121,9 @@ pkms agenda --prio A
 pkms agenda --sort "date,priority"
 ```
 
-`agenda` shows headings with `SCHEDULED` or `DEADLINE` timestamps and can focus
-on today, the current week, overdue items, upcoming items, or a specific date.
+`agenda` is deprecated and kept as a compatibility command. It shows headings
+with `SCHEDULED` or `DEADLINE` timestamps and can focus on today, the current
+week, overdue items, upcoming items, or a specific date.
 
 ## Filters
 
@@ -74,6 +135,11 @@ pkms todo --state "!DONE,!CANCELLED"
 pkms agenda --tags "agenda,project"
 pkms agenda --tags "!private"
 pkms agenda --type "SCHED,DEADL"
+pkms task list state:TODO
+pkms task list state:!DONE,!CANCELLED
+pkms task agenda tags:agenda,project
+pkms task agenda tags:!private
+pkms task agenda type:SCHED,DEADL
 ```
 
 ## Columns
@@ -143,12 +209,34 @@ PKMS ids are prefixed with `p` and Todoist ids are prefixed with `t`.
 
 Source-neutral JSON and NDJSON include fields such as `source`, `source_id`,
 `display_id`, `status`, `state`, `note_title`, `note_uuid`, `path`, and
-`line_number`.
+`line_number`. PKMS task items also include legacy-supporting metadata such as
+`has_agenda_tag`, `is_daily_file`, `daily_file_date`, and `heading_level`.
+
+Use `--output-schema legacy` on `task list` or `task agenda` in PKMS-only views
+to produce the old `todo` or `agenda` JSON/NDJSON schema.
+
+Legacy field mapping:
+
+| Legacy field | Source-neutral task field |
+|---|---|
+| `todo_state` | `state` |
+| `heading_title` | `title` |
+| note `title` | `note_title` |
+| `uuid` | `note_uuid` |
+| `id` | `source_id` in PKMS-only views, `display_id` for prefixed IDs |
+| `scheduled_date` | `scheduled.date` |
+| `deadline_date` | `deadline.date` |
+| `daily_file_date` | `daily_file_date` |
 
 Item-producing task commands accept positional string filters after the
 subcommand. These filters are separate from normal command flags such as
 `--limit`, `--sort`, and `--columns`. Metadata commands, `task list projects`
 and `task list tags`, accept only source filters.
+
+For migration from the compatibility commands, `task list` also accepts
+`--state`, `--tags`, `--type`, `--prio`, `--scope`, `--after`, and `--before`.
+`task agenda` also accepts `--state`, `--tags`, `--type`, `--prio`, `--date`,
+`--today`, `--week`, `--overdue`, and `--upcoming`.
 
 | Filter | Syntax | Notes |
 |--------|--------|-------|

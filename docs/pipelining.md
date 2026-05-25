@@ -18,7 +18,8 @@ when `--from-stdin` is set.
 - `suggest`
 - `validate`
 - `context`
-- `todo`
+- `task list`
+- `todo` (compatibility)
 - `show`
 
 ## Examples
@@ -29,7 +30,7 @@ pkms resolve --tags "ai" --output-format ndjson | pkms get --links
 pkms stats --hubs --output-format ndjson | pkms get --links --no-content
 pkms query "concurrency" --output-format ndjson | pkms suggest --output-format ndjson | pkms get --links
 pkms query "foo" --output-format ndjson | pkms validate
-pkms resolve --tags "project" --output-format ndjson | pkms todo --from-stdin
+pkms resolve --tags "project" --output-format ndjson | pkms task list --from-stdin
 ```
 
 Use `--from-stdin` explicitly when a consumer also receives flags that make

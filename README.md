@@ -55,8 +55,8 @@ pkms resolve --title "graph"
 pkms query "distributed systems" --limit 5
 pkms get <uuid-or-title> --links
 pkms check
-pkms todo --columns Id,Date,Prio,Note,Heading
-pkms agenda --today
+pkms task list --columns Id,Date,Prio,Note,Heading
+pkms task agenda today
 pkms show 5
 pkms open 5
 pkms new "My Note" --create --tags "topic,project"
@@ -75,8 +75,8 @@ pkms query "rust" --output-format ndjson | pkms get --links --from-stdin
 - Filetags use the canonical `#+filetags: :tag1:tag2:` form.
 - Internal links use `[[id:<uuid>][description]]`.
 - Headings with `:ID:` properties are first-class graph nodes.
-- TODO headings get deterministic global IDs shared by `todo`, `agenda`,
-  `show`, and `open`.
+- TODO headings get deterministic global IDs shared by `task list`,
+  `task agenda`, `show`, and `open`.
 - `query` and `suggest` support embedding mode only when built with
   `--features embed`.
 

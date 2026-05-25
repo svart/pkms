@@ -84,17 +84,15 @@ understand the intended target.
 
 ### Work With Tasks
 
-Use `todo` and `agenda` to list compatibility task views. Their `Id` column is
-the canonical ID used by `show <ID>`, `open <ID>`, and `task` IDs such as
-`p<ID>` or `pkms:<ID>`.
+Use `task list` and `task agenda` for task views. Their `Id` column is the
+canonical ID used by `show <ID>`, `open <ID>`, and `task` IDs such as `p<ID>`
+or `pkms:<ID>`. `todo` and `agenda` are compatibility commands only.
 
 ```bash
-pkms todo --columns Id,Date,Prio,Note,Heading
-pkms agenda --today
+pkms task list --columns Id,Date,Prio,Note,Heading
+pkms task agenda today
 pkms show 5
 pkms open 5
-pkms task list
-pkms task agenda today
 pkms task p5 state WAITING
 pkms task p5 done --dry-run
 ```

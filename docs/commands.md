@@ -109,15 +109,17 @@ pkms suggest <uuid> --embed
 ## Tasks
 
 ```bash
-pkms todo
-pkms agenda
-pkms show <id>
-pkms open <id>
 pkms task list
 pkms task agenda
+pkms show <id>
+pkms open <id>
 pkms task agenda today
 pkms task agenda overdue
 pkms task agenda upcoming --days 7
+pkms task list --group state
+pkms task list --from-stdin
+pkms task list --output-schema legacy state:TODO
+pkms task agenda --output-schema legacy date:today
 pkms task list state:TODO tags:work,!blocked
 pkms task agenda week type:SCHED project:Alpha
 pkms task p<id> show
@@ -148,6 +150,10 @@ pkms task todoist:<remote-id> deadline --deadline none
 
 See [TODO and Agenda](todo-agenda.md) for task IDs, filtering, table columns,
 editor behavior, and task state changes.
+
+`pkms todo` and `pkms agenda` are compatibility commands. Prefer
+`pkms task list` and `pkms task agenda`; use `--output-schema legacy` on the
+task commands when a script still needs the old JSON/NDJSON shape.
 
 `pkms task inbox` and default `pkms task add` use the PKMS inbox note configured
 as `[tasks].inbox`. The value can be a note title, UUID, absolute path, or path
