@@ -7,16 +7,7 @@ use anyhow::Result;
 use serde::Serialize;
 
 #[derive(Debug, Clone, Serialize)]
-pub struct TaskParent {
-    pub title: String,
-    pub todo_state: Option<String>,
-    pub priority: Option<char>,
-    pub line_number: usize,
-    pub level: usize,
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct TaskChild {
+pub struct RelatedTaskHeading {
     pub title: String,
     pub todo_state: Option<String>,
     pub priority: Option<char>,
@@ -46,8 +37,8 @@ pub struct ShowOutput {
     pub note_title: String,
     pub note_uuid: String,
     pub heading_uuid: Option<String>,
-    pub parents: Vec<TaskParent>,
-    pub children: Vec<TaskChild>,
+    pub parents: Vec<RelatedTaskHeading>,
+    pub children: Vec<RelatedTaskHeading>,
     pub outgoing: Vec<OutgoingLink>,
     pub content: String,
 }
@@ -82,7 +73,7 @@ fn find_heading_end(content: &str, heading_line: usize) -> usize {
     lines.len()
 }
 
-fn find_parents(headings: &[crate::parser::Heading], target_idx: usize) -> Vec<TaskParent> {
+fn find_parents(headings: &[crate::parser::Heading], target_idx: usize) -> Vec<RelatedTaskHeading> {
     let target_level = headings[target_idx].level;
     let mut parents = Vec::new();
     let mut seen_levels: Vec<usize> = Vec::new();
@@ -95,13 +86,7 @@ fn find_parents(headings: &[crate::parser::Heading], target_idx: usize) -> Vec<T
         }
         seen_levels.push(h.level);
         if h.todo_state.is_some() {
-            parents.push(TaskParent {
-                title: h.title.clone(),
-                todo_state: h.todo_state.clone(),
-                priority: h.priority,
-                line_number: h.line_number,
-                level: h.level,
-            });
+            parents.push(related_task_heading(h));
         }
     }
     parents.reverse();
@@ -112,7 +97,7 @@ fn find_children(
     headings: &[crate::parser::Heading],
     target_idx: usize,
     end_line: usize,
-) -> Vec<TaskChild> {
+) -> Vec<RelatedTaskHeading> {
     let target_level = headings[target_idx].level;
     let mut children = Vec::new();
     for h in headings.iter().skip(target_idx + 1) {
@@ -120,16 +105,20 @@ fn find_children(
             break;
         }
         if h.level > target_level {
-            children.push(TaskChild {
-                title: h.title.clone(),
-                todo_state: h.todo_state.clone(),
-                priority: h.priority,
-                line_number: h.line_number,
-                level: h.level,
-            });
+            children.push(related_task_heading(h));
         }
     }
     children
+}
+
+fn related_task_heading(heading: &crate::parser::Heading) -> RelatedTaskHeading {
+    RelatedTaskHeading {
+        title: heading.title.clone(),
+        todo_state: heading.todo_state.clone(),
+        priority: heading.priority,
+        line_number: heading.line_number,
+        level: heading.level,
+    }
 }
 
 fn extract_outgoing(links: &[Link]) -> Vec<OutgoingLink> {
