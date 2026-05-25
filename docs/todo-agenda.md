@@ -239,6 +239,8 @@ and flags to Todoist server-side filters:
 | `upcoming --days N` | `due after: today & next N days` |
 
 Without an agenda shortcut, Todoist-backed `task agenda` shows only scheduled tasks.
+Text output uses the same default agenda sections as PKMS tasks: overdue, today,
+and upcoming.
 An explicit `todoist.filter:<query>` takes precedence over the default agenda
 filter and agenda command, and is the escape hatch for custom Todoist filter
 syntax.

@@ -795,7 +795,7 @@ fn run_agenda(config: &ResolvedConfig, ctx: &OutputContext, args: &TaskAgendaArg
     apply_task_filter_criteria(config, &mut items, &filters.criteria)?;
     sort_task_items(&mut items, args.sort.as_deref().unwrap_or("date,priority"))?;
     let columns = resolve_task_table_columns(config, args.table.columns.as_deref());
-    print_task_items(ctx, filters.source, items, args.limit, columns.as_deref())
+    print_agenda_task_items(ctx, filters.source, items, args.limit, columns.as_deref())
 }
 
 fn collect_pkms_list_items(config: &ResolvedConfig) -> Result<Vec<TaskItem>> {
@@ -2521,6 +2521,14 @@ fn effective_date(item: &TaskItem) -> Option<&str> {
         .or(item.daily_file_date.as_deref())
 }
 
+fn task_item_is_overdue(item: &TaskItem, today: NaiveDate) -> bool {
+    item.is_overdue || item_dates(item).into_iter().any(|date| date < today)
+}
+
+fn task_item_is_today(item: &TaskItem, today: NaiveDate) -> bool {
+    item_dates(item).contains(&today)
+}
+
 fn print_task_items(
     ctx: &OutputContext,
     source: SourceSelection,
@@ -2547,13 +2555,82 @@ fn print_task_items(
     }
 }
 
+fn print_agenda_task_items(
+    ctx: &OutputContext,
+    source: SourceSelection,
+    mut items: Vec<TaskItem>,
+    limit: Option<usize>,
+    columns: Option<&[Column]>,
+) -> Result<()> {
+    let total = items.len();
+    if let Some(limit) = limit {
+        items.truncate(limit);
+    }
+
+    match ctx.format {
+        OutputFormat::Text => print_agenda_task_table(&items, total, source, columns),
+        OutputFormat::Json => {
+            #[derive(Serialize)]
+            struct TaskListOutput {
+                total: usize,
+                items: Vec<TaskItem>,
+            }
+            ctx.print_json(&TaskListOutput { total, items })
+        }
+        OutputFormat::Ndjson => ctx.print_ndjson(&items),
+    }
+}
+
 fn print_task_table(
     items: &[TaskItem],
     total: usize,
     source: SourceSelection,
     columns: Option<&[Column]>,
 ) -> Result<()> {
-    if items.is_empty() {
+    print_task_table_sections(&[("", items)], total, source, columns)
+}
+
+fn print_agenda_task_table(
+    items: &[TaskItem],
+    total: usize,
+    source: SourceSelection,
+    columns: Option<&[Column]>,
+) -> Result<()> {
+    let today = Local::now().date_naive();
+    let mut overdue = Vec::new();
+    let mut today_items = Vec::new();
+    let mut upcoming = Vec::new();
+
+    for item in items {
+        if task_item_is_overdue(item, today) {
+            overdue.push(item.clone());
+        } else if task_item_is_today(item, today) {
+            today_items.push(item.clone());
+        } else if effective_date(item).is_some() {
+            upcoming.push(item.clone());
+        }
+    }
+
+    overdue.sort_by(|a, b| effective_date(a).cmp(&effective_date(b)));
+    today_items.sort_by(|a, b| effective_date(a).cmp(&effective_date(b)));
+    upcoming.sort_by(|a, b| effective_date(a).cmp(&effective_date(b)));
+
+    let sections = [
+        ("=== Overdue ===", overdue.as_slice()),
+        ("=== Today ===", today_items.as_slice()),
+        ("=== Upcoming ===", upcoming.as_slice()),
+    ];
+    print_task_table_sections(&sections, total, source, columns)
+}
+
+fn print_task_table_sections(
+    sections: &[(&str, &[TaskItem])],
+    total: usize,
+    source: SourceSelection,
+    columns: Option<&[Column]>,
+) -> Result<()> {
+    let item_count: usize = sections.iter().map(|(_, items)| items.len()).sum();
+    if item_count == 0 {
         println!("No tasks found.");
         return Ok(());
     }
@@ -2569,26 +2646,59 @@ fn print_task_table(
             .map(|column| HEADERS[*column])
             .collect::<Vec<_>>(),
     );
-    for item in items {
-        for row in task_table_rows(item, source) {
-            builder.push_record(
-                selected_columns
-                    .iter()
-                    .map(|column| row[*column].clone())
-                    .collect::<Vec<_>>(),
-            );
+    let n_cols = selected_columns.len();
+    let empty_row: Vec<String> = std::iter::repeat_n(String::new(), n_cols).collect();
+    let mut section_rows = Vec::new();
+    let mut row_idx = 1;
+    let mut need_sep = false;
+
+    for (label, items) in sections {
+        if items.is_empty() {
+            continue;
         }
+        if need_sep {
+            builder.push_record(empty_row.clone());
+            row_idx += 1;
+        }
+        if !label.is_empty() {
+            let mut label_row = empty_row.clone();
+            label_row[0] = label.to_string();
+            builder.push_record(label_row);
+            section_rows.push(row_idx);
+            row_idx += 1;
+        }
+        for item in *items {
+            for row in task_table_rows(item, source) {
+                builder.push_record(
+                    selected_columns
+                        .iter()
+                        .map(|column| row[*column].clone())
+                        .collect::<Vec<_>>(),
+                );
+                row_idx += 1;
+            }
+        }
+        need_sep = true;
     }
-    let wrap_widths = task_table_wrap_widths(items, source, &selected_columns);
+    let all_items = sections
+        .iter()
+        .flat_map(|(_, items)| items.iter())
+        .collect::<Vec<_>>();
+    let wrap_widths = task_table_wrap_widths(&all_items, source, &selected_columns);
     let mut table = builder.build();
     table.with(Style::blank());
     table.with(Modify::new(Rows::one(1)).with(Border::new().top('─')));
     for (column, width) in wrap_widths {
         table.with(Modify::new(Columns::one(column)).with(Width::wrap(width).keep_words(true)));
     }
+    for section_row in section_rows {
+        table.with(
+            Modify::new((section_row, 0)).with(tabled::settings::Span::column(n_cols as isize)),
+        );
+    }
     println!("{table}");
     println!();
-    println!("Shown: {}, Total: {} task(s)", items.len(), total);
+    println!("Shown: {}, Total: {} task(s)", item_count, total);
     Ok(())
 }
 
@@ -2613,7 +2723,7 @@ fn task_table_column_index(column: &Column) -> usize {
 }
 
 fn task_table_wrap_widths(
-    items: &[TaskItem],
+    items: &[&TaskItem],
     source: SourceSelection,
     selected_columns: &[usize],
 ) -> Vec<(usize, usize)> {

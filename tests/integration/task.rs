@@ -1469,6 +1469,52 @@ fn test_task_list_tags_all_combines_pkms_and_todoist_metadata() {
 
 #[cfg(feature = "todoist")]
 #[test]
+fn test_task_agenda_todoist_text_splits_default_view_into_sections() {
+    let (_dir, root) = setup_db();
+    let overdue = org_date(-1);
+    let today = org_date(0);
+    let upcoming = org_date(1);
+    let body = Box::leak(
+        format!(
+            r#"{{"results":[{{"id":"old","content":"Overdue remote","priority":1,"labels":[],"due":{{"date":"{overdue}","string":"yesterday"}}}},{{"id":"today","content":"Today remote","priority":1,"labels":[],"due":{{"date":"{today}","string":"today"}}}},{{"id":"future","content":"Upcoming remote","priority":1,"labels":[],"due":{{"date":"{upcoming}","string":"tomorrow"}}}}],"next_cursor":null}}"#
+        )
+        .into_boxed_str(),
+    );
+    let (base_url, handle) = spawn_todoist_mock(vec![(
+        "GET",
+        "/tasks/filter?query=%21no%20date&limit=200",
+        body,
+    )]);
+    let output = run_with_todoist_env(
+        &[
+            "--db",
+            root.to_str().unwrap(),
+            "task",
+            "agenda",
+            "source:todoist",
+        ],
+        &base_url,
+    );
+    handle.join().unwrap();
+    assert!(
+        output.status.success(),
+        "stdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let overdue_section = stdout.find("=== Overdue ===").expect("stdout");
+    let today_section = stdout.find("=== Today ===").expect("stdout");
+    let upcoming_section = stdout.find("=== Upcoming ===").expect("stdout");
+    assert!(overdue_section < today_section);
+    assert!(today_section < upcoming_section);
+    assert!(overdue_section < stdout.find("Overdue remote").expect("stdout"));
+    assert!(today_section < stdout.find("Today remote").expect("stdout"));
+    assert!(upcoming_section < stdout.find("Upcoming remote").expect("stdout"));
+}
+
+#[cfg(feature = "todoist")]
+#[test]
 fn test_task_agenda_todoist_text_gives_heading_available_width() {
     let (_dir, root) = setup_db();
     let (base_url, handle) = spawn_todoist_mock(vec![(
