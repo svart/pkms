@@ -264,16 +264,6 @@ pub fn run(config: &ResolvedConfig, ctx: &OutputContext, opts: &CheckOptions) ->
         None
     };
 
-    let healthy = graph.stats().broken_link_count == 0
-        && graph.stats().parse_error_count == 0
-        && graph.stats().duplicate_uuid_count == 0
-        && broken_file.is_empty()
-        && broken_attachment.is_empty()
-        && filetags_issues.is_empty()
-        && (!show_agenda || agenda_issues.is_empty())
-        && self_link_entries.is_empty()
-        && overlink_entries.is_empty();
-
     let check_data = CheckData {
         graph: &graph,
         db_root,
@@ -295,6 +285,7 @@ pub fn run(config: &ResolvedConfig, ctx: &OutputContext, opts: &CheckOptions) ->
         show_self_links,
         show_overlinks,
     };
+    let healthy = check_data.is_healthy(&display_opts);
 
     if ctx.is_json() {
         print_check_json(ctx, &check_data, &display_opts)?;
@@ -330,6 +321,21 @@ struct CheckData<'a> {
     self_link_entries: &'a [SelfLinkEntry],
     overlink_entries: &'a [OverlinkEntry],
     cross_link_result: &'a Option<CrossLinkResult>,
+}
+
+impl CheckData<'_> {
+    fn is_healthy(&self, opts: &CheckDisplayOptions) -> bool {
+        let stats = self.graph.stats();
+        stats.broken_link_count == 0
+            && stats.parse_error_count == 0
+            && stats.duplicate_uuid_count == 0
+            && self.broken_file.is_empty()
+            && self.broken_attachment.is_empty()
+            && self.filetags_issues.is_empty()
+            && (!opts.show_agenda || self.agenda_issues.is_empty())
+            && self.self_link_entries.is_empty()
+            && self.overlink_entries.is_empty()
+    }
 }
 
 fn print_check_json(
@@ -371,16 +377,7 @@ fn print_check_json(
         vec![]
     };
 
-    let has_filetags_issues = !data.filetags_issues.is_empty();
-    let healthy = stats.broken_link_count == 0
-        && stats.parse_error_count == 0
-        && stats.duplicate_uuid_count == 0
-        && data.broken_file.is_empty()
-        && data.broken_attachment.is_empty()
-        && !has_filetags_issues
-        && (!opts.show_agenda || data.agenda_issues.is_empty())
-        && data.self_link_entries.is_empty()
-        && data.overlink_entries.is_empty();
+    let healthy = data.is_healthy(opts);
 
     let output = CheckOutput {
         db_root: data.db_root.display().to_string(),
@@ -434,15 +431,7 @@ fn print_check_json(
 
 fn print_check_text(data: &CheckData, opts: &CheckDisplayOptions) {
     let stats = data.graph.stats();
-    let healthy = stats.broken_link_count == 0
-        && stats.parse_error_count == 0
-        && stats.duplicate_uuid_count == 0
-        && data.broken_file.is_empty()
-        && data.broken_attachment.is_empty()
-        && data.filetags_issues.is_empty()
-        && (!opts.show_agenda || data.agenda_issues.is_empty())
-        && data.self_link_entries.is_empty()
-        && data.overlink_entries.is_empty();
+    let healthy = data.is_healthy(opts);
 
     let has_any_output = opts.show_stats
         || opts.show_file
