@@ -439,6 +439,33 @@ pub enum TaskCommand {
 pub struct TaskListArgs {
     #[arg(value_name = "MODE_OR_FILTER")]
     pub filters: Vec<String>,
+    #[command(flatten)]
+    pub compat_filters: TaskFilterArgs,
+    #[arg(
+        long,
+        value_name = "PRIO",
+        help = "Compatibility alias for prio:<PRIO>; use empty string or none for no priority"
+    )]
+    pub prio: Option<String>,
+    #[arg(
+        long,
+        num_args = 1..,
+        value_name = "TARGET",
+        help = "Compatibility alias for scope:<TARGET>"
+    )]
+    pub scope: Option<Vec<String>>,
+    #[arg(
+        long,
+        value_name = "DATE",
+        help = "Compatibility alias for after:<DATE>"
+    )]
+    pub after: Option<String>,
+    #[arg(
+        long,
+        value_name = "DATE",
+        help = "Compatibility alias for before:<DATE>"
+    )]
+    pub before: Option<String>,
     #[arg(long, value_name = "SORT")]
     pub sort: Option<String>,
     #[arg(long, help = "Maximum results")]
@@ -466,6 +493,28 @@ pub struct TaskAgendaArgs {
     pub command: Option<TaskAgendaCommand>,
     #[arg(value_name = "FILTER")]
     pub filters: Vec<String>,
+    #[command(flatten)]
+    pub compat_filters: TaskFilterArgs,
+    #[arg(
+        long,
+        value_name = "PRIO",
+        help = "Compatibility alias for prio:<PRIO>; use empty string or none for no priority"
+    )]
+    pub prio: Option<String>,
+    #[arg(
+        long,
+        value_name = "DATE",
+        help = "Compatibility alias for date:<DATE>"
+    )]
+    pub date: Option<String>,
+    #[arg(long, help = "Compatibility alias for date:today")]
+    pub today: bool,
+    #[arg(long, help = "Compatibility alias for date:week")]
+    pub week: bool,
+    #[arg(long, help = "Compatibility alias for date:overdue")]
+    pub overdue: bool,
+    #[arg(long, help = "Compatibility alias for date:upcoming")]
+    pub upcoming: bool,
     #[arg(long, value_name = "SORT")]
     pub sort: Option<String>,
     #[arg(long, help = "Maximum results")]

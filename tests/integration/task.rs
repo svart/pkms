@@ -263,6 +263,47 @@ fn test_task_list_legacy_schema_matches_todo_for_filters() {
 }
 
 #[test]
+fn test_task_list_compatibility_filter_flags_match_todo() {
+    let (_dir, root) = setup_db();
+    let (task, task_status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "task",
+        "list",
+        "--output-schema",
+        "legacy",
+        "--state",
+        "TODO",
+        "--tags",
+        "agenda",
+        "--type",
+        "SCHED",
+        "--prio",
+        "A",
+    ]);
+    let (todo, todo_status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "todo",
+        "--state",
+        "TODO",
+        "--tags",
+        "agenda",
+        "--type",
+        "SCHED",
+        "--prio",
+        "A",
+    ]);
+    assert!(task_status.success());
+    assert!(todo_status.success());
+    assert_eq!(task, todo);
+}
+
+#[test]
 fn test_task_list_pkms_text_uses_bare_source_ids() {
     let (_dir, root) = setup_db();
     let (stdout, stderr, status) = run(&[
@@ -383,6 +424,45 @@ fn test_task_agenda_date_upcoming_legacy_schema_matches_agenda_upcoming() {
         "json",
         "agenda",
         "--upcoming",
+    ]);
+    assert!(task_status.success());
+    assert!(agenda_status.success());
+    assert_eq!(task, agenda);
+}
+
+#[test]
+fn test_task_agenda_compatibility_filter_flags_match_agenda() {
+    let (_dir, root) = setup_db();
+    let (task, task_status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "task",
+        "agenda",
+        "--output-schema",
+        "legacy",
+        "--today",
+        "--state",
+        "TODO",
+        "--tags",
+        "agenda",
+        "--type",
+        "SCHED",
+    ]);
+    let (agenda, agenda_status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "agenda",
+        "--today",
+        "--state",
+        "TODO",
+        "--tags",
+        "agenda",
+        "--type",
+        "SCHED",
     ]);
     assert!(task_status.success());
     assert!(agenda_status.success());

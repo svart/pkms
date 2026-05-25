@@ -1,7 +1,7 @@
 use crate::cli::{
     OutputFormat, TaskAddArgs, TaskAgendaArgs, TaskAgendaCommand, TaskCommand, TaskDeadlineArgs,
-    TaskDoneArgs, TaskListArgs, TaskOpenArgs, TaskPostponeArgs, TaskScheduleArgs, TaskShortcutArgs,
-    TaskStateArgs, TaskTargetArgs, TaskUpcomingArgs,
+    TaskDoneArgs, TaskFilterArgs, TaskListArgs, TaskOpenArgs, TaskPostponeArgs, TaskScheduleArgs,
+    TaskShortcutArgs, TaskStateArgs, TaskTargetArgs, TaskUpcomingArgs,
 };
 use crate::commands::open::OpenOptions;
 use crate::commands::show::{HeadingTarget, ShowOptions};
@@ -271,7 +271,8 @@ fn run_task_list(
     args: &TaskListArgs,
     raw_filters: &[String],
 ) -> Result<()> {
-    let filters = parse_task_filters(raw_filters)?;
+    let raw_filters = task_list_filter_args(args, raw_filters);
+    let filters = parse_task_filters(&raw_filters)?;
     let legacy_schema = output_schema_is_legacy(args.output_schema.as_deref())?;
     let scope = task_scope(config, args.from_stdin, &filters.criteria.scope)?;
     if (args.group.is_some() || legacy_schema) && !matches!(filters.source, SourceSelection::Pkms) {
@@ -336,6 +337,64 @@ fn task_scope(
         return util::read_stdin_ndjson();
     }
     Ok(filter_scope.to_vec())
+}
+
+fn task_list_filter_args(args: &TaskListArgs, raw_filters: &[String]) -> Vec<String> {
+    let mut filters = raw_filters.to_vec();
+    push_compat_task_filters(&mut filters, &args.compat_filters);
+    if let Some(prio) = &args.prio {
+        filters.push(format!("prio:{}", priority_filter_value(prio)));
+    }
+    if let Some(scopes) = &args.scope {
+        filters.extend(scopes.iter().map(|scope| format!("scope:{scope}")));
+    }
+    if let Some(after) = &args.after {
+        filters.push(format!("after:{after}"));
+    }
+    if let Some(before) = &args.before {
+        filters.push(format!("before:{before}"));
+    }
+    filters
+}
+
+fn task_agenda_filter_args(args: &TaskAgendaArgs) -> Vec<String> {
+    let mut filters = args.filters.clone();
+    push_compat_task_filters(&mut filters, &args.compat_filters);
+    if let Some(prio) = &args.prio {
+        filters.push(format!("prio:{}", priority_filter_value(prio)));
+    }
+    if let Some(date) = &args.date {
+        filters.push(format!("date:{date}"));
+    }
+    if args.today {
+        filters.push("date:today".to_string());
+    }
+    if args.week {
+        filters.push("date:week".to_string());
+    }
+    if args.overdue {
+        filters.push("date:overdue".to_string());
+    }
+    if args.upcoming {
+        filters.push("date:upcoming".to_string());
+    }
+    filters
+}
+
+fn push_compat_task_filters(filters: &mut Vec<String>, compat: &TaskFilterArgs) {
+    if let Some(state) = &compat.state {
+        filters.push(format!("state:{state}"));
+    }
+    if let Some(tags) = &compat.tags {
+        filters.push(format!("tags:{tags}"));
+    }
+    if let Some(kind) = &compat.kind {
+        filters.push(format!("type:{kind}"));
+    }
+}
+
+fn priority_filter_value(value: &str) -> &str {
+    if value.is_empty() { "none" } else { value }
 }
 
 fn run_shortcut(
@@ -686,7 +745,8 @@ fn run_agenda(config: &ResolvedConfig, ctx: &OutputContext, args: &TaskAgendaArg
         None => {}
     }
 
-    let filters = parse_task_filters(&args.filters)?;
+    let raw_filters = task_agenda_filter_args(args);
+    let filters = parse_task_filters(&raw_filters)?;
     if legacy_schema && !matches!(filters.source, SourceSelection::Pkms) {
         bail!("task agenda --output-schema legacy is available only for source:pkms");
     }
