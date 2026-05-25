@@ -474,10 +474,16 @@ fn apply_task_date_filter(items: &mut Vec<TaskItem>, date_filter: &TaskDateFilte
 }
 
 fn item_dates(item: &TaskItem) -> Vec<NaiveDate> {
-    item_datetimes(item)
+    let mut dates: Vec<NaiveDate> = item_datetimes(item)
         .into_iter()
         .map(|dt| dt.date())
-        .collect()
+        .collect();
+    if let Some(daily_file_date) = &item.daily_file_date
+        && let Ok(date) = NaiveDate::parse_from_str(daily_file_date, "%Y-%m-%d")
+    {
+        dates.push(date);
+    }
+    dates
 }
 
 fn item_datetimes(item: &TaskItem) -> Vec<NaiveDateTime> {
@@ -2388,6 +2394,7 @@ fn effective_date(item: &TaskItem) -> Option<&str> {
         .as_ref()
         .and_then(|date| date.date.as_deref())
         .or_else(|| item.deadline.as_ref().and_then(|date| date.date.as_deref()))
+        .or(item.daily_file_date.as_deref())
 }
 
 fn print_task_items(
@@ -2675,7 +2682,7 @@ fn task_table_rows(item: &TaskItem, source: SourceSelection) -> Vec<[String; 9]>
     if rows.is_empty() {
         rows.push([
             id,
-            String::new(),
+            item.daily_file_date.clone().unwrap_or_default(),
             state,
             String::new(),
             prio,

@@ -34,6 +34,10 @@ pub fn record_to_task_item(config: &ResolvedConfig, record: TaskRecord) -> TaskI
         note_title: Some(record.title),
         note_uuid: Some(record.uuid),
         path: Some(PathBuf::from(record.path)),
+        has_agenda_tag: Some(record.has_agenda_tag),
+        is_daily_file: record.is_daily_file,
+        daily_file_date: record.daily_file_date,
+        heading_level: Some(record.heading_level),
         line_number: Some(record.line_number),
         url: None,
         is_overdue: record.is_overdue,
@@ -131,6 +135,9 @@ mod tests {
         assert_eq!(item.status, TaskStatus::Open);
         assert_eq!(item.title, "Call supplier");
         assert_eq!(item.note_title.as_deref(), Some("Note A"));
+        assert_eq!(item.has_agenda_tag, Some(true));
+        assert!(!item.is_daily_file);
+        assert_eq!(item.heading_level, Some(1));
         assert_eq!(item.project.as_deref(), Some("Work"));
         assert_eq!(item.project_id.as_deref(), Some("Work"));
         assert_eq!(item.tags, vec!["agenda", "work", "phone"]);
