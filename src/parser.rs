@@ -23,6 +23,16 @@ pub struct ParsedNote {
     pub headings: Vec<Heading>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ParsedNoteSummary {
+    pub uuids: Vec<String>,
+    pub title: String,
+    pub filetags: Vec<String>,
+    pub categories: Vec<String>,
+    pub aliases: Vec<String>,
+    pub has_todos: bool,
+}
+
 impl ParsedNote {
     pub fn empty() -> Self {
         ParsedNote {
@@ -129,6 +139,11 @@ pub(crate) static FILETAGS_RE: LazyLock<Regex> =
 pub(crate) static ID_PROPERTY_RE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r":ID:\s+([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})").unwrap()
 });
+
+static CATEGORY_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r":CATEGORY:\s+(.+)").unwrap());
+
+static ALIASES_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r":ROAM_ALIASES:\s+(.*)").unwrap());
 
 pub(crate) static UUID_FORMAT_RE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$").unwrap()
@@ -239,7 +254,7 @@ impl ParseContext {
             PropertyKey::RoamAliases => {
                 self.aliases = value
                     .split_whitespace()
-                    .map(std::string::ToString::to_string)
+                    .map(unquote_property_word)
                     .collect();
             }
             PropertyKey::RoamRefs => {
@@ -387,6 +402,58 @@ pub fn parse_note(content: &str) -> ParsedNote {
     ctx.finalize()
 }
 
+pub fn parse_note_summary(content: &str) -> ParsedNoteSummary {
+    let uuids = ID_PROPERTY_RE
+        .captures_iter(content)
+        .filter_map(|c| c.get(1))
+        .map(|m| m.as_str().to_string())
+        .collect();
+
+    let title = TITLE_RE
+        .captures(content)
+        .and_then(|c| c.get(1))
+        .map(|m| m.as_str().trim().to_string())
+        .unwrap_or_default();
+
+    let filetags = FILETAGS_RE
+        .captures(content)
+        .map(|c| {
+            c.get(1)
+                .map_or("", |m| m.as_str())
+                .split(':')
+                .filter(|t| !t.is_empty())
+                .map(|t| t.trim().to_string())
+                .collect()
+        })
+        .unwrap_or_default();
+
+    let aliases = ALIASES_RE
+        .captures_iter(content)
+        .last()
+        .map(|c| {
+            c.get(1)
+                .map_or("", |m| m.as_str())
+                .split_whitespace()
+                .map(unquote_property_word)
+                .collect()
+        })
+        .unwrap_or_default();
+
+    let categories = CATEGORY_RE
+        .captures_iter(content)
+        .filter_map(|c| c.get(1).map(|m| m.as_str().trim().to_string()))
+        .collect();
+
+    ParsedNoteSummary {
+        uuids,
+        title,
+        filetags,
+        categories,
+        aliases,
+        has_todos: parse_note(content).has_todo_headings(),
+    }
+}
+
 pub fn strip_org_links(text: &str) -> String {
     LINK_RE
         .replace_all(text, |caps: &regex::Captures| {
@@ -418,6 +485,10 @@ fn parse_property(line: &str) -> Option<(PropertyKey, &str)> {
         }
     }
     None
+}
+
+fn unquote_property_word(value: &str) -> String {
+    value.trim_matches('"').to_string()
 }
 
 /// Validate that all `#+filetags:` lines in content have the correct format.

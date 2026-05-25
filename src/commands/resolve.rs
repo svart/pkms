@@ -3,13 +3,11 @@ use crate::config::ResolvedConfig;
 use crate::discovery;
 use crate::input;
 use crate::output::OutputContext;
-use crate::parser::{FILETAGS_RE, ID_PROPERTY_RE, TITLE_RE, parse_note};
+use crate::parser::{ParsedNoteSummary, parse_note_summary};
 use anyhow::Result;
-use regex::Regex;
 use serde::Serialize;
 use std::collections::HashSet;
 use std::path::Path;
-use std::sync::LazyLock;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct ResolvedNote {
@@ -33,11 +31,6 @@ pub struct ResolveOutput {
     pub results: Vec<ResolvedNote>,
 }
 
-static CATEGORY_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r":CATEGORY:\s+(.+)").unwrap());
-
-static ALIASES_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r":ROAM_ALIASES:\s+(.*)").unwrap());
-
 fn scan_files(
     root: &Path,
     ignore_patterns: &[String],
@@ -56,95 +49,52 @@ fn scan_files(
         };
 
         if do_full_scan {
-            let all_uuids: Vec<String> = ID_PROPERTY_RE
-                .captures_iter(&content)
-                .filter_map(|c| c.get(1))
-                .map(|m| m.as_str().to_string())
-                .collect();
-            if all_uuids.is_empty() {
+            let summary = parse_note_summary(&content);
+            let Some(primary_uuid) = summary.uuids.first().cloned() else {
                 continue;
-            }
-            let primary_uuid = &all_uuids[0];
+            };
             let uq = uuid_query.unwrap();
-            let matched_heading = all_uuids
+            let matched_heading = summary
+                .uuids
                 .iter()
                 .skip(1)
                 .find(|u| u.to_lowercase().contains(&uq.to_lowercase()))
                 .cloned();
-            notes.push(scan_one_note(
+            notes.push(resolved_note_from_parsed(
                 path,
-                &content,
-                primary_uuid.clone(),
+                &summary,
+                primary_uuid,
                 matched_heading,
             ));
         } else {
             let header: Vec<&str> = content.lines().take(100).collect();
             let header_str = header.join("\n");
-            let uuid = ID_PROPERTY_RE
-                .captures_iter(&header_str)
-                .next()
-                .and_then(|c| c.get(1))
-                .map(|m| m.as_str().to_string());
-            let Some(uuid) = uuid else { continue };
-            notes.push(scan_one_note(path, &header_str, uuid, None));
+            let summary = parse_note_summary(&header_str);
+            let Some(uuid) = summary.uuids.first().cloned() else {
+                continue;
+            };
+            notes.push(resolved_note_from_parsed(path, &summary, uuid, None));
         }
     }
 
     notes
 }
 
-fn scan_one_note(
+fn resolved_note_from_parsed(
     path: &std::path::Path,
-    content: &str,
+    summary: &ParsedNoteSummary,
     uuid: String,
     matched_heading: Option<String>,
 ) -> ResolvedNote {
-    let title = TITLE_RE
-        .captures(content)
-        .and_then(|c| c.get(1))
-        .map(|m| m.as_str().trim().to_string())
-        .unwrap_or_default();
-
-    let filetags = FILETAGS_RE
-        .captures(content)
-        .map(|c| {
-            c.get(1)
-                .map_or("", |m| m.as_str())
-                .split(':')
-                .filter(|t| !t.is_empty())
-                .map(|t| t.trim().to_string())
-                .collect()
-        })
-        .unwrap_or_default();
-
-    let aliases = ALIASES_RE
-        .captures_iter(content)
-        .last()
-        .map(|c| {
-            c.get(1)
-                .map_or("", |m| m.as_str())
-                .split_whitespace()
-                .map(|s| s.trim_matches('"').to_string())
-                .collect()
-        })
-        .unwrap_or_default();
-
-    let categories: Vec<String> = CATEGORY_RE
-        .captures_iter(content)
-        .filter_map(|c| c.get(1).map(|m| m.as_str().trim().to_string()))
-        .collect();
-
-    let has_todos = parse_note(content).has_todo_headings();
-
     ResolvedNote {
         uuid,
-        title,
+        title: summary.title.clone(),
         path: path.display().to_string(),
-        filetags,
-        categories,
-        aliases,
+        filetags: summary.filetags.clone(),
+        categories: summary.categories.clone(),
+        aliases: summary.aliases.clone(),
         matched_heading_uuid: matched_heading,
-        has_todos,
+        has_todos: summary.has_todos,
     }
 }
 
