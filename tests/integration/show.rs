@@ -23,7 +23,7 @@ fn test_show_basic() {
 #[test]
 fn test_show_canonical_id() {
     let (_dir, root) = setup_db();
-    // ID 1 from pkms todo should resolve to some task
+    // ID 1 from a task list view should resolve to some task
     let (stdout, stderr, status) = run(&["--db", root.to_str().unwrap(), "show", "1"]);
     assert!(status.success(), "stdout: {stdout}\nstderr: {stderr}");
     assert!(stdout.contains("Task:"));
