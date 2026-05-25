@@ -37,6 +37,7 @@ pub enum TaskDateFilter {
     Week,
     Overdue,
     Upcoming,
+    Any(Vec<TaskDateFilter>),
 }
 
 pub fn parse_source_selection(filters: &[String]) -> Result<SourceSelection> {
@@ -176,6 +177,22 @@ fn parse_priority_filter(value: &str) -> String {
 }
 
 fn parse_date_filter(value: &str) -> Result<TaskDateFilter> {
+    let values: Vec<_> = value
+        .split(',')
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .collect();
+    if values.len() > 1 {
+        return values
+            .into_iter()
+            .map(parse_single_date_filter)
+            .collect::<Result<Vec<_>>>()
+            .map(TaskDateFilter::Any);
+    }
+    parse_single_date_filter(value.trim())
+}
+
+fn parse_single_date_filter(value: &str) -> Result<TaskDateFilter> {
     match value {
         "today" => Ok(TaskDateFilter::Today),
         "week" => Ok(TaskDateFilter::Week),
@@ -257,6 +274,19 @@ mod tests {
         assert!(filters.criteria.before.is_some());
         assert_eq!(filters.criteria.scope, vec!["Project Note"]);
         assert_eq!(filters.criteria.project.as_deref(), Some("Alpha"));
+    }
+
+    #[test]
+    fn parses_comma_separated_date_filters() {
+        let filters = parse_task_filters(&["date:today,2026-05-10,upcoming".to_string()]).unwrap();
+        assert_eq!(
+            filters.criteria.date,
+            Some(TaskDateFilter::Any(vec![
+                TaskDateFilter::Today,
+                TaskDateFilter::Exact(NaiveDate::from_ymd_opt(2026, 5, 10).unwrap()),
+                TaskDateFilter::Upcoming,
+            ]))
+        );
     }
 
     #[test]

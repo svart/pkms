@@ -758,6 +758,43 @@ fn test_task_agenda_accepts_exact_and_bare_date_filters() {
 }
 
 #[test]
+fn test_task_agenda_accepts_comma_separated_date_filters() {
+    let (_dir, root) = setup_db();
+    let today = org_date(0);
+    std::fs::write(
+        root.join("roam/common/20260525000000-filter-today.org"),
+        format!(
+            r#":PROPERTIES:
+:ID:       57575757-5757-4757-8757-575757575757
+:END:
+#+title: Filter Today
+#+filetags: :agenda:
+
+* TODO Filter today task
+SCHEDULED: <{today}>
+"#
+        ),
+    )
+    .unwrap();
+
+    let (tasks, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "task",
+        "agenda",
+        "date:today,2026-05-10",
+    ]);
+    assert!(status.success());
+    let titles = task_titles(&tasks);
+    assert!(titles.contains(&"Filter today task".to_string()));
+    assert!(titles.contains(&"High priority task".to_string()));
+    assert!(titles.contains(&"Fix this".to_string()));
+    assert!(!titles.contains(&"Parent task".to_string()));
+}
+
+#[test]
 fn test_task_metadata_rejects_non_source_filters() {
     let (_dir, root) = setup_db();
     let (stdout, _stderr, status) = run(&[

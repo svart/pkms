@@ -596,28 +596,27 @@ fn apply_task_filter_criteria(
 }
 
 fn apply_task_date_filter(items: &mut Vec<TaskItem>, date_filter: &TaskDateFilter) {
+    items.retain(|item| task_item_matches_date_filter(item, date_filter));
+}
+
+fn task_item_matches_date_filter(item: &TaskItem, date_filter: &TaskDateFilter) -> bool {
     let today = Local::now().date_naive();
     match date_filter {
-        TaskDateFilter::Exact(date) => {
-            items.retain(|item| item_dates(item).iter().any(|item_date| item_date == date));
-        }
-        TaskDateFilter::Today => {
-            items.retain(|item| item_dates(item).contains(&today));
-        }
+        TaskDateFilter::Exact(date) => item_dates(item).iter().any(|item_date| item_date == date),
+        TaskDateFilter::Today => item_dates(item).contains(&today),
         TaskDateFilter::Week => {
             let cutoff = today + chrono::Duration::days(7);
-            items.retain(|item| {
-                item_dates(item)
-                    .iter()
-                    .any(|item_date| *item_date <= cutoff)
-            });
+            item_dates(item)
+                .iter()
+                .any(|item_date| *item_date <= cutoff)
         }
-        TaskDateFilter::Overdue => items.retain(|item| item.is_overdue),
+        TaskDateFilter::Overdue => item.is_overdue,
         TaskDateFilter::Upcoming => {
-            items.retain(|item| {
-                !item.is_overdue && item_dates(item).iter().any(|item_date| *item_date > today)
-            });
+            !item.is_overdue && item_dates(item).iter().any(|item_date| *item_date > today)
         }
+        TaskDateFilter::Any(filters) => filters
+            .iter()
+            .any(|filter| task_item_matches_date_filter(item, filter)),
     }
 }
 

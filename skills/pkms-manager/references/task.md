@@ -51,6 +51,7 @@ only source filters:
 | Week | `date:week` | Matches scheduled or deadline dates through the next 7 days. |
 | Overdue | `date:overdue`, `overdue` | Matches overdue tasks. |
 | Upcoming | `date:upcoming`, `upcoming` | Matches non-overdue tasks after today. |
+| Multiple dates | `date:today,overdue,YYYY-MM-DD` | Matches any listed date filter. |
 | After | `after:YYYY-MM-DD`, `after:YYYY-MM-DD HH:MM` | Matches tasks on or after the date/time. |
 | Before | `before:YYYY-MM-DD`, `before:YYYY-MM-DD HH:MM` | Matches tasks on or before the date/time. |
 | Scope | `scope:<target>` | Restricts PKMS tasks to a note title, UUID, or path. |
@@ -63,6 +64,7 @@ Examples:
 pkms task list state:TODO tags:work,!blocked prio:A
 pkms task agenda week type:SCHED project:Alpha
 pkms task agenda source:all date:overdue tags:!waiting
+pkms task agenda source:all date:today,overdue
 pkms task agenda upcoming --days 14 source:all priority:B
 pkms task list 'scope:Some Note Title' after:2026-05-01 before:"2026-05-25 18:00"
 pkms task list source:todoist 'todoist.filter:today | overdue'
