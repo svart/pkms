@@ -52,6 +52,17 @@ fn test_removed_task_subcommands_are_rejected() {
 }
 
 #[test]
+fn test_removed_top_level_task_commands_are_rejected() {
+    for command in ["todo", "agenda"] {
+        let (stdout, stderr, status) = run(&[command, "--help"]);
+        assert!(
+            !status.success(),
+            "pkms {command} unexpectedly succeeded:\n{stdout}\n{stderr}"
+        );
+    }
+}
+
+#[test]
 fn test_task_agenda_help_lists_shortcut_subcommands() {
     let (stdout, stderr, status) = run(&["task", "agenda", "--help"]);
     assert!(
@@ -62,21 +73,19 @@ fn test_task_agenda_help_lists_shortcut_subcommands() {
     assert!(stdout.contains("week"));
     assert!(stdout.contains("overdue"));
     assert!(stdout.contains("upcoming"));
-    assert!(stdout.contains("--today"));
-    assert!(stdout.contains("--week"));
-    assert!(stdout.contains("--overdue"));
-    assert!(stdout.contains("--upcoming"));
+    assert!(!stdout.contains("--today"));
+    assert!(!stdout.contains("--week"));
+    assert!(!stdout.contains("--overdue"));
+    assert!(!stdout.contains("--upcoming"));
 }
 
 #[test]
-fn test_task_agenda_shortcut_flags_are_accepted_as_compatibility_aliases() {
-    let (_dir, root) = setup_db();
+fn test_task_agenda_shortcut_flags_are_rejected() {
     for flag in ["--today", "--week", "--overdue", "--upcoming"] {
-        let (stdout, stderr, status) =
-            run(&["--db", root.to_str().unwrap(), "task", "agenda", flag]);
+        let (stdout, stderr, status) = run(&["task", "agenda", flag, "--help"]);
         assert!(
-            status.success(),
-            "task agenda {flag} failed:\n{stdout}\n{stderr}"
+            !status.success(),
+            "task agenda {flag} unexpectedly succeeded:\n{stdout}\n{stderr}"
         );
     }
 }
@@ -94,9 +103,9 @@ fn task_help_commands(stdout: &str) -> Vec<&str> {
 }
 
 #[test]
-fn test_task_list_matches_todo_json() {
+fn test_task_list_json() {
     let (_dir, root) = setup_db();
-    let (task, task_status) = run_json(&[
+    let (v, status) = run_json(&[
         "--db",
         root.to_str().unwrap(),
         "--output-format",
@@ -104,40 +113,24 @@ fn test_task_list_matches_todo_json() {
         "task",
         "list",
     ]);
-    let (todo, todo_status) = run_json(&[
-        "--db",
-        root.to_str().unwrap(),
-        "--output-format",
-        "json",
-        "todo",
-    ]);
-    assert!(task_status.success());
-    assert!(todo_status.success());
-    assert_eq!(task, todo);
+    assert!(status.success());
+    assert!(v.get("total").is_some());
+    assert!(v["items"].as_array().is_some_and(|items| !items.is_empty()));
 }
 
 #[test]
-fn test_task_list_matches_todo_text() {
+fn test_task_list_text() {
     let (_dir, root) = setup_db();
-    let (task_stdout, task_stderr, task_status) =
-        run(&["--db", root.to_str().unwrap(), "task", "list"]);
-    let (todo_stdout, todo_stderr, todo_status) = run(&["--db", root.to_str().unwrap(), "todo"]);
-
-    assert!(
-        task_status.success(),
-        "task list failed:\n{task_stdout}\n{task_stderr}"
-    );
-    assert!(
-        todo_status.success(),
-        "todo failed:\n{todo_stdout}\n{todo_stderr}"
-    );
-    assert_eq!(task_stdout, todo_stdout);
+    let (stdout, stderr, status) = run(&["--db", root.to_str().unwrap(), "task", "list"]);
+    assert!(status.success(), "task list failed:\n{stdout}\n{stderr}");
+    assert!(stdout.contains("Total:"));
+    assert!(stdout.contains("High priority task"));
 }
 
 #[test]
-fn test_task_list_limit_json_matches_todo() {
+fn test_task_list_limit_json() {
     let (_dir, root) = setup_db();
-    let (task, task_status) = run_json(&[
+    let (v, status) = run_json(&[
         "--db",
         root.to_str().unwrap(),
         "--output-format",
@@ -147,23 +140,13 @@ fn test_task_list_limit_json_matches_todo() {
         "--limit",
         "1",
     ]);
-    let (todo, todo_status) = run_json(&[
-        "--db",
-        root.to_str().unwrap(),
-        "--output-format",
-        "json",
-        "todo",
-        "--limit",
-        "1",
-    ]);
 
-    assert!(task_status.success());
-    assert!(todo_status.success());
-    assert_eq!(task, todo);
+    assert!(status.success());
+    assert!(v["items"].as_array().unwrap().len() <= 1);
 }
 
 #[test]
-fn test_task_list_group_state_matches_todo_json() {
+fn test_task_list_group_state_json() {
     let (_dir, root) = setup_db();
     let (task, task_status) = run_json(&[
         "--db",
@@ -175,22 +158,15 @@ fn test_task_list_group_state_matches_todo_json() {
         "--group",
         "state",
     ]);
-    let (todo, todo_status) = run_json(&[
-        "--db",
-        root.to_str().unwrap(),
-        "--output-format",
-        "json",
-        "todo",
-        "--group",
-        "state",
-    ]);
     assert!(task_status.success());
-    assert!(todo_status.success());
-    assert_eq!(task, todo);
+    assert_eq!(task["group_field"], "state");
+    let groups = task["groups"].as_object().unwrap();
+    assert!(groups.contains_key("TODO"));
+    assert!(groups.contains_key("DONE"));
 }
 
 #[test]
-fn test_task_list_from_stdin_matches_todo_scope() {
+fn test_task_list_from_stdin_scopes_to_resolved_note() {
     let (_dir, root) = setup_db();
     let (task_stdout, task_stderr, task_status) = run_pipe(
         &[
@@ -217,92 +193,13 @@ fn test_task_list_from_stdin_matches_todo_scope() {
         "task list --from-stdin failed:\n{task_stdout}\n{task_stderr}"
     );
     let task: serde_json::Value = serde_json::from_str(task_stdout.trim()).unwrap();
-    let (todo, todo_status) = run_json(&[
-        "--db",
-        root.to_str().unwrap(),
-        "--output-format",
-        "json",
-        "todo",
-        "--scope",
-        "Agenda Item",
-    ]);
-    assert!(todo_status.success());
-    assert_eq!(task, todo);
-}
-
-#[test]
-fn test_task_list_legacy_schema_matches_todo_for_filters() {
-    let (_dir, root) = setup_db();
-    let (task, task_status) = run_json(&[
-        "--db",
-        root.to_str().unwrap(),
-        "--output-format",
-        "json",
-        "task",
-        "list",
-        "--output-schema",
-        "legacy",
-        "state:TODO",
-        "tags:agenda",
-        "prio:A",
-    ]);
-    let (todo, todo_status) = run_json(&[
-        "--db",
-        root.to_str().unwrap(),
-        "--output-format",
-        "json",
-        "todo",
-        "--state",
-        "TODO",
-        "--tags",
-        "agenda",
-        "--prio",
-        "A",
-    ]);
-    assert!(task_status.success());
-    assert!(todo_status.success());
-    assert_eq!(task, todo);
-}
-
-#[test]
-fn test_task_list_compatibility_filter_flags_match_todo() {
-    let (_dir, root) = setup_db();
-    let (task, task_status) = run_json(&[
-        "--db",
-        root.to_str().unwrap(),
-        "--output-format",
-        "json",
-        "task",
-        "list",
-        "--output-schema",
-        "legacy",
-        "--state",
-        "TODO",
-        "--tags",
-        "agenda",
-        "--type",
-        "SCHED",
-        "--prio",
-        "A",
-    ]);
-    let (todo, todo_status) = run_json(&[
-        "--db",
-        root.to_str().unwrap(),
-        "--output-format",
-        "json",
-        "todo",
-        "--state",
-        "TODO",
-        "--tags",
-        "agenda",
-        "--type",
-        "SCHED",
-        "--prio",
-        "A",
-    ]);
-    assert!(task_status.success());
-    assert!(todo_status.success());
-    assert_eq!(task, todo);
+    let items = task["items"].as_array().unwrap();
+    assert_eq!(items.len(), 3);
+    assert!(
+        items
+            .iter()
+            .all(|item| item["title"].as_str() == Some("Agenda Item"))
+    );
 }
 
 #[test]
@@ -327,9 +224,9 @@ fn test_task_list_pkms_text_uses_bare_source_ids() {
 }
 
 #[test]
-fn test_task_agenda_matches_agenda_json() {
+fn test_task_agenda_json() {
     let (_dir, root) = setup_db();
-    let (task, task_status) = run_json(&[
+    let (v, status) = run_json(&[
         "--db",
         root.to_str().unwrap(),
         "--output-format",
@@ -337,168 +234,17 @@ fn test_task_agenda_matches_agenda_json() {
         "task",
         "agenda",
     ]);
-    let (agenda, agenda_status) = run_json(&[
-        "--db",
-        root.to_str().unwrap(),
-        "--output-format",
-        "json",
-        "agenda",
-    ]);
-    assert!(task_status.success());
-    assert!(agenda_status.success());
-    assert_eq!(task, agenda);
+    assert!(status.success());
+    assert!(v.get("total").is_some());
+    assert!(v["items"].as_array().is_some_and(|items| !items.is_empty()));
 }
 
 #[test]
-fn test_task_agenda_matches_agenda_text() {
+fn test_task_agenda_text() {
     let (_dir, root) = setup_db();
-    let (task_stdout, task_stderr, task_status) =
-        run(&["--db", root.to_str().unwrap(), "task", "agenda"]);
-    let (agenda_stdout, agenda_stderr, agenda_status) =
-        run(&["--db", root.to_str().unwrap(), "agenda"]);
-
-    assert!(
-        task_status.success(),
-        "task agenda failed:\n{task_stdout}\n{task_stderr}"
-    );
-    assert!(
-        agenda_status.success(),
-        "agenda failed:\n{agenda_stdout}\n{agenda_stderr}"
-    );
-    assert_eq!(task_stdout, agenda_stdout);
-}
-
-#[test]
-fn test_task_agenda_legacy_schema_matches_agenda_for_filters() {
-    let (_dir, root) = setup_db();
-    let (task, task_status) = run_json(&[
-        "--db",
-        root.to_str().unwrap(),
-        "--output-format",
-        "json",
-        "task",
-        "agenda",
-        "--output-schema",
-        "legacy",
-        "state:TODO",
-        "tags:agenda",
-        "type:SCHED",
-        "prio:A",
-    ]);
-    let (agenda, agenda_status) = run_json(&[
-        "--db",
-        root.to_str().unwrap(),
-        "--output-format",
-        "json",
-        "agenda",
-        "--state",
-        "TODO",
-        "--tags",
-        "agenda",
-        "--type",
-        "SCHED",
-        "--prio",
-        "A",
-    ]);
-    assert!(task_status.success());
-    assert!(agenda_status.success());
-    assert_eq!(task, agenda);
-}
-
-#[test]
-fn test_task_agenda_date_upcoming_legacy_schema_matches_agenda_upcoming() {
-    let (_dir, root) = setup_db();
-    let (task, task_status) = run_json(&[
-        "--db",
-        root.to_str().unwrap(),
-        "--output-format",
-        "json",
-        "task",
-        "agenda",
-        "--output-schema",
-        "legacy",
-        "date:upcoming",
-    ]);
-    let (agenda, agenda_status) = run_json(&[
-        "--db",
-        root.to_str().unwrap(),
-        "--output-format",
-        "json",
-        "agenda",
-        "--upcoming",
-    ]);
-    assert!(task_status.success());
-    assert!(agenda_status.success());
-    assert_eq!(task, agenda);
-}
-
-#[test]
-fn test_task_agenda_compatibility_filter_flags_match_agenda() {
-    let (_dir, root) = setup_db();
-    let (task, task_status) = run_json(&[
-        "--db",
-        root.to_str().unwrap(),
-        "--output-format",
-        "json",
-        "task",
-        "agenda",
-        "--output-schema",
-        "legacy",
-        "--today",
-        "--state",
-        "TODO",
-        "--tags",
-        "agenda",
-        "--type",
-        "SCHED",
-    ]);
-    let (agenda, agenda_status) = run_json(&[
-        "--db",
-        root.to_str().unwrap(),
-        "--output-format",
-        "json",
-        "agenda",
-        "--today",
-        "--state",
-        "TODO",
-        "--tags",
-        "agenda",
-        "--type",
-        "SCHED",
-    ]);
-    assert!(task_status.success());
-    assert!(agenda_status.success());
-    assert_eq!(task, agenda);
-}
-
-#[test]
-fn test_legacy_task_commands_warn_on_stderr_only() {
-    let (_dir, root) = setup_db();
-    let (todo_stdout, todo_stderr, todo_status) = run(&[
-        "--db",
-        root.to_str().unwrap(),
-        "--output-format",
-        "json",
-        "todo",
-        "--limit",
-        "1",
-    ]);
-    assert!(todo_status.success());
-    assert!(todo_stdout.trim_start().starts_with('{'));
-    assert!(todo_stderr.contains("`pkms todo` is deprecated"));
-
-    let (agenda_stdout, agenda_stderr, agenda_status) = run(&[
-        "--db",
-        root.to_str().unwrap(),
-        "--output-format",
-        "json",
-        "agenda",
-        "--limit",
-        "1",
-    ]);
-    assert!(agenda_status.success());
-    assert!(agenda_stdout.trim_start().starts_with('{'));
-    assert!(agenda_stderr.contains("`pkms agenda` is deprecated"));
+    let (stdout, stderr, status) = run(&["--db", root.to_str().unwrap(), "task", "agenda"]);
+    assert!(status.success(), "task agenda failed:\n{stdout}\n{stderr}");
+    assert!(stdout.contains("planned item"));
 }
 
 #[test]
@@ -1109,7 +855,7 @@ fn assert_metadata_row(v: &serde_json::Value, source: &str, name: &str) {
 #[test]
 fn test_task_list_ndjson() {
     let (_dir, root) = setup_db();
-    let (task_stdout, task_stderr, task_status) = run(&[
+    let (stdout, stderr, status) = run(&[
         "--db",
         root.to_str().unwrap(),
         "--output-format",
@@ -1117,22 +863,11 @@ fn test_task_list_ndjson() {
         "task",
         "list",
     ]);
-    let (todo_stdout, todo_stderr, todo_status) = run(&[
-        "--db",
-        root.to_str().unwrap(),
-        "--output-format",
-        "ndjson",
-        "todo",
-    ]);
-    assert!(
-        task_status.success(),
-        "task list failed:\n{task_stdout}\n{task_stderr}"
-    );
-    assert!(
-        todo_status.success(),
-        "todo failed:\n{todo_stdout}\n{todo_stderr}"
-    );
-    assert_eq!(task_stdout, todo_stdout);
+    assert!(status.success(), "task list failed:\n{stdout}\n{stderr}");
+    let first = stdout.lines().next().expect("expected at least one task");
+    let v: serde_json::Value = serde_json::from_str(first).unwrap();
+    assert!(v.get("uuid").is_some());
+    assert!(v.get("todo_state").is_some());
 }
 
 #[test]

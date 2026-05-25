@@ -122,62 +122,6 @@ fn dispatch(cli: &Cli, cfg: &config::ResolvedConfig, ctx: &OutputContext) -> Res
         Command::Query(args) => {
             commands::query::run(cfg, ctx, &args.try_into()?).map(|()| ExitCode::SUCCESS)?
         }
-        Command::Todo(args) => {
-            eprintln!(
-                "Warning: `pkms todo` is deprecated; use `pkms task list` instead. Use `pkms task list --output-schema legacy` for legacy JSON/NDJSON schema."
-            );
-            let resolved_scope = if args.from_stdin {
-                util::read_stdin_ndjson()?
-            } else {
-                args.scope.clone().unwrap_or_default()
-            };
-            let todo_cols = input::resolve_columns(args.table.columns.as_deref(), &cfg.columns);
-            commands::todo::run(
-                cfg,
-                ctx,
-                &commands::todo::TodoOptions {
-                    state: args.filters.state.clone(),
-                    tags: args.filters.tags.clone(),
-                    kind: args.filters.kind.clone(),
-                    sort: args.sort.clone(),
-                    limit: args.limit,
-                    group: args.group.clone(),
-                    scope: resolved_scope,
-                    after: input::parse_datetime(args.after.as_deref()),
-                    before: input::parse_datetime(args.before.as_deref()),
-                    prio: args.prio.clone(),
-                    line_sep: args.table.line_sep,
-                    columns: todo_cols,
-                },
-            )
-            .map(|()| ExitCode::SUCCESS)?
-        }
-        Command::Agenda(args) => {
-            eprintln!(
-                "Warning: `pkms agenda` is deprecated; use `pkms task agenda` instead. Use `pkms task agenda --output-schema legacy` for legacy JSON/NDJSON schema."
-            );
-            let agenda_cols = input::resolve_columns(args.table.columns.as_deref(), &cfg.columns);
-            commands::agenda::run(
-                cfg,
-                ctx,
-                &commands::agenda::AgendaOptions {
-                    state: args.filters.state.clone(),
-                    tags: args.filters.tags.clone(),
-                    kind: args.filters.kind.clone(),
-                    prio: args.prio.clone(),
-                    overdue: args.overdue,
-                    upcoming: args.upcoming,
-                    date: input::parse_date(args.date.as_deref()),
-                    sort: args.sort.clone(),
-                    limit: args.limit,
-                    today: args.today,
-                    week: args.week,
-                    line_sep: args.table.line_sep,
-                    columns: agenda_cols,
-                },
-            )
-            .map(|()| ExitCode::SUCCESS)?
-        }
         Command::Task(args) => {
             commands::task::run(cfg, ctx, &args.command).map(|()| ExitCode::SUCCESS)?
         }

@@ -66,10 +66,6 @@ pub enum Command {
     Info,
     #[command(about = "Generate default config file at ~/.config/pkms.toml")]
     InitConfig(InitConfigArgs),
-    #[command(about = "Display upcoming and overdue items with SCHEDULED/DEADLINE dates")]
-    Agenda(AgendaArgs),
-    #[command(about = "Display TODO items (use --group to group by state/priority/file)")]
-    Todo(TodoArgs),
     #[command(about = "List, inspect, and update tasks across configured sources")]
     Task(TaskArgs),
     #[command(name = "path", about = "Find shortest path between two notes")]
@@ -285,86 +281,6 @@ pub struct InitConfigArgs {
 }
 
 #[derive(Debug, Args)]
-pub struct AgendaArgs {
-    #[command(flatten)]
-    pub filters: TaskFilterArgs,
-    #[arg(
-        long,
-        value_name = "PRIO",
-        help = "Filter by priority: A, B, C, or empty string for no priority"
-    )]
-    pub prio: Option<String>,
-    #[arg(long, help = "Only show overdue items (deadline in the past)")]
-    pub overdue: bool,
-    #[arg(long, help = "Show items scheduled or due on a specific date")]
-    pub date: Option<String>,
-    #[arg(
-        long,
-        value_name = "SORT",
-        help = "Comma-separated sort fields: priority, scheduled, deadline, file, date (default: date,priority)"
-    )]
-    pub sort: Option<String>,
-    #[arg(long, help = "Maximum results")]
-    pub limit: Option<usize>,
-    #[arg(long, help = "Show today's agenda items")]
-    pub today: bool,
-    #[arg(long, help = "Show this week's agenda items")]
-    pub week: bool,
-    #[arg(long, help = "Show only upcoming items (not overdue or today)")]
-    pub upcoming: bool,
-    #[command(flatten)]
-    pub table: TaskTableArgs,
-}
-
-#[derive(Debug, Args)]
-pub struct TodoArgs {
-    #[command(flatten)]
-    pub filters: TaskFilterArgs,
-    #[arg(
-        long,
-        value_name = "SORT",
-        help = "Comma-separated sort fields: priority, state, file, date (default: priority)"
-    )]
-    pub sort: Option<String>,
-    #[arg(long, help = "Maximum results")]
-    pub limit: Option<usize>,
-    #[arg(
-        long,
-        help = "Group: priority, state, file (same values as --sort; if combined with --sort, sorting is done within sections)"
-    )]
-    pub group: Option<String>,
-    #[arg(
-        long,
-        num_args = 1..,
-        value_name = "TARGET",
-        help = "Restrict to scope (UUIDs, file paths, or note titles)"
-    )]
-    pub scope: Option<Vec<String>>,
-    #[arg(
-        long,
-        value_name = "DATE",
-        help = "Show items on or after this date (YYYY-MM-DD)"
-    )]
-    pub after: Option<String>,
-    #[arg(
-        long,
-        value_name = "DATE",
-        help = "Show items on or before this date (YYYY-MM-DD)"
-    )]
-    pub before: Option<String>,
-    #[arg(
-        long,
-        value_name = "PRIO",
-        help = "Filter by priority: A, B, C, or empty string for no priority"
-    )]
-    pub prio: Option<String>,
-    #[arg(long, help = "Read UUIDs from NDJSON stdin to use as scope")]
-    pub from_stdin: bool,
-    #[command(flatten)]
-    pub table: TaskTableArgs,
-}
-
-#[derive(Debug, Args)]
 pub struct TaskFilterArgs {
     #[arg(
         long,
@@ -439,33 +355,6 @@ pub enum TaskCommand {
 pub struct TaskListArgs {
     #[arg(value_name = "MODE_OR_FILTER")]
     pub filters: Vec<String>,
-    #[command(flatten)]
-    pub compat_filters: TaskFilterArgs,
-    #[arg(
-        long,
-        value_name = "PRIO",
-        help = "Compatibility alias for prio:<PRIO>; use empty string or none for no priority"
-    )]
-    pub prio: Option<String>,
-    #[arg(
-        long,
-        num_args = 1..,
-        value_name = "TARGET",
-        help = "Compatibility alias for scope:<TARGET>"
-    )]
-    pub scope: Option<Vec<String>>,
-    #[arg(
-        long,
-        value_name = "DATE",
-        help = "Compatibility alias for after:<DATE>"
-    )]
-    pub after: Option<String>,
-    #[arg(
-        long,
-        value_name = "DATE",
-        help = "Compatibility alias for before:<DATE>"
-    )]
-    pub before: Option<String>,
     #[arg(long, value_name = "SORT")]
     pub sort: Option<String>,
     #[arg(long, help = "Maximum results")]
@@ -477,12 +366,6 @@ pub struct TaskListArgs {
     pub group: Option<String>,
     #[arg(long, help = "Read UUIDs from NDJSON stdin to use as PKMS scope")]
     pub from_stdin: bool,
-    #[arg(
-        long,
-        value_name = "SCHEMA",
-        help = "Output schema: task or legacy. Legacy is available for source:pkms."
-    )]
-    pub output_schema: Option<String>,
     #[command(flatten)]
     pub table: TaskTableArgs,
 }
@@ -493,38 +376,10 @@ pub struct TaskAgendaArgs {
     pub command: Option<TaskAgendaCommand>,
     #[arg(value_name = "FILTER")]
     pub filters: Vec<String>,
-    #[command(flatten)]
-    pub compat_filters: TaskFilterArgs,
-    #[arg(
-        long,
-        value_name = "PRIO",
-        help = "Compatibility alias for prio:<PRIO>; use empty string or none for no priority"
-    )]
-    pub prio: Option<String>,
-    #[arg(
-        long,
-        value_name = "DATE",
-        help = "Compatibility alias for date:<DATE>"
-    )]
-    pub date: Option<String>,
-    #[arg(long, help = "Compatibility alias for date:today")]
-    pub today: bool,
-    #[arg(long, help = "Compatibility alias for date:week")]
-    pub week: bool,
-    #[arg(long, help = "Compatibility alias for date:overdue")]
-    pub overdue: bool,
-    #[arg(long, help = "Compatibility alias for date:upcoming")]
-    pub upcoming: bool,
     #[arg(long, value_name = "SORT")]
     pub sort: Option<String>,
     #[arg(long, help = "Maximum results")]
     pub limit: Option<usize>,
-    #[arg(
-        long,
-        value_name = "SCHEMA",
-        help = "Output schema: task or legacy. Legacy is available for source:pkms."
-    )]
-    pub output_schema: Option<String>,
     #[command(flatten)]
     pub table: TaskTableArgs,
 }

@@ -1,4 +1,3 @@
-mod agenda;
 mod all_commands;
 mod check;
 mod config;
@@ -19,7 +18,6 @@ mod snapshot;
 mod stats;
 mod suggest;
 mod task;
-mod todo;
 mod validate;
 
 use std::fs;

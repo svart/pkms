@@ -200,7 +200,7 @@ fn test_pipe_resolve_to_validate() {
 }
 
 #[test]
-fn test_pipe_resolve_to_todo() {
+fn test_pipe_resolve_to_task_list() {
     let (_dir, root) = setup_db();
     let db = root.to_str().unwrap();
     let (stdout, status) = run_pipe_ndjson(
@@ -218,13 +218,14 @@ fn test_pipe_resolve_to_todo() {
             db,
             "--output-format",
             "ndjson",
-            "todo",
+            "task",
+            "list",
             "--from-stdin",
         ],
     );
     assert!(
         status.success(),
-        "pipe resolve|todo failed:\nstdout: {}\n",
+        "pipe resolve|task list failed:\nstdout: {}\n",
         stdout
     );
     assert!(!stdout.is_empty(), "expected output from pipe");
@@ -233,7 +234,7 @@ fn test_pipe_resolve_to_todo() {
             .unwrap_or_else(|e| panic!("Bad JSON line '{}': {}", line, e));
         assert!(
             v.get("uuid").is_some(),
-            "expected todo output with uuid, got: {}",
+            "expected task list output with uuid, got: {}",
             line
         );
     }

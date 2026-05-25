@@ -1,7 +1,9 @@
 use crate::output::{ALL_COLUMNS, Column};
 use crate::util::{is_stdin_piped, read_stdin_ndjson};
 use anyhow::Result;
-use chrono::{NaiveDate, NaiveDateTime};
+use chrono::NaiveDate;
+#[cfg(test)]
+use chrono::NaiveDateTime;
 
 pub fn comma_list(value: Option<&str>) -> Option<Vec<String>> {
     value.map(|s| s.split(',').map(|s| s.trim().to_string()).collect())
@@ -11,6 +13,7 @@ pub fn parse_date(value: Option<&str>) -> Option<NaiveDate> {
     value.and_then(|d| NaiveDate::parse_from_str(d, "%Y-%m-%d").ok())
 }
 
+#[cfg(test)]
 pub fn parse_datetime(value: Option<&str>) -> Option<NaiveDateTime> {
     value.and_then(|d| {
         NaiveDateTime::parse_from_str(d, "%Y-%m-%d %H:%M")
