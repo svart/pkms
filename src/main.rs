@@ -9,6 +9,7 @@ mod embed;
 mod graph;
 mod input;
 mod org_date;
+mod org_edit;
 mod output;
 mod parser;
 pub mod tasks;

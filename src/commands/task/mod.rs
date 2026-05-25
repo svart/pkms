@@ -12,6 +12,7 @@ use crate::commands::task_index::{
 use crate::config::{ColumnSource, ColumnView, ResolvedConfig};
 use crate::input;
 use crate::org_date::parse_org_date;
+use crate::org_edit;
 use crate::output::{ALL_COLUMNS, Column, OutputContext};
 use crate::parser::{DEADLINE_RE, HEADING_RE, SCHEDULED_RE, find_daily_file_date};
 use crate::tasks::filter::{
@@ -1977,14 +1978,7 @@ fn replace_heading_state(
     new_state: &str,
     dry_run: bool,
 ) -> Result<TaskStateChangeOutput> {
-    let content = std::fs::read_to_string(path)?;
-    let mut lines: Vec<String> = content.split_inclusive('\n').map(str::to_string).collect();
-    if content.is_empty() || !content.ends_with('\n') {
-        let consumed: usize = lines.iter().map(String::len).sum();
-        if consumed < content.len() {
-            lines.push(content[consumed..].to_string());
-        }
-    }
+    let mut lines = org_edit::read_lines(path)?;
     let idx = line_number
         .checked_sub(1)
         .ok_or_else(|| anyhow::anyhow!("Invalid task line number: {line_number}"))?;
@@ -1992,14 +1986,7 @@ fn replace_heading_state(
         .get(idx)
         .ok_or_else(|| anyhow::anyhow!("Task line {line_number} no longer exists in {path}"))?
         .clone();
-    let newline = if line.ends_with("\r\n") {
-        "\r\n"
-    } else if line.ends_with('\n') {
-        "\n"
-    } else {
-        ""
-    };
-    let body = line.strip_suffix(newline).unwrap_or(&line);
+    let (body, newline) = org_edit::split_line_ending(&line);
     let captures = HEADING_RE
         .captures(body)
         .ok_or_else(|| anyhow::anyhow!("Task line {line_number} is no longer an org heading"))?;
@@ -2022,7 +2009,7 @@ fn replace_heading_state(
     updated.replace_range(state_match.range(), new_state);
     lines[idx] = format!("{updated}{newline}");
     if !dry_run {
-        std::fs::write(path, lines.concat())?;
+        org_edit::write_lines(path, &lines)?;
     }
 
     Ok(TaskStateChangeOutput {
@@ -2107,14 +2094,7 @@ fn update_heading_planning_date(
     kind: PlanningKind,
     date: Option<&str>,
 ) -> Result<()> {
-    let content = std::fs::read_to_string(path)?;
-    let mut lines: Vec<String> = content.split_inclusive('\n').map(str::to_string).collect();
-    if content.is_empty() || !content.ends_with('\n') {
-        let consumed: usize = lines.iter().map(String::len).sum();
-        if consumed < content.len() {
-            lines.push(content[consumed..].to_string());
-        }
-    }
+    let mut lines = org_edit::read_lines(path)?;
     let heading_idx = line_number
         .checked_sub(1)
         .ok_or_else(|| anyhow::anyhow!("Invalid task line number: {line_number}"))?;
@@ -2147,7 +2127,7 @@ fn update_heading_planning_date(
         }
         (None, None) => {}
     }
-    std::fs::write(path, lines.concat())?;
+    org_edit::write_lines(path, &lines)?;
     Ok(())
 }
 
@@ -2170,14 +2150,7 @@ fn find_planning_line_index(lines: &[String], heading_idx: usize) -> Option<usiz
 
 fn update_recurring_planning_date(path: &str, line_number: usize, date: &str) -> Result<()> {
     let new_date = NaiveDate::parse_from_str(date, "%Y-%m-%d")?;
-    let content = std::fs::read_to_string(path)?;
-    let mut lines: Vec<String> = content.split_inclusive('\n').map(str::to_string).collect();
-    if content.is_empty() || !content.ends_with('\n') {
-        let consumed: usize = lines.iter().map(String::len).sum();
-        if consumed < content.len() {
-            lines.push(content[consumed..].to_string());
-        }
-    }
+    let mut lines = org_edit::read_lines(path)?;
     let heading_idx = line_number
         .checked_sub(1)
         .ok_or_else(|| anyhow::anyhow!("Invalid task line number: {line_number}"))?;
@@ -2185,7 +2158,7 @@ fn update_recurring_planning_date(path: &str, line_number: usize, date: &str) ->
         anyhow::anyhow!("Task does not have a recurring scheduled or deadline date")
     })?;
     lines[planning_idx] = postpone_recurring_planning_line(&lines[planning_idx], new_date)?;
-    std::fs::write(path, lines.concat())?;
+    org_edit::write_lines(path, &lines)?;
     Ok(())
 }
 
@@ -2249,14 +2222,7 @@ fn planning_label(kind: PlanningKind) -> &'static str {
 }
 
 fn replace_planning_token(line: &str, kind: PlanningKind, value: Option<&str>) -> String {
-    let newline = if line.ends_with("\r\n") {
-        "\r\n"
-    } else if line.ends_with('\n') {
-        "\n"
-    } else {
-        ""
-    };
-    let body = line.strip_suffix(newline).unwrap_or(line);
+    let (body, newline) = org_edit::split_line_ending(line);
     let regex = match kind {
         PlanningKind::Scheduled => &*SCHEDULED_RE,
         PlanningKind::Deadline => &*DEADLINE_RE,
