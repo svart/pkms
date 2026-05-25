@@ -11,7 +11,6 @@ use crate::commands::task_index::{
 };
 use crate::config::{ColumnSource, ColumnView, ResolvedConfig};
 use crate::input;
-use crate::org_date::parse_org_date;
 use crate::org_edit;
 use crate::output::{ALL_COLUMNS, Column, OutputContext};
 use crate::parser::{DEADLINE_RE, HEADING_RE, SCHEDULED_RE, find_daily_file_date};
@@ -27,7 +26,7 @@ use crate::tasks::provider::{
 use crate::util;
 use crate::workspace::Workspace;
 use anyhow::{Context, Result, bail};
-use chrono::{Local, NaiveDate, NaiveDateTime, NaiveTime};
+use chrono::{Local, NaiveDate};
 use serde::Serialize;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -102,10 +101,7 @@ impl RowItem for TaskRow<'_> {
     }
 
     fn priority(&self) -> Option<char> {
-        self.item
-            .priority
-            .as_deref()
-            .and_then(|priority| priority.chars().next())
+        self.item.priority_char()
     }
 
     fn title(&self) -> &str {
@@ -141,17 +137,11 @@ impl RowItem for TaskRow<'_> {
     }
 
     fn scheduled_date_str(&self) -> Option<&str> {
-        self.item
-            .scheduled
-            .as_ref()
-            .and_then(|date| date.date.as_deref())
+        self.item.scheduled_date_str()
     }
 
     fn deadline_date_str(&self) -> Option<&str> {
-        self.item
-            .deadline
-            .as_ref()
-            .and_then(|date| date.date.as_deref())
+        self.item.deadline_date_str()
     }
 }
 
@@ -717,11 +707,11 @@ fn apply_task_filter_criteria(
     }
 
     if let Some(after) = criteria.after {
-        items.retain(|item| item_datetimes(item).iter().any(|dt| dt >= &after));
+        items.retain(|item| item.datetimes().iter().any(|dt| dt >= &after));
     }
 
     if let Some(before) = criteria.before {
-        items.retain(|item| item_datetimes(item).iter().any(|dt| dt <= &before));
+        items.retain(|item| item.datetimes().iter().any(|dt| dt <= &before));
     }
 
     let project_filters = crate::commands::task_common::parse_filters(criteria.project.as_deref());
@@ -744,50 +734,20 @@ fn apply_task_date_filter(items: &mut Vec<TaskItem>, date_filter: &TaskDateFilte
 fn task_item_matches_date_filter(item: &TaskItem, date_filter: &TaskDateFilter) -> bool {
     let today = Local::now().date_naive();
     match date_filter {
-        TaskDateFilter::Exact(date) => item_dates(item).iter().any(|item_date| item_date == date),
-        TaskDateFilter::Today => item_dates(item).contains(&today),
+        TaskDateFilter::Exact(date) => item.dates().iter().any(|item_date| item_date == date),
+        TaskDateFilter::Today => item.dates().contains(&today),
         TaskDateFilter::Week => {
             let cutoff = today + chrono::Duration::days(7);
-            item_dates(item)
-                .iter()
-                .any(|item_date| *item_date <= cutoff)
+            item.dates().iter().any(|item_date| *item_date <= cutoff)
         }
         TaskDateFilter::Overdue => item.is_overdue,
         TaskDateFilter::Upcoming => {
-            !item.is_overdue && item_dates(item).iter().any(|item_date| *item_date > today)
+            !item.is_overdue && item.dates().iter().any(|item_date| *item_date > today)
         }
         TaskDateFilter::Any(filters) => filters
             .iter()
             .any(|filter| task_item_matches_date_filter(item, filter)),
     }
-}
-
-fn item_dates(item: &TaskItem) -> Vec<NaiveDate> {
-    let mut dates: Vec<NaiveDate> = item_datetimes(item)
-        .into_iter()
-        .map(|dt| dt.date())
-        .collect();
-    if let Some(daily_file_date) = &item.daily_file_date
-        && let Ok(date) = NaiveDate::parse_from_str(daily_file_date, "%Y-%m-%d")
-    {
-        dates.push(date);
-    }
-    dates
-}
-
-fn item_datetimes(item: &TaskItem) -> Vec<NaiveDateTime> {
-    [item.scheduled.as_ref(), item.deadline.as_ref()]
-        .into_iter()
-        .flatten()
-        .filter_map(|date| {
-            parse_org_date(&date.raw).map(|parsed| {
-                let time = parsed
-                    .time
-                    .unwrap_or_else(|| NaiveTime::from_hms_opt(0, 0, 0).unwrap());
-                parsed.base_date.and_time(time)
-            })
-        })
-        .collect()
 }
 
 fn apply_project_filter(item: &TaskItem, filters: &[crate::commands::task_common::Filter]) -> bool {
@@ -2499,7 +2459,7 @@ fn todoist_created_task_id(response: &serde_json::Value) -> Result<String> {
 
 fn print_created_task(item: &TaskItem) {
     let mut details = vec![format!("id {}", item.display_id)];
-    if let Some(date) = effective_date(item) {
+    if let Some(date) = item.effective_date() {
         details.push(format!("date {date}"));
     }
     if let Some(priority) = item.priority.as_deref() {
@@ -2633,7 +2593,7 @@ fn retain_upcoming_task_items(items: &mut Vec<TaskItem>, days: i64) {
     let today = Local::now().date_naive();
     let cutoff = today + chrono::Duration::days(days);
     items.retain(|item| {
-        effective_date(item)
+        item.effective_date()
             .and_then(|date| NaiveDate::parse_from_str(date, "%Y-%m-%d").ok())
             .is_some_and(|date| date > today && date <= cutoff)
     });
@@ -2644,10 +2604,10 @@ fn sort_task_items(items: &mut [TaskItem], sort: &str) -> Result<()> {
     items.sort_by(|a, b| {
         for field in &fields {
             let ord = match *field {
-                "priority" => priority_sort_value(a).cmp(&priority_sort_value(b)),
-                "date" => effective_date(a).cmp(&effective_date(b)),
-                "scheduled" => task_date_value(&a.scheduled).cmp(&task_date_value(&b.scheduled)),
-                "deadline" => task_date_value(&a.deadline).cmp(&task_date_value(&b.deadline)),
+                "priority" => a.priority_sort_value().cmp(&b.priority_sort_value()),
+                "date" => a.effective_date().cmp(&b.effective_date()),
+                "scheduled" => a.scheduled_date_str().cmp(&b.scheduled_date_str()),
+                "deadline" => a.deadline_date_str().cmp(&b.deadline_date_str()),
                 "file" => a.note_title.cmp(&b.note_title),
                 "source" => source_name(a).cmp(source_name(b)),
                 "state" => a.state.cmp(&b.state),
@@ -2686,34 +2646,6 @@ fn parse_task_sort_fields(sort: &str) -> Result<Vec<&str>> {
         }
     }
     Ok(fields)
-}
-
-fn task_date_value(date: &Option<crate::tasks::model::TaskDate>) -> Option<&str> {
-    date.as_ref().and_then(|date| date.date.as_deref())
-}
-
-fn priority_sort_value(item: &TaskItem) -> u8 {
-    item.priority
-        .as_deref()
-        .and_then(|priority| priority.chars().next())
-        .map(crate::util::priority_value)
-        .unwrap_or(3)
-}
-
-fn effective_date(item: &TaskItem) -> Option<&str> {
-    item.scheduled
-        .as_ref()
-        .and_then(|date| date.date.as_deref())
-        .or_else(|| item.deadline.as_ref().and_then(|date| date.date.as_deref()))
-        .or(item.daily_file_date.as_deref())
-}
-
-fn task_item_is_overdue(item: &TaskItem, today: NaiveDate) -> bool {
-    item.is_overdue || item_dates(item).into_iter().any(|date| date < today)
-}
-
-fn task_item_is_today(item: &TaskItem, today: NaiveDate) -> bool {
-    item_dates(item).contains(&today)
 }
 
 fn print_task_items(
@@ -2799,18 +2731,18 @@ fn print_agenda_task_table(
     let mut upcoming = Vec::new();
 
     for item in items {
-        if task_item_is_overdue(item, today) {
+        if item.is_overdue_on(today) {
             overdue.push(item.clone());
-        } else if task_item_is_today(item, today) {
+        } else if item.is_today_on(today) {
             today_items.push(item.clone());
-        } else if effective_date(item).is_some() {
+        } else if item.effective_date().is_some() {
             upcoming.push(item.clone());
         }
     }
 
-    overdue.sort_by(|a, b| effective_date(a).cmp(&effective_date(b)));
-    today_items.sort_by(|a, b| effective_date(a).cmp(&effective_date(b)));
-    upcoming.sort_by(|a, b| effective_date(a).cmp(&effective_date(b)));
+    overdue.sort_by(|a, b| a.effective_date().cmp(&b.effective_date()));
+    today_items.sort_by(|a, b| a.effective_date().cmp(&b.effective_date()));
+    upcoming.sort_by(|a, b| a.effective_date().cmp(&b.effective_date()));
 
     let overdue_rows = task_rows(&overdue, source);
     let today_rows = task_rows(&today_items, source);
