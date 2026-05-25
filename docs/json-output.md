@@ -30,4 +30,4 @@ passing a stream of note or task records to another command.
 ```
 
 NDJSON is one JSON object per line. Pipeline consumers read the `uuid` field by
-default; `show` can also read task-style target records.
+default unless the command documents a narrower input shape.

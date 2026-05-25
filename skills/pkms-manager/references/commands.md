@@ -60,8 +60,6 @@ pkms fix <broken-full-uuid> <replacement-full-uuid> --apply
 ## Tasks
 
 ```bash
-pkms show <canonical-id>
-pkms open <canonical-id>
 pkms task list
 pkms task agenda
 pkms task agenda today

@@ -111,8 +111,6 @@ pkms suggest <uuid> --embed
 ```bash
 pkms task list
 pkms task agenda
-pkms show <id>
-pkms open <id>
 pkms task agenda today
 pkms task agenda overdue
 pkms task agenda upcoming --days 7

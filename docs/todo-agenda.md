@@ -1,9 +1,8 @@
 # TODO and Agenda
 
-`task list`, `task agenda`, `show`, `open`, and the local `task` namespace
-share one canonical task ID space. The ID shown by `task list` is the same ID
-used by `task agenda`, `show <ID>`, `open <ID>`, `task p<ID> show`, and
-`task p<ID> open`.
+`task list`, `task agenda`, and task ID actions share one canonical task ID
+space. The ID shown by `task list` is the same ID used by `task agenda`,
+`task p<ID> show`, and `task p<ID> open`.
 
 IDs are assigned globally using a deterministic sort:
 
@@ -97,7 +96,6 @@ Use `--line-sep` for row separator lines in text output.
 Inspect a task by canonical ID:
 
 ```bash
-pkms show 5
 pkms task p5 show
 pkms task pkms:5 show
 ```
@@ -105,20 +103,16 @@ pkms task pkms:5 show
 Open a task at its source heading:
 
 ```bash
-pkms open 5
 pkms task p5 open
 ```
 
-By default, `open` runs `emacsclient -n`. Override it with `--editor` or open a
-specific line with `--line`.
+By default, `task p<ID> open` runs `emacsclient -n`. Override it with
+`--editor` or open a specific line with `--line`.
 
 ```bash
-pkms open <uuid-or-title> --editor "emacsclient -n"
-pkms open <uuid-or-title> --line 42
+pkms task p5 open --editor "emacsclient -n"
+pkms task p5 open --line 42
 ```
-
-Use `show --uuid <target>` when a numeric-looking target should be treated as a
-note target rather than a canonical task ID.
 
 ## Task Namespace
 

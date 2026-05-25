@@ -61,22 +61,6 @@ pub struct HeadingTarget {
     pub canonical_id: Option<usize>,
 }
 
-impl HeadingTarget {
-    pub fn from_arg(arg: String) -> Result<Self> {
-        if let Ok(id) = arg.parse::<usize>() {
-            Ok(HeadingTarget {
-                note_target: arg,
-                canonical_id: Some(id),
-            })
-        } else {
-            Ok(HeadingTarget {
-                note_target: arg,
-                canonical_id: None,
-            })
-        }
-    }
-}
-
 fn find_heading_end(content: &str, heading_line: usize) -> usize {
     let lines: Vec<&str> = content.lines().collect();
     if heading_line == 0 || heading_line > lines.len() {
@@ -367,29 +351,6 @@ fn process_one_show(
         path_ref,
         line_number,
     )
-}
-
-pub fn read_stdin_targets() -> Result<Vec<HeadingTarget>> {
-    let values = crate::util::read_stdin_ndjson_raw()?;
-    let mut targets = Vec::new();
-    for value in &values {
-        let uuid = value
-            .get("uuid")
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_string());
-        let path = value
-            .get("path")
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_string());
-        let target_str = uuid.or(path).unwrap_or_default();
-        if !target_str.is_empty() {
-            targets.push(HeadingTarget::from_arg(target_str)?);
-        }
-    }
-    if targets.is_empty() {
-        anyhow::bail!("No valid NDJSON lines with 'uuid' or 'path' field found on stdin");
-    }
-    Ok(targets)
 }
 
 fn print_one_show_text(output: &ShowOutput, graph: &Graph) {

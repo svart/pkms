@@ -57,8 +57,8 @@ pkms get <uuid-or-title> --links
 pkms check
 pkms task list --columns Id,Date,Prio,Note,Heading
 pkms task agenda today
-pkms show 5
-pkms open 5
+pkms task p5 show
+pkms task p5 open
 pkms new "My Note" --create --tags "topic,project"
 ```
 
@@ -76,7 +76,7 @@ pkms query "rust" --output-format ndjson | pkms get --links --from-stdin
 - Internal links use `[[id:<uuid>][description]]`.
 - Headings with `:ID:` properties are first-class graph nodes.
 - TODO headings get deterministic global IDs shared by `task list`,
-  `task agenda`, `show`, and `open`.
+  `task agenda`, and task ID actions such as `task p<ID> show`.
 - `query` and `suggest` support embedding mode only when built with
   `--features embed`.
 

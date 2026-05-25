@@ -19,7 +19,6 @@ when `--from-stdin` is set.
 - `validate`
 - `context`
 - `task list`
-- `show`
 
 ## Examples
 

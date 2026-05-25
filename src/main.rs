@@ -128,38 +128,6 @@ fn dispatch(cli: &Cli, cfg: &config::ResolvedConfig, ctx: &OutputContext) -> Res
         Command::Path(args) => {
             commands::path::run(cfg, ctx, &args.try_into()?).map(|()| ExitCode::SUCCESS)?
         }
-        Command::Open(args) => {
-            let targets = input::resolve_targets(&args.target, args.from_stdin)?;
-            commands::open::run(
-                cfg,
-                ctx,
-                &commands::open::OpenOptions {
-                    targets,
-                    editor: args.editor.clone(),
-                    line: args.line,
-                },
-            )
-            .map(|()| ExitCode::SUCCESS)?
-        }
-        Command::Show(args) => {
-            let targets = if args.from_stdin {
-                commands::show::read_stdin_targets()?
-            } else if let Some(t) = &args.target {
-                vec![commands::show::HeadingTarget::from_arg(t.clone())?]
-            } else if let Some(u) = &args.uuid {
-                vec![commands::show::HeadingTarget {
-                    note_target: u.clone(),
-                    canonical_id: None,
-                }]
-            } else {
-                anyhow::bail!(
-                    "No target specified and no stdin pipe detected. \
-                     Provide a target or use --from-stdin."
-                );
-            };
-            commands::show::run(cfg, ctx, &commands::show::ShowOptions { targets })
-                .map(|()| ExitCode::SUCCESS)?
-        }
     })
 }
 

@@ -70,10 +70,6 @@ pub enum Command {
     Task(TaskArgs),
     #[command(name = "path", about = "Find shortest path between two notes")]
     Path(PathArgs),
-    #[command(about = "Show detailed task information for a heading")]
-    Show(ShowArgs),
-    #[command(about = "Open a task or note in an editor")]
-    Open(OpenArgs),
 }
 
 #[derive(Debug, Args)]
@@ -535,36 +531,4 @@ pub struct PathArgs {
     pub from: Option<String>,
     #[arg(help = "Target note (UUID, path, or title)")]
     pub to: Option<String>,
-}
-
-#[derive(Debug, Args)]
-pub struct ShowArgs {
-    #[arg(
-        help = "Canonical task ID (from todo/agenda), or UUID/path/title. If numeric, treated as ID."
-    )]
-    pub target: Option<String>,
-    #[arg(
-        long,
-        value_name = "UUID",
-        help = "Explicit note UUID, file path, or title (bypasses canonical ID detection)"
-    )]
-    pub uuid: Option<String>,
-    #[arg(long, help = "Read targets from NDJSON stdin")]
-    pub from_stdin: bool,
-}
-
-#[derive(Debug, Args)]
-pub struct OpenArgs {
-    #[arg(help = "Canonical task ID (from todo/agenda), or UUID/path/title")]
-    pub target: Option<String>,
-    #[arg(
-        long,
-        default_value = "emacsclient -n",
-        help = "Editor command (default: emacsclient -n)"
-    )]
-    pub editor: String,
-    #[arg(short, long, value_name = "LINE", help = "Line number to open at")]
-    pub line: Option<usize>,
-    #[arg(long, help = "Read targets from NDJSON stdin")]
-    pub from_stdin: bool,
 }

@@ -19,7 +19,6 @@ read targets from stdin automatically when possible or explicitly with
 - `validate`
 - `context`
 - `task list`
-- `show`
 
 ## Examples
 
@@ -30,7 +29,6 @@ pkms stats --hubs --output-format ndjson | pkms get --links --no-content
 pkms query "concurrency" --output-format ndjson | pkms suggest --output-format ndjson | pkms get --links
 pkms query "foo" --output-format ndjson | pkms validate
 pkms resolve --tags "project" --output-format ndjson | pkms task list --from-stdin
-pkms task list --output-format ndjson | pkms show --from-stdin
 ```
 
 Use `--from-stdin` when the consumer also has flags or scope could be ambiguous.

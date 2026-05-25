@@ -53,7 +53,7 @@ fn test_removed_task_subcommands_are_rejected() {
 
 #[test]
 fn test_removed_top_level_task_commands_are_rejected() {
-    for command in ["todo", "agenda"] {
+    for command in ["todo", "agenda", "show", "open"] {
         let (stdout, stderr, status) = run(&[command, "--help"]);
         assert!(
             !status.success(),
