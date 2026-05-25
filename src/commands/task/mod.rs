@@ -358,6 +358,63 @@ impl<'a> TodoistTaskProvider<'a> {
     }
 }
 
+struct TaskProviders<'a> {
+    pkms: PkmsTaskProvider<'a>,
+    todoist: TodoistTaskProvider<'a>,
+}
+
+impl<'a> TaskProviders<'a> {
+    fn new(config: &'a ResolvedConfig) -> Self {
+        Self {
+            pkms: PkmsTaskProvider::new(config),
+            todoist: TodoistTaskProvider::new(config),
+        }
+    }
+
+    fn list(&self, source: SourceSelection, query: &TaskQuery) -> Result<Vec<TaskItem>> {
+        match source {
+            SourceSelection::Pkms => self.pkms.list(query),
+            SourceSelection::Todoist => self.todoist.list(query),
+            SourceSelection::All => {
+                let mut items = self.pkms.list(query)?;
+                items.extend(self.todoist.list(query)?);
+                Ok(items)
+            }
+        }
+    }
+
+    fn metadata(
+        &self,
+        source: SourceSelection,
+        kind: MetadataKind,
+    ) -> Result<Vec<TaskMetadataRow>> {
+        let collect = |provider: &dyn TaskProvider| match kind {
+            MetadataKind::Projects => provider.projects(),
+            MetadataKind::Tags => provider.tags(),
+        };
+
+        match source {
+            SourceSelection::Pkms => collect(&self.pkms),
+            SourceSelection::Todoist => collect(&self.todoist),
+            SourceSelection::All => {
+                let mut rows = collect(&self.pkms)?;
+                rows.extend(collect(&self.todoist)?);
+                Ok(rows)
+            }
+        }
+    }
+}
+
+impl SourceSelection {
+    fn column_source(self) -> ColumnSource {
+        match self {
+            SourceSelection::Pkms => ColumnSource::Pkms,
+            SourceSelection::Todoist => ColumnSource::Todoist,
+            SourceSelection::All => ColumnSource::All,
+        }
+    }
+}
+
 impl TaskProvider for PkmsTaskProvider<'_> {
     fn source(&self) -> TaskSourceKind {
         TaskSourceKind::Pkms
@@ -528,18 +585,7 @@ fn collect_task_items(
         filters: filters.clone(),
         view,
     };
-    let pkms = PkmsTaskProvider::new(config);
-    let todoist = TodoistTaskProvider::new(config);
-
-    match filters.source {
-        SourceSelection::Pkms => pkms.list(&query),
-        SourceSelection::Todoist => todoist.list(&query),
-        SourceSelection::All => {
-            let mut items = pkms.list(&query)?;
-            items.extend(todoist.list(&query)?);
-            Ok(items)
-        }
-    }
+    TaskProviders::new(config).list(filters.source, &query)
 }
 
 fn run_shortcut(
@@ -600,12 +646,7 @@ fn resolve_task_table_columns(
         return input::resolve_columns(Some(raw_columns), None).map(Some);
     }
 
-    let source = match source {
-        SourceSelection::Pkms => ColumnSource::Pkms,
-        SourceSelection::Todoist => ColumnSource::Todoist,
-        SourceSelection::All => ColumnSource::All,
-    };
-    let default_columns = config.default_columns(source, view)?;
+    let default_columns = config.default_columns(source.column_source(), view)?;
     if raw_columns.is_none() && default_columns.is_none() {
         return Ok(None);
     }
@@ -618,12 +659,10 @@ fn resolve_task_columns(
     view: ColumnView,
     raw_columns: Option<&str>,
 ) -> Result<Vec<Column>> {
-    let source = match source {
-        SourceSelection::Pkms => ColumnSource::Pkms,
-        SourceSelection::Todoist => ColumnSource::Todoist,
-        SourceSelection::All => ColumnSource::All,
-    };
-    input::resolve_columns(raw_columns, config.default_columns(source, view)?)
+    input::resolve_columns(
+        raw_columns,
+        config.default_columns(source.column_source(), view)?,
+    )
 }
 
 fn collect_shortcut_items(
@@ -983,23 +1022,7 @@ fn collect_task_metadata(
     source: SourceSelection,
     kind: MetadataKind,
 ) -> Result<Vec<TaskMetadataRow>> {
-    let pkms = PkmsTaskProvider::new(config);
-    let todoist = TodoistTaskProvider::new(config);
-
-    let collect = |provider: &dyn TaskProvider| match kind {
-        MetadataKind::Projects => provider.projects(),
-        MetadataKind::Tags => provider.tags(),
-    };
-
-    match source {
-        SourceSelection::Pkms => collect(&pkms),
-        SourceSelection::Todoist => collect(&todoist),
-        SourceSelection::All => {
-            let mut rows = collect(&pkms)?;
-            rows.extend(collect(&todoist)?);
-            Ok(rows)
-        }
-    }
+    TaskProviders::new(config).metadata(source, kind)
 }
 
 fn pkms_project_rows(config: &ResolvedConfig) -> Result<Vec<TaskMetadataRow>> {
