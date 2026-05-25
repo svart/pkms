@@ -45,6 +45,6 @@ top-level `* Inbox` heading.
 
 ## Agenda States
 
-`open_todo_states` define headings treated as active tasks by `todo`.
+`open_todo_states` define headings treated as active tasks by `task list`.
 `closed_todo_states` define completed task states. These state lists also affect
 canonical task ID ordering.

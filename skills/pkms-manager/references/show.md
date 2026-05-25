@@ -6,7 +6,7 @@ Show detailed information for a task heading.
 pkms show <canonical-id>
 pkms show <uuid-or-title>
 pkms show --uuid <uuid-or-title>
-pkms todo --output-format ndjson | pkms show --from-stdin
+pkms task list --output-format ndjson | pkms show --from-stdin
 pkms --output-format json show <canonical-id>
 ```
 

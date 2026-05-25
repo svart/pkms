@@ -9,7 +9,7 @@ pkms open <target> --line 42
 pkms open <target> --editor "emacsclient -n"
 ```
 
-Numeric targets are canonical task IDs from `todo` and `agenda`. Non-numeric
+Numeric targets are canonical task IDs from `task list` and `task agenda`. Non-numeric
 targets can be UUIDs, paths, or note titles.
 
 Default editor command is `emacsclient -n`.

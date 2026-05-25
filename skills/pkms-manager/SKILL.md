@@ -38,7 +38,7 @@ Load only the file needed for the task:
 - Note inspection and graph navigation: `references/get.md`, `references/path.md`, `references/context.md`
 - Note creation and repair: `references/new.md`, `references/fix.md`
 - Suggestions and orphan linking: `references/suggest.md`, `references/orphans.md`
-- TODO and agenda tasks: `references/todo.md`, `references/agenda.md`, `references/show.md`, `references/open.md`, `references/task.md`
+- TODO and agenda tasks: `references/task.md`, `references/show.md`, `references/open.md`
 - Pipelines: `references/pipelining.md`
 - Configuration: `references/info.md`, `references/init-config.md`
 
@@ -86,7 +86,7 @@ understand the intended target.
 
 Use `task list` and `task agenda` for task views. Their `Id` column is the
 canonical ID used by `show <ID>`, `open <ID>`, and `task` IDs such as `p<ID>`
-or `pkms:<ID>`. `todo` and `agenda` are compatibility commands only.
+or `pkms:<ID>`.
 
 ```bash
 pkms task list --columns Id,Date,Prio,Note,Heading
@@ -97,7 +97,7 @@ pkms task p5 state WAITING
 pkms task p5 done --dry-run
 ```
 
-See the TODO/agenda references before changing task workflows.
+See the task reference before changing task workflows.
 
 ### Create and Link Notes
 
@@ -131,7 +131,7 @@ Use NDJSON for command chaining. Producers emit one JSON object per line;
 consumers read UUID/path targets from stdin.
 
 Common producers: `resolve`, `query`, `orphans`, `stats --hubs`, `suggest`.
-Common consumers: `get`, `suggest`, `validate`, `context`, `todo`, `show`.
+Common consumers: `get`, `suggest`, `validate`, `context`, `task list`, `show`.
 
 Use `--from-stdin` when the consumer also has other flags or scope could be
 ambiguous.

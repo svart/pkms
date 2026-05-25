@@ -50,7 +50,7 @@ not mechanically add backlinks.
 ## Scope Work with Pipelines
 
 ```bash
-pkms resolve --tags "project" --output-format ndjson | pkms todo --from-stdin
+pkms resolve --tags "project" --output-format ndjson | pkms task list --from-stdin
 pkms query "topic" --output-format ndjson | pkms validate
 ```
 
@@ -70,8 +70,8 @@ pkms task p5 done --dry-run
 pkms task p5 done
 ```
 
-Use `todo` and `agenda` when you need the older compatibility flags such as
-`--scope`, `--state`, `--tags`, `--type`, or grouped TODO output.
+Use positional filters such as `scope:`, `state:`, `tags:`, and `type:` for
+scoped task views. Use `task list --group` for grouped TODO output.
 
 When built with Todoist support, phone-captured Todoist tasks can be included in
 terminal task review:

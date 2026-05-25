@@ -17,11 +17,9 @@ pkms task p5 done --dry-run
 ```
 
 PKMS task IDs can be written as bare canonical IDs, `p<ID>`, or `pkms:<ID>`.
-Top-level compatibility commands use bare numeric IDs.
 
-By default, `task list` mirrors `todo` output and `task agenda` mirrors
-`agenda` output for PKMS tasks. Explicit Todoist and mixed-source task views
-use the same table shape plus a `Project` column:
+Explicit Todoist and mixed-source task views use the same table shape plus a
+`Project` column:
 `Id,Date,State,Type,Prio,Tags,Project,Note,Heading`. With only one source, the
 `Id` column is the bare source id. With `source:all`, local PKMS ids use
 `p<ID>` and Todoist ids use `t<remote-id>`. Source-neutral JSON keeps stable
@@ -46,13 +44,13 @@ only source filters:
 | Priority | `prio:A`, `priority:A` | Matches priority `A`, `B`, or `C`; matching is case-insensitive. |
 | No priority | `prio:none`, `priority:none` | Matches tasks without a priority. |
 | Exact agenda date | `date:YYYY-MM-DD` | Matches scheduled or deadline dates on that day. |
-| Today | `date:today` | Same date semantics as `agenda --today`. |
-| Week | `date:week` | Same date semantics as `agenda --week`. |
+| Today | `date:today` | Matches scheduled or deadline dates today. |
+| Week | `date:week` | Matches scheduled or deadline dates through the next 7 days. |
 | Overdue | `date:overdue`, `overdue` | Matches overdue tasks. |
 | Upcoming | `date:upcoming`, `upcoming` | Matches non-overdue tasks after today. |
-| After | `after:YYYY-MM-DD`, `after:YYYY-MM-DD HH:MM` | Same datetime semantics as `todo --after`. |
-| Before | `before:YYYY-MM-DD`, `before:YYYY-MM-DD HH:MM` | Same datetime semantics as `todo --before`. |
-| Scope | `scope:<target>` | Restricts PKMS tasks to a note title, UUID, or path, like `todo --scope`. |
+| After | `after:YYYY-MM-DD`, `after:YYYY-MM-DD HH:MM` | Matches tasks on or after the date/time. |
+| Before | `before:YYYY-MM-DD`, `before:YYYY-MM-DD HH:MM` | Matches tasks on or before the date/time. |
+| Scope | `scope:<target>` | Restricts PKMS tasks to a note title, UUID, or path. |
 | Project | `project:<name-or-id>` | Matches PKMS `PROJECT` properties and Todoist project names or ids. |
 | Project exclusion | `project:!<name-or-id>` | Excludes matching projects. |
 
@@ -152,8 +150,8 @@ marker. Treat this as a privacy boundary: the PKMS UUID is stored in Todoist.
 
 Use `task list projects` and `task list tags` when you need task metadata. With
 `source:pkms`, projects come from note-level or heading-level `PROJECT`
-properties, and tags combine note `#+filetags` with heading tags as in `todo`
-and `agenda`. With `source:todoist`, projects and tags come from Todoist
+properties, and tags combine note `#+filetags` with heading tags. With
+`source:todoist`, projects and tags come from Todoist
 metadata. `source:all` combines both sources. Todoist task output uses a
 human-readable `project` when metadata is available and keeps the raw id in
 `project_id`.
