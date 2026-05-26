@@ -175,20 +175,15 @@ impl TodoistClient {
     }
 
     pub fn update_task(&self, id: &str, request: &serde_json::Value) -> Result<()> {
-        let _: serde_json::Value = self.post_json(&format!("/tasks/{id}"), request)?;
-        Ok(())
+        self.post_no_content(&format!("/tasks/{id}"), request)
     }
 
     pub fn close_task(&self, id: &str) -> Result<()> {
-        let _: serde_json::Value =
-            self.post_json(&format!("/tasks/{id}/close"), &serde_json::json!({}))?;
-        Ok(())
+        self.post_no_content(&format!("/tasks/{id}/close"), &serde_json::json!({}))
     }
 
     pub fn reopen_task(&self, id: &str) -> Result<()> {
-        let _: serde_json::Value =
-            self.post_json(&format!("/tasks/{id}/reopen"), &serde_json::json!({}))?;
-        Ok(())
+        self.post_no_content(&format!("/tasks/{id}/reopen"), &serde_json::json!({}))
     }
 
     fn get_paginated<T: for<'de> Deserialize<'de>>(
@@ -242,6 +237,15 @@ impl TodoistClient {
             .body_mut()
             .read_json()
             .context("Failed to parse Todoist response")
+    }
+
+    fn post_no_content<B: Serialize>(&self, path: &str, body: &B) -> Result<()> {
+        self.agent
+            .post(&self.url(path))
+            .header("Authorization", &format!("Bearer {}", self.token))
+            .send_json(body)
+            .map_err(todoist_error)?;
+        Ok(())
     }
 
     fn url(&self, path: &str) -> String {

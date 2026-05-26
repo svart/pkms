@@ -1,13 +1,14 @@
 use super::Column;
 
 pub fn terminal_width() -> Option<usize> {
-    if let Some((w, _)) = terminal_size::terminal_size() {
-        return Some(w.0 as usize);
-    }
-    std::env::var("COLUMNS")
+    if let Some(w) = std::env::var("COLUMNS")
         .ok()
         .and_then(|s| s.parse().ok())
         .filter(|&w| w > 0)
+    {
+        return Some(w);
+    }
+    terminal_size::terminal_size().map(|(w, _)| w.0 as usize)
 }
 
 const MIN_COLUMN_WIDTH: usize = 15;

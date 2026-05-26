@@ -1741,6 +1741,7 @@ fn test_task_agenda_todoist_text_gives_heading_available_width() {
             root.to_str().unwrap(),
             "task",
             "agenda",
+            "--columns=id,heading",
             "source:todoist",
         ],
         &base_url,
@@ -2958,7 +2959,7 @@ fn test_task_add_todoist_invalid_structured_date_fails_before_api() {
 #[test]
 fn test_task_done_todoist_calls_mock_close_endpoint() {
     let (_dir, root) = setup_db();
-    let (base_url, handle) = spawn_todoist_mock(vec![("POST", "/tasks/abc/close", "null")]);
+    let (base_url, handle) = spawn_todoist_mock(vec![("POST", "/tasks/abc/close", "")]);
     let output = run_with_todoist_env(
         &[
             "--db",
