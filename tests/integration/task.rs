@@ -3221,6 +3221,45 @@ fn test_task_done_todoist_dry_run_does_not_call_mock_api() {
 }
 
 #[cfg(feature = "todoist")]
+#[test]
+fn test_todoist_http_logging_records_metadata_without_token() {
+    let (_dir, root) = setup_db();
+    let (base_url, handle) = spawn_todoist_mock(vec![("POST", "/tasks/abc/close", "")]);
+    let config_home = setup_test_config_home();
+    let mut command = Command::new(pkms_binary());
+    configure_test_command(&mut command, config_home.path());
+    let output = command
+        .args([
+            "--db",
+            root.to_str().unwrap(),
+            "--output-format",
+            "json",
+            "task",
+            "todoist:abc",
+            "done",
+        ])
+        .env("TODOIST_API_TOKEN", "test-token")
+        .env("PKMS_TODOIST_API_BASE_URL", &base_url)
+        .env("PKMS_LOG_HTTP", "1")
+        .env("COLUMNS", "120")
+        .output()
+        .unwrap();
+
+    handle.join().unwrap();
+    assert!(output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("todoist request"), "stderr: {stderr}");
+    assert!(stderr.contains("todoist response"), "stderr: {stderr}");
+    assert!(stderr.contains("method=\"POST\""), "stderr: {stderr}");
+    assert!(
+        stderr.contains("path=\"/tasks/abc/close\""),
+        "stderr: {stderr}"
+    );
+    assert!(stderr.contains("status=200"), "stderr: {stderr}");
+    assert!(!stderr.contains("test-token"), "stderr: {stderr}");
+}
+
+#[cfg(feature = "todoist")]
 fn run_with_todoist_env(args: &[&str], base_url: &str) -> std::process::Output {
     let config_home = setup_test_config_home();
     let mut command = Command::new(pkms_binary());

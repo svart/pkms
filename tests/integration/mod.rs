@@ -44,7 +44,8 @@ fn configure_test_command(command: &mut Command, config_home: &Path) {
         .env("XDG_CONFIG_HOME", config_home)
         .env_remove("PKMS_DB_ROOT")
         .env_remove("PKMS_LOG")
-        .env_remove("PKMS_LOG_FORMAT");
+        .env_remove("PKMS_LOG_FORMAT")
+        .env_remove("PKMS_LOG_HTTP");
 }
 
 pub fn run(args: &[&str]) -> (String, String, ExitStatus) {

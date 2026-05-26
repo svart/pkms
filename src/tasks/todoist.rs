@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 const DEFAULT_BASE_URL: &str = "https://api.todoist.com/api/v1";
+const HTTP_LOG_TARGET: &str = "pkms::tasks::todoist::http";
 
 pub struct TodoistClient {
     base_url: String,
@@ -200,22 +201,52 @@ impl TodoistClient {
                 page_params.push(("cursor", cursor.as_str()));
             }
             let page: Paginated<T> = self.get_json(&path_with_query(path, &page_params))?;
+            let page_count = page.results.len();
+            let total_count = results.len() + page_count;
+            let has_next_cursor = page
+                .next_cursor
+                .as_ref()
+                .is_some_and(|next| !next.is_empty());
+            tracing::debug!(
+                target: HTTP_LOG_TARGET,
+                path,
+                page_count,
+                total_count,
+                has_next_cursor,
+                "todoist page received"
+            );
             results.extend(page.results);
             match page.next_cursor {
                 Some(next) if !next.is_empty() => cursor = Some(next),
                 _ => break,
             }
         }
+        tracing::debug!(
+            target: HTTP_LOG_TARGET,
+            path,
+            total_count = results.len(),
+            "todoist pagination completed"
+        );
         Ok(results)
     }
 
     fn get_json<T: for<'de> Deserialize<'de>>(&self, path: &str) -> Result<T> {
+        log_todoist_request("GET", path);
         let mut response = self
             .agent
             .get(&self.url(path))
             .header("Authorization", &format!("Bearer {}", self.token))
             .call()
-            .map_err(todoist_error)?;
+            .map_err(|err| {
+                log_todoist_error("GET", path, &err);
+                todoist_error(err)
+            })?;
+        log_todoist_response(
+            "GET",
+            path,
+            response.status().as_u16(),
+            response_content_length(&response),
+        );
         response
             .body_mut()
             .read_json()
@@ -227,12 +258,22 @@ impl TodoistClient {
         path: &str,
         body: &B,
     ) -> Result<T> {
+        log_todoist_request("POST", path);
         let mut response = self
             .agent
             .post(&self.url(path))
             .header("Authorization", &format!("Bearer {}", self.token))
             .send_json(body)
-            .map_err(todoist_error)?;
+            .map_err(|err| {
+                log_todoist_error("POST", path, &err);
+                todoist_error(err)
+            })?;
+        log_todoist_response(
+            "POST",
+            path,
+            response.status().as_u16(),
+            response_content_length(&response),
+        );
         response
             .body_mut()
             .read_json()
@@ -240,11 +281,22 @@ impl TodoistClient {
     }
 
     fn post_no_content<B: Serialize>(&self, path: &str, body: &B) -> Result<()> {
-        self.agent
+        log_todoist_request("POST", path);
+        let response = self
+            .agent
             .post(&self.url(path))
             .header("Authorization", &format!("Bearer {}", self.token))
             .send_json(body)
-            .map_err(todoist_error)?;
+            .map_err(|err| {
+                log_todoist_error("POST", path, &err);
+                todoist_error(err)
+            })?;
+        log_todoist_response(
+            "POST",
+            path,
+            response.status().as_u16(),
+            response_content_length(&response),
+        );
         Ok(())
     }
 
@@ -376,6 +428,49 @@ fn todoist_error(err: ureq::Error) -> anyhow::Error {
         ureq::Error::StatusCode(code) => anyhow::anyhow!("Todoist API returned HTTP {code}"),
         other => anyhow::anyhow!("Todoist API request failed: {other}"),
     }
+}
+
+fn log_todoist_request(method: &'static str, path: &str) {
+    tracing::debug!(
+        target: HTTP_LOG_TARGET,
+        method,
+        path,
+        "todoist request"
+    );
+}
+
+fn log_todoist_response(
+    method: &'static str,
+    path: &str,
+    status: u16,
+    content_length: Option<u64>,
+) {
+    tracing::debug!(
+        target: HTTP_LOG_TARGET,
+        method,
+        path,
+        status,
+        content_length,
+        "todoist response"
+    );
+}
+
+fn log_todoist_error(method: &'static str, path: &str, err: &ureq::Error) {
+    tracing::debug!(
+        target: HTTP_LOG_TARGET,
+        method,
+        path,
+        error = %err,
+        "todoist request failed"
+    );
+}
+
+fn response_content_length(response: &ureq::http::Response<ureq::Body>) -> Option<u64> {
+    response
+        .headers()
+        .get("content-length")
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| value.parse::<u64>().ok())
 }
 
 pub fn ensure_enabled(config: &crate::config::ResolvedConfig) -> Result<String> {
