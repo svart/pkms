@@ -6,6 +6,7 @@ mod error;
 mod fix;
 mod get;
 mod info;
+mod logging;
 mod new;
 mod orphans;
 mod path;
@@ -41,7 +42,9 @@ fn setup_test_config_home() -> tempfile::TempDir {
 fn configure_test_command(command: &mut Command, config_home: &Path) {
     command
         .env("XDG_CONFIG_HOME", config_home)
-        .env_remove("PKMS_DB_ROOT");
+        .env_remove("PKMS_DB_ROOT")
+        .env_remove("PKMS_LOG")
+        .env_remove("PKMS_LOG_FORMAT");
 }
 
 pub fn run(args: &[&str]) -> (String, String, ExitStatus) {

@@ -8,6 +8,7 @@ mod discovery;
 mod embed;
 mod graph;
 mod input;
+mod logging;
 mod org_date;
 mod org_edit;
 mod output;
@@ -25,7 +26,9 @@ use output::OutputContext;
 use std::process::ExitCode;
 
 fn main() -> ExitCode {
+    logging::init();
     let cli = Cli::parse();
+    tracing::debug!(command = command_name(&cli.command), "dispatching command");
     let app = match App::from_cli(&cli) {
         Ok(app) => app,
         Err(e) => {
@@ -39,6 +42,26 @@ fn main() -> ExitCode {
     match dispatch(&cli, &app.config, &app.output) {
         Ok(code) => code,
         Err(e) => app::command_error(&app.output, e),
+    }
+}
+
+fn command_name(command: &Command) -> &'static str {
+    match command {
+        Command::Check(_) => "check",
+        Command::Validate(_) => "validate",
+        Command::Stats(_) => "stats",
+        Command::Orphans(_) => "orphans",
+        Command::Context(_) => "context",
+        Command::Resolve(_) => "resolve",
+        Command::Fix(_) => "fix",
+        Command::Suggest(_) => "suggest",
+        Command::New(_) => "new",
+        Command::Get(_) => "get",
+        Command::Query(_) => "query",
+        Command::Info => "info",
+        Command::InitConfig(_) => "init-config",
+        Command::Task(_) => "task",
+        Command::Path(_) => "path",
     }
 }
 
