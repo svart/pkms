@@ -21,6 +21,17 @@ If `db_root` is wrong, pass `--db /actual/path` to commands. For reported tool
 bugs against the current database, build the repository binary and reproduce
 with `target/debug/pkms` before analysis.
 
+For hard-to-explain CLI behavior, enable diagnostics on stderr while keeping
+stdout parseable:
+
+```bash
+PKMS_LOG=debug pkms --output-format json <command>
+PKMS_LOG_HTTP=1 pkms task todoist:<remote-id> done
+```
+
+Use `PKMS_LOG_HTTP=1` for Todoist API debugging. It logs request and response
+metadata without tokens or Todoist task payloads.
+
 Prefer structured output when an agent must parse results:
 
 ```bash

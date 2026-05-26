@@ -291,6 +291,10 @@ variable, and `PKMS_TODOIST_API_BASE_URL` exists for tests and mock servers.
 HTTPS uses the platform certificate verifier so system trust-store corporate
 proxy roots are honored.
 
+For debugging Todoist API behavior, set `PKMS_LOG_HTTP=1`. It writes HTTP
+metadata and pagination counts to stderr without logging tokens, request
+bodies, task content, or descriptions.
+
 Todoist responsibilities currently include:
 
 - Read list, agenda, inbox, projects, labels, and show.

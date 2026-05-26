@@ -37,6 +37,18 @@ cargo test --features todoist <test-name>
 cargo test --features todoist --test integration <test-name>
 ```
 
+## Diagnostics
+
+Use `PKMS_LOG` for local debugging when command output alone is not enough.
+Logs are written to stderr so text, JSON, and NDJSON stdout remain parseable.
+`PKMS_LOG=1` enables debug logs; module filters such as
+`PKMS_LOG=pkms::graph=debug` keep output focused. Add `PKMS_LOG_FORMAT=json`
+when logs need to be parsed by tools.
+
+For Todoist API issues, prefer `PKMS_LOG_HTTP=1`. It emits request/response
+metadata and pagination counts without logging tokens, request bodies, task
+content, or descriptions.
+
 ## Final Verification
 
 Before committing release-ready work or after a broad behavior change, run the

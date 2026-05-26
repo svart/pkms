@@ -25,6 +25,32 @@ The database root is resolved once at startup in this order:
 
 If none is available, the command exits with setup instructions.
 
+## Diagnostic Logging
+
+Runtime diagnostics are disabled by default. Set `PKMS_LOG` to enable structured
+internal logs on stderr without changing command stdout:
+
+```bash
+PKMS_LOG=debug pkms --db ~/Documents/org task agenda
+PKMS_LOG=pkms::config=debug pkms info
+PKMS_LOG_FORMAT=json PKMS_LOG=debug pkms --output-format json info
+```
+
+`PKMS_LOG=1` and `PKMS_LOG=true` are aliases for `debug`. `PKMS_LOG` also
+accepts `tracing-subscriber` env-filter directives, so module-specific targets
+can be enabled without turning on all debug logs.
+
+Todoist HTTP metadata can be enabled separately:
+
+```bash
+PKMS_LOG_HTTP=1 pkms task todoist:<remote-id> done
+```
+
+HTTP diagnostics include request method, Todoist API path, response status,
+content length, pagination counts, and transport errors. They intentionally do
+not log authorization tokens, request bodies, task content, descriptions, or
+other Todoist payload fields.
+
 ## New Notes Directory
 
 `new_notes_dir` controls where `pkms new --create` writes files. Relative paths
