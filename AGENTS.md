@@ -20,17 +20,8 @@ database, inspect those files before broader analysis.
 
 ## Build, Lint, and Test
 
-After code or documentation changes, run these commands in this strict order:
-
-```bash
-cargo fmt --check
-cargo clippy -- -D warnings
-cargo build
-cargo build --features=embed
-cargo test
-cargo test --test integration
-cargo run -- --help
-```
+Refer to the [iterative checks section](docs/development.md#iterative-checks)
+for specific commands and usecases.
 
 All checks must pass. Fix clippy warnings directly; do not suppress clippy lints
 unless the user explicitly instructs otherwise.
@@ -75,11 +66,12 @@ moved or behavior has changed.
 
 ## Architecture Invariants
 
-`pkms` is a stateless single-run CLI:
+`pkms` is primarily a stateless single-run CLI:
 
 - Parse args, resolve config, load org files, compute, print, exit.
-- Do not introduce persistent caches, databases, daemons, watch mode, or server
-  mode.
+- Do not introduce persistent caches, databases, daemons, or watch mode.
+- `pkms serve` is the explicit foreground local HTTP viewer exception. It must
+  keep no persistent derived state.
 - `Graph::load()` re-scans and re-parses `.org` files for each invocation.
 - `Config::load()` reads optional user config; `Config::resolve()` produces a
   `ResolvedConfig`.

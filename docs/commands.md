@@ -56,6 +56,8 @@ pkms query "search terms" --embed
 pkms get <target>
 pkms get <target> --links
 pkms get <target> --headings --no-content
+pkms serve <target>
+pkms serve <target> --port 0
 pkms path <from> <to>
 pkms context <target> --depth 2
 pkms context <target> --max-tokens 2000
@@ -63,6 +65,14 @@ pkms context <target> --max-tokens 2000
 
 Targets may be UUIDs, note titles, or file paths unless a command says
 otherwise.
+
+`serve` starts a foreground local HTTP server and renders the selected note as
+HTML. Internal `id:` links navigate to `/?id=<uuid>`, so the browser address bar
+tracks the rendered note. Local `file:` links and `attachment:` links are served
+as assets when they resolve under the database root or the user's home
+directory; image assets are embedded in the page. Org tables are rendered as
+HTML tables, source blocks are syntax-highlighted for common languages, and TeX
+formula text is shown as styled math without client-side JavaScript.
 
 ## Statistics and Discovery
 

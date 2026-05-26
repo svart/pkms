@@ -1,12 +1,13 @@
 # Development
 
-`pkms` is a stateless single-run CLI. Each invocation parses args, resolves the
-database root once, reads org files from disk, computes the result, prints, and
-exits.
+`pkms` is primarily a stateless single-run CLI. Each non-interactive invocation
+parses args, resolves the database root once, reads org files from disk,
+computes the result, prints, and exits.
 
-Do not introduce persistent caches, daemon processes, server mode, or watch
-mode. If performance needs improvement, optimize fresh discovery, parsing, and
-graph construction.
+Do not introduce persistent caches, daemon processes, or watch mode. `pkms
+serve` is the intentional exception: it is a foreground local HTTP viewer that
+loads the graph at startup and keeps no persistent derived state. If performance
+needs improvement, optimize fresh discovery, parsing, and graph construction.
 
 ## Iterative Checks
 

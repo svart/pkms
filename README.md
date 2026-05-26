@@ -4,9 +4,9 @@
 [org-roam](https://www.orgroam.com/) personal knowledge bases.
 
 It reads org files from disk, builds an in-memory graph, performs one command,
-prints output, and exits. It does not keep a cache, database, daemon, watch
-process, or server. Performance work should preserve this stateless single-run
-model and optimize the fresh read/parse path.
+prints output, and exits. It does not keep a cache, database, daemon, or watch
+process. The `serve` command is an explicit foreground local web viewer; it
+still builds from the current files and keeps no persistent derived state.
 
 ## Quick Start
 
@@ -55,6 +55,7 @@ pkms info
 pkms resolve --title "graph"
 pkms query "distributed systems" --limit 5
 pkms get <uuid-or-title> --links
+pkms serve <uuid-or-title>
 pkms check
 pkms task list --columns Id,Date,Prio,Note,Heading
 pkms task agenda today
