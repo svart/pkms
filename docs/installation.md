@@ -14,6 +14,12 @@ Build with embedding-based semantic search support:
 cargo install --path . --features embed
 ```
 
+Build with the local web viewer:
+
+```bash
+cargo install --path . --features web
+```
+
 Run directly from the checkout:
 
 ```bash
@@ -27,6 +33,7 @@ Install from a local checkout:
 ```bash
 nix profile install .#default
 nix profile install .#embed
+nix profile install .#web
 ```
 
 Install directly from GitHub:
@@ -34,6 +41,7 @@ Install directly from GitHub:
 ```bash
 nix profile install github:svart/pkms
 nix profile install github:svart/pkms#embed
+nix profile install github:svart/pkms#web
 ```
 
 Run or build without installing:
@@ -41,8 +49,10 @@ Run or build without installing:
 ```bash
 nix run . -- <args>
 nix run .#embed -- <args>
+nix run .#web -- <args>
 nix build
 nix build .#embed
+nix build .#web
 ```
 
 Enter the development shell:
@@ -63,3 +73,9 @@ nix profile remove <index>
 The `embed` feature enables `--embed` for `query` and `suggest`. Default builds
 do not expose those flags. Embedding mode uses `fastembed` and downloads the
 model on first use to the local cache.
+
+## Web Feature
+
+The `web` feature enables `serve`. Default builds do not expose that command.
+The web viewer renders org notes as static HTML and uses KaTeX for formulas and
+Syntect for source block highlighting.

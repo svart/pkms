@@ -13,6 +13,7 @@ mod path;
 mod pipe;
 mod query;
 mod resolve;
+#[cfg(feature = "web")]
 mod serve;
 mod snapshot;
 mod stats;

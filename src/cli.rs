@@ -70,6 +70,7 @@ pub enum Command {
     Task(TaskArgs),
     #[command(name = "path", about = "Find shortest path between two notes")]
     Path(PathArgs),
+    #[cfg(feature = "web")]
     #[command(about = "Serve one rendered note and linked notes over local HTTP")]
     Serve(ServeArgs),
 }
@@ -272,6 +273,7 @@ pub struct QueryArgs {
     pub embed: bool,
 }
 
+#[cfg(feature = "web")]
 #[derive(Debug, Args)]
 pub struct ServeArgs {
     #[arg(help = "UUID, file path, or note title to render first")]

@@ -148,8 +148,10 @@ the relevant integration tests.
 | Feature | Default | Description |
 |---------|---------|-------------|
 | `embed` | off | Enables embedding-based `query` and `suggest` behavior through `fastembed`. |
+| `web` | off | Enables the local `serve` web viewer and static rendering through `katex` and `syntect`. |
 
-Always verify both default and `embed` builds.
+Always verify both default and `embed` builds. When changing `serve` or rendered
+HTML behavior, also verify the `web` feature build and tests.
 
 ## Command Pipelining
 

@@ -10,6 +10,14 @@ use std::io::{BufRead, BufReader, Write};
 use std::net::{TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use std::sync::LazyLock;
+use syntect::highlighting::{Theme, ThemeSet};
+use syntect::html::{ClassStyle, ClassedHTMLGenerator, css_for_theme_with_class_style};
+use syntect::parsing::{SyntaxReference, SyntaxSet};
+use syntect::util::LinesWithEndings;
+
+static SYNTAX_SET: LazyLock<SyntaxSet> = LazyLock::new(SyntaxSet::load_defaults_newlines);
+static THEME_SET: LazyLock<ThemeSet> = LazyLock::new(ThemeSet::load_defaults);
+const SYNTECT_CLASS_STYLE: ClassStyle = ClassStyle::SpacedPrefixed { prefix: "syn-" };
 
 pub struct ServeOptions {
     pub target: String,
@@ -318,7 +326,7 @@ fn render_org_body(graph: &Graph, config: &ResolvedConfig, node: &Node, content:
                 i += 1;
             }
             html.push_str(&format!(
-                "<figure class=\"code\"><figcaption>{}</figcaption><pre><code>{}</code></pre></figure>\n",
+                "<figure class=\"code\"><figcaption>{}</figcaption><pre><code class=\"syn-code\">{}</code></pre></figure>\n",
                 escape_html(lang),
                 highlight_code(lang, &code)
             ));
@@ -727,16 +735,56 @@ fn is_emphasis_boundary(c: char) -> bool {
 }
 
 fn highlight_code(lang: &str, code: &str) -> String {
-    let escaped = escape_html(code);
-    if !matches!(lang, "rust" | "rs" | "python" | "py" | "bash" | "sh") {
-        return escaped;
+    let syntax_set = &SYNTAX_SET;
+    let syntax = syntax_for_lang(lang, syntax_set);
+    let mut generator =
+        ClassedHTMLGenerator::new_with_class_style(syntax, syntax_set, SYNTECT_CLASS_STYLE);
+    for line in LinesWithEndings::from(code) {
+        if generator
+            .parse_html_for_line_which_includes_newline(line)
+            .is_err()
+        {
+            return escape_html(code);
+        }
     }
-    static KEYWORD_RE: LazyLock<Regex> = LazyLock::new(|| {
-        Regex::new(r"\b(fn|let|mut|pub|struct|enum|impl|use|mod|match|if|else|for|while|return|def|class|import|from|as|in|true|false|None|echo|case|do|done|then|fi)\b").unwrap()
-    });
-    KEYWORD_RE
-        .replace_all(&escaped, "<span class=\"kw\">$1</span>")
-        .to_string()
+    generator.finalize()
+}
+
+fn syntax_for_lang<'a>(lang: &str, syntax_set: &'a SyntaxSet) -> &'a SyntaxReference {
+    let lower = lang.to_ascii_lowercase();
+    let token = match lower.as_str() {
+        "bash" | "shell" => "sh",
+        "c++" | "cxx" => "cpp",
+        "emacs-lisp" | "elisp" => "el",
+        "javascript" => "js",
+        "python" => "py",
+        "rust" => "rs",
+        "typescript" => "ts",
+        _ => lower.as_str(),
+    };
+    syntax_set
+        .find_syntax_by_token(token)
+        .or_else(|| syntax_set.find_syntax_by_extension(token))
+        .or_else(|| syntax_set.find_syntax_by_name(lang))
+        .unwrap_or_else(|| syntax_set.find_syntax_plain_text())
+}
+
+fn syntect_theme() -> &'static Theme {
+    THEME_SET
+        .themes
+        .get("InspiredGitHub")
+        .or_else(|| THEME_SET.themes.get("base16-ocean.dark"))
+        .or_else(|| THEME_SET.themes.values().next())
+        .expect("syntect default themes should include at least one theme")
+}
+
+fn syntect_css() -> String {
+    let mut css =
+        css_for_theme_with_class_style(syntect_theme(), SYNTECT_CLASS_STYLE).unwrap_or_default();
+    css.push_str(
+        ".code pre .syn-code,.code pre .syn-code span{background:transparent!important;background-color:transparent!important}",
+    );
+    css
 }
 
 fn escape_html(text: &str) -> String {
@@ -810,10 +858,13 @@ fn mime_type(path: &Path) -> &'static str {
     }
 }
 
-fn page_css() -> &'static str {
-    r#":root{color-scheme:light dark;--bg:#fafafa;--fg:#1f2328;--muted:#667085;--border:#d0d7de;--surface:#fff;--accent:#0969da;--code:#f6f8fa;--mark:#fff7cc;--inline-code:#f3f4f6;--orange-code:#bf360c}
+fn page_css() -> String {
+    let mut css = r#":root{color-scheme:light dark;--bg:#fafafa;--fg:#1f2328;--muted:#667085;--border:#d0d7de;--surface:#fff;--accent:#0969da;--code:#f6f8fa;--mark:#fff7cc;--inline-code:#f3f4f6;--orange-code:#bf360c}
 @media (prefers-color-scheme:dark){:root{--bg:#0d1117;--fg:#e6edf3;--muted:#8b949e;--border:#30363d;--surface:#161b22;--accent:#58a6ff;--code:#161b22;--mark:#3b3200;--inline-code:#1f2937;--orange-code:#ff9f5a}}
-*{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--fg);font:18px/1.68 Alegreya,"Iowan Old Style",Palatino,Georgia,serif} main{width:min(78ch,calc(100% - 32px));margin:0 auto;padding:40px 0 64px}.note-header{border-bottom:1px solid var(--border);margin-bottom:28px;padding-bottom:20px}.eyebrow{color:var(--muted);font:600 12px/1.2 "Alegreya Sans",ui-sans-serif,system-ui,sans-serif;letter-spacing:0;text-transform:uppercase;margin:0 0 8px}h1,h2,h3,h4,h5,h6{font-family:Alegreya,"Iowan Old Style",Palatino,Georgia,serif;line-height:1.2;margin:1.5em 0 .45em;font-weight:700}h1{font-size:2.25rem;margin:0 0 .35em}h2{font-size:1.65rem}h3{font-size:1.35rem}.uuid{font:13px/1.4 "Fira Code","Fira Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:var(--muted);overflow-wrap:anywhere;margin:0}a{color:var(--accent);text-decoration-thickness:.08em;text-underline-offset:.16em}p{margin:0 0 1em}ul{padding-left:1.45em}strong{font-weight:700}em{font-style:italic}u{text-underline-offset:.12em}del{color:var(--muted)}table{width:100%;border-collapse:collapse;margin:1.2em 0;font-family:"Alegreya Sans",ui-sans-serif,system-ui,sans-serif;font-size:.95em}td,th{border:1px solid var(--border);padding:.45rem .6rem;vertical-align:top}tr:nth-child(even){background:color-mix(in srgb,var(--surface),var(--border) 15%)}pre{overflow:auto;background:var(--code);border:1px solid var(--border);border-radius:6px;padding:1rem;font:14px/1.55 "Fira Code","Fira Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}code{font-family:"Fira Code","Fira Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-variant-ligatures:contextual}.inline-code{background:var(--inline-code);border:1px solid var(--border);border-radius:4px;font-size:.86em;padding:.05rem .28rem}.code-orange{color:var(--orange-code);font-weight:600}figure{margin:1.2em 0}.code figcaption{font:12px/1.4 "Alegreya Sans",ui-sans-serif,system-ui,sans-serif;color:var(--muted);margin-bottom:.35rem}img{max-width:100%;height:auto;border:1px solid var(--border);border-radius:6px;background:var(--surface)}figcaption{color:var(--muted);font-size:.9em}.todo{font-size:.75em;border:1px solid var(--border);border-radius:4px;padding:.08rem .35rem;color:var(--muted);vertical-align:.12em}.math{font-family:"Cambria Math","STIX Two Math","Times New Roman",serif;background:var(--mark);border-radius:4px;padding:.08rem .28rem}.math-error{color:#b42318}.math-display{margin:1.35em 0;overflow-x:auto;text-align:center}.katex{font:normal 1.08em KaTeX_Main,"Cambria Math","STIX Two Math","Times New Roman",serif;line-height:1.2;text-indent:0;text-rendering:auto}.katex-display{display:block;text-align:center}.katex .katex-mathml{display:inline}.katex .katex-html{clip:rect(1px,1px,1px,1px);border:0;height:1px;overflow:hidden;padding:0;position:absolute;width:1px}.katex .base{display:inline-block}.katex .strut{display:inline-block}.katex .mord,.katex .mop,.katex .mbin,.katex .mrel,.katex .mopen,.katex .mclose,.katex .mpunct,.katex .minner{display:inline-block}.katex .mspace{display:inline-block}.katex .vlist-t{display:inline-table;table-layout:fixed}.katex .vlist-r{display:table-row}.katex .vlist{display:table-cell;vertical-align:bottom;position:relative}.katex .vlist>span{display:block;height:0;position:relative}.katex .vlist-s{display:table-cell;vertical-align:bottom;font-size:1px;width:2px;min-width:2px}.katex .sqrt>.root{margin-left:.27777778em;margin-right:-.55555556em}.katex .sqrt>.sqrt-sign{display:inline-block}.katex .frac-line{border-bottom-style:solid;display:block;width:100%}.katex .mfrac .frac-line{border-bottom-width:.04em}.katex .mfrac>span>span{text-align:center}.katex .msupsub{text-align:left}.katex .mfrac,.katex .msupsub,.katex .munder,.katex .mover,.katex .munderover{display:inline-block}.katex .mord.text{font-family:Alegreya,"Iowan Old Style",Palatino,Georgia,serif}.katex .mathnormal{font-style:italic}.katex .mathbf{font-weight:700}.katex .mathrm{font-style:normal}.katex .mspace.negativethinspace{margin-left:-.16666667em}.kw{color:#cf222e;font-weight:600}"#
+*{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--fg);font:18px/1.68 Alegreya,"Iowan Old Style",Palatino,Georgia,serif} main{width:min(78ch,calc(100% - 32px));margin:0 auto;padding:40px 0 64px}.note-header{border-bottom:1px solid var(--border);margin-bottom:28px;padding-bottom:20px}.eyebrow{color:var(--muted);font:600 12px/1.2 "Alegreya Sans",ui-sans-serif,system-ui,sans-serif;letter-spacing:0;text-transform:uppercase;margin:0 0 8px}h1,h2,h3,h4,h5,h6{font-family:Alegreya,"Iowan Old Style",Palatino,Georgia,serif;line-height:1.2;margin:1.5em 0 .45em;font-weight:700}h1{font-size:2.25rem;margin:0 0 .35em}h2{font-size:1.65rem}h3{font-size:1.35rem}.uuid{font:13px/1.4 "Fira Code","Fira Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:var(--muted);overflow-wrap:anywhere;margin:0}a{color:var(--accent);text-decoration-thickness:.08em;text-underline-offset:.16em}p{margin:0 0 1em}ul{padding-left:1.45em}strong{font-weight:700}em{font-style:italic}u{text-underline-offset:.12em}del{color:var(--muted)}table{width:100%;border-collapse:collapse;margin:1.2em 0;font-family:"Alegreya Sans",ui-sans-serif,system-ui,sans-serif;font-size:.95em}td,th{border:1px solid var(--border);padding:.45rem .6rem;vertical-align:top}tr:nth-child(even){background:color-mix(in srgb,var(--surface),var(--border) 15%)}pre{overflow:auto;background:var(--code);border:1px solid var(--border);border-radius:6px;padding:1rem;font:14px/1.55 "Fira Code","Fira Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}code{font-family:"Fira Code","Fira Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-variant-ligatures:contextual}.inline-code{background:var(--inline-code);border:1px solid var(--border);border-radius:4px;font-size:.86em;padding:.05rem .28rem}.code-orange{color:var(--orange-code);font-weight:600}figure{margin:1.2em 0}.code figcaption{font:12px/1.4 "Alegreya Sans",ui-sans-serif,system-ui,sans-serif;color:var(--muted);margin-bottom:.35rem}img{max-width:100%;height:auto;border:1px solid var(--border);border-radius:6px;background:var(--surface)}figcaption{color:var(--muted);font-size:.9em}.todo{font-size:.75em;border:1px solid var(--border);border-radius:4px;padding:.08rem .35rem;color:var(--muted);vertical-align:.12em}.math{font-family:"Cambria Math","STIX Two Math","Times New Roman",serif;background:var(--mark);border-radius:4px;padding:.08rem .28rem}.math-error{color:#b42318}.math-display{margin:1.35em 0;overflow-x:auto;text-align:center}.katex{font:normal 1.08em KaTeX_Main,"Cambria Math","STIX Two Math","Times New Roman",serif;line-height:1.2;text-indent:0;text-rendering:auto}.katex-display{display:block;text-align:center}.katex .katex-mathml{display:inline}.katex .katex-html{clip:rect(1px,1px,1px,1px);border:0;height:1px;overflow:hidden;padding:0;position:absolute;width:1px}.katex .base{display:inline-block}.katex .strut{display:inline-block}.katex .mord,.katex .mop,.katex .mbin,.katex .mrel,.katex .mopen,.katex .mclose,.katex .mpunct,.katex .minner{display:inline-block}.katex .mspace{display:inline-block}.katex .vlist-t{display:inline-table;table-layout:fixed}.katex .vlist-r{display:table-row}.katex .vlist{display:table-cell;vertical-align:bottom;position:relative}.katex .vlist>span{display:block;height:0;position:relative}.katex .vlist-s{display:table-cell;vertical-align:bottom;font-size:1px;width:2px;min-width:2px}.katex .sqrt>.root{margin-left:.27777778em;margin-right:-.55555556em}.katex .sqrt>.sqrt-sign{display:inline-block}.katex .frac-line{border-bottom-style:solid;display:block;width:100%}.katex .mfrac .frac-line{border-bottom-width:.04em}.katex .mfrac>span>span{text-align:center}.katex .msupsub{text-align:left}.katex .mfrac,.katex .msupsub,.katex .munder,.katex .mover,.katex .munderover{display:inline-block}.katex .mord.text{font-family:Alegreya,"Iowan Old Style",Palatino,Georgia,serif}.katex .mathnormal{font-style:italic}.katex .mathbf{font-weight:700}.katex .mathrm{font-style:normal}.katex .mspace.negativethinspace{margin-left:-.16666667em}"#
+    .to_string();
+    css.push_str(&syntect_css());
+    css
 }
 
 #[cfg(test)]
@@ -891,7 +942,9 @@ fn main() {}
         assert!(html.contains("<table>"));
         assert!(html.contains("class=\"katex\""));
         assert!(html.contains("<math"));
-        assert!(html.contains("<span class=\"kw\">fn</span> main"));
+        assert!(html.contains("<code class=\"syn-code\">"));
+        assert!(html.contains("syn-"));
+        assert!(html.contains("main"));
         assert!(html.contains("<img src=\"/asset?note=aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa&amp;"));
     }
 
@@ -932,5 +985,22 @@ fn main() {}
         assert!(css.contains(".katex .katex-html"));
         assert!(css.contains("position:absolute"));
         assert!(css.contains("clip:rect(1px,1px,1px,1px)"));
+    }
+
+    #[test]
+    fn code_highlighting_uses_syntect_classes() {
+        let html = highlight_code("rust", "fn main() {}\n");
+
+        assert!(html.contains("syn-"));
+        assert!(html.contains("main"));
+    }
+
+    #[test]
+    fn page_css_includes_syntect_rules() {
+        let css = page_css();
+
+        assert!(css.contains(".syn-code"));
+        assert!(css.contains(".code pre .syn-code"));
+        assert!(css.contains("background-color:transparent!important"));
     }
 }

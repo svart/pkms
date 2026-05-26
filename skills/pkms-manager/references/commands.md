@@ -41,12 +41,17 @@ pkms query "terms" --todos
 pkms get <target>
 pkms get <target> --links
 pkms get <target> --headings --no-content
-pkms serve <target>
 pkms path <from> <to>
 pkms context <target> --depth 2 --max-tokens 4000
 ```
 
-`serve` starts a foreground local web viewer. Internal links navigate with
+`serve` exists only in builds made with the `web` feature:
+
+```bash
+pkms serve <target>
+```
+
+It starts a foreground local web viewer. Internal links navigate with
 `/?id=<uuid>`; local file and attachment links are served as static assets when
 they resolve to allowed local paths.
 

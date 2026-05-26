@@ -68,6 +68,7 @@ fn command_name(command: &Command) -> &'static str {
         Command::InitConfig(_) => "init-config",
         Command::Task(_) => "task",
         Command::Path(_) => "path",
+        #[cfg(feature = "web")]
         Command::Serve(_) => "serve",
     }
 }
@@ -159,6 +160,7 @@ fn dispatch(cli: &Cli, cfg: &config::ResolvedConfig, ctx: &OutputContext) -> Res
         Command::Path(args) => {
             commands::path::run(cfg, ctx, &args.try_into()?).map(|()| ExitCode::SUCCESS)?
         }
+        #[cfg(feature = "web")]
         Command::Serve(args) => commands::serve::run(
             cfg,
             ctx,

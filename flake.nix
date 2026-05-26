@@ -50,12 +50,18 @@
             ORT_LIB_PATH = "${pkgs.onnxruntime}/lib";
             ORT_PREFER_DYNAMIC_LINK = "true";
           });
+          web = naersk'.buildPackage (commonArgs // {
+            cargoBuildOptions = old: old ++ [ "--features" "web" ];
+          });
         };
 
         apps = {
           default = flake-utils.lib.mkApp { drv = pkms; };
           embed = flake-utils.lib.mkApp {
             drv = self.packages.${system}.embed;
+          };
+          web = flake-utils.lib.mkApp {
+            drv = self.packages.${system}.web;
           };
         };
 

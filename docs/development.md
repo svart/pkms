@@ -4,10 +4,11 @@
 parses args, resolves the database root once, reads org files from disk,
 computes the result, prints, and exits.
 
-Do not introduce persistent caches, daemon processes, or watch mode. `pkms
-serve` is the intentional exception: it is a foreground local HTTP viewer that
-loads the graph at startup and keeps no persistent derived state. If performance
-needs improvement, optimize fresh discovery, parsing, and graph construction.
+Do not introduce persistent caches, daemon processes, or watch mode. In builds
+with the `web` feature, `pkms serve` is the intentional exception: it is a
+foreground local HTTP viewer that loads the graph at startup and keeps no
+persistent derived state. If performance needs improvement, optimize fresh
+discovery, parsing, and graph construction.
 
 ## Iterative Checks
 
@@ -59,16 +60,22 @@ full verification gate:
 cargo fmt --check
 cargo clippy -- -D warnings
 cargo clippy --features todoist -- -D warnings
+cargo clippy --features web -- -D warnings
 cargo build
 cargo build --features=embed
 cargo build --features=todoist
 cargo build --features=embed,todoist
+cargo build --features=web
+cargo build --features=embed,web
 cargo test
 cargo test --features todoist
+cargo test --features web
 cargo test --test integration
 cargo test --features todoist --test integration
+cargo test --features web --test integration
 cargo run -- --help
 cargo run --features todoist -- --help
+cargo run --features web -- --help
 ```
 
 ## Project Structure

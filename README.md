@@ -5,8 +5,9 @@
 
 It reads org files from disk, builds an in-memory graph, performs one command,
 prints output, and exits. It does not keep a cache, database, daemon, or watch
-process. The `serve` command is an explicit foreground local web viewer; it
-still builds from the current files and keeps no persistent derived state.
+process. When built with the `web` feature, the `serve` command is an explicit
+foreground local web viewer; it still builds from the current files and keeps no
+persistent derived state.
 
 ## Quick Start
 
@@ -55,7 +56,6 @@ pkms info
 pkms resolve --title "graph"
 pkms query "distributed systems" --limit 5
 pkms get <uuid-or-title> --links
-pkms serve <uuid-or-title>
 pkms check
 pkms task list --columns Id,Date,Prio,Note,Heading
 pkms task agenda today
@@ -66,6 +66,12 @@ pkms new "My Note" --create --tags "topic,project"
 
 Commands support text output by default and structured output with
 `--output-format json` or `--output-format ndjson`.
+
+The local web viewer is available in builds made with `--features web`:
+
+```bash
+pkms serve <uuid-or-title>
+```
 
 ```bash
 pkms query "rust" --output-format ndjson | pkms get --links --from-stdin
@@ -81,6 +87,7 @@ pkms query "rust" --output-format ndjson | pkms get --links --from-stdin
   `task agenda`, and task ID actions such as `task p<ID> show`.
 - `query` and `suggest` support embedding mode only when built with
   `--features embed`.
+- `serve` is available only when built with `--features web`.
 
 ## Documentation
 
