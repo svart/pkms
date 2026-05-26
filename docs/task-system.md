@@ -255,7 +255,8 @@ PKMS add modifiers:
 | `desc:<text>` | `description:`, `body:` | Add body text. |
 | `note:<target>` | | Choose destination note. |
 
-Dates accept `today`, `tomorrow`, `tod`, `tom`, or `YYYY-MM-DD`.
+Dates accept `today`, `tomorrow`, `tod`, `tom`, `YYYY-MM-DD`, or
+`YYYY-MM-DD HH:MM`.
 
 Local mutation rules:
 

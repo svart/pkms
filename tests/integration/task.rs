@@ -2252,6 +2252,49 @@ fn test_task_add_defaults_to_pkms_inbox() {
 }
 
 #[test]
+fn test_task_add_pkms_accepts_scheduled_and_deadline_times() {
+    let (_dir, root) = setup_db();
+    let inbox_path = root.join("roam/personal/20260525000001-capture-inbox.org");
+    std::fs::write(
+        &inbox_path,
+        r#":PROPERTIES:
+:ID:       26262626-2626-4626-8626-262626262626
+:END:
+#+title: Capture Inbox
+"#,
+    )
+    .unwrap();
+    let config = format!("{TEST_CONFIG}\n[tasks]\ninbox = \"Capture Inbox\"\n");
+    let (stdout, stderr, status) = run_with_config(
+        &[
+            "--db",
+            root.to_str().unwrap(),
+            "--output-format",
+            "json",
+            "task",
+            "add",
+            "prio:a",
+            "sch:2025-05-26 09:30",
+            "dl:2025-05-26 13:00",
+            "Test",
+            "with",
+            "deadline",
+        ],
+        &config,
+    );
+    assert!(status.success(), "task add failed:\n{stdout}\n{stderr}");
+    let v: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    assert_eq!(v["item"]["source"], "pkms");
+    assert_eq!(v["item"]["title"], "Test with deadline");
+    assert_eq!(v["item"]["scheduled"]["date"], "2025-05-26");
+    assert_eq!(v["item"]["deadline"]["date"], "2025-05-26");
+    let content = std::fs::read_to_string(&inbox_path).unwrap();
+    assert!(content.contains("* TODO [#A] Test with deadline"));
+    assert!(content.contains("SCHEDULED: <2025-05-26 Mon 09:30>"));
+    assert!(content.contains("DEADLINE: <2025-05-26 Mon 13:00>"));
+}
+
+#[test]
 fn test_task_add_pkms_accepts_modifiers_and_note_target() {
     let (_dir, root) = setup_db();
     let target_path = root.join("roam/personal/20260525000001-capture-target.org");

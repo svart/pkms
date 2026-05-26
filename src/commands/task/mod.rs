@@ -27,7 +27,7 @@ use crate::tasks::scope::ResolvedScope;
 use crate::util;
 use crate::workspace::Workspace;
 use anyhow::{Context, Result, bail};
-use chrono::{Local, NaiveDate};
+use chrono::{Local, NaiveDate, NaiveDateTime};
 use serde::Serialize;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -1719,16 +1719,21 @@ fn parse_add_date_arg(name: &str, value: &str) -> Result<String> {
             .format("%Y-%m-%d")
             .to_string());
     }
-    crate::input::parse_date(Some(value))
-        .map(|date| date.format("%Y-%m-%d").to_string())
-        .ok_or_else(|| {
-            anyhow::anyhow!(
-                "Invalid {name} date '{value}'. Use today, tomorrow, tod, tom, or YYYY-MM-DD."
-            )
-        })
+    if let Some(date) = crate::input::parse_date(Some(value)) {
+        return Ok(date.format("%Y-%m-%d").to_string());
+    }
+    if let Ok(datetime) = NaiveDateTime::parse_from_str(value, "%Y-%m-%d %H:%M") {
+        return Ok(datetime.format("%Y-%m-%d %H:%M").to_string());
+    }
+    Err(anyhow::anyhow!(
+        "Invalid {name} date '{value}'. Use today, tomorrow, tod, tom, YYYY-MM-DD, or YYYY-MM-DD HH:MM."
+    ))
 }
 
 fn org_date(date: &str) -> Result<String> {
+    if let Ok(datetime) = NaiveDateTime::parse_from_str(date, "%Y-%m-%d %H:%M") {
+        return Ok(format!("<{}>", datetime.format("%Y-%m-%d %a %H:%M")));
+    }
     let date = NaiveDate::parse_from_str(date, "%Y-%m-%d")?;
     Ok(format!("<{}>", date.format("%Y-%m-%d %a")))
 }

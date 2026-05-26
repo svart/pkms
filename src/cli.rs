@@ -466,7 +466,7 @@ pub struct TaskDoneArgs {
 
 #[derive(Debug, Args)]
 #[command(
-    after_help = "Add modifiers:\n  title:<text>              Task title; non-modifier words are task text\n  tag:<label>, tags:<a,b>   Labels/tags; repeat or comma-separate\n  schedule:<date>, sch:<date>, due:<date>\n  deadline:<date>, dead:<date>, dl:<date>\n  project:<name-or-id>, prio:A|B|C, desc:<text>, source:pkms|todoist\n  note:<uuid-title-or-path> PKMS only; choose the note to append into\n\nDate shortcuts for schedule/deadline: today, tomorrow, tod, tom, or YYYY-MM-DD.\n\nExamples:\n  pkms task add title:\"This is title\" sch:tod dead:tom prio:a tag:phone\n  pkms task add source:todoist title:\"Call Alice\" project:Inbox tag:phone prio:b\n  pkms task add note:\"Project Alpha\" title:\"Follow up\""
+    after_help = "Add modifiers:\n  title:<text>              Task title; non-modifier words are task text\n  tag:<label>, tags:<a,b>   Labels/tags; repeat or comma-separate\n  schedule:<date>, sch:<date>, due:<date>\n  deadline:<date>, dead:<date>, dl:<date>\n  project:<name-or-id>, prio:A|B|C, desc:<text>, source:pkms|todoist\n  note:<uuid-title-or-path> PKMS only; choose the note to append into\n\nDate shortcuts for schedule/deadline: today, tomorrow, tod, tom, YYYY-MM-DD, or YYYY-MM-DD HH:MM.\n\nExamples:\n  pkms task add title:\"This is title\" sch:tod dead:tom prio:a tag:phone\n  pkms task add source:todoist title:\"Call Alice\" project:Inbox tag:phone prio:b\n  pkms task add note:\"Project Alpha\" title:\"Follow up\""
 )]
 pub struct TaskAddArgs {
     #[arg(

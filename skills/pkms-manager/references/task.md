@@ -152,11 +152,11 @@ Add modifiers: `source:`/`src:`, `title:`, `tag:`/`tags:`/`label:`/`labels:`,
 `project:`/`proj:`, `prio:`/`priority:`/`pri:`, `desc:`/`description:`/`body:`,
 and PKMS-only `note:`.
 
-Structured due and deadline values accept `today`, `tomorrow`, `tod`, `tom`, or
-`YYYY-MM-DD`. Priority must be `A`, `B`, or `C`. Repeat or comma-separate tag
-modifiers for multiple labels. `project:` accepts either a Todoist project id or
-an exact project name. If a project name is duplicated case-insensitively, use
-the project id. Todoist task creation rejects `note:`.
+Structured due and deadline values accept `today`, `tomorrow`, `tod`, `tom`,
+`YYYY-MM-DD`, or `YYYY-MM-DD HH:MM`. Priority must be `A`, `B`, or `C`. Repeat
+or comma-separate tag modifiers for multiple labels. `project:` accepts either a
+Todoist project id or an exact project name. If a project name is duplicated
+case-insensitively, use the project id. Todoist task creation rejects `note:`.
 
 Legacy Todoist descriptions containing `pkms:id:<uuid>` are still detected by
 `task list source:todoist` and `task todoist:<remote-id> show`.
