@@ -15,6 +15,7 @@ impl App {
             format: cli.output_format.clone().unwrap_or(OutputFormat::Text),
         };
         let config = Config::load()?.resolve(cli.db.clone())?;
+        tracing::debug!(output_format = ?output.format, "app initialized");
         Ok(App { config, output })
     }
 }

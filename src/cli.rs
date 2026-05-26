@@ -1,7 +1,7 @@
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use std::path::PathBuf;
 
-#[derive(Clone, PartialEq, ValueEnum)]
+#[derive(Debug, Clone, PartialEq, ValueEnum)]
 pub enum OutputFormat {
     Text,
     Json,

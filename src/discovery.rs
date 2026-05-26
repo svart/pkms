@@ -12,6 +12,7 @@ pub fn walk_org_files(root: &Path, ignore_patterns: &[String]) -> Result<Vec<Pat
         .iter()
         .filter_map(|p| glob::Pattern::new(p).ok())
         .collect();
+    let valid_ignore_pattern_count = compiled_patterns.len();
 
     let root_clone = root.to_path_buf();
     let mut files = Vec::new();
@@ -33,6 +34,13 @@ pub fn walk_org_files(root: &Path, ignore_patterns: &[String]) -> Result<Vec<Pat
     }
 
     files.sort();
+    tracing::debug!(
+        root = %root.display(),
+        ignore_pattern_count = ignore_patterns.len(),
+        valid_ignore_pattern_count,
+        file_count = files.len(),
+        "discovered org files"
+    );
     Ok(files)
 }
 
@@ -41,6 +49,7 @@ pub fn discover_files(root: &Path, ignore_patterns: &[String]) -> Result<Vec<Fil
         .canonicalize()
         .map_err(|e| anyhow::anyhow!("Failed to resolve db root '{}': {}", root.display(), e))?;
 
+    tracing::debug!(root = %root.display(), "starting file discovery");
     let files = walk_org_files(&root, ignore_patterns)?;
     Ok(files.into_iter().map(|path| FileEntry { path }).collect())
 }

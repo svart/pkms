@@ -132,6 +132,7 @@ impl Config {
             .context("Could not find XDG config directory")?
             .join("pkms.toml");
 
+        tracing::debug!(path = %config_path.display(), exists = config_path.exists(), "loading config");
         if config_path.exists() {
             let content = std::fs::read_to_string(&config_path)
                 .with_context(|| format!("Failed to read config: {}", config_path.display()))?;
@@ -151,16 +152,19 @@ impl Config {
     }
 
     pub fn resolve(self, cli_db: Option<PathBuf>) -> Result<ResolvedConfig> {
-        let db_root = cli_db
-            .or_else(|| std::env::var("PKMS_DB_ROOT").ok().map(PathBuf::from))
-            .or_else(|| self.db_root.clone())
-            .ok_or_else(|| {
-                anyhow::anyhow!(
-                    "No database root specified. Provide --db PATH, set PKMS_DB_ROOT env var, \
-                     or set db_root in ~/.config/pkms.toml"
-                )
-            })?;
-        Ok(ResolvedConfig {
+        let (db_root, db_root_source) = if let Some(db_root) = cli_db {
+            (db_root, "cli")
+        } else if let Some(db_root) = std::env::var("PKMS_DB_ROOT").ok().map(PathBuf::from) {
+            (db_root, "env")
+        } else if let Some(db_root) = self.db_root.clone() {
+            (db_root, "config")
+        } else {
+            anyhow::bail!(
+                "No database root specified. Provide --db PATH, set PKMS_DB_ROOT env var, \
+                 or set db_root in ~/.config/pkms.toml"
+            );
+        };
+        let resolved = ResolvedConfig {
             db_root: canonicalize_or_abs(&db_root),
             new_notes_dir: self.new_notes_dir,
             ignore_patterns: self.ignore_patterns,
@@ -168,7 +172,20 @@ impl Config {
             tasks: self.tasks,
             agenda: self.agenda,
             todoist: self.todoist,
-        })
+        };
+        tracing::debug!(
+            db_root = %resolved.db_root.display(),
+            db_root_source,
+            ignore_pattern_count = resolved.ignore_patterns.as_ref().map_or(0, Vec::len),
+            todoist_enabled = resolved.todoist_enabled(),
+            has_task_inbox = resolved
+                .tasks
+                .as_ref()
+                .and_then(|tasks| tasks.inbox.as_ref())
+                .is_some(),
+            "config resolved"
+        );
+        Ok(resolved)
     }
 }
 

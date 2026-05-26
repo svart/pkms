@@ -41,3 +41,37 @@ fn test_pkms_log_json_format_writes_json_to_stderr() {
     let event: serde_json::Value = serde_json::from_str(first).unwrap();
     assert_eq!(event["fields"]["message"], "dispatching command");
 }
+
+#[test]
+fn test_pkms_log_can_target_config_resolution() {
+    let (_dir, root) = setup_db();
+    let output = Command::new(pkms_binary())
+        .args(["--db", root.to_str().unwrap(), "info"])
+        .env("PKMS_LOG", "pkms::config=debug")
+        .env_remove("PKMS_DB_ROOT")
+        .output()
+        .unwrap();
+
+    assert!(output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("config resolved"), "stderr: {stderr}");
+    assert!(
+        stderr.contains("db_root_source=\"cli\""),
+        "stderr: {stderr}"
+    );
+}
+
+#[test]
+fn test_pkms_log_can_target_task_collection() {
+    let (_dir, root) = setup_db();
+    let output = Command::new(pkms_binary())
+        .args(["--db", root.to_str().unwrap(), "task", "list"])
+        .env("PKMS_LOG", "pkms::commands::task=debug")
+        .env_remove("PKMS_DB_ROOT")
+        .output()
+        .unwrap();
+
+    assert!(output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("running task list"), "stderr: {stderr}");
+}

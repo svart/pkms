@@ -372,12 +372,43 @@ impl<'a> TaskProviders<'a> {
     }
 
     fn list(&self, source: SourceSelection, query: &TaskQuery) -> Result<Vec<TaskItem>> {
+        tracing::debug!(
+            source = ?source,
+            view = ?query.view,
+            has_todoist_filter = query.filters.todoist_filter.is_some(),
+            "collecting task items from providers"
+        );
         match source {
-            SourceSelection::Pkms => self.pkms.list(query),
-            SourceSelection::Todoist => self.todoist.list(query),
+            SourceSelection::Pkms => {
+                let items = self.pkms.list(query)?;
+                tracing::debug!(
+                    source = "pkms",
+                    item_count = items.len(),
+                    "provider returned tasks"
+                );
+                Ok(items)
+            }
+            SourceSelection::Todoist => {
+                let items = self.todoist.list(query)?;
+                tracing::debug!(
+                    source = "todoist",
+                    item_count = items.len(),
+                    "provider returned tasks"
+                );
+                Ok(items)
+            }
             SourceSelection::All => {
                 let mut items = self.pkms.list(query)?;
-                items.extend(self.todoist.list(query)?);
+                let pkms_count = items.len();
+                let todoist_items = self.todoist.list(query)?;
+                let todoist_count = todoist_items.len();
+                items.extend(todoist_items);
+                tracing::debug!(
+                    pkms_count,
+                    todoist_count,
+                    total_count = items.len(),
+                    "providers returned combined tasks"
+                );
                 Ok(items)
             }
         }
@@ -517,6 +548,13 @@ fn run_task_list(
     raw_filters: &[String],
 ) -> Result<()> {
     let filters = parse_task_filters(raw_filters)?;
+    tracing::debug!(
+        source = ?filters.source,
+        filter_count = raw_filters.len(),
+        has_todoist_filter = filters.todoist_filter.is_some(),
+        has_criteria = filters.has_criteria(),
+        "running task list"
+    );
     let scope = task_scope(config, args.from_stdin, &filters.criteria.scope)?;
     if args.group.is_some() && !matches!(filters.source, SourceSelection::Pkms) {
         bail!("task list --group is available only for source:pkms");
@@ -585,7 +623,14 @@ fn collect_task_items(
         filters: filters.clone(),
         view,
     };
-    TaskProviders::new(config).list(filters.source, &query)
+    let items = TaskProviders::new(config).list(filters.source, &query)?;
+    tracing::debug!(
+        source = ?filters.source,
+        view = ?view,
+        item_count = items.len(),
+        "collected task items"
+    );
+    Ok(items)
 }
 
 fn run_shortcut(
@@ -701,6 +746,7 @@ fn apply_task_filter_criteria(
     items: &mut Vec<TaskItem>,
     criteria: &TaskFilterCriteria,
 ) -> Result<()> {
+    let before_count = items.len();
     let scope = if criteria.scope.is_empty() {
         None
     } else {
@@ -716,6 +762,20 @@ fn apply_task_filter_criteria(
         scope: scope.as_ref(),
     };
     items.retain(|item| criteria.matches_item(item, &context));
+    tracing::debug!(
+        before_count,
+        after_count = items.len(),
+        has_state = criteria.state.is_some(),
+        has_tags = criteria.tags.is_some(),
+        has_kind = criteria.kind.is_some(),
+        has_prio = criteria.prio.is_some(),
+        has_date = criteria.date.is_some(),
+        has_after = criteria.after.is_some(),
+        has_before = criteria.before.is_some(),
+        scope_count = criteria.scope.len(),
+        has_project = criteria.project.is_some(),
+        "applied task filter criteria"
+    );
 
     Ok(())
 }
@@ -736,6 +796,13 @@ fn run_agenda(config: &ResolvedConfig, ctx: &OutputContext, args: &TaskAgendaArg
     }
 
     let filters = parse_task_filters(&args.filters)?;
+    tracing::debug!(
+        source = ?filters.source,
+        filter_count = args.filters.len(),
+        has_todoist_filter = filters.todoist_filter.is_some(),
+        has_criteria = filters.has_criteria(),
+        "running task agenda"
+    );
     if matches!(filters.source, SourceSelection::Pkms) && !filters.has_criteria() {
         let columns = resolve_task_columns(
             config,

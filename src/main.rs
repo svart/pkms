@@ -40,8 +40,14 @@ fn main() -> ExitCode {
     };
 
     match dispatch(&cli, &app.config, &app.output) {
-        Ok(code) => code,
-        Err(e) => app::command_error(&app.output, e),
+        Ok(code) => {
+            tracing::debug!(command = command_name(&cli.command), "command completed");
+            code
+        }
+        Err(e) => {
+            tracing::error!(command = command_name(&cli.command), error = %e, "command failed");
+            app::command_error(&app.output, e)
+        }
     }
 }
 

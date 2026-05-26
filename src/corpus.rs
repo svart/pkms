@@ -22,6 +22,11 @@ impl Corpus {
     pub fn load(config: &ResolvedConfig) -> Result<Self> {
         let db_root = config.resolved_db_root();
         let ignore = config.resolve_ignore_patterns();
+        tracing::debug!(
+            db_root = %db_root.display(),
+            ignore_pattern_count = ignore.len(),
+            "loading corpus"
+        );
         Self::scan(db_root, &ignore)
     }
 
@@ -51,6 +56,16 @@ impl Corpus {
             })
             .collect();
 
+        let parse_error_count = results
+            .iter()
+            .filter(|result| result.parse_error.is_some())
+            .count();
+        tracing::debug!(
+            db_root = %db_root.display(),
+            file_count = results.len(),
+            parse_error_count,
+            "corpus loaded"
+        );
         Ok(Corpus { results })
     }
 

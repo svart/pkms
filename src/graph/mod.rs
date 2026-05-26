@@ -150,14 +150,31 @@ pub fn file_link_target_exists(target: &str, source_path: &Path, db_root: &Path)
 
 impl Graph {
     pub fn load(config: &ResolvedConfig) -> anyhow::Result<Self> {
+        tracing::debug!(db_root = %config.resolved_db_root().display(), "loading graph");
         let corpus = Corpus::load(config)?;
-        Ok(Self::from_corpus(&corpus))
+        let graph = Self::from_corpus(&corpus);
+        tracing::debug!(
+            node_count = graph.nodes.len(),
+            backlink_target_count = graph.backlinks.len(),
+            broken_link_count = graph.broken_links.len(),
+            parse_error_count = graph.parse_errors.len(),
+            skipped_file_count = graph.skipped_files.len(),
+            "graph loaded"
+        );
+        Ok(graph)
     }
 
     pub fn from_corpus(corpus: &Corpus) -> Self {
         let results = corpus.results().to_vec();
         let mut graph = Graph::build(results.clone());
         graph.results = results;
+        tracing::debug!(
+            node_count = graph.nodes.len(),
+            file_count = graph.results.len(),
+            parse_error_count = graph.parse_errors.len(),
+            skipped_file_count = graph.skipped_files.len(),
+            "graph built from corpus"
+        );
         graph
     }
 
