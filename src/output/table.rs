@@ -1,14 +1,16 @@
 use super::Column;
 
 pub fn terminal_width() -> Option<usize> {
-    if let Some(w) = std::env::var("COLUMNS")
-        .ok()
+    let columns = std::env::var("COLUMNS").ok();
+    let detected = terminal_size::terminal_size().map(|(w, _)| w.0 as usize);
+    terminal_width_from(columns.as_deref(), detected)
+}
+
+fn terminal_width_from(columns: Option<&str>, detected: Option<usize>) -> Option<usize> {
+    columns
         .and_then(|s| s.parse().ok())
         .filter(|&w| w > 0)
-    {
-        return Some(w);
-    }
-    terminal_size::terminal_size().map(|(w, _)| w.0 as usize)
+        .or(detected)
 }
 
 const MIN_COLUMN_WIDTH: usize = 15;
@@ -215,6 +217,17 @@ mod tests {
     fn rendered_width(widths: &[(Column, usize)]) -> usize {
         let padding = widths.len().saturating_sub(1) + 2 * widths.len();
         widths.iter().map(|(_, w)| *w).sum::<usize>() + padding
+    }
+
+    #[test]
+    fn test_terminal_width_prefers_columns_env() {
+        assert_eq!(terminal_width_from(Some("120"), Some(80)), Some(120));
+    }
+
+    #[test]
+    fn test_terminal_width_uses_detected_width_when_columns_invalid() {
+        assert_eq!(terminal_width_from(Some("0"), Some(80)), Some(80));
+        assert_eq!(terminal_width_from(Some("wide"), Some(80)), Some(80));
     }
 
     #[test]
