@@ -72,7 +72,7 @@ tracks the rendered note. Local `file:` links and `attachment:` links are served
 as assets when they resolve under the database root or the user's home
 directory; image assets are embedded in the page. Org tables are rendered as
 HTML tables, source blocks are syntax-highlighted for common languages, and TeX
-formula text is shown as styled math without client-side JavaScript.
+formula text is rendered to static KaTeX HTML without client-side JavaScript.
 
 ## Statistics and Discovery
 

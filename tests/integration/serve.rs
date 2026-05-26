@@ -57,6 +57,9 @@ fn http_get(host_port: &str, path: &str) -> String {
         assert_eq!(err.kind(), std::io::ErrorKind::BrokenPipe);
     }
     let mut response = String::new();
-    stream.read_to_string(&mut response).unwrap();
+    if let Err(err) = stream.read_to_string(&mut response) {
+        assert_eq!(err.kind(), std::io::ErrorKind::ConnectionReset);
+        assert!(!response.is_empty(), "connection reset before response");
+    }
     response
 }
