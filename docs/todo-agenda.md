@@ -277,9 +277,10 @@ inbox = "Inbox"
 
 The inbox value can be a note title, UUID, absolute path, or path relative to
 `db_root`. Set it to `daily` to use today's daily note and place new tasks under
-the `* Inbox` heading, creating the heading when needed. Without an inbox
-configuration, PKMS inbox commands fail. `task inbox source:todoist` continues
-to use Todoist's `#Inbox` filter.
+the `* Inbox` heading, creating the heading when needed. New daily notes are
+created under `daily_notes_dir`, or `new_notes_dir` when `daily_notes_dir` is
+unset. Without an inbox configuration, PKMS inbox commands fail. `task inbox
+source:todoist` continues to use Todoist's `#Inbox` filter.
 
 PKMS task creation appends a TODO heading to that inbox note by default. It
 accepts positional text or add modifiers. `note:` is PKMS-only and chooses the

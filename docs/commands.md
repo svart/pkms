@@ -155,7 +155,8 @@ editor behavior, and task state changes.
 `pkms task inbox` and default `pkms task add` use the PKMS inbox note configured
 as `[tasks].inbox`. The value can be a note title, UUID, absolute path, or path
 relative to `db_root`. Set it to `daily` to use today's daily note and place
-new tasks under `* Inbox`.
+new tasks under `* Inbox`. New daily notes are created under `daily_notes_dir`,
+or `new_notes_dir` when `daily_notes_dir` is unset.
 
 Todoist task reads require a build with `--features todoist` and a token from
 `TODOIST_API_TOKEN` or `[todoist].token` in config. Prefer the environment

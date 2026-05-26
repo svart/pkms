@@ -2390,6 +2390,100 @@ Existing plan
 }
 
 #[test]
+fn test_task_add_daily_inbox_uses_configured_daily_notes_dir() {
+    let (_dir, root) = setup_db();
+    let today = chrono::Local::now().date_naive();
+    let daily_path = root
+        .join("roam/dailies")
+        .join(format!("{}.org", today.format("%Y-%m-%d")));
+    let new_notes_daily_path = root
+        .join("roam/new")
+        .join(format!("{}.org", today.format("%Y-%m-%d")));
+    let config = format!(
+        "new_notes_dir = \"roam/new\"\ndaily_notes_dir = \"roam/dailies\"\n{TEST_CONFIG}\n[tasks]\ninbox = \"daily\"\n"
+    );
+    let (stdout, stderr, status) = run_with_config(
+        &[
+            "--db",
+            root.to_str().unwrap(),
+            "--output-format",
+            "json",
+            "task",
+            "add",
+            "Daily configured dir capture",
+        ],
+        &config,
+    );
+    assert!(status.success(), "task add failed:\n{stdout}\n{stderr}");
+    let v: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    assert_eq!(v["item"]["source"], "pkms");
+    assert_eq!(v["item"]["title"], "Daily configured dir capture");
+    assert!(daily_path.exists());
+    assert!(!new_notes_daily_path.exists());
+    let content = std::fs::read_to_string(&daily_path).unwrap();
+    assert!(content.contains("#+filetags: :daily:"));
+    assert!(content.contains("** TODO Daily configured dir capture"));
+}
+
+#[test]
+fn test_task_add_daily_inbox_prefers_configured_daily_notes_dir_over_other_daily_file() {
+    let (_dir, root) = setup_db();
+    let today = chrono::Local::now().date_naive();
+    let legacy_daily_path = root
+        .join("roam")
+        .join(format!("{}.org", today.format("%Y-%m-%d")));
+    let configured_daily_path = root
+        .join("roam/dailies")
+        .join(format!("{}.org", today.format("%Y-%m-%d")));
+    std::fs::create_dir_all(configured_daily_path.parent().unwrap()).unwrap();
+    std::fs::write(
+        &legacy_daily_path,
+        format!(
+            r#"#+title: {}
+#+filetags: :daily:
+
+* Inbox
+** TODO Legacy inbox task
+"#,
+            today.format("%Y-%m-%d")
+        ),
+    )
+    .unwrap();
+    std::fs::write(
+        &configured_daily_path,
+        format!(
+            r#"#+title: {}
+#+filetags: :daily:
+
+* Inbox
+** TODO Configured inbox task
+"#,
+            today.format("%Y-%m-%d")
+        ),
+    )
+    .unwrap();
+    let config =
+        format!("daily_notes_dir = \"roam/dailies\"\n{TEST_CONFIG}\n[tasks]\ninbox = \"daily\"\n");
+    let (stdout, stderr, status) = run_with_config(
+        &[
+            "--db",
+            root.to_str().unwrap(),
+            "--output-format",
+            "json",
+            "task",
+            "add",
+            "Daily configured preferred",
+        ],
+        &config,
+    );
+    assert!(status.success(), "task add failed:\n{stdout}\n{stderr}");
+    let legacy_content = std::fs::read_to_string(&legacy_daily_path).unwrap();
+    let configured_content = std::fs::read_to_string(&configured_daily_path).unwrap();
+    assert!(!legacy_content.contains("Daily configured preferred"));
+    assert!(configured_content.contains("** TODO Daily configured preferred"));
+}
+
+#[test]
 fn test_task_inbox_daily_lists_only_today_inbox_section() {
     let (_dir, root) = setup_db();
     let today = chrono::Local::now().date_naive();

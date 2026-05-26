@@ -9,4 +9,5 @@ pkms --output-format json info
 ```
 
 Always start a database workflow with `pkms info` so the active `db_root`,
-`new_notes_dir`, ignore patterns, and config status are known.
+`new_notes_dir`, `daily_notes_dir`, ignore patterns, and config status are
+known.

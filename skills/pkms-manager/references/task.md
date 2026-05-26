@@ -125,7 +125,8 @@ accept `source:pkms`, `source:todoist`, or `source:all`; `task inbox` defaults
 to the PKMS inbox note configured as `[tasks].inbox`. Use
 `task inbox source:todoist` for Todoist's `#Inbox` filter. When `[tasks].inbox`
 is `daily`, PKMS inbox tasks live in today's daily note under the top-level
-`* Inbox` heading.
+`* Inbox` heading. New daily notes are created under `daily_notes_dir`, or
+`new_notes_dir` when `daily_notes_dir` is unset.
 
 Default `task add` appends a TODO heading to the configured PKMS inbox note.
 Use positional text or add modifiers. `note:` is PKMS-only and chooses the note

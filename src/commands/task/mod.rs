@@ -1594,6 +1594,18 @@ fn resolve_pkms_note_task_target(config: &ResolvedConfig, target: &str) -> Resul
 
 fn resolve_daily_inbox_target(config: &ResolvedConfig, create: bool) -> Result<PkmsInboxTarget> {
     let today = Local::now().date_naive();
+    let configured_path = config
+        .resolve_daily_notes_dir()
+        .join(format!("{today}.org"));
+    if config.daily_notes_dir.is_some() || configured_path.exists() {
+        if create {
+            ensure_daily_note_exists(&configured_path, today)?;
+        }
+        return Ok(PkmsInboxTarget::Daily {
+            path: configured_path,
+        });
+    }
+
     let graph = crate::graph::Graph::load(config)?;
     if let Some(result) = graph
         .results
@@ -1607,11 +1619,17 @@ fn resolve_daily_inbox_target(config: &ResolvedConfig, create: bool) -> Result<P
 
     if !create {
         return Ok(PkmsInboxTarget::Daily {
-            path: config.resolve_new_notes_dir().join(format!("{today}.org")),
+            path: configured_path,
         });
     }
 
-    let path = config.resolve_new_notes_dir().join(format!("{today}.org"));
+    ensure_daily_note_exists(&configured_path, today)?;
+    Ok(PkmsInboxTarget::Daily {
+        path: configured_path,
+    })
+}
+
+fn ensure_daily_note_exists(path: &Path, today: chrono::NaiveDate) -> Result<()> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).with_context(|| {
             format!(
@@ -1622,10 +1640,10 @@ fn resolve_daily_inbox_target(config: &ResolvedConfig, create: bool) -> Result<P
     }
     if !path.exists() {
         let title = today.format("%Y-%m-%d").to_string();
-        std::fs::write(&path, format!("#+title: {title}\n#+filetags: :daily:\n\n"))
+        std::fs::write(path, format!("#+title: {title}\n#+filetags: :daily:\n\n"))
             .with_context(|| format!("Failed to create daily note: {}", path.display()))?;
     }
-    Ok(PkmsInboxTarget::Daily { path })
+    Ok(())
 }
 
 fn add_pkms_task(config: &ResolvedConfig, ctx: &OutputContext, spec: &TaskAddSpec) -> Result<()> {

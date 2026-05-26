@@ -21,4 +21,5 @@ fn test_info_json() {
     assert!(status.success());
     assert!(v.get("config").is_some());
     assert!(v.get("config_path").is_some());
+    assert!(v["config"].get("daily_notes_dir").is_some());
 }

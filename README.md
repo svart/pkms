@@ -34,6 +34,7 @@ Minimal `~/.config/pkms.toml`:
 ```toml
 db_root = "/home/user/Documents/org"
 new_notes_dir = "roam"
+daily_notes_dir = "roam/daily"
 ignore_patterns = [".attach", "*.bak"]
 
 [tasks]

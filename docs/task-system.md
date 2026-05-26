@@ -239,8 +239,10 @@ inbox = "Inbox"
 
 The inbox can be a note title, UUID, absolute path, path relative to `db_root`,
 or `daily`. `daily` uses today's daily note and places tasks under a top-level
-`* Inbox` heading, creating the heading when needed. `note:<target>` on
-`task add` is PKMS-only and overrides the configured inbox destination.
+`* Inbox` heading, creating the heading when needed. New daily notes are created
+under `daily_notes_dir`, or `new_notes_dir` when `daily_notes_dir` is unset.
+`note:<target>` on `task add` is PKMS-only and overrides the configured inbox
+destination.
 
 PKMS add modifiers:
 

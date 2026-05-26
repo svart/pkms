@@ -5,6 +5,7 @@
 ```toml
 db_root = "/home/user/Documents/org"
 new_notes_dir = "roam"
+daily_notes_dir = "roam/daily"
 ignore_patterns = [".attach", "*.bak"]
 
 [tasks]
@@ -55,6 +56,13 @@ other Todoist payload fields.
 
 `new_notes_dir` controls where `pkms new --create` writes files. Relative paths
 are resolved under `db_root`; absolute paths are used as written.
+
+## Daily Notes Directory
+
+`daily_notes_dir` controls where `pkms` creates daily notes when `[tasks].inbox`
+is set to `daily`. Relative paths are resolved under `db_root`; absolute paths
+are used as written. When unset, daily notes use `new_notes_dir` for backward
+compatibility.
 
 ## Ignore Patterns
 

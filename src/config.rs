@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 pub struct Config {
     pub db_root: Option<PathBuf>,
     pub new_notes_dir: Option<PathBuf>,
+    pub daily_notes_dir: Option<PathBuf>,
     pub ignore_patterns: Option<Vec<String>>,
     pub columns: Option<ColumnsConfig>,
     pub tasks: Option<TaskConfig>,
@@ -18,6 +19,7 @@ pub struct Config {
 pub struct ResolvedConfig {
     pub db_root: PathBuf,
     pub new_notes_dir: Option<PathBuf>,
+    pub daily_notes_dir: Option<PathBuf>,
     pub ignore_patterns: Option<Vec<String>>,
     pub columns: Option<ColumnsConfig>,
     pub tasks: Option<TaskConfig>,
@@ -142,6 +144,7 @@ impl Config {
             Ok(Config {
                 db_root: None,
                 new_notes_dir: None,
+                daily_notes_dir: None,
                 ignore_patterns: None,
                 columns: None,
                 tasks: None,
@@ -167,6 +170,7 @@ impl Config {
         let resolved = ResolvedConfig {
             db_root: canonicalize_or_abs(&db_root),
             new_notes_dir: self.new_notes_dir,
+            daily_notes_dir: self.daily_notes_dir,
             ignore_patterns: self.ignore_patterns,
             columns: self.columns,
             tasks: self.tasks,
@@ -191,7 +195,18 @@ impl Config {
 
 impl ResolvedConfig {
     pub fn resolve_new_notes_dir(&self) -> PathBuf {
-        match &self.new_notes_dir {
+        self.resolve_configured_dir(self.new_notes_dir.as_ref(), "roam")
+    }
+
+    pub fn resolve_daily_notes_dir(&self) -> PathBuf {
+        match &self.daily_notes_dir {
+            Some(dir) => self.resolve_configured_dir(Some(dir), "roam"),
+            None => self.resolve_new_notes_dir(),
+        }
+    }
+
+    fn resolve_configured_dir(&self, dir: Option<&PathBuf>, default: &str) -> PathBuf {
+        match dir {
             Some(dir) => {
                 if dir.is_absolute() {
                     dir.clone()
@@ -199,7 +214,7 @@ impl ResolvedConfig {
                     self.db_root.join(dir)
                 }
             }
-            None => self.db_root.join("roam"),
+            None => self.db_root.join(default),
         }
     }
 
@@ -305,6 +320,7 @@ impl ResolvedConfig {
         ConfigInfo {
             db_root: self.db_root.clone(),
             new_notes_dir: self.resolve_new_notes_dir(),
+            daily_notes_dir: self.resolve_daily_notes_dir(),
             ignore_patterns: self.resolve_ignore_patterns(),
             has_config_file: dirs::config_dir().is_some_and(|d| d.join("pkms.toml").exists()),
         }
@@ -315,6 +331,7 @@ impl ResolvedConfig {
 pub struct ConfigInfo {
     pub db_root: PathBuf,
     pub new_notes_dir: PathBuf,
+    pub daily_notes_dir: PathBuf,
     pub ignore_patterns: Vec<String>,
     pub has_config_file: bool,
 }
@@ -343,6 +360,9 @@ pub fn generate_default_config(db_root: Option<&std::path::Path>) -> String {
 
 # Directory where new notes are created (relative to db_root or absolute)
 # new_notes_dir = "roam"
+
+# Directory where daily notes are created (defaults to new_notes_dir)
+# daily_notes_dir = "roam/daily"
 
 # Glob patterns to ignore during file discovery
 # ignore_patterns = [".attach", "*.bak"]
@@ -396,6 +416,7 @@ mod tests {
         let config = ResolvedConfig {
             db_root: PathBuf::from("/test/root"),
             new_notes_dir: None,
+            daily_notes_dir: None,
             ignore_patterns: None,
             columns: None,
             tasks: None,
@@ -413,6 +434,7 @@ mod tests {
         let config = ResolvedConfig {
             db_root: PathBuf::from("/test/root"),
             new_notes_dir: Some(PathBuf::from("/abs/path")),
+            daily_notes_dir: None,
             ignore_patterns: None,
             columns: None,
             tasks: None,
@@ -427,6 +449,7 @@ mod tests {
         let config = ResolvedConfig {
             db_root: PathBuf::from("/test/root"),
             new_notes_dir: Some(PathBuf::from("subdir")),
+            daily_notes_dir: None,
             ignore_patterns: None,
             columns: None,
             tasks: None,
@@ -440,10 +463,65 @@ mod tests {
     }
 
     #[test]
+    fn test_resolve_daily_notes_dir_defaults_to_new_notes_dir() {
+        let config = ResolvedConfig {
+            db_root: PathBuf::from("/test/root"),
+            new_notes_dir: Some(PathBuf::from("notes")),
+            daily_notes_dir: None,
+            ignore_patterns: None,
+            columns: None,
+            tasks: None,
+            agenda: None,
+            todoist: None,
+        };
+        assert_eq!(
+            config.resolve_daily_notes_dir(),
+            PathBuf::from("/test/root/notes")
+        );
+    }
+
+    #[test]
+    fn test_resolve_daily_notes_dir_relative() {
+        let config = ResolvedConfig {
+            db_root: PathBuf::from("/test/root"),
+            new_notes_dir: Some(PathBuf::from("notes")),
+            daily_notes_dir: Some(PathBuf::from("daily")),
+            ignore_patterns: None,
+            columns: None,
+            tasks: None,
+            agenda: None,
+            todoist: None,
+        };
+        assert_eq!(
+            config.resolve_daily_notes_dir(),
+            PathBuf::from("/test/root/daily")
+        );
+    }
+
+    #[test]
+    fn test_resolve_daily_notes_dir_absolute() {
+        let config = ResolvedConfig {
+            db_root: PathBuf::from("/test/root"),
+            new_notes_dir: None,
+            daily_notes_dir: Some(PathBuf::from("/daily/path")),
+            ignore_patterns: None,
+            columns: None,
+            tasks: None,
+            agenda: None,
+            todoist: None,
+        };
+        assert_eq!(
+            config.resolve_daily_notes_dir(),
+            PathBuf::from("/daily/path")
+        );
+    }
+
+    #[test]
     fn test_resolve_ignore_patterns_some() {
         let config = ResolvedConfig {
             db_root: PathBuf::from("/test/root"),
             new_notes_dir: None,
+            daily_notes_dir: None,
             ignore_patterns: Some(vec!["*.bak".to_string(), ".attach".to_string()]),
             columns: None,
             tasks: None,
@@ -460,6 +538,7 @@ mod tests {
         let config = ResolvedConfig {
             db_root: PathBuf::from("/test/root"),
             new_notes_dir: None,
+            daily_notes_dir: None,
             ignore_patterns: None,
             columns: None,
             tasks: None,
@@ -500,6 +579,7 @@ mod tests {
         let config = ResolvedConfig {
             db_root: PathBuf::from("/actual/db"),
             new_notes_dir: Some(PathBuf::from("/notes/dir")),
+            daily_notes_dir: Some(PathBuf::from("/daily/dir")),
             ignore_patterns: Some(vec!["*.tmp".to_string()]),
             columns: None,
             tasks: None,
@@ -509,6 +589,7 @@ mod tests {
         let info = config.resolved_info();
         assert_eq!(info.db_root, PathBuf::from("/actual/db"));
         assert_eq!(info.new_notes_dir, PathBuf::from("/notes/dir"));
+        assert_eq!(info.daily_notes_dir, PathBuf::from("/daily/dir"));
         assert_eq!(info.ignore_patterns, vec!["*.tmp".to_string()]);
     }
 
@@ -517,6 +598,7 @@ mod tests {
         let content = r#"
 db_root = "/test/db"
 new_notes_dir = "notes"
+daily_notes_dir = "daily"
 ignore_patterns = [".attach"]
 
 [tasks]
@@ -531,6 +613,7 @@ default_filter = "today | overdue"
         let config: Config = toml::from_str(content).unwrap();
         assert_eq!(config.db_root, Some(PathBuf::from("/test/db")));
         assert_eq!(config.new_notes_dir, Some(PathBuf::from("notes")));
+        assert_eq!(config.daily_notes_dir, Some(PathBuf::from("daily")));
         assert_eq!(config.ignore_patterns, Some(vec![".attach".to_string()]));
         assert_eq!(
             config
@@ -636,6 +719,7 @@ tasks = ["Id", "Project", "Heading"]
         let config = ResolvedConfig {
             db_root: PathBuf::from("/test/root"),
             new_notes_dir: None,
+            daily_notes_dir: None,
             ignore_patterns: None,
             columns: None,
             tasks: None,
@@ -652,6 +736,7 @@ tasks = ["Id", "Project", "Heading"]
         let config = ResolvedConfig {
             db_root: PathBuf::from("/test/root"),
             new_notes_dir: None,
+            daily_notes_dir: None,
             ignore_patterns: None,
             columns: None,
             tasks: None,
@@ -672,6 +757,7 @@ tasks = ["Id", "Project", "Heading"]
         let config = ResolvedConfig {
             db_root: PathBuf::from("/test/root"),
             new_notes_dir: None,
+            daily_notes_dir: None,
             ignore_patterns: None,
             columns: None,
             tasks: None,

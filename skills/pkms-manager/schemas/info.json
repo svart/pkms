@@ -10,6 +10,7 @@
       "properties": {
         "db_root": { "type": "string" },
         "new_notes_dir": { "type": "string" },
+        "daily_notes_dir": { "type": "string" },
         "ignore_patterns": { "type": "array", "items": { "type": "string" } },
         "has_config_file": { "type": "boolean" }
       }

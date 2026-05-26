@@ -88,6 +88,7 @@ mod tests {
         Config {
             db_root: None,
             new_notes_dir: None,
+            daily_notes_dir: None,
             ignore_patterns: None,
             columns: None,
             tasks: None,

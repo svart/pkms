@@ -34,6 +34,7 @@ pub fn run(config: &ResolvedConfig, ctx: &OutputContext) -> Result<()> {
         );
         println!("  db_root:      {}", info.db_root.display());
         println!("  new_notes:    {}", info.new_notes_dir.display());
+        println!("  daily_notes:  {}", info.daily_notes_dir.display());
         if !info.ignore_patterns.is_empty() {
             println!("  ignore:       {}", info.ignore_patterns.join(", "));
         }
