@@ -281,6 +281,7 @@ fn render_org_body(graph: &Graph, config: &ResolvedConfig, node: &Node, content:
     let mut paragraph: Vec<&str> = Vec::new();
     let mut in_list = false;
     let mut in_properties = false;
+    let mut pending_caption: Option<String> = None;
 
     while i < lines.len() {
         let line = lines[i];
@@ -304,6 +305,7 @@ fn render_org_body(graph: &Graph, config: &ResolvedConfig, node: &Node, content:
         if trimmed.is_empty() {
             flush_paragraph(&mut html, &mut paragraph, graph, config, node);
             close_list(&mut html, &mut in_list);
+            pending_caption = None;
             i += 1;
             continue;
         }
@@ -311,9 +313,32 @@ fn render_org_body(graph: &Graph, config: &ResolvedConfig, node: &Node, content:
             i += 1;
             continue;
         }
+        if lower.starts_with("#+caption:") {
+            flush_paragraph(&mut html, &mut paragraph, graph, config, node);
+            close_list(&mut html, &mut in_list);
+            let mut caption = trimmed
+                .split_once(':')
+                .map(|(_, value)| value.trim().to_string())
+                .unwrap_or_default();
+            i += 1;
+            while i < lines.len() {
+                let continuation = lines[i].trim();
+                if continuation.starts_with("#+") || !continuation.starts_with('#') {
+                    break;
+                }
+                if !caption.is_empty() {
+                    caption.push(' ');
+                }
+                caption.push_str(continuation.trim_start_matches('#').trim());
+                i += 1;
+            }
+            pending_caption = (!caption.is_empty()).then_some(caption);
+            continue;
+        }
         if lower.starts_with("#+begin_src") {
             flush_paragraph(&mut html, &mut paragraph, graph, config, node);
             close_list(&mut html, &mut in_list);
+            pending_caption = None;
             let lang = trimmed.split_whitespace().nth(1).unwrap_or("text");
             let mut code = String::new();
             i += 1;
@@ -335,6 +360,7 @@ fn render_org_body(graph: &Graph, config: &ResolvedConfig, node: &Node, content:
         if lower.starts_with("#+begin_export latex") || trimmed == r"\[" {
             flush_paragraph(&mut html, &mut paragraph, graph, config, node);
             close_list(&mut html, &mut in_list);
+            pending_caption = None;
             let mut formula = String::new();
             i += 1;
             while i < lines.len()
@@ -354,6 +380,7 @@ fn render_org_body(graph: &Graph, config: &ResolvedConfig, node: &Node, content:
         if trimmed.starts_with('|') {
             flush_paragraph(&mut html, &mut paragraph, graph, config, node);
             close_list(&mut html, &mut in_list);
+            pending_caption = None;
             let mut table_lines = Vec::new();
             while i < lines.len() && lines[i].trim().starts_with('|') {
                 table_lines.push(lines[i].trim());
@@ -362,14 +389,26 @@ fn render_org_body(graph: &Graph, config: &ResolvedConfig, node: &Node, content:
             html.push_str(&render_table(&table_lines, graph, config, node));
             continue;
         }
-        if let Some(item) = list_item_text(trimmed) {
+        if let Some(caption) = pending_caption.take()
+            && let Some(figure) = render_standalone_image(config, node, trimmed, &caption)
+        {
+            html.push_str(&figure);
+            i += 1;
+            continue;
+        }
+        if let Some(item) = list_item(trimmed) {
             flush_paragraph(&mut html, &mut paragraph, graph, config, node);
+            pending_caption = None;
             if !in_list {
                 html.push_str("<ul>\n");
                 in_list = true;
             }
-            html.push_str("<li>");
-            html.push_str(&render_inline(graph, config, node, item));
+            if item.checked {
+                html.push_str("<li class=\"checked-item\">");
+            } else {
+                html.push_str("<li>");
+            }
+            html.push_str(&render_inline(graph, config, node, item.text));
             html.push_str("</li>\n");
             i += 1;
             continue;
@@ -377,10 +416,15 @@ fn render_org_body(graph: &Graph, config: &ResolvedConfig, node: &Node, content:
         if let Some(cap) = HEADING_RE.captures(line) {
             flush_paragraph(&mut html, &mut paragraph, graph, config, node);
             close_list(&mut html, &mut in_list);
+            pending_caption = None;
             let level = cap[1].len().saturating_add(1).min(6);
             let todo = cap.get(2).map(|m| m.as_str()).unwrap_or_default();
             let title = cap.get(4).map_or("", |m| m.as_str());
-            html.push_str(&format!("<h{level}>"));
+            if is_closed_todo_state(config, todo) {
+                html.push_str(&format!("<h{level} class=\"closed-heading\">"));
+            } else {
+                html.push_str(&format!("<h{level}>"));
+            }
             if !todo.is_empty() {
                 html.push_str(&format!(
                     "<span class=\"todo\">{}</span> ",
@@ -393,10 +437,12 @@ fn render_org_body(graph: &Graph, config: &ResolvedConfig, node: &Node, content:
             continue;
         }
         if trimmed.starts_with("#+") {
+            pending_caption = None;
             i += 1;
             continue;
         }
 
+        pending_caption = None;
         paragraph.push(line);
         i += 1;
     }
@@ -432,6 +478,7 @@ fn close_list(html: &mut String, in_list: &mut bool) {
 
 fn render_table(lines: &[&str], graph: &Graph, config: &ResolvedConfig, node: &Node) -> String {
     let mut html = String::from("<table>\n<tbody>\n");
+    let mut is_header = true;
     for line in lines {
         let cells: Vec<&str> = line.trim_matches('|').split('|').map(str::trim).collect();
         if cells
@@ -442,20 +489,37 @@ fn render_table(lines: &[&str], graph: &Graph, config: &ResolvedConfig, node: &N
         }
         html.push_str("<tr>");
         for cell in cells {
-            html.push_str("<td>");
+            if is_header {
+                html.push_str("<th scope=\"col\">");
+            } else {
+                html.push_str("<td>");
+            }
             html.push_str(&render_inline(graph, config, node, cell));
-            html.push_str("</td>");
+            if is_header {
+                html.push_str("</th>");
+            } else {
+                html.push_str("</td>");
+            }
         }
         html.push_str("</tr>\n");
+        is_header = false;
     }
     html.push_str("</tbody>\n</table>\n");
     html
 }
 
-fn list_item_text(trimmed: &str) -> Option<&str> {
+struct ListItem<'a> {
+    text: &'a str,
+    checked: bool,
+}
+
+fn list_item(trimmed: &str) -> Option<ListItem<'_>> {
     for marker in ["- ", "+ "] {
         if let Some(rest) = trimmed.strip_prefix(marker) {
-            return Some(rest);
+            return Some(ListItem {
+                text: rest,
+                checked: is_checked_item(rest),
+            });
         }
     }
     static ORDERED_RE: LazyLock<Regex> =
@@ -463,6 +527,24 @@ fn list_item_text(trimmed: &str) -> Option<&str> {
     ORDERED_RE
         .captures(trimmed)
         .and_then(|cap| cap.get(1).map(|m| m.as_str()))
+        .map(|text| ListItem {
+            text,
+            checked: is_checked_item(text),
+        })
+}
+
+fn is_checked_item(text: &str) -> bool {
+    text.get(..3)
+        .is_some_and(|prefix| prefix.eq_ignore_ascii_case("[x]"))
+        && text.as_bytes().get(3).is_none_or(u8::is_ascii_whitespace)
+}
+
+fn is_closed_todo_state(config: &ResolvedConfig, state: &str) -> bool {
+    !state.is_empty()
+        && config
+            .closed_todo_states()
+            .iter()
+            .any(|closed| closed.eq_ignore_ascii_case(state))
 }
 
 fn render_inline(graph: &Graph, config: &ResolvedConfig, node: &Node, text: &str) -> String {
@@ -533,6 +615,58 @@ fn render_link(
         );
     }
     render_formatted_text(label)
+}
+
+fn render_standalone_image(
+    config: &ResolvedConfig,
+    node: &Node,
+    text: &str,
+    caption: &str,
+) -> Option<String> {
+    let cap = LINK_RE.captures(text)?;
+    let link = cap.get(0)?;
+    if link.as_str() != text {
+        return None;
+    }
+    let target = cap.get(1).map_or("", |m| m.as_str());
+    let desc = cap.get(2).map(|m| m.as_str()).filter(|s| !s.is_empty());
+    render_image_link(config, node, target, desc, Some(caption))
+}
+
+fn render_image_link(
+    config: &ResolvedConfig,
+    node: &Node,
+    target: &str,
+    desc: Option<&str>,
+    caption: Option<&str>,
+) -> Option<String> {
+    if let Some(path) = target.strip_prefix("file:") {
+        let resolved = resolve_file_link_path(path, &node.path, config.resolved_db_root());
+        if is_image_path(&resolved) {
+            return Some(render_image_figure(
+                &asset_href(&node.uuid, "file", path),
+                caption.or(desc).unwrap_or(target),
+            ));
+        }
+    }
+    if let Some(path) = target.strip_prefix("attachment:") {
+        let resolved = resolve_existing_attachment(config.resolved_db_root(), &node.uuid, path);
+        if is_image_path(&resolved) {
+            return Some(render_image_figure(
+                &asset_href(&node.uuid, "attachment", path),
+                caption.or(desc).unwrap_or(target),
+            ));
+        }
+    }
+    None
+}
+
+fn render_image_figure(href: &str, caption: &str) -> String {
+    format!(
+        "<figure><img src=\"{href}\" alt=\"{}\"><figcaption>{}</figcaption></figure>\n",
+        escape_html(caption),
+        render_formatted_text(caption)
+    )
 }
 
 fn asset_href(note_uuid: &str, kind: &str, target: &str) -> String {
@@ -859,10 +993,8 @@ fn mime_type(path: &Path) -> &'static str {
 }
 
 fn page_css() -> String {
-    let mut css = r#":root{color-scheme:light dark;--bg:#fafafa;--fg:#1f2328;--muted:#667085;--border:#d0d7de;--surface:#fff;--accent:#0969da;--code:#f6f8fa;--mark:#fff7cc;--inline-code:#f3f4f6;--orange-code:#bf360c}
-@media (prefers-color-scheme:dark){:root{--bg:#0d1117;--fg:#e6edf3;--muted:#8b949e;--border:#30363d;--surface:#161b22;--accent:#58a6ff;--code:#161b22;--mark:#3b3200;--inline-code:#1f2937;--orange-code:#ff9f5a}}
-*{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--fg);font:18px/1.68 Alegreya,"Iowan Old Style",Palatino,Georgia,serif} main{width:min(78ch,calc(100% - 32px));margin:0 auto;padding:40px 0 64px}.note-header{border-bottom:1px solid var(--border);margin-bottom:28px;padding-bottom:20px}.eyebrow{color:var(--muted);font:600 12px/1.2 "Alegreya Sans",ui-sans-serif,system-ui,sans-serif;letter-spacing:0;text-transform:uppercase;margin:0 0 8px}h1,h2,h3,h4,h5,h6{font-family:Alegreya,"Iowan Old Style",Palatino,Georgia,serif;line-height:1.2;margin:1.5em 0 .45em;font-weight:700}h1{font-size:2.25rem;margin:0 0 .35em}h2{font-size:1.65rem}h3{font-size:1.35rem}.uuid{font:13px/1.4 "Fira Code","Fira Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:var(--muted);overflow-wrap:anywhere;margin:0}a{color:var(--accent);text-decoration-thickness:.08em;text-underline-offset:.16em}p{margin:0 0 1em}ul{padding-left:1.45em}strong{font-weight:700}em{font-style:italic}u{text-underline-offset:.12em}del{color:var(--muted)}table{width:100%;border-collapse:collapse;margin:1.2em 0;font-family:"Alegreya Sans",ui-sans-serif,system-ui,sans-serif;font-size:.95em}td,th{border:1px solid var(--border);padding:.45rem .6rem;vertical-align:top}tr:nth-child(even){background:color-mix(in srgb,var(--surface),var(--border) 15%)}pre{overflow:auto;background:var(--code);border:1px solid var(--border);border-radius:6px;padding:1rem;font:14px/1.55 "Fira Code","Fira Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}code{font-family:"Fira Code","Fira Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-variant-ligatures:contextual}.inline-code{background:var(--inline-code);border:1px solid var(--border);border-radius:4px;font-size:.86em;padding:.05rem .28rem}.code-orange{color:var(--orange-code);font-weight:600}figure{margin:1.2em 0}.code figcaption{font:12px/1.4 "Alegreya Sans",ui-sans-serif,system-ui,sans-serif;color:var(--muted);margin-bottom:.35rem}img{max-width:100%;height:auto;border:1px solid var(--border);border-radius:6px;background:var(--surface)}figcaption{color:var(--muted);font-size:.9em}.todo{font-size:.75em;border:1px solid var(--border);border-radius:4px;padding:.08rem .35rem;color:var(--muted);vertical-align:.12em}.math{font-family:"Cambria Math","STIX Two Math","Times New Roman",serif;background:var(--mark);border-radius:4px;padding:.08rem .28rem}.math-error{color:#b42318}.math-display{margin:1.35em 0;overflow-x:auto;text-align:center}.katex{font:normal 1.08em KaTeX_Main,"Cambria Math","STIX Two Math","Times New Roman",serif;line-height:1.2;text-indent:0;text-rendering:auto}.katex-display{display:block;text-align:center}.katex .katex-mathml{display:inline}.katex .katex-html{clip:rect(1px,1px,1px,1px);border:0;height:1px;overflow:hidden;padding:0;position:absolute;width:1px}.katex .base{display:inline-block}.katex .strut{display:inline-block}.katex .mord,.katex .mop,.katex .mbin,.katex .mrel,.katex .mopen,.katex .mclose,.katex .mpunct,.katex .minner{display:inline-block}.katex .mspace{display:inline-block}.katex .vlist-t{display:inline-table;table-layout:fixed}.katex .vlist-r{display:table-row}.katex .vlist{display:table-cell;vertical-align:bottom;position:relative}.katex .vlist>span{display:block;height:0;position:relative}.katex .vlist-s{display:table-cell;vertical-align:bottom;font-size:1px;width:2px;min-width:2px}.katex .sqrt>.root{margin-left:.27777778em;margin-right:-.55555556em}.katex .sqrt>.sqrt-sign{display:inline-block}.katex .frac-line{border-bottom-style:solid;display:block;width:100%}.katex .mfrac .frac-line{border-bottom-width:.04em}.katex .mfrac>span>span{text-align:center}.katex .msupsub{text-align:left}.katex .mfrac,.katex .msupsub,.katex .munder,.katex .mover,.katex .munderover{display:inline-block}.katex .mord.text{font-family:Alegreya,"Iowan Old Style",Palatino,Georgia,serif}.katex .mathnormal{font-style:italic}.katex .mathbf{font-weight:700}.katex .mathrm{font-style:normal}.katex .mspace.negativethinspace{margin-left:-.16666667em}"#
-    .to_string();
+    let mut css = include_str!("serve.css").to_string();
+    css.push('\n');
     css.push_str(&syntect_css());
     css
 }
@@ -906,6 +1038,11 @@ mod tests {
 :END:
 #+title: Alpha
 
+* DONE Finished
+* TODO Active
+- [x] Ticked item
+- [ ] Open item
+
 [[id:bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb][Beta]]
 [[attachment:pic.png][Picture]]
 
@@ -939,7 +1076,15 @@ fn main() {}
         let html = render_note_html(&graph, &config, node, &content);
 
         assert!(html.contains("href=\"/?id=bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb\""));
+        assert!(html.contains(
+            "<h2 class=\"closed-heading\"><span class=\"todo\">DONE</span> Finished</h2>"
+        ));
+        assert!(html.contains("<h2><span class=\"todo\">TODO</span> Active</h2>"));
+        assert!(html.contains("<li class=\"checked-item\">[x] Ticked item</li>"));
+        assert!(html.contains("<li>[ ] Open item</li>"));
         assert!(html.contains("<table>"));
+        assert!(html.contains("<th scope=\"col\">Name</th>"));
+        assert!(html.contains("<th scope=\"col\">Value</th>"));
         assert!(html.contains("class=\"katex\""));
         assert!(html.contains("<math"));
         assert!(html.contains("<code class=\"syn-code\">"));
@@ -970,6 +1115,49 @@ fn main() {}
     }
 
     #[test]
+    fn renders_caption_before_standalone_image() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().to_path_buf();
+        let roam = root.join("roam");
+        fs::create_dir_all(&roam).unwrap();
+        fs::create_dir_all(root.join(".attach/aa/aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa")).unwrap();
+        fs::write(
+            root.join(".attach/aa/aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa/pic.png"),
+            b"png",
+        )
+        .unwrap();
+        fs::write(
+            roam.join("a.org"),
+            r#":PROPERTIES:
+:ID:       aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa
+:END:
+#+title: Alpha
+
+#+caption: *Bold* caption
+[[attachment:pic.png]]
+
+#+caption: Long caption first line
+#second line
+[[attachment:pic.png]]
+"#,
+        )
+        .unwrap();
+        let config = test_config(root);
+        let corpus = Corpus::load(&config).unwrap();
+        let graph = Graph::from_corpus(&corpus);
+        let node = graph
+            .resolve_target("aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa")
+            .unwrap();
+        let content = fs::read_to_string(&node.path).unwrap();
+
+        let html = render_note_html(&graph, &config, node, &content);
+
+        assert!(html.contains("<figcaption><strong>Bold</strong> caption</figcaption>"));
+        assert!(html.contains("<figcaption>Long caption first line second line</figcaption>"));
+        assert!(!html.contains("<figcaption>attachment:pic.png</figcaption>"));
+    }
+
+    #[test]
     fn renders_display_math_with_katex() {
         let html = render_display_math(r"\frac{a}{b}");
 
@@ -983,8 +1171,8 @@ fn main() {}
         let css = page_css();
 
         assert!(css.contains(".katex .katex-html"));
-        assert!(css.contains("position:absolute"));
-        assert!(css.contains("clip:rect(1px,1px,1px,1px)"));
+        assert!(css.contains("position: absolute"));
+        assert!(css.contains("clip: rect(1px, 1px, 1px, 1px)"));
     }
 
     #[test]
