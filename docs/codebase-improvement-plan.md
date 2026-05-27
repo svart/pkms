@@ -110,7 +110,8 @@ Phase 1 progress:
 
 - [x] Extract task ID-first parsing and dispatch adapter into
   `commands/task/id_command.rs`.
-- [ ] Extract provider orchestration and source selection.
+- [x] Extract provider orchestration and source selection into
+  `commands/task/providers.rs`.
 - [ ] Extract task rendering helpers.
 
 ### Phase 2: Split `serve.rs`
