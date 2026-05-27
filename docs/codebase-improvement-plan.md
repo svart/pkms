@@ -153,7 +153,7 @@ Phase 2 progress:
   `commands/serve/http.rs`.
 - [x] Extract serve inline rendering and codec helpers into
   `commands/serve/inline.rs`.
-- [ ] Extract serve page shell and panels.
+- [x] Extract serve page shell and panels into `commands/serve/page.rs`.
 - [ ] Extract serve org body rendering.
 - [x] Extract serve syntax highlighting into `commands/serve/highlight.rs`.
 
