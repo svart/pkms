@@ -181,6 +181,11 @@ Do this incrementally. Good first candidates:
 This keeps the CLI simple while making behavior testable without spawning the
 binary for every branch.
 
+Phase 3 progress:
+
+- [x] Convert `path` to the reference `execute`/`render` shape and add focused
+  text-rendering unit tests.
+
 ### Phase 4: Use `Workspace` Consistently
 
 Commands that need both parsed files and graph data should prefer
@@ -272,5 +277,5 @@ targeted extraction around modules that have become too dense.
   `commands/serve/inline.rs`.
 - [ ] Add a small test config builder used by unit tests that need
    `ResolvedConfig`.
-- [ ] Convert one narrow command, such as `path` or `query`, to an
-   `execute`/`render` shape as the reference pattern.
+- [x] Convert one narrow command, `path`, to an `execute`/`render` shape as the
+  reference pattern.
