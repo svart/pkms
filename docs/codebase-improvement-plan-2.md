@@ -45,9 +45,10 @@ refactor commits.
 
 5. [ ] Inject time where behavior depends on `today`.
 
-   Partially done. `task agenda` now captures one `today` value and threads it
-   through `run_on(...)`, but other task paths still call `Local::now()`
-   directly.
+   Partially done. `task agenda` captures one `today` value and threads it
+   through `run_on(...)`. Task provider queries and source-neutral filter
+   application also receive an explicit date from the command path. Some task
+   paths still call `Local::now()` directly where they are thin CLI wrappers.
 
 6. [x] Split `serve.rs` by responsibility.
 
@@ -93,8 +94,8 @@ refactor commits.
   `tasks/*` modules.
 - Consolidate task filtering so source-neutral filters and row-oriented filters
   do not drift.
-- Continue replacing scattered `Local::now()` calls in task code with explicit
-  dates in core logic.
+- Continue replacing the remaining thin-wrapper `Local::now()` calls in task
+  code with explicit dates when the surrounding command logic is refactored.
 - Add a focused `TestDb` builder for smaller, clearer tests.
 - Move more pure command behavior behind typed `execute`/`render` boundaries
   when those commands are touched for feature work.

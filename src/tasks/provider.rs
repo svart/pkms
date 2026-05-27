@@ -2,6 +2,7 @@ use crate::config::ResolvedConfig;
 use crate::tasks::filter::TaskFilters;
 use crate::tasks::model::{TaskItem, TaskSourceKind};
 use anyhow::Result;
+use chrono::NaiveDate;
 use serde::Serialize;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -19,6 +20,7 @@ pub enum TaskListView {
 pub struct TaskQuery {
     pub filters: TaskFilters,
     pub view: TaskListView,
+    pub today: NaiveDate,
 }
 
 pub trait TaskProvider {

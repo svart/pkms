@@ -159,8 +159,9 @@ fn run_task_list(
         );
     }
 
-    let mut items = providers::collect_task_items(config, &filters, TaskListView::All)?;
-    apply_task_filter_criteria(config, &mut items, &filters.criteria)?;
+    let today = Local::now().date_naive();
+    let mut items = providers::collect_task_items(config, &filters, TaskListView::All, today)?;
+    apply_task_filter_criteria_on(config, &mut items, &filters.criteria, today)?;
     sort_task_items(&mut items, args.sort.as_deref().unwrap_or("priority"))?;
     let columns = resolve_task_table_columns(
         config,
@@ -188,7 +189,8 @@ fn run_shortcut(
     args: &TaskShortcutArgs,
     kind: ShortcutKind,
 ) -> Result<()> {
-    let mut items = collect_shortcut_items(config, &args.filters, kind)?;
+    let today = Local::now().date_naive();
+    let mut items = collect_shortcut_items_on(config, &args.filters, kind, today)?;
     let source = shortcut_display_source(&args.filters)?;
     sort_task_items(&mut items, "priority")?;
     let columns = resolve_task_table_columns(
@@ -205,12 +207,14 @@ fn run_upcoming(
     ctx: &OutputContext,
     args: &TaskUpcomingArgs,
 ) -> Result<()> {
-    let mut items = collect_shortcut_items(
+    let today = Local::now().date_naive();
+    let mut items = collect_shortcut_items_on(
         config,
         &args.filters,
         ShortcutKind::Upcoming {
             days: args.days.max(0),
         },
+        today,
     )?;
     let source = shortcut_display_source(&args.filters)?;
     sort_task_items(&mut items, "priority")?;
@@ -259,14 +263,16 @@ fn resolve_task_columns(
     )
 }
 
-fn collect_shortcut_items(
+fn collect_shortcut_items_on(
     config: &ResolvedConfig,
     raw_filters: &[String],
     kind: ShortcutKind,
+    today: NaiveDate,
 ) -> Result<Vec<TaskItem>> {
     let filters = parse_task_filters(raw_filters)?;
-    let mut items = providers::collect_task_items(config, &filters, shortcut_task_view(kind))?;
-    apply_task_filter_criteria(config, &mut items, &filters.criteria)?;
+    let mut items =
+        providers::collect_task_items(config, &filters, shortcut_task_view(kind), today)?;
+    apply_task_filter_criteria_on(config, &mut items, &filters.criteria, today)?;
     Ok(items)
 }
 
@@ -290,10 +296,11 @@ fn shortcut_column_view(kind: ShortcutKind) -> ColumnView {
     }
 }
 
-fn apply_task_filter_criteria(
+fn apply_task_filter_criteria_on(
     config: &ResolvedConfig,
     items: &mut Vec<TaskItem>,
     criteria: &TaskFilterCriteria,
+    today: NaiveDate,
 ) -> Result<()> {
     let before_count = items.len();
     let scope = if criteria.scope.is_empty() {
@@ -307,7 +314,7 @@ fn apply_task_filter_criteria(
         ))
     };
     let context = TaskFilterContext {
-        today: Local::now().date_naive(),
+        today,
         scope: scope.as_ref(),
     };
     items.retain(|item| criteria.matches_item(item, &context));
@@ -380,8 +387,9 @@ fn run_agenda(config: &ResolvedConfig, ctx: &OutputContext, args: &TaskAgendaArg
         );
     }
 
-    let mut items = providers::collect_task_items(config, &filters, TaskListView::Agenda)?;
-    apply_task_filter_criteria(config, &mut items, &filters.criteria)?;
+    let today = Local::now().date_naive();
+    let mut items = providers::collect_task_items(config, &filters, TaskListView::Agenda, today)?;
+    apply_task_filter_criteria_on(config, &mut items, &filters.criteria, today)?;
     sort_task_items(&mut items, args.sort.as_deref().unwrap_or("date,priority"))?;
     let columns = resolve_task_table_columns(
         config,
@@ -1377,8 +1385,11 @@ fn quick_add_text(text: &str, project: Option<&str>) -> String {
     }
 }
 
-pub(super) fn retain_upcoming_task_items(items: &mut Vec<TaskItem>, days: i64) {
-    let today = Local::now().date_naive();
+pub(super) fn retain_upcoming_task_items_on(
+    items: &mut Vec<TaskItem>,
+    days: i64,
+    today: NaiveDate,
+) {
     let cutoff = today + chrono::Duration::days(days);
     items.retain(|item| {
         item.effective_date()

@@ -6,6 +6,7 @@ use crate::tasks::provider::{
     TaskListView, TaskMetadataRow, TaskProvider, TaskProviderContext, TaskQuery,
 };
 use anyhow::Result;
+use chrono::NaiveDate;
 use std::collections::BTreeMap;
 
 struct PkmsTaskProvider<'a> {
@@ -118,20 +119,48 @@ impl TaskProvider for PkmsTaskProvider<'_> {
     fn list(&self, query: &TaskQuery) -> Result<Vec<TaskItem>> {
         match query.view {
             TaskListView::All => pkms::list_items(self.context.config),
-            TaskListView::Agenda => pkms::agenda_items(self.context.config),
-            TaskListView::Today => {
-                pkms::agenda_items_for(self.context.config, true, false, false, false)
-            }
-            TaskListView::Week => {
-                pkms::agenda_items_for(self.context.config, false, true, false, false)
-            }
-            TaskListView::Overdue => {
-                pkms::agenda_items_for(self.context.config, false, false, true, false)
-            }
+            TaskListView::Agenda => pkms::agenda_items_for_on(
+                self.context.config,
+                false,
+                false,
+                false,
+                false,
+                query.today,
+            ),
+            TaskListView::Today => pkms::agenda_items_for_on(
+                self.context.config,
+                true,
+                false,
+                false,
+                false,
+                query.today,
+            ),
+            TaskListView::Week => pkms::agenda_items_for_on(
+                self.context.config,
+                false,
+                true,
+                false,
+                false,
+                query.today,
+            ),
+            TaskListView::Overdue => pkms::agenda_items_for_on(
+                self.context.config,
+                false,
+                false,
+                true,
+                false,
+                query.today,
+            ),
             TaskListView::Upcoming { days } => {
-                let mut items =
-                    pkms::agenda_items_for(self.context.config, false, false, false, true)?;
-                super::retain_upcoming_task_items(&mut items, days);
+                let mut items = pkms::agenda_items_for_on(
+                    self.context.config,
+                    false,
+                    false,
+                    false,
+                    true,
+                    query.today,
+                )?;
+                super::retain_upcoming_task_items_on(&mut items, days, query.today);
                 Ok(items)
             }
             TaskListView::Inbox => pkms::collect_inbox_items(self.context.config),
@@ -195,10 +224,12 @@ pub(super) fn collect_task_items(
     config: &ResolvedConfig,
     filters: &TaskFilters,
     view: TaskListView,
+    today: NaiveDate,
 ) -> Result<Vec<TaskItem>> {
     let query = TaskQuery {
         filters: filters.clone(),
         view,
+        today,
     };
     let items = TaskProviders::new(config).list(filters.source, &query)?;
     tracing::debug!(
