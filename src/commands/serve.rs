@@ -647,7 +647,7 @@ fn render_org_body(graph: &Graph, config: &ResolvedConfig, node: &Node, content:
         .collect();
     let mut i = 0;
     let mut paragraph: Vec<&str> = Vec::new();
-    let mut in_list = false;
+    let mut list_stack: Vec<ListFrame> = Vec::new();
     let mut in_properties = false;
     let mut pending_caption: Option<String> = None;
 
@@ -658,7 +658,7 @@ fn render_org_body(graph: &Graph, config: &ResolvedConfig, node: &Node, content:
 
         if trimmed == ":PROPERTIES:" {
             flush_paragraph(&mut html, &mut paragraph, graph, config, node);
-            close_list(&mut html, &mut in_list);
+            close_lists(&mut html, &mut list_stack);
             in_properties = true;
             i += 1;
             continue;
@@ -672,7 +672,7 @@ fn render_org_body(graph: &Graph, config: &ResolvedConfig, node: &Node, content:
         }
         if trimmed.is_empty() {
             flush_paragraph(&mut html, &mut paragraph, graph, config, node);
-            close_list(&mut html, &mut in_list);
+            close_lists(&mut html, &mut list_stack);
             pending_caption = None;
             i += 1;
             continue;
@@ -683,14 +683,14 @@ fn render_org_body(graph: &Graph, config: &ResolvedConfig, node: &Node, content:
         }
         if is_planning_line(trimmed) {
             flush_paragraph(&mut html, &mut paragraph, graph, config, node);
-            close_list(&mut html, &mut in_list);
+            close_lists(&mut html, &mut list_stack);
             pending_caption = None;
             i += 1;
             continue;
         }
         if lower.starts_with("#+caption:") {
             flush_paragraph(&mut html, &mut paragraph, graph, config, node);
-            close_list(&mut html, &mut in_list);
+            close_lists(&mut html, &mut list_stack);
             let mut caption = trimmed
                 .split_once(':')
                 .map(|(_, value)| value.trim().to_string())
@@ -712,7 +712,7 @@ fn render_org_body(graph: &Graph, config: &ResolvedConfig, node: &Node, content:
         }
         if let Some((block, next_i)) = read_org_block(&lines, i) {
             flush_paragraph(&mut html, &mut paragraph, graph, config, node);
-            close_list(&mut html, &mut in_list);
+            close_lists(&mut html, &mut list_stack);
             let caption = pending_caption.take();
             html.push_str(&render_org_block(
                 graph,
@@ -726,7 +726,7 @@ fn render_org_body(graph: &Graph, config: &ResolvedConfig, node: &Node, content:
         }
         if trimmed == r"\[" {
             flush_paragraph(&mut html, &mut paragraph, graph, config, node);
-            close_list(&mut html, &mut in_list);
+            close_lists(&mut html, &mut list_stack);
             pending_caption = None;
             let mut formula = String::new();
             i += 1;
@@ -743,7 +743,7 @@ fn render_org_body(graph: &Graph, config: &ResolvedConfig, node: &Node, content:
         }
         if trimmed.starts_with('|') {
             flush_paragraph(&mut html, &mut paragraph, graph, config, node);
-            close_list(&mut html, &mut in_list);
+            close_lists(&mut html, &mut list_stack);
             pending_caption = None;
             let mut table_lines = Vec::new();
             while i < lines.len() && lines[i].trim().starts_with('|') {
@@ -760,26 +760,16 @@ fn render_org_body(graph: &Graph, config: &ResolvedConfig, node: &Node, content:
             i += 1;
             continue;
         }
-        if let Some(item) = list_item(trimmed) {
+        if let Some(item) = list_item(line) {
             flush_paragraph(&mut html, &mut paragraph, graph, config, node);
             pending_caption = None;
-            if !in_list {
-                html.push_str("<ul>\n");
-                in_list = true;
-            }
-            if item.checked {
-                html.push_str("<li class=\"checked-item\">");
-            } else {
-                html.push_str("<li>");
-            }
-            html.push_str(&render_inline(graph, config, node, item.text));
-            html.push_str("</li>\n");
+            render_list_item(&mut html, &mut list_stack, item, graph, config, node);
             i += 1;
             continue;
         }
         if let Some(cap) = HEADING_RE.captures(line) {
             flush_paragraph(&mut html, &mut paragraph, graph, config, node);
-            close_list(&mut html, &mut in_list);
+            close_lists(&mut html, &mut list_stack);
             pending_caption = None;
             let level = cap[1].len().saturating_add(1).min(6);
             let todo = cap.get(2).map(|m| m.as_str()).unwrap_or_default();
@@ -818,12 +808,13 @@ fn render_org_body(graph: &Graph, config: &ResolvedConfig, node: &Node, content:
         }
 
         pending_caption = None;
+        close_lists(&mut html, &mut list_stack);
         paragraph.push(line);
         i += 1;
     }
 
     flush_paragraph(&mut html, &mut paragraph, graph, config, node);
-    close_list(&mut html, &mut in_list);
+    close_lists(&mut html, &mut list_stack);
     html
 }
 
@@ -844,10 +835,83 @@ fn flush_paragraph(
     paragraph.clear();
 }
 
-fn close_list(html: &mut String, in_list: &mut bool) {
-    if *in_list {
-        html.push_str("</ul>\n");
-        *in_list = false;
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ListKind {
+    Ordered,
+    Unordered,
+}
+
+impl ListKind {
+    fn tag(self) -> &'static str {
+        match self {
+            Self::Ordered => "ol",
+            Self::Unordered => "ul",
+        }
+    }
+}
+
+struct ListFrame {
+    kind: ListKind,
+    indent: usize,
+    open_item: bool,
+}
+
+fn render_list_item(
+    html: &mut String,
+    stack: &mut Vec<ListFrame>,
+    item: ListItem<'_>,
+    graph: &Graph,
+    config: &ResolvedConfig,
+    node: &Node,
+) {
+    while stack.last().is_some_and(|frame| frame.indent > item.indent) {
+        close_list_frame(html, stack);
+    }
+    if stack
+        .last()
+        .is_some_and(|frame| frame.indent == item.indent && frame.kind != item.kind)
+    {
+        close_list_frame(html, stack);
+    }
+    if stack
+        .last()
+        .is_none_or(|frame| frame.indent < item.indent || frame.kind != item.kind)
+    {
+        let tag = item.kind.tag();
+        let _ = writeln!(html, "<{tag}>");
+        stack.push(ListFrame {
+            kind: item.kind,
+            indent: item.indent,
+            open_item: false,
+        });
+    }
+    if let Some(frame) = stack.last_mut() {
+        if frame.open_item {
+            html.push_str("</li>\n");
+        }
+        if item.checked {
+            html.push_str("<li class=\"checked-item\">");
+        } else {
+            html.push_str("<li>");
+        }
+        frame.open_item = true;
+    }
+    html.push_str(&render_inline(graph, config, node, item.text));
+}
+
+fn close_lists(html: &mut String, stack: &mut Vec<ListFrame>) {
+    while !stack.is_empty() {
+        close_list_frame(html, stack);
+    }
+}
+
+fn close_list_frame(html: &mut String, stack: &mut Vec<ListFrame>) {
+    if let Some(frame) = stack.pop() {
+        if frame.open_item {
+            html.push_str("</li>\n");
+        }
+        let tag = frame.kind.tag();
+        let _ = writeln!(html, "</{tag}>");
     }
 }
 
@@ -1044,14 +1108,20 @@ fn render_table(lines: &[&str], graph: &Graph, config: &ResolvedConfig, node: &N
 }
 
 struct ListItem<'a> {
+    indent: usize,
+    kind: ListKind,
     text: &'a str,
     checked: bool,
 }
 
-fn list_item(trimmed: &str) -> Option<ListItem<'_>> {
+fn list_item(line: &str) -> Option<ListItem<'_>> {
+    let indent = line.len() - line.trim_start_matches([' ', '\t']).len();
+    let trimmed = line.trim_start();
     for marker in ["- ", "+ "] {
         if let Some(rest) = trimmed.strip_prefix(marker) {
             return Some(ListItem {
+                indent,
+                kind: ListKind::Unordered,
                 text: rest,
                 checked: is_checked_item(rest),
             });
@@ -1063,6 +1133,8 @@ fn list_item(trimmed: &str) -> Option<ListItem<'_>> {
         .captures(trimmed)
         .and_then(|cap| cap.get(1).map(|m| m.as_str()))
         .map(|text| ListItem {
+            indent,
+            kind: ListKind::Ordered,
             text,
             checked: is_checked_item(text),
         })
@@ -1992,6 +2064,13 @@ Body.
 SCHEDULED: <2026-05-27 Wed> DEADLINE: <2026-05-28 Thu>
 - [x] Ticked item
 - [ ] Open item
+- First level
+  - Second level
+- Back to first
+1. Number one
+2. Number two
+   1. Number two child
+3. Number three
 
 [[id:bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb][Beta]]
 [[https://example.org/docs][Example docs]]
@@ -2045,6 +2124,12 @@ fn main() {}
         assert!(!html.contains("<p>DEADLINE:"));
         assert!(html.contains("<li class=\"checked-item\">[x] Ticked item</li>"));
         assert!(html.contains("<li>[ ] Open item</li>"));
+        assert!(html.contains(
+            "<li>First level<ul>\n<li>Second level</li>\n</ul>\n</li>\n<li>Back to first</li>"
+        ));
+        assert!(html.contains(
+            "<ol>\n<li>Number one</li>\n<li>Number two<ol>\n<li>Number two child</li>\n</ol>\n</li>\n<li>Number three</li>\n</ol>"
+        ));
         assert!(html.contains("<table>"));
         assert!(html.contains("<th scope=\"col\">Name</th>"));
         assert!(html.contains("<th scope=\"col\">Value</th>"));
