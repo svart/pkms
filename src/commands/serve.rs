@@ -1651,7 +1651,66 @@ fn page_js() -> &'static str {
   const HOVER_DELAY_MS = 450;
   const preview = document.getElementById("note-preview");
   const originalNote = document.querySelector(".note-body");
+  const outlineLinks = Array.from(document.querySelectorAll(".contents-panel a[href^='#h-']"));
   const openButton = document.querySelector(".open-note-button[data-open-url]");
+
+  if (originalNote && outlineLinks.length > 0) {
+    const headings = outlineLinks
+      .map((link) => {
+        const id = link.getAttribute("href").slice(1);
+        const heading = document.getElementById(id);
+        return heading ? { id, heading, link } : null;
+      })
+      .filter(Boolean);
+    let activeId = "";
+    let ticking = false;
+
+    function setActiveOutline(id) {
+      if (id === activeId) {
+        return;
+      }
+      activeId = id;
+      for (const item of headings) {
+        const active = item.id === id;
+        item.link.classList.toggle("active-outline", active);
+        if (active) {
+          item.link.setAttribute("aria-current", "location");
+        } else {
+          item.link.removeAttribute("aria-current");
+        }
+      }
+    }
+
+    function updateActiveOutline() {
+      ticking = false;
+      if (headings.length === 0) {
+        return;
+      }
+      const threshold = Math.min(window.innerHeight * 0.3, 160);
+      let current = headings[0];
+      for (const item of headings) {
+        if (item.heading.getBoundingClientRect().top <= threshold) {
+          current = item;
+        } else {
+          break;
+        }
+      }
+      setActiveOutline(current.id);
+    }
+
+    function requestOutlineUpdate() {
+      if (ticking) {
+        return;
+      }
+      ticking = true;
+      window.requestAnimationFrame(updateActiveOutline);
+    }
+
+    window.addEventListener("scroll", requestOutlineUpdate, { passive: true });
+    window.addEventListener("resize", requestOutlineUpdate);
+    updateActiveOutline();
+  }
+
   if (openButton && window.fetch) {
     openButton.addEventListener("click", async () => {
       const label = openButton.textContent;
@@ -1908,6 +1967,9 @@ Preview body.
         assert!(page.contains("data-open-url=\"/open?id=aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa\""));
         assert!(page.contains("Open in Emacs"));
         assert!(page.contains("fetch(openButton.dataset.openUrl, { method: \"POST\" })"));
+        assert!(page.contains("const outlineLinks = Array.from(document.querySelectorAll"));
+        assert!(page.contains("item.link.classList.toggle(\"active-outline\", active);"));
+        assert!(page.contains("item.link.setAttribute(\"aria-current\", \"location\");"));
         assert!(page.contains("const HOVER_DELAY_MS = 450;"));
         assert!(page.contains("originalNote.addEventListener(\"click\""));
         assert!(page.contains("preview.addEventListener(\"wheel\""));
@@ -2037,6 +2099,8 @@ Body.
         assert!(css.contains("text-align: right;"));
         assert!(css.contains(".backlinks-panel summary::after"));
         assert!(css.contains("border-right: 0.42rem solid currentColor;"));
+        assert!(css.contains(".outline-list a.active-outline"));
+        assert!(css.contains("font-weight: 700;"));
     }
 
     #[test]

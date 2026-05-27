@@ -221,6 +221,11 @@ main {
   text-underline-offset: 0.16em;
 }
 
+.outline-list a.active-outline {
+  color: var(--fg);
+  font-weight: 700;
+}
+
 .panel-empty {
   color: var(--muted);
   margin: 0.65rem 0 0;
