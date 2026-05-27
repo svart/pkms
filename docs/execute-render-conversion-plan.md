@@ -249,10 +249,10 @@ capturing stdout.
 
 **Planned changes:**
 
-- [ ] Normalize `task agenda`, `task agenda today`, `week`, `overdue`, and
+- [x] Normalize `task agenda`, `task agenda today`, `week`, `overdue`, and
   `upcoming` into an internal agenda request.
-- [ ] Carry `TaskClock` through the request.
-- [ ] Keep shortcut-specific defaults explicit: view, date window, sort, and
+- [x] Carry `TaskClock` through the request.
+- [x] Keep shortcut-specific defaults explicit: view, date window, sort, and
   default columns.
 
 **Benefit:** Date-sensitive behavior becomes easier to test and reason about.
@@ -261,10 +261,10 @@ capturing stdout.
 
 **Planned changes:**
 
-- [ ] Add an internal helper such as `execute_task_agenda(config, request)`.
-- [ ] Return typed agenda rows plus source, limit, columns, and grouping date.
-- [ ] Keep agenda grouping and table rendering in `commands/task/render.rs`.
-- [ ] Add focused tests for today/week/overdue/upcoming request behavior and
+- [x] Add an internal helper such as `execute_task_agenda(config, request)`.
+- [x] Return typed agenda rows plus source, limit, columns, and grouping date.
+- [x] Keep agenda grouping and table rendering in `commands/task/render.rs`.
+- [x] Add focused tests for today/week/overdue/upcoming request behavior and
   source-neutral filtering.
 
 **Benefit:** Agenda behavior gets the same testability benefits as
@@ -304,8 +304,8 @@ existing task source and table abstractions.
 8. [x] Apply the light `context` cleanup.
 9. [x] Refactor task list request planning.
 10. [x] Refactor task list execution.
-11. [ ] Refactor agenda request planning.
-12. [ ] Refactor agenda execution.
+11. [x] Refactor agenda request planning.
+12. [x] Refactor agenda execution.
 13. [ ] Review whether any remaining read-only command still has duplicated
     execution paths.
 

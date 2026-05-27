@@ -94,6 +94,38 @@ struct TaskListExecution {
     columns: Option<Vec<Column>>,
 }
 
+struct AgendaRequest {
+    filters: TaskFilters,
+    sort: Option<String>,
+    limit: Option<usize>,
+    line_sep: bool,
+    columns: AgendaColumns,
+    clock: TaskClock,
+    view: TaskListView,
+    render_kind: AgendaRenderKind,
+    legacy_pkms: bool,
+}
+
+enum AgendaColumns {
+    Pkms(Vec<Column>),
+    SourceNeutral(Option<Vec<Column>>),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AgendaRenderKind {
+    TaskItems,
+    AgendaGroups,
+}
+
+struct AgendaExecution {
+    source: SourceSelection,
+    items: Vec<TaskItem>,
+    limit: Option<usize>,
+    columns: Option<Vec<Column>>,
+    today: NaiveDate,
+    render_kind: AgendaRenderKind,
+}
+
 impl TaskListRequest {
     fn uses_pkms_todo_path(&self) -> bool {
         matches!(self.filters.source, SourceSelection::Pkms)
@@ -111,6 +143,26 @@ impl TaskListRequest {
         match &self.columns {
             TaskListColumns::SourceNeutral(columns) => columns.as_deref(),
             TaskListColumns::Pkms(_) => unreachable!("expected source-neutral task columns"),
+        }
+    }
+}
+
+impl AgendaRequest {
+    fn uses_pkms_agenda_path(&self) -> bool {
+        self.legacy_pkms
+    }
+
+    fn pkms_columns(&self) -> &[Column] {
+        match &self.columns {
+            AgendaColumns::Pkms(columns) => columns,
+            AgendaColumns::SourceNeutral(_) => unreachable!("expected PKMS agenda columns"),
+        }
+    }
+
+    fn source_neutral_columns(&self) -> Option<&[Column]> {
+        match &self.columns {
+            AgendaColumns::SourceNeutral(columns) => columns.as_deref(),
+            AgendaColumns::Pkms(_) => unreachable!("expected source-neutral agenda columns"),
         }
     }
 }
@@ -293,31 +345,6 @@ fn run_shortcut(
     render::print_task_items(ctx, source, items, args.limit, columns.as_deref())
 }
 
-fn run_upcoming(
-    config: &ResolvedConfig,
-    ctx: &OutputContext,
-    args: &TaskUpcomingArgs,
-) -> Result<()> {
-    let clock = TaskClock::now();
-    let mut items = collect_shortcut_items_on(
-        config,
-        &args.filters,
-        ShortcutKind::Upcoming {
-            days: args.days.max(0),
-        },
-        clock,
-    )?;
-    let source = shortcut_display_source(&args.filters)?;
-    sort_task_items(&mut items, "priority")?;
-    let columns = resolve_task_table_columns(
-        config,
-        source,
-        ColumnView::Agenda,
-        args.table.columns.as_deref(),
-    )?;
-    render::print_task_items(ctx, source, items, args.limit, columns.as_deref())
-}
-
 fn shortcut_display_source(raw_filters: &[String]) -> Result<SourceSelection> {
     let filters = parse_task_filters(raw_filters)?;
     Ok(filters.source)
@@ -428,17 +455,49 @@ fn apply_task_filter_criteria_on(
 }
 
 fn run_agenda(config: &ResolvedConfig, ctx: &OutputContext, args: &TaskAgendaArgs) -> Result<()> {
+    let request = plan_agenda_request(config, args)?;
+    if request.uses_pkms_agenda_path() {
+        let columns = request.pkms_columns().to_vec();
+        return agenda::run_with_clock(
+            config,
+            ctx,
+            &agenda::AgendaOptions {
+                state: None,
+                tags: None,
+                kind: None,
+                prio: None,
+                overdue: false,
+                upcoming: false,
+                date: None,
+                sort: request.sort.clone(),
+                limit: request.limit,
+                today: false,
+                week: false,
+                line_sep: request.line_sep,
+                columns,
+            },
+            request.clock,
+        );
+    }
+
+    let output = execute_task_agenda(config, &request)?;
+    render_task_agenda(ctx, output)
+}
+
+fn plan_agenda_request(config: &ResolvedConfig, args: &TaskAgendaArgs) -> Result<AgendaRequest> {
     match &args.command {
         Some(TaskAgendaCommand::Today(args)) => {
-            return run_shortcut(config, ctx, args, ShortcutKind::Today);
+            return plan_agenda_shortcut_request(config, args, ShortcutKind::Today);
         }
         Some(TaskAgendaCommand::Week(args)) => {
-            return run_shortcut(config, ctx, args, ShortcutKind::Week);
+            return plan_agenda_shortcut_request(config, args, ShortcutKind::Week);
         }
         Some(TaskAgendaCommand::Overdue(args)) => {
-            return run_shortcut(config, ctx, args, ShortcutKind::Overdue);
+            return plan_agenda_shortcut_request(config, args, ShortcutKind::Overdue);
         }
-        Some(TaskAgendaCommand::Upcoming(args)) => return run_upcoming(config, ctx, args),
+        Some(TaskAgendaCommand::Upcoming(args)) => {
+            return plan_agenda_upcoming_request(config, args);
+        }
         None => {}
     }
 
@@ -451,52 +510,134 @@ fn run_agenda(config: &ResolvedConfig, ctx: &OutputContext, args: &TaskAgendaArg
         "running task agenda"
     );
     let clock = TaskClock::now();
-    if matches!(filters.source, SourceSelection::Pkms) && !filters.has_criteria() {
-        let columns = resolve_task_columns(
+    let columns = if matches!(filters.source, SourceSelection::Pkms) && !filters.has_criteria() {
+        AgendaColumns::Pkms(resolve_task_columns(
             config,
             SourceSelection::Pkms,
             ColumnView::Agenda,
             args.table.columns.as_deref(),
-        )?;
-        return agenda::run_with_clock(
+        )?)
+    } else {
+        AgendaColumns::SourceNeutral(resolve_task_table_columns(
             config,
-            ctx,
-            &agenda::AgendaOptions {
-                state: None,
-                tags: None,
-                kind: None,
-                prio: None,
-                overdue: false,
-                upcoming: false,
-                date: None,
-                sort: args.sort.clone(),
-                limit: args.limit,
-                today: false,
-                week: false,
-                line_sep: args.table.line_sep,
-                columns,
-            },
-            clock,
-        );
-    }
+            filters.source,
+            ColumnView::Agenda,
+            args.table.columns.as_deref(),
+        )?)
+    };
+    let legacy_pkms = matches!(columns, AgendaColumns::Pkms(_));
 
-    let mut items = providers::collect_task_items(config, &filters, TaskListView::Agenda, clock)?;
-    apply_task_filter_criteria_on(config, &mut items, &filters.criteria, clock.today)?;
-    sort_task_items(&mut items, args.sort.as_deref().unwrap_or("date,priority"))?;
+    Ok(AgendaRequest {
+        filters,
+        sort: args.sort.clone(),
+        limit: args.limit,
+        line_sep: args.table.line_sep,
+        columns,
+        clock,
+        view: TaskListView::Agenda,
+        render_kind: AgendaRenderKind::AgendaGroups,
+        legacy_pkms,
+    })
+}
+
+fn plan_agenda_shortcut_request(
+    config: &ResolvedConfig,
+    args: &TaskShortcutArgs,
+    kind: ShortcutKind,
+) -> Result<AgendaRequest> {
+    let filters = parse_task_filters(&args.filters)?;
+    let clock = TaskClock::now();
     let columns = resolve_task_table_columns(
         config,
         filters.source,
-        ColumnView::Agenda,
+        shortcut_column_view(kind),
         args.table.columns.as_deref(),
     )?;
-    render::print_agenda_task_items(
-        ctx,
+    Ok(AgendaRequest {
+        filters,
+        sort: Some("priority".to_string()),
+        limit: args.limit,
+        line_sep: args.table.line_sep,
+        columns: AgendaColumns::SourceNeutral(columns),
+        clock,
+        view: shortcut_task_view(kind),
+        render_kind: AgendaRenderKind::TaskItems,
+        legacy_pkms: false,
+    })
+}
+
+fn plan_agenda_upcoming_request(
+    config: &ResolvedConfig,
+    args: &TaskUpcomingArgs,
+) -> Result<AgendaRequest> {
+    let filters = parse_task_filters(&args.filters)?;
+    let clock = TaskClock::now();
+    let kind = ShortcutKind::Upcoming {
+        days: args.days.max(0),
+    };
+    let columns = resolve_task_table_columns(
+        config,
         filters.source,
+        shortcut_column_view(kind),
+        args.table.columns.as_deref(),
+    )?;
+    Ok(AgendaRequest {
+        filters,
+        sort: Some("priority".to_string()),
+        limit: args.limit,
+        line_sep: args.table.line_sep,
+        columns: AgendaColumns::SourceNeutral(columns),
+        clock,
+        view: shortcut_task_view(kind),
+        render_kind: AgendaRenderKind::TaskItems,
+        legacy_pkms: false,
+    })
+}
+
+fn execute_task_agenda(
+    config: &ResolvedConfig,
+    request: &AgendaRequest,
+) -> Result<AgendaExecution> {
+    let mut items =
+        providers::collect_task_items(config, &request.filters, request.view, request.clock)?;
+    apply_task_filter_criteria_on(
+        config,
+        &mut items,
+        &request.filters.criteria,
+        request.clock.today,
+    )?;
+    sort_task_items(
+        &mut items,
+        request.sort.as_deref().unwrap_or("date,priority"),
+    )?;
+    Ok(AgendaExecution {
+        source: request.filters.source,
         items,
-        args.limit,
-        columns.as_deref(),
-        clock.today,
-    )
+        limit: request.limit,
+        columns: request.source_neutral_columns().map(<[Column]>::to_vec),
+        today: request.clock.today,
+        render_kind: request.render_kind,
+    })
+}
+
+fn render_task_agenda(ctx: &OutputContext, output: AgendaExecution) -> Result<()> {
+    match output.render_kind {
+        AgendaRenderKind::TaskItems => render::print_task_items(
+            ctx,
+            output.source,
+            output.items,
+            output.limit,
+            output.columns.as_deref(),
+        ),
+        AgendaRenderKind::AgendaGroups => render::print_agenda_task_items(
+            ctx,
+            output.source,
+            output.items,
+            output.limit,
+            output.columns.as_deref(),
+            output.today,
+        ),
+    }
 }
 
 pub(super) fn run_show(
