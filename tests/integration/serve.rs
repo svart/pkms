@@ -146,10 +146,34 @@ fn http_get(host_port: &str, path: &str) -> String {
     if let Err(err) = write_result {
         assert_eq!(err.kind(), std::io::ErrorKind::BrokenPipe);
     }
-    let mut response = String::new();
-    if let Err(err) = stream.read_to_string(&mut response) {
+    let mut response = Vec::new();
+    if let Err(err) = stream.read_to_end(&mut response) {
         assert_eq!(err.kind(), std::io::ErrorKind::ConnectionReset);
-        assert!(!response.is_empty(), "connection reset before response");
     }
-    response
+    assert_complete_http_response(&response, path);
+    String::from_utf8(response).expect("serve response should be utf-8")
+}
+
+fn assert_complete_http_response(response: &[u8], path: &str) {
+    let header_end = response
+        .windows(4)
+        .position(|window| window == b"\r\n\r\n")
+        .map(|index| index + 4)
+        .unwrap_or_else(|| panic!("incomplete HTTP headers for {path}"));
+    let headers = std::str::from_utf8(&response[..header_end])
+        .unwrap_or_else(|_| panic!("HTTP headers should be utf-8 for {path}"));
+    let content_len = headers
+        .lines()
+        .find_map(|line| {
+            let (name, value) = line.split_once(':')?;
+            name.eq_ignore_ascii_case("content-length")
+                .then(|| value.trim().parse::<usize>().ok())
+                .flatten()
+        })
+        .unwrap_or_else(|| panic!("missing Content-Length header for {path}"));
+    let body_len = response.len() - header_end;
+    assert!(
+        body_len >= content_len,
+        "partial HTTP response body for {path}: expected {content_len} bytes, got {body_len}"
+    );
 }
