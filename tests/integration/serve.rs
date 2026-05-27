@@ -66,6 +66,76 @@ fn test_serve_renders_initial_note_and_linked_note() {
     let _ = child.wait();
 }
 
+#[test]
+fn test_serve_accepts_db_relative_note_path() {
+    let (_dir, root) = setup_db();
+    let config_home = setup_test_config_home();
+    let mut child = Command::new(pkms_binary())
+        .args([
+            "--db",
+            root.to_str().unwrap(),
+            "serve",
+            "roam/common/20220101000000-note_a.org",
+            "--port",
+            "0",
+        ])
+        .env("XDG_CONFIG_HOME", config_home.path())
+        .env_remove("PKMS_DB_ROOT")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("failed to spawn pkms serve");
+
+    let stdout = child.stdout.take().unwrap();
+    let mut reader = BufReader::new(stdout);
+    let mut line = String::new();
+    reader.read_line(&mut line).unwrap();
+    assert!(
+        line.starts_with("Serving http://"),
+        "unexpected line: {line}"
+    );
+
+    child.kill().unwrap();
+    let _ = child.wait();
+}
+
+#[test]
+fn test_serve_accepts_cwd_relative_note_path() {
+    let (_dir, root) = setup_db();
+    let config_home = setup_test_config_home();
+    let parent = root.parent().unwrap();
+    let target = root.file_name().unwrap().to_string_lossy().to_string()
+        + "/roam/common/20220101000000-note_a.org";
+    let mut child = Command::new(pkms_binary())
+        .current_dir(parent)
+        .args([
+            "--db",
+            root.to_str().unwrap(),
+            "serve",
+            &target,
+            "--port",
+            "0",
+        ])
+        .env("XDG_CONFIG_HOME", config_home.path())
+        .env_remove("PKMS_DB_ROOT")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("failed to spawn pkms serve");
+
+    let stdout = child.stdout.take().unwrap();
+    let mut reader = BufReader::new(stdout);
+    let mut line = String::new();
+    reader.read_line(&mut line).unwrap();
+    assert!(
+        line.starts_with("Serving http://"),
+        "unexpected line: {line}"
+    );
+
+    child.kill().unwrap();
+    let _ = child.wait();
+}
+
 fn http_get(host_port: &str, path: &str) -> String {
     let mut stream = TcpStream::connect(host_port).unwrap();
     let write_result = write!(

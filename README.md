@@ -70,7 +70,7 @@ Commands support text output by default and structured output with
 The local web viewer is available in builds made with `--features web`:
 
 ```bash
-pkms serve <uuid-or-title>
+pkms serve <target>
 ```
 
 ```bash

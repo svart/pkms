@@ -152,7 +152,8 @@ impl Graph {
     pub fn load(config: &ResolvedConfig) -> anyhow::Result<Self> {
         tracing::debug!(db_root = %config.resolved_db_root().display(), "loading graph");
         let corpus = Corpus::load(config)?;
-        let graph = Self::from_corpus(&corpus);
+        let mut graph = Self::from_corpus(&corpus);
+        graph.index_db_relative_paths(config.resolved_db_root());
         tracing::debug!(
             node_count = graph.nodes.len(),
             backlink_target_count = graph.backlinks.len(),
@@ -178,11 +179,29 @@ impl Graph {
         graph
     }
 
+    fn index_db_relative_paths(&mut self, db_root: &Path) {
+        for result in &self.results {
+            let Some(uuid) = self.path_to_uuid.get(&result.path).cloned() else {
+                continue;
+            };
+            if let Ok(relative_path) = result.path.strip_prefix(db_root) {
+                self.path_to_uuid
+                    .entry(relative_path.to_path_buf())
+                    .or_insert(uuid);
+            }
+        }
+    }
+
     pub fn find_node(&self, target: &str) -> Option<&Node> {
         if let Some(node) = self.nodes.get(target) {
             return Some(node);
         }
         if let Some(uuid) = self.path_to_uuid.get(&PathBuf::from(target)) {
+            return self.nodes.get(uuid);
+        }
+        if let Ok(path) = std::fs::canonicalize(target)
+            && let Some(uuid) = self.path_to_uuid.get(&path)
+        {
             return self.nodes.get(uuid);
         }
         if let Some(uuids) = self.title_to_uuid.get(target)
