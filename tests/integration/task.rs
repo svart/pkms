@@ -2,11 +2,20 @@ use super::*;
 #[cfg(feature = "todoist")]
 use std::io::{Read, Write};
 #[cfg(feature = "todoist")]
-use std::net::TcpListener;
+use std::net::{TcpListener, TcpStream};
 #[cfg(feature = "todoist")]
-use std::process::Command;
+use std::process::{Command, Output, Stdio};
 #[cfg(feature = "todoist")]
 use std::thread;
+#[cfg(feature = "todoist")]
+use std::time::{Duration, Instant};
+
+#[cfg(feature = "todoist")]
+const TODOIST_COMMAND_TIMEOUT: Duration = Duration::from_secs(30);
+#[cfg(feature = "todoist")]
+const TODOIST_MOCK_ACCEPT_TIMEOUT: Duration = Duration::from_secs(10);
+#[cfg(feature = "todoist")]
+const TODOIST_MOCK_READ_TIMEOUT: Duration = Duration::from_secs(2);
 
 fn org_date(days_from_today: i64) -> String {
     (chrono::Local::now().date_naive() + chrono::Duration::days(days_from_today))
@@ -3405,9 +3414,8 @@ fn run_with_todoist_env(args: &[&str], base_url: &str) -> std::process::Output {
         .args(args)
         .env("TODOIST_API_TOKEN", "test-token")
         .env("PKMS_TODOIST_API_BASE_URL", base_url)
-        .env("COLUMNS", "120")
-        .output()
-        .unwrap()
+        .env("COLUMNS", "120");
+    output_with_timeout(&mut command)
 }
 
 #[cfg(feature = "todoist")]
@@ -3429,9 +3437,39 @@ token = "config-token"
     command
         .args(args)
         .env_remove("TODOIST_API_TOKEN")
-        .env("PKMS_TODOIST_API_BASE_URL", base_url)
-        .output()
-        .unwrap()
+        .env("PKMS_TODOIST_API_BASE_URL", base_url);
+    output_with_timeout(&mut command)
+}
+
+#[cfg(feature = "todoist")]
+fn output_with_timeout(command: &mut Command) -> Output {
+    command.stdout(Stdio::piped()).stderr(Stdio::piped());
+    let mut child = command.spawn().expect("failed to spawn pkms command");
+    let deadline = Instant::now() + TODOIST_COMMAND_TIMEOUT;
+    loop {
+        if child
+            .try_wait()
+            .expect("failed to poll pkms command")
+            .is_some()
+        {
+            return child
+                .wait_with_output()
+                .expect("failed to collect pkms command output");
+        }
+        if Instant::now() >= deadline {
+            let _ = child.kill();
+            let output = child
+                .wait_with_output()
+                .expect("failed to collect timed-out pkms command output");
+            panic!(
+                "pkms command timed out after {:?}\nstdout:\n{}\nstderr:\n{}",
+                TODOIST_COMMAND_TIMEOUT,
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+        thread::sleep(Duration::from_millis(10));
+    }
 }
 
 #[cfg(feature = "todoist")]
@@ -3446,34 +3484,12 @@ fn spawn_todoist_mock_expect_bodies(
     responses: Vec<(&'static str, &'static str, serde_json::Value, &'static str)>,
 ) -> (String, thread::JoinHandle<()>) {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    listener.set_nonblocking(true).unwrap();
     let base_url = format!("http://{}", listener.local_addr().unwrap());
     let handle = thread::spawn(move || {
         for (method, expected_path, expected_body, body) in responses {
-            let (mut stream, _) = listener.accept().unwrap();
-            stream
-                .set_read_timeout(Some(std::time::Duration::from_secs(1)))
-                .unwrap();
-            let mut request_bytes = Vec::new();
-            let mut buffer = [0_u8; 4096];
-            loop {
-                let read = stream.read(&mut buffer).unwrap();
-                request_bytes.extend_from_slice(&buffer[..read]);
-                let request = String::from_utf8_lossy(&request_bytes);
-                if let Some((headers, body)) = request.split_once("\r\n\r\n") {
-                    let content_length = headers
-                        .lines()
-                        .find_map(|line| {
-                            line.to_ascii_lowercase()
-                                .strip_prefix("content-length:")
-                                .and_then(|value| value.trim().parse::<usize>().ok())
-                        })
-                        .unwrap_or(0);
-                    if body.len() >= content_length {
-                        break;
-                    }
-                }
-            }
-            let request = String::from_utf8_lossy(&request_bytes);
+            let mut stream = accept_todoist_connection(&listener, method, expected_path);
+            let request = read_todoist_request(&mut stream, method, expected_path);
             assert!(
                 request.starts_with(&format!("{method} {expected_path} HTTP/1.1")),
                 "unexpected request: {request}"
@@ -3507,13 +3523,12 @@ fn spawn_todoist_mock_with_token(
     expected_token: &'static str,
 ) -> (String, thread::JoinHandle<()>) {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    listener.set_nonblocking(true).unwrap();
     let base_url = format!("http://{}", listener.local_addr().unwrap());
     let handle = thread::spawn(move || {
         for (method, expected_path, body) in responses {
-            let (mut stream, _) = listener.accept().unwrap();
-            let mut buffer = [0_u8; 4096];
-            let read = stream.read(&mut buffer).unwrap();
-            let request = String::from_utf8_lossy(&buffer[..read]);
+            let mut stream = accept_todoist_connection(&listener, method, expected_path);
+            let request = read_todoist_request(&mut stream, method, expected_path);
             assert!(
                 request.starts_with(&format!("{method} {expected_path} HTTP/1.1")),
                 "unexpected request: {request}"
@@ -3532,4 +3547,76 @@ fn spawn_todoist_mock_with_token(
         }
     });
     (base_url, handle)
+}
+
+#[cfg(feature = "todoist")]
+fn accept_todoist_connection(
+    listener: &TcpListener,
+    method: &'static str,
+    expected_path: &'static str,
+) -> TcpStream {
+    let deadline = Instant::now() + TODOIST_MOCK_ACCEPT_TIMEOUT;
+    loop {
+        match listener.accept() {
+            Ok((stream, _)) => return stream,
+            Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {
+                if Instant::now() >= deadline {
+                    panic!(
+                        "timed out after {:?} waiting for Todoist mock request {method} {expected_path}",
+                        TODOIST_MOCK_ACCEPT_TIMEOUT
+                    );
+                }
+                thread::sleep(Duration::from_millis(10));
+            }
+            Err(err) => {
+                panic!("failed to accept Todoist mock request {method} {expected_path}: {err}")
+            }
+        }
+    }
+}
+
+#[cfg(feature = "todoist")]
+fn read_todoist_request(
+    stream: &mut TcpStream,
+    method: &'static str,
+    expected_path: &'static str,
+) -> String {
+    stream
+        .set_read_timeout(Some(TODOIST_MOCK_READ_TIMEOUT))
+        .unwrap();
+    let mut request_bytes = Vec::new();
+    let mut buffer = [0_u8; 4096];
+    loop {
+        let read = stream.read(&mut buffer).unwrap_or_else(|err| {
+            panic!(
+                "failed to read Todoist mock request {method} {expected_path} within {:?}: {err}",
+                TODOIST_MOCK_READ_TIMEOUT
+            )
+        });
+        if read == 0 {
+            break;
+        }
+        request_bytes.extend_from_slice(&buffer[..read]);
+        if request_is_complete(&request_bytes) {
+            break;
+        }
+    }
+    String::from_utf8_lossy(&request_bytes).into_owned()
+}
+
+#[cfg(feature = "todoist")]
+fn request_is_complete(request_bytes: &[u8]) -> bool {
+    let request = String::from_utf8_lossy(request_bytes);
+    let Some((headers, body)) = request.split_once("\r\n\r\n") else {
+        return false;
+    };
+    let content_length = headers
+        .lines()
+        .find_map(|line| {
+            line.to_ascii_lowercase()
+                .strip_prefix("content-length:")
+                .and_then(|value| value.trim().parse::<usize>().ok())
+        })
+        .unwrap_or(0);
+    body.len() >= content_length
 }
