@@ -38,8 +38,9 @@ fn test_serve_renders_initial_note_and_linked_note() {
     let response = http_get(host_port, &format!("/{path}"));
     assert!(response.contains("HTTP/1.1 200 OK"));
     assert!(response.contains("<h1>Note A</h1>"));
-    assert!(response.contains("<details class=\"side-panel contents-panel\" open>"));
-    assert!(response.contains("<details class=\"side-panel backlinks-panel\" open>"));
+    assert!(response.contains("<details class=\"side-panel contents-panel\">"));
+    assert!(response.contains("<details class=\"side-panel backlinks-panel\">"));
+    assert!(response.contains("window.matchMedia(\"(min-width: 1361px)\")"));
     assert!(response.contains("id=\"note-preview\""));
     assert!(response.contains("href=\"/?id=bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb\""));
     assert!(response.contains("data-preview-id=\"bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb\""));

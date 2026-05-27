@@ -489,7 +489,7 @@ fn collect_outline_headings(config: &ResolvedConfig, content: &str) -> Vec<Outli
 fn render_contents_panel(config: &ResolvedConfig, content: &str) -> String {
     let headings = collect_outline_headings(config, content);
     let mut html = String::from(
-        "<details class=\"side-panel contents-panel\" open>\n<summary>Contents</summary>\n",
+        "<details class=\"side-panel contents-panel\">\n<summary>Contents</summary>\n",
     );
     if headings.is_empty() {
         html.push_str("<p class=\"panel-empty\">No headings</p>\n");
@@ -621,7 +621,7 @@ fn render_backlinks_panel(graph: &Graph, node: &Node) -> String {
     }
 
     let mut html = String::from(
-        "<details class=\"side-panel backlinks-panel\" open>\n<summary>Backlinks</summary>\n",
+        "<details class=\"side-panel backlinks-panel\">\n<summary>Backlinks</summary>\n",
     );
     if incoming.is_empty() {
         html.push_str("<p class=\"panel-empty\">No backlinks</p>\n");
@@ -1745,8 +1745,16 @@ fn page_js() -> &'static str {
   const HOVER_DELAY_MS = 450;
   const preview = document.getElementById("note-preview");
   const originalNote = document.querySelector(".note-body");
+  const sidePanels = Array.from(document.querySelectorAll(".side-panel"));
   const outlineLinks = Array.from(document.querySelectorAll(".contents-panel a[href^='#h-']"));
   const openButton = document.querySelector(".open-note-button[data-open-url]");
+
+  if (sidePanels.length > 0) {
+    const widePanels = window.matchMedia("(min-width: 1361px)");
+    for (const panel of sidePanels) {
+      panel.open = widePanels.matches;
+    }
+  }
 
   if (originalNote && outlineLinks.length > 0) {
     const headings = outlineLinks
@@ -2157,7 +2165,7 @@ Body.
 
         let html = render_note_html(&graph, &config, node, &content);
 
-        assert!(html.contains("<details class=\"side-panel contents-panel\" open>"));
+        assert!(html.contains("<details class=\"side-panel contents-panel\">"));
         assert!(html.contains("<summary>Contents</summary>"));
         assert!(html.contains("href=\"#h-6\""));
         assert!(html.contains("<a href=\"#h-6\"><span class=\"todo\">TODO</span> First</a>"));
@@ -2171,7 +2179,7 @@ Body.
         assert!(!html.contains(
             "<a href=\"#h-8\">[[id:bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb][Universal ping utility]]</a>"
         ));
-        assert!(html.contains("<details class=\"side-panel backlinks-panel\" open>"));
+        assert!(html.contains("<details class=\"side-panel backlinks-panel\">"));
         assert!(html.contains("<summary>Backlinks</summary>"));
         assert!(html.contains("href=\"/?id=bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb\""));
         assert!(html.contains("Beta"));
@@ -2238,6 +2246,7 @@ Body.
             .expect("side panel rules should precede contents panel");
 
         assert!(css.contains(".side-panel"));
+        assert!(css.contains("position: fixed;"));
         assert!(css.contains("background: var(--bg);"));
         assert!(!side_panel_css.contains("border: 1px solid var(--border);"));
         assert!(css.contains(".backlinks-panel summary"));
@@ -2247,6 +2256,16 @@ Body.
         assert!(css.contains("border-right: 0.42rem solid currentColor;"));
         assert!(css.contains(".outline-list a.active-outline"));
         assert!(css.contains("font-weight: 700;"));
+        assert!(css.contains("@media (max-width: 1360px)"));
+        assert!(css.contains("width: min(17rem, calc(100vw - 1.5rem));"));
+        assert!(css.contains("left: 0.75rem;"));
+        assert!(css.contains("right: 0.75rem;"));
+        assert!(!css.contains("position: sticky;"));
+        assert!(!css.contains("width: min(78ch, calc(100% - 32px));\n    max-height: none;"));
+
+        let js = page_js();
+        assert!(js.contains("window.matchMedia(\"(min-width: 1361px)\")"));
+        assert!(js.contains("panel.open = widePanels.matches;"));
     }
 
     #[test]

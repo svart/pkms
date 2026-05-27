@@ -85,7 +85,9 @@ The note header includes an "Open in Emacs" button that opens the rendered note
 file through the same `emacsclient -n` editor path used by task opening.
 The page also includes collapsible floating panels: note contents on the left
 from the heading hierarchy, and backlinks on the top right from notes that link
-to the current note. Both panels are open by default and do not change the main
+to the current note. On wide viewports both panels open by default; on
+constrained viewports they start collapsed. Opening a panel keeps it floating in
+the nearest top corner and may cover the note text instead of changing the main
 note column width. Hovering over an internal note link opens a scrollable note
 preview after a short delay; links inside the preview remain clickable, and
 clicking back in the original note closes the preview.

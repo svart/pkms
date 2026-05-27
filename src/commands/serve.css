@@ -277,21 +277,22 @@ main {
 
 @media (max-width: 1360px) {
   .side-panel {
-    position: sticky;
-    width: min(78ch, calc(100% - 32px));
-    max-height: none;
-    margin: 0.75rem auto 0;
+    width: min(17rem, calc(100vw - 1.5rem));
+    max-height: calc(100vh - 1.5rem);
   }
 
-  .contents-panel,
+  .contents-panel {
+    top: 0.75rem;
+    left: 0.75rem;
+  }
+
   .backlinks-panel {
     top: 0.75rem;
-    left: auto;
-    right: auto;
+    right: 0.75rem;
   }
 
   .side-panel:not([open]) {
-    width: min(78ch, calc(100% - 32px));
+    width: auto;
   }
 
   .note-preview {
