@@ -72,19 +72,19 @@ neighbor lookup.
 
 **Planned changes:**
 
-- [ ] Replace the separate text processing path with execution into
+- [x] Replace the separate text processing path with execution into
   `Vec<GetOutput>`.
-- [ ] Ensure `execute(...)` reads content once per target and carries enough
+- [x] Ensure `execute(...)` reads content once per target and carries enough
   typed data to render text without `Graph`.
-- [ ] Add a text-rendering helper that formats `GetOutput`.
-- [ ] Keep adaptive JSON behavior for one target versus multiple targets.
-- [ ] Add unit tests for rendering content, headings, and links from typed
+- [x] Add a text-rendering helper that formats `GetOutput`.
+- [x] Keep adaptive JSON behavior for one target versus multiple targets.
+- [x] Add unit tests for rendering content, headings, and links from typed
   output.
 
 **Acceptance criteria:**
 
-- [ ] Text, JSON, and NDJSON formats are driven from the same typed data.
-- [ ] `get --headings`, `get --links`, and `get --no-content` behavior remains
+- [x] Text, JSON, and NDJSON formats are driven from the same typed data.
+- [x] `get --headings`, `get --links`, and `get --no-content` behavior remains
   unchanged.
 
 ### Step 3: Convert `resolve`
@@ -295,7 +295,7 @@ existing task source and table abstractions.
 ## Suggested Implementation Order
 
 1. [x] Convert `check`.
-2. [ ] Convert `get`.
+2. [x] Convert `get`.
 3. [ ] Convert `resolve`.
 4. [ ] Convert `query`.
 5. [ ] Convert `suggest`.

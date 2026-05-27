@@ -8,6 +8,7 @@ use crate::util;
 use anyhow::Result;
 use serde::Serialize;
 use std::collections::HashMap;
+use std::fmt::Write;
 
 #[derive(Serialize)]
 pub struct HeadingJson {
@@ -83,6 +84,8 @@ pub struct GetOutput {
     pub neighbors: HashMap<u32, NeighborOutput>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub estimated_tokens: Option<usize>,
+    #[serde(skip)]
+    pub text_content: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -132,23 +135,22 @@ fn process_one_get(
         HashMap::new()
     };
 
-    let head_content = if show_headings {
-        std::fs::read_to_string(&node.path).ok()
+    let full_content = std::fs::read_to_string(&node.path).ok();
+    let node_content = if show_headings && !no_content {
+        full_content.clone()
     } else {
         None
     };
+    let text_content = (!no_content).then(|| full_content.clone()).flatten();
 
-    let node_content = if no_content {
-        None
+    let headings = if show_headings {
+        full_content.as_deref().map(headings_from_content)
     } else {
-        head_content.clone()
+        None
     };
-
-    let headings = head_content.as_deref().map(headings_from_content);
 
     let node_json = NodeJson::from_node(&node, node_content.as_deref(), headings);
 
-    let full_content = std::fs::read_to_string(&node.path).ok();
     let estimated_tokens = full_content
         .as_deref()
         .map(|c| tokens::count_tokens(c, encoding));
@@ -157,148 +159,184 @@ fn process_one_get(
         node: node_json,
         neighbors,
         estimated_tokens,
+        text_content,
     })
 }
 
-fn print_one_get_text(
-    graph: &Graph,
-    target: &str,
-    show_links: bool,
-    show_headings: bool,
-    no_content: bool,
-    encoding: tokens::Encoding,
-) -> Result<()> {
-    let node = graph.resolve_target(target)?.clone();
-    let neighbors = if show_links {
-        Some(graph.get_neighbors(&node.uuid, 1))
-    } else {
-        None
-    };
+pub fn execute(config: &ResolvedConfig, opts: &GetOptions) -> Result<Vec<GetOutput>> {
+    let graph = Graph::load(config)?;
+    opts.targets
+        .iter()
+        .map(|target| {
+            process_one_get(
+                &graph,
+                target,
+                opts.show_links,
+                opts.show_headings,
+                opts.no_content,
+                opts.encoding,
+            )
+        })
+        .collect()
+}
 
-    let full_content = std::fs::read_to_string(&node.path).ok();
-    let content_tokens = full_content
-        .as_deref()
-        .map(|c| tokens::count_tokens(c, encoding));
-
-    let node_content = if no_content {
-        None
-    } else {
-        full_content.clone()
-    };
-
-    println!("Note: {}", node.title);
-    println!("  UUID:   {}", node.uuid);
-    println!("  Path:   {}", node.path.display());
-    if let Some(t) = content_tokens {
-        println!("  Content tokens: {t}");
-    }
-    if !node.filetags.is_empty() {
-        println!("  Tags:   {}", node.filetags.join(", "));
-    }
-    if !node.categories.is_empty() {
-        println!("  Cats:   {}", node.categories.join(", "));
-    }
-
-    if show_headings && let Some(ref content) = full_content {
-        let headings = headings_from_content(content);
-        if !headings.is_empty() {
-            println!();
-            println!("--- Headings ---");
-            for h in &headings {
-                if let Some(ref uuid) = h.uuid {
-                    println!("{} ({})", h.raw, uuid);
-                } else {
-                    println!("{}", h.raw);
-                }
-            }
-            println!("--- End Headings ---");
+pub fn render(ctx: &OutputContext, outputs: &[GetOutput]) -> Result<()> {
+    match ctx.format {
+        OutputFormat::Text => {
+            print!("{}", render_text(outputs));
         }
-    }
-
-    if let Some(content) = node_content
-        && !no_content
-    {
-        println!();
-        println!("--- Content ---");
-        println!("{content}");
-        println!("--- End Content ---");
-    }
-
-    if let Some(ns) = neighbors
-        && let Some(ns) = ns.get(&1)
-    {
-        println!();
-        if !ns.outgoing.is_empty() {
-            println!("Forward links:");
-            for n in &ns.outgoing {
-                println!("  {} ({})", n.title, n.uuid);
+        OutputFormat::Json => {
+            if outputs.len() == 1 {
+                ctx.print_json(&outputs[0])?;
+            } else {
+                ctx.print_json(outputs)?;
             }
         }
-        if !ns.incoming.is_empty() {
-            println!("Backlinks:");
-            for n in &ns.incoming {
-                println!("  {} ({})", n.title, n.uuid);
-            }
-        }
-        if ns.outgoing.is_empty() && ns.incoming.is_empty() {
-            println!("(no connections)");
-        }
+        OutputFormat::Ndjson => ctx.print_ndjson(outputs)?,
     }
 
     Ok(())
 }
 
-pub fn run(config: &ResolvedConfig, ctx: &OutputContext, opts: &GetOptions) -> Result<()> {
-    let graph = Graph::load(config)?;
+pub fn render_text(outputs: &[GetOutput]) -> String {
+    outputs
+        .iter()
+        .map(render_one_text)
+        .collect::<Vec<_>>()
+        .join("\n")
+}
 
-    match ctx.format {
-        OutputFormat::Text => {
-            for target in &opts.targets {
-                print_one_get_text(
-                    &graph,
-                    target,
-                    opts.show_links,
-                    opts.show_headings,
-                    opts.no_content,
-                    opts.encoding,
-                )?;
-                if opts.targets.len() > 1 {
-                    println!();
-                }
-            }
-        }
-        OutputFormat::Json => {
-            let mut all_outputs = Vec::new();
-            for target in &opts.targets {
-                all_outputs.push(process_one_get(
-                    &graph,
-                    target,
-                    opts.show_links,
-                    opts.show_headings,
-                    opts.no_content,
-                    opts.encoding,
-                )?);
-            }
-            if all_outputs.len() == 1 {
-                ctx.print_json(&all_outputs[0])?;
+fn render_one_text(output: &GetOutput) -> String {
+    let mut text = String::new();
+
+    let _ = writeln!(text, "Note: {}", output.node.title);
+    let _ = writeln!(text, "  UUID:   {}", output.node.uuid);
+    let _ = writeln!(text, "  Path:   {}", output.node.path);
+    if let Some(t) = output.estimated_tokens {
+        let _ = writeln!(text, "  Content tokens: {t}");
+    }
+    if !output.node.filetags.is_empty() {
+        let _ = writeln!(text, "  Tags:   {}", output.node.filetags.join(", "));
+    }
+    if !output.node.categories.is_empty() {
+        let _ = writeln!(text, "  Cats:   {}", output.node.categories.join(", "));
+    }
+
+    if let Some(headings) = &output.node.headings
+        && !headings.is_empty()
+    {
+        text.push('\n');
+        text.push_str("--- Headings ---\n");
+        for h in headings {
+            if let Some(ref uuid) = h.uuid {
+                let _ = writeln!(text, "{} ({})", h.raw, uuid);
             } else {
-                ctx.print_json(&all_outputs)?;
+                let _ = writeln!(text, "{}", h.raw);
             }
         }
-        OutputFormat::Ndjson => {
-            for target in &opts.targets {
-                let output = process_one_get(
-                    &graph,
-                    target,
-                    opts.show_links,
-                    opts.show_headings,
-                    opts.no_content,
-                    opts.encoding,
-                )?;
-                println!("{}", serde_json::to_string(&output)?);
+        text.push_str("--- End Headings ---\n");
+    }
+
+    if let Some(content) = &output.text_content {
+        text.push('\n');
+        text.push_str("--- Content ---\n");
+        let _ = writeln!(text, "{content}");
+        text.push_str("--- End Content ---\n");
+    }
+
+    if let Some(ns) = output.neighbors.get(&1) {
+        text.push('\n');
+        if !ns.outgoing.is_empty() {
+            text.push_str("Forward links:\n");
+            for n in &ns.outgoing {
+                let _ = writeln!(text, "  {} ({})", n.title, n.uuid);
             }
+        }
+        if !ns.incoming.is_empty() {
+            text.push_str("Backlinks:\n");
+            for n in &ns.incoming {
+                let _ = writeln!(text, "  {} ({})", n.title, n.uuid);
+            }
+        }
+        if ns.outgoing.is_empty() && ns.incoming.is_empty() {
+            text.push_str("(no connections)\n");
         }
     }
 
-    Ok(())
+    text
+}
+
+pub fn run(config: &ResolvedConfig, ctx: &OutputContext, opts: &GetOptions) -> Result<()> {
+    let outputs = execute(config, opts)?;
+    render(ctx, &outputs)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn node(title: &str) -> NodeJson {
+        NodeJson {
+            uuid: "11111111-1111-4111-8111-111111111111".to_string(),
+            title: title.to_string(),
+            path: "/notes/a.org".to_string(),
+            filetags: vec!["tag".to_string()],
+            categories: vec!["cat".to_string()],
+            content: None,
+            headings: None,
+            headings_count: None,
+        }
+    }
+
+    #[test]
+    fn renders_get_text_from_typed_output() {
+        let output = GetOutput {
+            node: node("Note A"),
+            neighbors: HashMap::new(),
+            estimated_tokens: Some(12),
+            text_content: Some("Body text".to_string()),
+        };
+
+        let text = render_text(&[output]);
+
+        assert!(text.contains("Note: Note A"));
+        assert!(text.contains("  Content tokens: 12"));
+        assert!(text.contains("  Tags:   tag"));
+        assert!(text.contains("--- Content ---\nBody text\n--- End Content ---"));
+    }
+
+    #[test]
+    fn renders_headings_and_links_from_typed_output() {
+        let mut note = node("Note A");
+        note.headings = Some(vec![HeadingJson {
+            level: 1,
+            title: "Heading".to_string(),
+            todo_state: None,
+            tags: vec![],
+            raw: "* Heading".to_string(),
+            uuid: Some("22222222-2222-4222-8222-222222222222".to_string()),
+            priority: None,
+            scheduled: None,
+            deadline: None,
+        }]);
+        let mut neighbors = HashMap::new();
+        neighbors.insert(
+            1,
+            NeighborOutput {
+                outgoing: vec![node("Note B")],
+                incoming: vec![],
+            },
+        );
+        let output = GetOutput {
+            node: note,
+            neighbors,
+            estimated_tokens: None,
+            text_content: None,
+        };
+
+        let text = render_text(&[output]);
+
+        assert!(text.contains("* Heading (22222222-2222-4222-8222-222222222222)"));
+        assert!(text.contains("Forward links:\n  Note B"));
+    }
 }
