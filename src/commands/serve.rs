@@ -610,38 +610,27 @@ fn render_org_body(graph: &Graph, config: &ResolvedConfig, node: &Node, content:
             pending_caption = (!caption.is_empty()).then_some(caption);
             continue;
         }
-        if lower.starts_with("#+begin_src") {
+        if let Some((block, next_i)) = read_org_block(&lines, i) {
             flush_paragraph(&mut html, &mut paragraph, graph, config, node);
             close_list(&mut html, &mut in_list);
-            pending_caption = None;
-            let lang = trimmed.split_whitespace().nth(1).unwrap_or("text");
-            let mut code = String::new();
-            i += 1;
-            while i < lines.len() && !lines[i].trim().eq_ignore_ascii_case("#+end_src") {
-                code.push_str(lines[i]);
-                code.push('\n');
-                i += 1;
-            }
-            if i < lines.len() {
-                i += 1;
-            }
-            html.push_str(&format!(
-                "<figure class=\"code\"><figcaption>{}</figcaption><pre><code class=\"syn-code\">{}</code></pre></figure>\n",
-                escape_html(lang),
-                highlight_code(lang, &code)
+            let caption = pending_caption.take();
+            html.push_str(&render_org_block(
+                graph,
+                config,
+                node,
+                &block,
+                caption.as_deref(),
             ));
+            i = next_i;
             continue;
         }
-        if lower.starts_with("#+begin_export latex") || trimmed == r"\[" {
+        if trimmed == r"\[" {
             flush_paragraph(&mut html, &mut paragraph, graph, config, node);
             close_list(&mut html, &mut in_list);
             pending_caption = None;
             let mut formula = String::new();
             i += 1;
-            while i < lines.len()
-                && !lines[i].trim().eq_ignore_ascii_case("#+end_export")
-                && lines[i].trim() != r"\]"
-            {
+            while i < lines.len() && lines[i].trim() != r"\]" {
                 formula.push_str(lines[i].trim());
                 formula.push('\n');
                 i += 1;
@@ -759,6 +748,166 @@ fn close_list(html: &mut String, in_list: &mut bool) {
     if *in_list {
         html.push_str("</ul>\n");
         *in_list = false;
+    }
+}
+
+struct OrgBlock<'a> {
+    kind: String,
+    args: &'a str,
+    body: Vec<&'a str>,
+}
+
+fn read_org_block<'a>(lines: &[&'a str], start: usize) -> Option<(OrgBlock<'a>, usize)> {
+    let trimmed = lines.get(start)?.trim();
+    let lower = trimmed.to_ascii_lowercase();
+    let rest = lower.strip_prefix("#+begin_")?;
+    let kind_end = rest.find(char::is_whitespace).unwrap_or(rest.len());
+    let kind = rest[..kind_end].to_string();
+    let original_rest = trimmed.get("#+begin_".len()..)?;
+    let args = original_rest
+        .get(kind_end..)
+        .map(str::trim)
+        .unwrap_or_default();
+    let end_marker = format!("#+end_{kind}");
+    let mut body = Vec::new();
+    let mut i = start + 1;
+    while i < lines.len() && !lines[i].trim().eq_ignore_ascii_case(&end_marker) {
+        body.push(lines[i]);
+        i += 1;
+    }
+    if i < lines.len() {
+        i += 1;
+    }
+    Some((OrgBlock { kind, args, body }, i))
+}
+
+fn render_org_block(
+    graph: &Graph,
+    config: &ResolvedConfig,
+    node: &Node,
+    block: &OrgBlock<'_>,
+    caption: Option<&str>,
+) -> String {
+    match block.kind.as_str() {
+        "src" => render_src_block(block, caption),
+        "example" => render_pre_block("example", "Example", &block.body_text(), caption),
+        "quote" => render_text_block(graph, config, node, "quote", "Quote", &block.body, caption),
+        "verse" => render_pre_block("verse", "Verse", &block.body_text(), caption),
+        "center" => render_text_block(
+            graph,
+            config,
+            node,
+            "center",
+            "Center",
+            &block.body,
+            caption,
+        ),
+        "comment" => render_text_block(
+            graph,
+            config,
+            node,
+            "comment",
+            "Comment",
+            &block.body,
+            caption,
+        ),
+        "export" => render_export_block(block, caption),
+        kind => {
+            let label = format!("Block: {kind}");
+            render_pre_block("special", &label, &block.body_text(), caption)
+        }
+    }
+}
+
+impl OrgBlock<'_> {
+    fn body_text(&self) -> String {
+        let mut text = self.body.join("\n");
+        if !text.is_empty() {
+            text.push('\n');
+        }
+        text
+    }
+}
+
+fn render_src_block(block: &OrgBlock<'_>, caption: Option<&str>) -> String {
+    let lang = block.args.split_whitespace().next().unwrap_or_default();
+    let label = if lang.is_empty() {
+        "Source".to_string()
+    } else {
+        format!("Source: {lang}")
+    };
+    let code = block.body_text();
+    let rendered_code = if lang.is_empty() {
+        escape_html(&code)
+    } else {
+        highlight_code(lang, &code)
+    };
+    let mut html = format!(
+        "<figure class=\"org-block org-block-src code\"><figcaption>{}</figcaption><pre><code class=\"syn-code\">{}</code></pre>",
+        escape_html(&label),
+        rendered_code
+    );
+    push_block_caption(&mut html, caption);
+    html.push_str("</figure>\n");
+    html
+}
+
+fn render_export_block(block: &OrgBlock<'_>, caption: Option<&str>) -> String {
+    let backend = block.args.split_whitespace().next().unwrap_or_default();
+    let text = block.body_text();
+    if backend.eq_ignore_ascii_case("latex") {
+        let mut html = format!(
+            "<figure class=\"org-block org-block-export org-block-export-latex\"><figcaption>Export: latex</figcaption>{}",
+            render_display_math(text.trim())
+        );
+        push_block_caption(&mut html, caption);
+        html.push_str("</figure>\n");
+        return html;
+    }
+    let label = if backend.is_empty() {
+        "Export".to_string()
+    } else {
+        format!("Export: {backend}")
+    };
+    render_pre_block("export", &label, &text, caption)
+}
+
+fn render_pre_block(kind: &str, label: &str, text: &str, caption: Option<&str>) -> String {
+    let mut html = format!(
+        "<figure class=\"org-block org-block-{kind}\"><figcaption>{}</figcaption><pre>{}</pre>",
+        escape_html(label),
+        escape_html(text)
+    );
+    push_block_caption(&mut html, caption);
+    html.push_str("</figure>\n");
+    html
+}
+
+fn render_text_block(
+    graph: &Graph,
+    config: &ResolvedConfig,
+    node: &Node,
+    kind: &str,
+    label: &str,
+    lines: &[&str],
+    caption: Option<&str>,
+) -> String {
+    let text = lines.join("\n");
+    let mut html = format!(
+        "<figure class=\"org-block org-block-{kind}\"><figcaption>{}</figcaption><div class=\"org-block-content\">{}</div>",
+        escape_html(label),
+        render_inline(graph, config, node, &text)
+    );
+    push_block_caption(&mut html, caption);
+    html.push_str("</figure>\n");
+    html
+}
+
+fn push_block_caption(html: &mut String, caption: Option<&str>) {
+    if let Some(caption) = caption {
+        html.push_str("<div class=\"org-block-caption\">");
+        html.push_str(&render_formatted_text(caption));
+        html.push_str("</div>");
     }
 }
 
@@ -1712,6 +1861,112 @@ fn main() {}
         assert!(html.contains("syn-"));
         assert!(html.contains("main"));
         assert!(html.contains("<img src=\"/asset?note=aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa&amp;"));
+    }
+
+    #[test]
+    fn renders_org_blocks_as_identified_blocks() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().to_path_buf();
+        let roam = root.join("roam");
+        fs::create_dir_all(&roam).unwrap();
+        fs::write(
+            roam.join("a.org"),
+            r#":PROPERTIES:
+:ID:       aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa
+:END:
+#+title: Alpha
+
+#+begin_src rust
+fn main() {}
+#+end_src
+
+#+begin_src
+plain source
+#+end_src
+
+#+begin_example
+<literal example>
+#+end_example
+
+#+begin_quote
+quoted *text*
+#+end_quote
+
+#+begin_verse
+first line
+second line
+#+end_verse
+
+#+caption: centered caption
+#+begin_center
+centered /text/
+#+end_center
+
+#+caption: comment caption
+#+begin_comment
+comment text
+#+end_comment
+
+#+caption: ascii caption
+#+begin_export ascii
+ascii <export>
+#+end_export
+
+#+caption: html caption
+#+begin_export html
+<script>alert("x")</script>
+#+end_export
+
+#+caption: latex caption
+#+begin_export latex
+\frac{a}{b}
+#+end_export
+
+#+caption: export caption
+#+begin_export
+generic export
+#+end_export
+"#,
+        )
+        .unwrap();
+        let config = test_config(root);
+        let corpus = Corpus::load(&config).unwrap();
+        let graph = Graph::from_corpus(&corpus);
+        let node = graph
+            .resolve_target("aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa")
+            .unwrap();
+        let content = fs::read_to_string(&node.path).unwrap();
+
+        let html = render_note_html(&graph, &config, node, &content);
+
+        assert!(html.contains("org-block-src"));
+        assert!(html.contains("<figcaption>Source: rust</figcaption>"));
+        assert!(html.contains("<figcaption>Source</figcaption>"));
+        assert!(html.contains("class=\"org-block org-block-example\""));
+        assert!(html.contains("&lt;literal example&gt;"));
+        assert!(html.contains("class=\"org-block org-block-quote\""));
+        assert!(html.contains("quoted <strong>text</strong>"));
+        assert!(html.contains("class=\"org-block org-block-verse\""));
+        assert!(html.contains("first line\nsecond line"));
+        assert!(html.contains("class=\"org-block org-block-center\""));
+        assert!(html.contains("centered <em>text</em>"));
+        assert!(html.contains("<div class=\"org-block-caption\">centered caption</div>"));
+        assert!(html.contains("class=\"org-block org-block-comment\""));
+        assert!(html.contains("<figcaption>Comment</figcaption>"));
+        assert!(html.contains("comment text"));
+        assert!(html.contains("<div class=\"org-block-caption\">comment caption</div>"));
+        assert!(html.contains("<figcaption>Export: ascii</figcaption>"));
+        assert!(html.contains("ascii &lt;export&gt;"));
+        assert!(html.contains("<div class=\"org-block-caption\">ascii caption</div>"));
+        assert!(html.contains("<figcaption>Export: html</figcaption>"));
+        assert!(html.contains("&lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt;"));
+        assert!(html.contains("<div class=\"org-block-caption\">html caption</div>"));
+        assert!(html.contains("class=\"math-display\""));
+        assert!(html.contains("class=\"katex-display\""));
+        assert!(html.contains("<div class=\"org-block-caption\">latex caption</div>"));
+        assert!(html.contains("<figcaption>Export</figcaption>"));
+        assert!(html.contains("generic export"));
+        assert!(html.contains("<div class=\"org-block-caption\">export caption</div>"));
     }
 
     #[test]

@@ -406,6 +406,69 @@ pre {
   font: 14px/1.55 "Fira Code", "Fira Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
+.org-block {
+  margin: 1.25em 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--surface), var(--border) 8%);
+  overflow: hidden;
+}
+
+.org-block figcaption {
+  border-bottom: 1px solid var(--border);
+  color: var(--muted);
+  background: color-mix(in srgb, var(--surface), var(--border) 16%);
+  font: 700 0.78rem/1.35 "Alegreya Sans", ui-sans-serif, system-ui, sans-serif;
+  padding: 0.42rem 0.7rem;
+}
+
+.org-block pre {
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.org-block-content {
+  padding: 0.8rem 0.9rem;
+}
+
+.org-block-caption {
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font: 0.9rem/1.45 "Alegreya Sans", ui-sans-serif, system-ui, sans-serif;
+  padding: 0.55rem 0.75rem;
+}
+
+.org-block-content p:last-child,
+.org-block-content > :last-child {
+  margin-bottom: 0;
+}
+
+.org-block-quote .org-block-content {
+  margin: 0.85rem 0.95rem;
+  padding: 0;
+  font-style: italic;
+}
+
+.org-block-center .org-block-content {
+  text-align: center;
+}
+
+.org-block-comment {
+  background: color-mix(in srgb, var(--mark), var(--surface) 68%);
+  border-style: dashed;
+}
+
+.org-block-comment figcaption {
+  color: var(--fg);
+}
+
+.org-block-export-latex .math-display {
+  margin: 0;
+  padding: 1rem;
+}
+
 code {
   font-family: "Fira Code", "Fira Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-variant-ligatures: contextual;
