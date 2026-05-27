@@ -8,6 +8,7 @@ use crate::parser::{Link, parse_note, validate_filetags_format};
 use crate::util;
 use anyhow::Result;
 use serde::Serialize;
+use std::fmt::Write;
 use std::path::Path;
 use std::process::ExitCode;
 
@@ -104,6 +105,11 @@ pub struct CheckOptions {
     pub cross_links: Option<Vec<String>>,
 }
 
+pub struct CheckCommandOutput {
+    pub output: CheckOutput,
+    pub exit_code: ExitCode,
+}
+
 impl From<&CheckArgs> for CheckOptions {
     fn from(args: &CheckArgs) -> Self {
         CheckOptions {
@@ -121,32 +127,74 @@ impl From<&CheckArgs> for CheckOptions {
 }
 
 pub fn run(config: &ResolvedConfig, ctx: &OutputContext, opts: &CheckOptions) -> Result<ExitCode> {
+    let output = execute(config, opts)?;
+    render(ctx, &output)
+}
+
+pub fn execute(config: &ResolvedConfig, opts: &CheckOptions) -> Result<CheckCommandOutput> {
     let graph = Graph::load(config)?;
     let db_root = config.resolved_db_root();
 
+    let display_opts = CheckDisplayOptions::from_options(opts);
+    let issue_data = collect_check_data(&graph, db_root, opts, &display_opts)?;
+    let output = build_check_output(&issue_data, &display_opts);
+    let exit_code = if output.healthy {
+        ExitCode::SUCCESS
+    } else {
+        ExitCode::from(1)
+    };
+
+    Ok(CheckCommandOutput { output, exit_code })
+}
+
+pub fn render(ctx: &OutputContext, output: &CheckCommandOutput) -> Result<ExitCode> {
+    if ctx.is_json() {
+        ctx.print_json(&output.output)?;
+    } else {
+        print!("{}", render_text(&output.output));
+    }
+
+    Ok(output.exit_code)
+}
+
+impl CheckDisplayOptions {
+    fn from_options(opts: &CheckOptions) -> Self {
+        let cross_links_specified = opts.cross_links.is_some();
+        let any_explicit = opts.stats
+            || opts.id_links
+            || opts.file_links
+            || opts.attachment_links
+            || opts.filetags
+            || opts.agenda
+            || opts.self_links
+            || opts.overlinks
+            || cross_links_specified;
+
+        CheckDisplayOptions {
+            show_stats: opts.stats || !any_explicit,
+            show_id: opts.id_links || !any_explicit,
+            show_file: opts.file_links || !any_explicit,
+            show_attach: opts.attachment_links || !any_explicit,
+            show_filetags: opts.filetags || !any_explicit,
+            show_agenda: opts.agenda || !any_explicit,
+            show_self_links: opts.self_links || !any_explicit,
+            show_overlinks: opts.overlinks || !any_explicit,
+        }
+    }
+}
+
+fn collect_check_data<'a>(
+    graph: &'a Graph,
+    db_root: &'a Path,
+    opts: &CheckOptions,
+    display_opts: &CheckDisplayOptions,
+) -> Result<CheckData<'a>> {
     let cross_links_specified = opts.cross_links.is_some();
-    let any_explicit = opts.stats
-        || opts.id_links
-        || opts.file_links
-        || opts.attachment_links
-        || opts.filetags
-        || opts.agenda
-        || opts.self_links
-        || opts.overlinks
-        || cross_links_specified;
-    let show_stats = opts.stats || !any_explicit;
-    let show_id = opts.id_links || !any_explicit;
-    let show_file = opts.file_links || !any_explicit;
-    let show_attach = opts.attachment_links || !any_explicit;
-    let show_filetags = opts.filetags || !any_explicit;
-    let show_agenda = opts.agenda || !any_explicit;
-    let show_self_links = opts.self_links || !any_explicit;
-    let show_overlinks = opts.overlinks || !any_explicit;
 
     let mut broken_file = Vec::new();
     let mut broken_attachment = Vec::new();
 
-    if show_file {
+    if display_opts.show_file {
         for node in graph.nodes.values() {
             for link in &node.outgoing {
                 if let Link::File(target) = link
@@ -162,7 +210,7 @@ pub fn run(config: &ResolvedConfig, ctx: &OutputContext, opts: &CheckOptions) ->
         }
     }
 
-    if show_attach {
+    if display_opts.show_attach {
         for node in graph.nodes.values() {
             for link in &node.outgoing {
                 if let Link::Attachment(target) = link
@@ -179,7 +227,7 @@ pub fn run(config: &ResolvedConfig, ctx: &OutputContext, opts: &CheckOptions) ->
     }
 
     let mut filetags_issues = Vec::new();
-    if show_filetags {
+    if display_opts.show_filetags {
         for node in graph.nodes.values() {
             if let Some(result) = graph.results.iter().find(|r| r.path == node.path)
                 && let Some(ref content) = result.raw_content
@@ -196,7 +244,7 @@ pub fn run(config: &ResolvedConfig, ctx: &OutputContext, opts: &CheckOptions) ->
     }
 
     let mut agenda_issues = Vec::new();
-    if show_agenda {
+    if display_opts.show_agenda {
         for node in graph.nodes.values() {
             if node.filetags.iter().any(|t| t == "agenda") {
                 continue;
@@ -227,19 +275,19 @@ pub fn run(config: &ResolvedConfig, ctx: &OutputContext, opts: &CheckOptions) ->
         }
     }
 
-    let self_link_entries = if show_self_links {
+    let self_link_entries = if display_opts.show_self_links {
         graph.detect_self_links(db_root)
     } else {
         vec![]
     };
 
-    let overlink_entries = if show_overlinks {
+    let overlink_entries = if display_opts.show_overlinks {
         graph.detect_overlinks()
     } else {
         vec![]
     };
 
-    let cross_link_result = if let Some(ref pair) = opts.cross_links {
+    let cross_link_result = if cross_links_specified && let Some(ref pair) = opts.cross_links {
         let node_a = graph.resolve_target(&pair[0])?;
         let node_b = graph.resolve_target(&pair[1])?;
         let a_to_b = node_a
@@ -264,40 +312,17 @@ pub fn run(config: &ResolvedConfig, ctx: &OutputContext, opts: &CheckOptions) ->
         None
     };
 
-    let check_data = CheckData {
-        graph: &graph,
+    Ok(CheckData {
+        graph,
         db_root,
-        broken_file: &broken_file,
-        broken_attachment: &broken_attachment,
-        filetags_issues: &filetags_issues,
-        agenda_issues: &agenda_issues,
-        self_link_entries: &self_link_entries,
-        overlink_entries: &overlink_entries,
-        cross_link_result: &cross_link_result,
-    };
-    let display_opts = CheckDisplayOptions {
-        show_stats,
-        show_id,
-        show_file,
-        show_attach,
-        show_filetags,
-        show_agenda,
-        show_self_links,
-        show_overlinks,
-    };
-    let healthy = check_data.is_healthy(&display_opts);
-
-    if ctx.is_json() {
-        print_check_json(ctx, &check_data, &display_opts)?;
-    } else {
-        print_check_text(&check_data, &display_opts);
-    }
-
-    if healthy {
-        Ok(ExitCode::SUCCESS)
-    } else {
-        Ok(ExitCode::from(1))
-    }
+        broken_file,
+        broken_attachment,
+        filetags_issues,
+        agenda_issues,
+        self_link_entries,
+        overlink_entries,
+        cross_link_result,
+    })
 }
 
 struct CheckDisplayOptions {
@@ -314,13 +339,13 @@ struct CheckDisplayOptions {
 struct CheckData<'a> {
     graph: &'a Graph,
     db_root: &'a Path,
-    broken_file: &'a [BrokenFileLinkEntry],
-    broken_attachment: &'a [BrokenAttachmentLinkEntry],
-    filetags_issues: &'a [FiletagsIssue],
-    agenda_issues: &'a [AgendaIssue],
-    self_link_entries: &'a [SelfLinkEntry],
-    overlink_entries: &'a [OverlinkEntry],
-    cross_link_result: &'a Option<CrossLinkResult>,
+    broken_file: Vec<BrokenFileLinkEntry>,
+    broken_attachment: Vec<BrokenAttachmentLinkEntry>,
+    filetags_issues: Vec<FiletagsIssue>,
+    agenda_issues: Vec<AgendaIssue>,
+    self_link_entries: Vec<SelfLinkEntry>,
+    overlink_entries: Vec<OverlinkEntry>,
+    cross_link_result: Option<CrossLinkResult>,
 }
 
 impl CheckData<'_> {
@@ -338,11 +363,7 @@ impl CheckData<'_> {
     }
 }
 
-fn print_check_json(
-    ctx: &OutputContext,
-    data: &CheckData,
-    opts: &CheckDisplayOptions,
-) -> Result<()> {
+fn build_check_output(data: &CheckData, opts: &CheckDisplayOptions) -> CheckOutput {
     let stats = data.graph.stats();
 
     let broken = if opts.show_id {
@@ -379,7 +400,7 @@ fn print_check_json(
 
     let healthy = data.is_healthy(opts);
 
-    let output = CheckOutput {
+    CheckOutput {
         db_root: data.db_root.display().to_string(),
         stats: if opts.show_stats {
             Some(stats.clone())
@@ -425,206 +446,310 @@ fn print_check_json(
         },
         cross_links: data.cross_link_result.clone(),
         healthy,
-    };
-    ctx.print_json(&output)
+    }
 }
 
-fn print_check_text(data: &CheckData, opts: &CheckDisplayOptions) {
-    let stats = data.graph.stats();
-    let healthy = data.is_healthy(opts);
+pub fn render_text(output: &CheckOutput) -> String {
+    let mut text = String::new();
 
-    let has_any_output = opts.show_stats
-        || opts.show_file
-        || opts.show_attach
-        || opts.show_filetags
-        || opts.show_id
-        || opts.show_agenda
-        || opts.show_self_links
-        || opts.show_overlinks
-        || data.cross_link_result.is_some();
+    let has_any_output = output.stats.is_some()
+        || output.broken_file_links.is_some()
+        || output.broken_attachment_links.is_some()
+        || output.filetags_issues.is_some()
+        || output.duplicates.is_some()
+        || output.broken_links.is_some()
+        || output.failed_files.is_some()
+        || output.agenda_issues.is_some()
+        || output.self_links.is_some()
+        || output.overlinks.is_some()
+        || output.cross_links.is_some();
 
     if has_any_output {
-        println!("Database: {}", data.db_root.display());
+        let _ = writeln!(text, "Database: {}", output.db_root);
     }
 
-    if opts.show_stats {
-        println!("  Notes:          {}", stats.total_notes);
-        println!(
+    if let Some(stats) = &output.stats {
+        let _ = writeln!(text, "  Notes:          {}", stats.total_notes);
+        let _ = writeln!(
+            text,
             "  Links:          {} (internal: {}, file: {}, url: {})",
             stats.total_links,
             stats.total_internal_links,
             stats.total_file_links,
             stats.total_url_links,
         );
-        println!("  Orphans:        {}", stats.orphan_notes);
-        println!("  Broken links:   {}", stats.broken_link_count);
-        println!("  Parse errors:   {}", stats.parse_error_count);
-        println!("  Skipped files:  {}", stats.skipped_count);
-        println!("  Dup UUIDs:      {}", stats.duplicate_uuid_count);
-        println!("  Dup titles:     {}", stats.duplicate_title_count);
-        println!("  Missing titles: {}", stats.missing_title_count);
+        let _ = writeln!(text, "  Orphans:        {}", stats.orphan_notes);
+        let _ = writeln!(text, "  Broken links:   {}", stats.broken_link_count);
+        let _ = writeln!(text, "  Parse errors:   {}", stats.parse_error_count);
+        let _ = writeln!(text, "  Skipped files:  {}", stats.skipped_count);
+        let _ = writeln!(text, "  Dup UUIDs:      {}", stats.duplicate_uuid_count);
+        let _ = writeln!(text, "  Dup titles:     {}", stats.duplicate_title_count);
+        let _ = writeln!(text, "  Missing titles: {}", stats.missing_title_count);
     }
 
-    if opts.show_file {
-        println!("  Broken files:   {}", data.broken_file.len());
+    if let Some(broken_file) = &output.broken_file_links {
+        let _ = writeln!(text, "  Broken files:   {}", broken_file.len());
     }
-    if opts.show_attach {
-        println!("  Broken attach:  {}", data.broken_attachment.len());
+    if let Some(broken_attachment) = &output.broken_attachment_links {
+        let _ = writeln!(text, "  Broken attach:  {}", broken_attachment.len());
     }
-    if opts.show_filetags {
-        println!("  Filetags issues: {}", data.filetags_issues.len());
+    if let Some(filetags_issues) = &output.filetags_issues {
+        let _ = writeln!(text, "  Filetags issues: {}", filetags_issues.len());
     }
-    if opts.show_overlinks {
-        println!("  Overlinks:      {}", data.overlink_entries.len());
+    if let Some(overlinks) = &output.overlinks {
+        let _ = writeln!(text, "  Overlinks:      {}", overlinks.len());
     }
 
-    if opts.show_id {
-        if !data.graph.duplicates.duplicate_uuids.is_empty() {
-            println!();
-            println!(
+    if let Some(duplicates) = &output.duplicates {
+        if !duplicates.duplicate_uuids.is_empty() {
+            text.push('\n');
+            let _ = writeln!(
+                text,
                 "Duplicate UUIDs ({}):",
-                data.graph.duplicates.duplicate_uuids.len()
+                duplicates.duplicate_uuids.len()
             );
-            for d in &data.graph.duplicates.duplicate_uuids {
+            for d in &duplicates.duplicate_uuids {
                 for p in &d.paths {
-                    println!("  {} -> {}", d.value, p);
+                    let _ = writeln!(text, "  {} -> {}", d.value, p);
                 }
             }
         }
 
-        if !data.graph.duplicates.duplicate_titles.is_empty() {
-            println!();
-            println!(
+        if !duplicates.duplicate_titles.is_empty() {
+            text.push('\n');
+            let _ = writeln!(
+                text,
                 "Duplicate titles ({}):",
-                data.graph.duplicates.duplicate_titles.len()
+                duplicates.duplicate_titles.len()
             );
-            for d in &data.graph.duplicates.duplicate_titles {
+            for d in &duplicates.duplicate_titles {
                 for p in &d.paths {
-                    println!("  \"{}\" -> {}", d.value, p);
+                    let _ = writeln!(text, "  \"{}\" -> {}", d.value, p);
                 }
             }
         }
 
-        if !data.graph.duplicates.missing_titles.is_empty() {
-            println!();
-            println!(
+        if !duplicates.missing_titles.is_empty() {
+            text.push('\n');
+            let _ = writeln!(
+                text,
                 "Missing #+title ({}):",
-                data.graph.duplicates.missing_titles.len()
+                duplicates.missing_titles.len()
             );
-            for p in &data.graph.duplicates.missing_titles {
-                println!("  {p}");
+            for p in &duplicates.missing_titles {
+                let _ = writeln!(text, "  {p}");
             }
         }
     }
 
-    if opts.show_id && !data.graph.broken_links.is_empty() {
-        println!();
-        println!("Broken links ({}):", data.graph.broken_links.len());
-        for (src, tgt) in &data.graph.broken_links {
-            let title = data.graph.nodes.get(src).map_or("?", |n| n.title.as_str());
-            println!("  {title} -> {tgt}");
+    if let Some(broken_links) = &output.broken_links
+        && !broken_links.is_empty()
+    {
+        text.push('\n');
+        let _ = writeln!(text, "Broken links ({}):", broken_links.len());
+        for entry in broken_links {
+            let title = if entry.source_title.is_empty() {
+                "?"
+            } else {
+                entry.source_title.as_str()
+            };
+            let _ = writeln!(text, "  {title} -> {}", entry.target_uuid);
         }
     }
 
-    if !data.broken_file.is_empty() {
-        println!();
-        println!("Broken file links ({}):", data.broken_file.len());
-        for entry in data.broken_file {
-            println!("  {} -> {}", entry.source_title, entry.target_path);
+    if let Some(broken_file) = &output.broken_file_links
+        && !broken_file.is_empty()
+    {
+        text.push('\n');
+        let _ = writeln!(text, "Broken file links ({}):", broken_file.len());
+        for entry in broken_file {
+            let _ = writeln!(text, "  {} -> {}", entry.source_title, entry.target_path);
         }
     }
 
-    if !data.broken_attachment.is_empty() {
-        println!();
-        println!(
+    if let Some(broken_attachment) = &output.broken_attachment_links
+        && !broken_attachment.is_empty()
+    {
+        text.push('\n');
+        let _ = writeln!(
+            text,
             "Broken attachment links ({}):",
-            data.broken_attachment.len()
+            broken_attachment.len()
         );
-        for entry in data.broken_attachment {
-            println!("  {} -> {}", entry.source_title, entry.target_path);
+        for entry in broken_attachment {
+            let _ = writeln!(text, "  {} -> {}", entry.source_title, entry.target_path);
         }
     }
 
-    if !data.filetags_issues.is_empty() {
-        println!();
-        println!("Invalid filetags format ({}):", data.filetags_issues.len());
-        for entry in data.filetags_issues {
-            println!("  {} ({}): {}", entry.title, entry.path, entry.issue);
+    if let Some(filetags_issues) = &output.filetags_issues
+        && !filetags_issues.is_empty()
+    {
+        text.push('\n');
+        let _ = writeln!(text, "Invalid filetags format ({}):", filetags_issues.len());
+        for entry in filetags_issues {
+            let _ = writeln!(text, "  {} ({}): {}", entry.title, entry.path, entry.issue);
         }
     }
 
-    if !data.agenda_issues.is_empty() {
-        println!();
-        println!(
+    if let Some(agenda_issues) = &output.agenda_issues
+        && !agenda_issues.is_empty()
+    {
+        text.push('\n');
+        let _ = writeln!(
+            text,
             "Missing :agenda: tag (files with TODOs but no agenda tag) ({}):",
-            data.agenda_issues.len()
+            agenda_issues.len()
         );
-        for entry in data.agenda_issues {
+        for entry in agenda_issues {
             let short_uuid = if entry.uuid.len() >= 8 {
                 &entry.uuid[..8]
             } else {
                 &entry.uuid
             };
-            println!(
+            let _ = writeln!(
+                text,
                 "  {} ({})  \u{2014} {} TODOs",
                 entry.title, short_uuid, entry.todo_count
             );
         }
     }
 
-    if !data.self_link_entries.is_empty() {
-        println!();
-        println!("Self-referencing links ({}):", data.self_link_entries.len());
-        for entry in data.self_link_entries {
+    if let Some(self_links) = &output.self_links
+        && !self_links.is_empty()
+    {
+        text.push('\n');
+        let _ = writeln!(text, "Self-referencing links ({}):", self_links.len());
+        for entry in self_links {
             match entry.suggestion.as_ref() {
-                Some(suggestion) => println!(
-                    "  {} — {} link to self: {} ({})",
-                    entry.source_title, entry.link_type, entry.target, suggestion
-                ),
-                None => println!(
-                    "  {} — {} link to self: {}",
-                    entry.source_title, entry.link_type, entry.target
-                ),
+                Some(suggestion) => {
+                    let _ = writeln!(
+                        text,
+                        "  {} — {} link to self: {} ({})",
+                        entry.source_title, entry.link_type, entry.target, suggestion
+                    );
+                }
+                None => {
+                    let _ = writeln!(
+                        text,
+                        "  {} — {} link to self: {}",
+                        entry.source_title, entry.link_type, entry.target
+                    );
+                }
             }
         }
     }
 
-    if !data.overlink_entries.is_empty() {
-        println!();
-        println!(
+    if let Some(overlinks) = &output.overlinks
+        && !overlinks.is_empty()
+    {
+        text.push('\n');
+        let _ = writeln!(
+            text,
             "Overlinking (2+ links to the same note) ({}):",
-            data.overlink_entries.len()
+            overlinks.len()
         );
-        for entry in data.overlink_entries {
-            println!(
+        for entry in overlinks {
+            let _ = writeln!(
+                text,
                 "  \"{}\" -> \"{}\" ({}x)",
                 entry.source_title, entry.target_title, entry.count
             );
         }
     }
 
-    if let Some(cr) = data.cross_link_result {
-        println!();
-        println!(
+    if let Some(cr) = &output.cross_links {
+        text.push('\n');
+        let _ = writeln!(
+            text,
             "Cross-links between \"{}\" and \"{}\":",
             cr.source_title, cr.target_title
         );
-        println!(
+        let _ = writeln!(
+            text,
             "  \"{}\" -> \"{}\": {} link(s)",
             cr.source_title, cr.target_title, cr.source_to_target
         );
-        println!(
+        let _ = writeln!(
+            text,
             "  \"{}\" -> \"{}\": {} link(s)",
             cr.target_title, cr.source_title, cr.target_to_source
         );
     }
 
     if has_any_output {
-        println!();
+        text.push('\n');
     }
-    if healthy {
-        println!("Status: healthy");
+    if output.healthy {
+        text.push_str("Status: healthy\n");
     } else {
-        println!("Status: issues found");
+        text.push_str("Status: issues found\n");
+    }
+
+    text
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::graph::GraphStats;
+
+    fn healthy_output() -> CheckOutput {
+        CheckOutput {
+            db_root: "/notes".to_string(),
+            stats: Some(GraphStats {
+                total_notes: 2,
+                total_links: 3,
+                total_internal_links: 1,
+                total_file_links: 1,
+                total_url_links: 1,
+                orphan_notes: 0,
+                broken_link_count: 0,
+                skipped_count: 0,
+                parse_error_count: 0,
+                duplicate_uuid_count: 0,
+                duplicate_title_count: 0,
+                missing_title_count: 0,
+            }),
+            duplicates: None,
+            broken_links: None,
+            broken_file_links: None,
+            broken_attachment_links: None,
+            failed_files: None,
+            filetags_issues: None,
+            agenda_issues: None,
+            self_links: None,
+            overlinks: None,
+            cross_links: None,
+            healthy: true,
+        }
+    }
+
+    #[test]
+    fn renders_healthy_text_from_typed_output() {
+        let text = render_text(&healthy_output());
+
+        assert!(text.contains("Database: /notes"));
+        assert!(text.contains("  Notes:          2"));
+        assert!(text.contains("  Links:          3 (internal: 1, file: 1, url: 1)"));
+        assert!(text.ends_with("Status: healthy\n"));
+    }
+
+    #[test]
+    fn renders_issue_text_from_typed_output() {
+        let mut output = healthy_output();
+        output.stats = None;
+        output.broken_file_links = Some(vec![BrokenFileLinkEntry {
+            source_uuid: "source".to_string(),
+            source_title: "Source Note".to_string(),
+            target_path: "missing.org".to_string(),
+        }]);
+        output.healthy = false;
+
+        let text = render_text(&output);
+
+        assert!(text.contains("  Broken files:   1"));
+        assert!(text.contains("Broken file links (1):"));
+        assert!(text.contains("  Source Note -> missing.org"));
+        assert!(text.ends_with("Status: issues found\n"));
     }
 }
