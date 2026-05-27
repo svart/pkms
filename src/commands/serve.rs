@@ -2104,6 +2104,20 @@ Body.
     }
 
     #[test]
+    fn note_body_css_keeps_lists_tight_and_tilde_code_subdued() {
+        let css = page_css();
+
+        assert!(css.contains("ul,\nol {\n  margin: 0 0 1em;\n  padding-left: 1.45em;\n}"));
+        assert!(css.contains("p:has(+ ul),\np:has(+ ol) {\n  margin-bottom: 0;\n}"));
+        assert!(css.contains("li > ul,\nli > ol {\n  margin-bottom: 0;\n}"));
+        assert!(css.contains("--tilde-code: #9a3412;"));
+        assert!(css.contains("--tilde-code: #c9672c;"));
+        assert!(
+            css.contains(".code-orange {\n  color: var(--tilde-code);\n  font-weight: 400;\n}")
+        );
+    }
+
+    #[test]
     fn renders_links_tables_code_math_and_images() {
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path().to_path_buf();

@@ -9,7 +9,7 @@
   --code: #f6f8fa;
   --mark: #fff7cc;
   --inline-code: #f3f4f6;
-  --orange-code: #bf360c;
+  --tilde-code: #9a3412;
   --tag-bg: #eef6ff;
   --tag-fg: #175cd3;
   --scheduled-bg: #ecfdf3;
@@ -85,7 +85,7 @@
     --code: #161b22;
     --mark: #3b3200;
     --inline-code: #1f2937;
-    --orange-code: #ff9f5a;
+    --tilde-code: #c9672c;
     --tag-bg: #102a43;
     --tag-fg: #9ac8ff;
     --scheduled-bg: #092f24;
@@ -444,8 +444,20 @@ p {
   margin: 0 0 1em;
 }
 
-ul {
+ul,
+ol {
+  margin: 0 0 1em;
   padding-left: 1.45em;
+}
+
+p:has(+ ul),
+p:has(+ ol) {
+  margin-bottom: 0;
+}
+
+li > ul,
+li > ol {
+  margin-bottom: 0;
 }
 
 .closed-heading,
@@ -574,8 +586,8 @@ code {
 }
 
 .code-orange {
-  color: var(--orange-code);
-  font-weight: 600;
+  color: var(--tilde-code);
+  font-weight: 400;
 }
 
 figure {
