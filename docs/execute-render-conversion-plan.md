@@ -156,15 +156,15 @@ validation details.
 
 **Planned changes:**
 
-- [ ] Make `execute(...)` return `Vec<ValidateOutput>`.
-- [ ] Ensure `ValidateOutput` contains all fields needed for text rendering.
-- [ ] Convert text rendering to `render_text(&[ValidateOutput]) -> String`.
-- [ ] Add unit tests for rendering healthy and unhealthy validation results.
+- [x] Make `execute(...)` return `Vec<ValidateOutput>`.
+- [x] Ensure `ValidateOutput` contains all fields needed for text rendering.
+- [x] Convert text rendering to `render_text(&[ValidateOutput]) -> String`.
+- [x] Add unit tests for rendering healthy and unhealthy validation results.
 
 **Acceptance criteria:**
 
-- [ ] JSON and NDJSON output remain compatible.
-- [ ] Text output no longer requires direct `Graph` access.
+- [x] JSON and NDJSON output remain compatible.
+- [x] Text output no longer requires direct `Graph` access.
 
 ### Step 7: Convert `show`
 
@@ -299,7 +299,7 @@ existing task source and table abstractions.
 3. [x] Convert `resolve`.
 4. [x] Convert `query`.
 5. [x] Convert `suggest`.
-6. [ ] Convert `validate`.
+6. [x] Convert `validate`.
 7. [ ] Convert `show`.
 8. [ ] Apply the light `context` cleanup.
 9. [ ] Refactor task list request planning.

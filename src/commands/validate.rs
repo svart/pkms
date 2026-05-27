@@ -6,6 +6,7 @@ use crate::parser::{ID_PROPERTY_RE, Link, UUID_FORMAT_RE, validate_filetags_form
 use anyhow::Result;
 use serde::Serialize;
 use std::collections::HashMap;
+use std::fmt::Write;
 use std::path::Path;
 
 #[derive(Serialize)]
@@ -75,83 +76,6 @@ fn build_validate_output(
         backlinks: backlink_entries,
         issues,
         healthy,
-    }
-}
-
-fn print_validate_text(
-    node: &crate::graph::Node,
-    broken_internal: &[String],
-    broken_files: &[String],
-    incoming: &[String],
-    issues: &[String],
-) {
-    let outgoing_internal_len = node
-        .outgoing
-        .iter()
-        .filter(|l| matches!(l, crate::parser::Link::Internal(_)))
-        .count();
-    let healthy = issues.is_empty();
-    println!("Note: {}", node.title);
-    println!("  UUID:   {}", node.uuid);
-    println!("  Path:   {}", node.path.display());
-    if !node.filetags.is_empty() {
-        println!("  Tags:   {}", node.filetags.join(", "));
-    }
-    if !node.categories.is_empty() {
-        println!("  Cats:   {}", node.categories.join(", "));
-    }
-    if !node.aliases.is_empty() {
-        println!("  Aliases: {}", node.aliases.join(", "));
-    }
-    if !node.refs.is_empty() {
-        println!("  Refs:   {}", node.refs.join(", "));
-    }
-    println!("  Headings: {}", node.headings_count);
-    if !node.heading_uuids.is_empty() {
-        println!("  Heading UUIDs: {}", node.heading_uuids.join(", "));
-    }
-    println!();
-    println!("Links:");
-    println!(
-        "  Outgoing: {} ({} internal)",
-        node.outgoing.len(),
-        outgoing_internal_len,
-    );
-    println!("  Incoming: {}", incoming.len());
-    println!(
-        "  Broken:   {} internal, {} file",
-        broken_internal.len(),
-        broken_files.len()
-    );
-
-    if !broken_internal.is_empty() {
-        println!();
-        println!("Broken internal links:");
-        for uuid in broken_internal {
-            println!("  -> {uuid}");
-        }
-    }
-
-    if !broken_files.is_empty() {
-        println!();
-        println!("Broken file links:");
-        for path in broken_files {
-            println!("  -> {path}");
-        }
-    }
-
-    if !issues.is_empty() {
-        println!();
-        for i in issues {
-            println!("Issue: {i}");
-        }
-    }
-
-    println!();
-    if healthy {
-        println!("Status: healthy");
-    } else {
-        println!("Status: {} issue(s)", issues.len());
     }
 }
 
@@ -389,47 +313,164 @@ pub struct ValidateOptions {
 }
 
 pub fn run(config: &ResolvedConfig, ctx: &OutputContext, opts: &ValidateOptions) -> Result<()> {
+    let outputs = execute(config, opts)?;
+    render(ctx, &outputs)
+}
+
+pub fn execute(config: &ResolvedConfig, opts: &ValidateOptions) -> Result<Vec<ValidateOutput>> {
     let graph = Graph::load(config)?;
     let db_root = config.resolved_db_root();
 
+    opts.targets
+        .iter()
+        .map(|target| validate_one(&graph, target, db_root))
+        .collect()
+}
+
+pub fn render(ctx: &OutputContext, outputs: &[ValidateOutput]) -> Result<()> {
     match ctx.format {
         OutputFormat::Text => {
-            for t in &opts.targets {
-                let node = graph.resolve_target(t)?.clone();
-                let is_heading_node = graph.heading_uuid_to_primary.contains_key(&node.uuid);
-                let target_is_uuid = UUID_FORMAT_RE.is_match(t);
-                let incoming = graph.backlinks.get(&node.uuid).cloned().unwrap_or_default();
-                let output =
-                    validate_node(&graph, &node, t, target_is_uuid, is_heading_node, db_root)?;
-                print_validate_text(
-                    &node,
-                    &output.broken_internal,
-                    &output.broken_files,
-                    &incoming,
-                    &output.issues,
-                );
-                if opts.targets.len() > 1 {
-                    println!();
-                }
-            }
+            print!("{}", render_text(outputs));
         }
         OutputFormat::Json => {
-            let all_outputs: Vec<ValidateOutput> = opts
-                .targets
-                .iter()
-                .map(|t| validate_one(&graph, t, db_root))
-                .collect::<Result<Vec<_>>>()?;
-            ctx.print_json_adaptive(&all_outputs)?;
+            ctx.print_json_adaptive(outputs)?;
         }
         OutputFormat::Ndjson => {
-            let all_outputs: Vec<ValidateOutput> = opts
-                .targets
-                .iter()
-                .map(|t| validate_one(&graph, t, db_root))
-                .collect::<Result<Vec<_>>>()?;
-            ctx.print_ndjson(&all_outputs)?;
+            ctx.print_ndjson(outputs)?;
         }
     }
 
     Ok(())
+}
+
+pub fn render_text(outputs: &[ValidateOutput]) -> String {
+    outputs
+        .iter()
+        .map(render_one_text)
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn render_one_text(output: &ValidateOutput) -> String {
+    let mut text = String::new();
+
+    let _ = writeln!(text, "Note: {}", output.title);
+    let _ = writeln!(text, "  UUID:   {}", output.uuid);
+    let _ = writeln!(text, "  Path:   {}", output.path);
+    if !output.filetags.is_empty() {
+        let _ = writeln!(text, "  Tags:   {}", output.filetags.join(", "));
+    }
+    if !output.categories.is_empty() {
+        let _ = writeln!(text, "  Cats:   {}", output.categories.join(", "));
+    }
+    if !output.aliases.is_empty() {
+        let _ = writeln!(text, "  Aliases: {}", output.aliases.join(", "));
+    }
+    if !output.refs.is_empty() {
+        let _ = writeln!(text, "  Refs:   {}", output.refs.join(", "));
+    }
+    let _ = writeln!(text, "  Headings: {}", output.headings);
+    if !output.heading_uuids.is_empty() {
+        let _ = writeln!(text, "  Heading UUIDs: {}", output.heading_uuids.join(", "));
+    }
+    text.push('\n');
+    text.push_str("Links:\n");
+    let _ = writeln!(
+        text,
+        "  Outgoing: {} ({} internal)",
+        output.outgoing, output.outgoing_internal,
+    );
+    let _ = writeln!(text, "  Incoming: {}", output.incoming);
+    let _ = writeln!(
+        text,
+        "  Broken:   {} internal, {} file",
+        output.broken_internal.len(),
+        output.broken_files.len()
+    );
+
+    if !output.broken_internal.is_empty() {
+        text.push('\n');
+        text.push_str("Broken internal links:\n");
+        for uuid in &output.broken_internal {
+            let _ = writeln!(text, "  -> {uuid}");
+        }
+    }
+
+    if !output.broken_files.is_empty() {
+        text.push('\n');
+        text.push_str("Broken file links:\n");
+        for path in &output.broken_files {
+            let _ = writeln!(text, "  -> {path}");
+        }
+    }
+
+    if !output.issues.is_empty() {
+        text.push('\n');
+        for issue in &output.issues {
+            let _ = writeln!(text, "Issue: {issue}");
+        }
+    }
+
+    text.push('\n');
+    if output.healthy {
+        text.push_str("Status: healthy\n");
+    } else {
+        let _ = writeln!(text, "Status: {} issue(s)", output.issues.len());
+    }
+
+    text
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn healthy_output() -> ValidateOutput {
+        ValidateOutput {
+            uuid: "11111111-1111-4111-8111-111111111111".to_string(),
+            title: "Note A".to_string(),
+            path: "/notes/a.org".to_string(),
+            filetags: vec!["tag".to_string()],
+            categories: vec!["cat".to_string()],
+            aliases: vec!["Alias A".to_string()],
+            refs: vec!["ref-a".to_string()],
+            headings: 2,
+            heading_uuids: vec!["22222222-2222-4222-8222-222222222222".to_string()],
+            outgoing: 3,
+            incoming: 1,
+            outgoing_internal: 2,
+            broken_internal: vec![],
+            broken_files: vec![],
+            backlinks: vec![],
+            issues: vec![],
+            healthy: true,
+        }
+    }
+
+    #[test]
+    fn renders_healthy_validate_text_from_typed_output() {
+        let text = render_text(&[healthy_output()]);
+
+        assert!(text.contains("Note: Note A"));
+        assert!(text.contains("  Tags:   tag"));
+        assert!(text.contains("  Heading UUIDs: 22222222-2222-4222-8222-222222222222"));
+        assert!(text.contains("  Outgoing: 3 (2 internal)"));
+        assert!(text.ends_with("Status: healthy\n"));
+    }
+
+    #[test]
+    fn renders_unhealthy_validate_text_from_typed_output() {
+        let mut output = healthy_output();
+        output.broken_internal = vec!["missing-id".to_string()];
+        output.broken_files = vec!["missing.org".to_string()];
+        output.issues = vec!["1 broken internal link(s)".to_string()];
+        output.healthy = false;
+
+        let text = render_text(&[output]);
+
+        assert!(text.contains("Broken internal links:\n  -> missing-id"));
+        assert!(text.contains("Broken file links:\n  -> missing.org"));
+        assert!(text.contains("Issue: 1 broken internal link(s)"));
+        assert!(text.ends_with("Status: 1 issue(s)\n"));
+    }
 }
