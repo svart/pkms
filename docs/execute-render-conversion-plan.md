@@ -135,17 +135,17 @@ path is feature-gated, so this should follow `query`.
 
 **Planned changes:**
 
-- [ ] Introduce an execution output that can represent one or many targets.
-- [ ] Route non-embed suggestion scoring through `execute(...)`.
-- [ ] Keep embed support feature-gated, but make it return the same typed output
+- [x] Introduce an execution output that can represent one or many targets.
+- [x] Route non-embed suggestion scoring through `execute(...)`.
+- [x] Keep embed support feature-gated, but make it return the same typed output
   where practical.
-- [ ] Convert text rendering to a pure helper.
-- [ ] Add focused tests for text rendering and target metadata.
+- [x] Convert text rendering to a pure helper.
+- [x] Add focused tests for text rendering and target metadata.
 
 **Acceptance criteria:**
 
-- [ ] Non-embed and embed behavior remain compatible.
-- [ ] Single-target JSON output keeps its existing shape unless a deliberate
+- [x] Non-embed and embed behavior remain compatible.
+- [x] Single-target JSON output keeps its existing shape unless a deliberate
   contract change is documented.
 
 ### Step 6: Convert `validate`
@@ -298,7 +298,7 @@ existing task source and table abstractions.
 2. [x] Convert `get`.
 3. [x] Convert `resolve`.
 4. [x] Convert `query`.
-5. [ ] Convert `suggest`.
+5. [x] Convert `suggest`.
 6. [ ] Convert `validate`.
 7. [ ] Convert `show`.
 8. [ ] Apply the light `context` cleanup.

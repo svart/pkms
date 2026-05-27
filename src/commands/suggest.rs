@@ -8,6 +8,7 @@ use crate::parser::{HEADING_RE, Link};
 use anyhow::Result;
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
+use std::fmt::Write;
 
 const TITLE_OVERLAP_WEIGHT: f64 = 20.0;
 const CONTENT_MATCH_WEIGHT: f64 = 5.0;
@@ -64,9 +65,15 @@ pub struct SuggestOutput {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub showed: Option<usize>,
     pub suggestions: Vec<Suggestion>,
+    #[serde(skip)]
+    pub target_heading_context: Option<String>,
+    #[serde(skip)]
+    pub ndjson_target_uuid: Option<String>,
+    #[serde(skip)]
+    pub score_precision: usize,
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 pub struct Suggestion {
     pub uuid: String,
     pub title: String,
@@ -560,12 +567,17 @@ pub struct SuggestOptions {
 }
 
 pub fn run(config: &ResolvedConfig, ctx: &OutputContext, opts: &SuggestOptions) -> Result<()> {
+    let outputs = execute(config, opts)?;
+    render(ctx, &outputs)
+}
+
+pub fn execute(config: &ResolvedConfig, opts: &SuggestOptions) -> Result<Vec<SuggestOutput>> {
     let graph = Graph::load(config)?;
 
     if opts.use_embed {
         #[cfg(feature = "embed")]
         {
-            return suggest_by_embedding(&graph, ctx, &opts.targets, opts.limit);
+            return suggest_by_embedding_output(&graph, &opts.targets, opts.limit);
         }
         #[cfg(not(feature = "embed"))]
         {
@@ -573,74 +585,46 @@ pub fn run(config: &ResolvedConfig, ctx: &OutputContext, opts: &SuggestOptions) 
         }
     }
 
+    opts.targets
+        .iter()
+        .map(|target| {
+            let (node, suggestions, total, showed, heading_ctx) = compute_suggestions_for_node(
+                &graph,
+                target,
+                opts.exclude_orphans,
+                opts.limit,
+                None,
+            )?;
+            Ok(SuggestOutput {
+                target: node.title.clone(),
+                target_uuid: node.uuid.clone(),
+                total,
+                showed,
+                suggestions,
+                target_heading_context: heading_ctx,
+                ndjson_target_uuid: Some(target.clone()),
+                score_precision: 1,
+            })
+        })
+        .collect()
+}
+
+pub fn render(ctx: &OutputContext, outputs: &[SuggestOutput]) -> Result<()> {
     match ctx.format {
         OutputFormat::Text => {
-            for t in &opts.targets {
-                let (node, suggestions, _total, _showed, heading_ctx) =
-                    compute_suggestions_for_node(
-                        &graph,
-                        t,
-                        opts.exclude_orphans,
-                        opts.limit,
-                        None,
-                    )?;
-                if let Some(ref h) = heading_ctx {
-                    println!("Suggestions for \"{}\" ({})", node.title, h);
-                } else {
-                    println!("Suggestions for \"{}\":", node.title);
-                }
-                println!();
-                for (i, s) in suggestions.iter().enumerate() {
-                    println!("{:3}. {}  (score: {:.1})", i + 1, s.title, s.score);
-                    println!("       UUID: {}", s.uuid);
-                    if !s.scores.is_empty() {
-                        let mut factors: Vec<&str> = s.scores.keys().map(String::as_str).collect();
-                        factors.sort();
-                        println!("       Matches: {}", factors.join(", "));
-                    }
-                }
-                if opts.targets.len() > 1 {
-                    println!();
-                }
-            }
+            print!("{}", render_text(outputs));
         }
         OutputFormat::Json => {
-            let mut all_outputs = Vec::new();
-            for t in &opts.targets {
-                let (node, suggestions, total, showed, _heading_ctx) =
-                    compute_suggestions_for_node(
-                        &graph,
-                        t,
-                        opts.exclude_orphans,
-                        opts.limit,
-                        None,
-                    )?;
-                all_outputs.push(SuggestOutput {
-                    target: node.title.clone(),
-                    target_uuid: node.uuid.clone(),
-                    total,
-                    showed,
-                    suggestions,
-                });
-            }
-            if all_outputs.len() == 1 {
-                ctx.print_json(&all_outputs[0])?;
+            if outputs.len() == 1 {
+                ctx.print_json(&outputs[0])?;
             } else {
-                ctx.print_json(&all_outputs)?;
+                ctx.print_json(outputs)?;
             }
         }
         OutputFormat::Ndjson => {
-            for t in &opts.targets {
-                let (_node, suggestions, _total, _showed, _heading_ctx) =
-                    compute_suggestions_for_node(
-                        &graph,
-                        t,
-                        opts.exclude_orphans,
-                        opts.limit,
-                        Some(t.clone()),
-                    )?;
-                for s in &suggestions {
-                    println!("{}", serde_json::to_string(s)?);
+            for output in outputs {
+                for suggestion in ndjson_suggestions(output) {
+                    println!("{}", serde_json::to_string(&suggestion)?);
                 }
             }
         }
@@ -649,13 +633,65 @@ pub fn run(config: &ResolvedConfig, ctx: &OutputContext, opts: &SuggestOptions) 
     Ok(())
 }
 
+pub fn render_text(outputs: &[SuggestOutput]) -> String {
+    outputs
+        .iter()
+        .map(render_one_text)
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn render_one_text(output: &SuggestOutput) -> String {
+    let mut text = String::new();
+
+    if let Some(ref heading_context) = output.target_heading_context {
+        let _ = writeln!(
+            text,
+            "Suggestions for \"{}\" ({})",
+            output.target, heading_context
+        );
+    } else {
+        let _ = writeln!(text, "Suggestions for \"{}\":", output.target);
+    }
+    text.push('\n');
+    for (i, suggestion) in output.suggestions.iter().enumerate() {
+        let score = format!(
+            "{:.precision$}",
+            suggestion.score,
+            precision = output.score_precision
+        );
+        let _ = writeln!(text, "{:3}. {}  (score: {score})", i + 1, suggestion.title);
+        let _ = writeln!(text, "       UUID: {}", suggestion.uuid);
+        if !suggestion.scores.is_empty() && output.score_precision == 1 {
+            let mut factors: Vec<&str> = suggestion.scores.keys().map(String::as_str).collect();
+            factors.sort();
+            let _ = writeln!(text, "       Matches: {}", factors.join(", "));
+        }
+    }
+
+    text
+}
+
+fn ndjson_suggestions(output: &SuggestOutput) -> Vec<Suggestion> {
+    output
+        .suggestions
+        .iter()
+        .map(|suggestion| {
+            let mut suggestion = suggestion.clone();
+            if suggestion.target_uuid.is_none() {
+                suggestion.target_uuid = output.ndjson_target_uuid.clone();
+            }
+            suggestion
+        })
+        .collect()
+}
+
 #[cfg(feature = "embed")]
-fn suggest_by_embedding(
+fn suggest_by_embedding_output(
     graph: &Graph,
-    ctx: &OutputContext,
     targets: &[String],
     limit: Option<usize>,
-) -> Result<()> {
+) -> Result<Vec<SuggestOutput>> {
     let mut texts = Vec::new();
     let mut node_list: Vec<&Node> = graph.nodes.values().collect();
     node_list.sort_by(|a, b| a.uuid.cmp(&b.uuid));
@@ -669,12 +705,12 @@ fn suggest_by_embedding(
     }
 
     if texts.is_empty() {
-        return Ok(());
+        return Ok(Vec::new());
     }
 
     let embeddings = embed::compute_embeddings(&texts)?;
 
-    let all_outputs: Vec<SuggestOutput> = targets
+    let outputs: Vec<SuggestOutput> = targets
         .iter()
         .filter_map(|t| {
             let target_node = graph.resolve_target(t).ok()?;
@@ -716,39 +752,74 @@ fn suggest_by_embedding(
                 total: suggestions.len(),
                 showed: limit.map(|l| suggestions.len().min(l)),
                 suggestions,
+                target_heading_context: None,
+                ndjson_target_uuid: Some(target_node.uuid.clone()),
+                score_precision: 3,
             })
         })
         .collect();
 
-    match ctx.format {
-        OutputFormat::Text => {
-            for output in &all_outputs {
-                println!("Suggestions for \"{}\":", output.target);
-                println!();
-                for (i, s) in output.suggestions.iter().enumerate() {
-                    println!("{:3}. {}  (score: {:.3})", i + 1, s.title, s.score);
-                    println!("       UUID: {}", s.uuid);
-                }
-                if all_outputs.len() > 1 {
-                    println!();
-                }
-            }
-        }
-        OutputFormat::Json => {
-            if all_outputs.len() == 1 {
-                ctx.print_json(&all_outputs[0])?;
-            } else {
-                ctx.print_json(&all_outputs)?;
-            }
-        }
-        OutputFormat::Ndjson => {
-            for output in &all_outputs {
-                for s in &output.suggestions {
-                    println!("{}", serde_json::to_string(s)?);
-                }
-            }
+    Ok(outputs)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn suggestion(title: &str, score: f64) -> Suggestion {
+        Suggestion {
+            uuid: "11111111-1111-4111-8111-111111111111".to_string(),
+            title: title.to_string(),
+            path: "/notes/a.org".to_string(),
+            score,
+            reasons: vec!["shared tags".to_string()],
+            filetags: vec!["tag".to_string()],
+            scores: HashMap::from([("tags".to_string(), 25.0)]),
+            target_uuid: None,
+            heading_context: None,
         }
     }
 
-    Ok(())
+    fn output() -> SuggestOutput {
+        SuggestOutput {
+            target: "Target".to_string(),
+            target_uuid: "22222222-2222-4222-8222-222222222222".to_string(),
+            total: 1,
+            showed: None,
+            suggestions: vec![suggestion("Suggestion", 25.0)],
+            target_heading_context: None,
+            ndjson_target_uuid: Some("input-target".to_string()),
+            score_precision: 1,
+        }
+    }
+
+    #[test]
+    fn renders_suggest_text_from_typed_output() {
+        let text = render_text(&[output()]);
+
+        assert!(text.contains("Suggestions for \"Target\":"));
+        assert!(text.contains("  1. Suggestion  (score: 25.0)"));
+        assert!(text.contains("       UUID: 11111111-1111-4111-8111-111111111111"));
+        assert!(text.contains("       Matches: tags"));
+    }
+
+    #[test]
+    fn renders_heading_context_in_suggest_header() {
+        let mut output = output();
+        output.target_heading_context = Some("Heading".to_string());
+
+        let text = render_text(&[output]);
+
+        assert!(text.contains("Suggestions for \"Target\" (Heading)"));
+    }
+
+    #[test]
+    fn fills_ndjson_target_uuid_without_changing_typed_suggestion() {
+        let output = output();
+
+        let suggestions = ndjson_suggestions(&output);
+
+        assert_eq!(suggestions[0].target_uuid.as_deref(), Some("input-target"));
+        assert!(output.suggestions[0].target_uuid.is_none());
+    }
 }
