@@ -10,6 +10,12 @@
   --mark: #fff7cc;
   --inline-code: #f3f4f6;
   --orange-code: #bf360c;
+  --tag-bg: #eef6ff;
+  --tag-fg: #175cd3;
+  --scheduled-bg: #ecfdf3;
+  --scheduled-fg: #067647;
+  --deadline-bg: #fff4ed;
+  --deadline-fg: #b93815;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -24,6 +30,12 @@
     --mark: #3b3200;
     --inline-code: #1f2937;
     --orange-code: #ff9f5a;
+    --tag-bg: #102a43;
+    --tag-fg: #9ac8ff;
+    --scheduled-bg: #092f24;
+    --scheduled-fg: #7ce2b2;
+    --deadline-bg: #3b1d13;
+    --deadline-fg: #ffb199;
   }
 }
 
@@ -188,6 +200,10 @@ main {
   margin: 0;
 }
 
+.note-preview-header .note-tags {
+  margin-top: 0.55rem;
+}
+
 .note-preview-body h2 {
   font-size: 1.25rem;
 }
@@ -265,7 +281,66 @@ h3 {
   font: 13px/1.4 "Fira Code", "Fira Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   color: var(--muted);
   overflow-wrap: anywhere;
-  margin: 0;
+  margin: 0.75rem 0 0;
+}
+
+.tag-list,
+.heading-tags,
+.heading-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.note-tags {
+  margin: -0.2rem 0 0.35rem;
+}
+
+.heading-tags {
+  display: inline-flex;
+  margin-left: 0.35rem;
+  vertical-align: 0.14em;
+}
+
+.tag {
+  border: 1px solid color-mix(in srgb, var(--tag-fg), transparent 68%);
+  border-radius: 999px;
+  background: var(--tag-bg);
+  color: var(--tag-fg);
+  font: 600 0.72rem/1.2 "Alegreya Sans", ui-sans-serif, system-ui, sans-serif;
+  padding: 0.12rem 0.45rem;
+  white-space: nowrap;
+}
+
+.heading-meta {
+  margin: -0.35rem 0 0.95rem;
+  font: 600 0.78rem/1.35 "Alegreya Sans", ui-sans-serif, system-ui, sans-serif;
+}
+
+.planning {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.16rem 0.5rem;
+}
+
+.planning-label {
+  color: var(--muted);
+  text-transform: uppercase;
+  font-size: 0.68rem;
+  letter-spacing: 0;
+}
+
+.planning-scheduled {
+  background: var(--scheduled-bg);
+  color: var(--scheduled-fg);
+  border-color: color-mix(in srgb, var(--scheduled-fg), transparent 68%);
+}
+
+.planning-deadline {
+  background: var(--deadline-bg);
+  color: var(--deadline-fg);
+  border-color: color-mix(in srgb, var(--deadline-fg), transparent 68%);
 }
 
 a {

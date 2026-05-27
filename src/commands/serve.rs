@@ -1,7 +1,9 @@
 use crate::config::ResolvedConfig;
 use crate::graph::{Graph, Node, resolve_file_link_path};
 use crate::output::OutputContext;
-use crate::parser::{HEADING_RE, LINK_RE, strip_org_links};
+use crate::parser::{
+    DEADLINE_RE, HEADING_RE, Heading, LINK_RE, SCHEDULED_RE, parse_note, strip_org_links,
+};
 use crate::util;
 use anyhow::{Context, Result};
 use regex::Regex;
@@ -301,6 +303,7 @@ fn render_note_html(graph: &Graph, config: &ResolvedConfig, node: &Node, content
     let body = render_org_body(graph, config, node, content);
     let contents = render_contents_panel(content);
     let backlinks = render_backlinks_panel(graph, node);
+    let tags = render_tag_list("Note tags", &node.filetags, "note-tags");
     let title = escape_html(&node.title);
     format!(
         r#"<!doctype html>
@@ -319,6 +322,7 @@ fn render_note_html(graph: &Graph, config: &ResolvedConfig, node: &Node, content
 <header class="note-header">
 <p class="eyebrow">pkms note</p>
 <h1>{title}</h1>
+{tags}
 <p class="uuid">{}</p>
 </header>
 <article class="note-body">
@@ -341,9 +345,10 @@ fn render_preview_html(
     content: &str,
 ) -> String {
     let body = render_org_body(graph, config, node, content);
+    let tags = render_tag_list("Note tags", &node.filetags, "note-tags");
     let title = escape_html(&node.title);
     format!(
-        "<section class=\"note-preview-content\" data-preview-note=\"{}\">\n<header class=\"note-preview-header\">\n<p class=\"eyebrow\">pkms note</p>\n<h1>{title}</h1>\n</header>\n<article class=\"note-body note-preview-body\">\n{body}</article>\n</section>\n",
+        "<section class=\"note-preview-content\" data-preview-note=\"{}\">\n<header class=\"note-preview-header\">\n<p class=\"eyebrow\">pkms note</p>\n<h1>{title}</h1>\n{tags}</header>\n<article class=\"note-body note-preview-body\">\n{body}</article>\n</section>\n",
         escape_html(&node.uuid)
     )
 }
@@ -405,6 +410,94 @@ fn render_outline_heading_label(heading: &OutlineHeading) -> String {
     label
 }
 
+fn render_tag_list(label: &str, tags: &[String], class_name: &str) -> String {
+    if tags.is_empty() {
+        return String::new();
+    }
+    let mut html = format!(
+        "<div class=\"tag-list {class_name}\" aria-label=\"{}\">",
+        escape_html(label)
+    );
+    for tag in tags {
+        html.push_str(&render_tag(tag));
+    }
+    html.push_str("</div>\n");
+    html
+}
+
+fn render_heading_tags(tags: &[String]) -> String {
+    if tags.is_empty() {
+        return String::new();
+    }
+    let mut html = String::from(" <span class=\"heading-tags\" aria-label=\"Heading tags\">");
+    for tag in tags {
+        html.push_str(&render_tag(tag));
+    }
+    html.push_str("</span>");
+    html
+}
+
+fn render_tag(tag: &str) -> String {
+    format!("<span class=\"tag\">#{}</span>", escape_html(tag))
+}
+
+fn render_heading_dates(heading: &Heading) -> String {
+    if heading.scheduled.is_none() && heading.deadline.is_none() {
+        return String::new();
+    }
+    let mut html = String::from("<div class=\"heading-meta\" aria-label=\"Heading planning\">\n");
+    if let Some(scheduled) = heading.scheduled.as_deref() {
+        html.push_str(&render_planning_item(
+            "Scheduled",
+            "planning-scheduled",
+            scheduled,
+        ));
+    }
+    if let Some(deadline) = heading.deadline.as_deref() {
+        html.push_str(&render_planning_item(
+            "Deadline",
+            "planning-deadline",
+            deadline,
+        ));
+    }
+    html.push_str("</div>\n");
+    html
+}
+
+fn render_planning_item(label: &str, class_name: &str, timestamp: &str) -> String {
+    let display = display_timestamp(timestamp);
+    let datetime = timestamp_date(timestamp)
+        .map(|date| format!(" datetime=\"{}\"", escape_html(date)))
+        .unwrap_or_default();
+    format!(
+        "<span class=\"planning {class_name}\"><span class=\"planning-label\">{}</span> <time{datetime}>{}</time></span>\n",
+        escape_html(label),
+        escape_html(&display)
+    )
+}
+
+fn display_timestamp(timestamp: &str) -> String {
+    timestamp
+        .trim()
+        .trim_start_matches('<')
+        .trim_end_matches('>')
+        .replace(">--<", " - ")
+        .to_string()
+}
+
+fn timestamp_date(timestamp: &str) -> Option<&str> {
+    let inner = timestamp.trim().strip_prefix('<')?;
+    let date = inner.get(0..10)?;
+    (date.len() == 10
+        && date.as_bytes().get(4) == Some(&b'-')
+        && date.as_bytes().get(7) == Some(&b'-'))
+    .then_some(date)
+}
+
+fn is_planning_line(trimmed: &str) -> bool {
+    SCHEDULED_RE.is_match(trimmed) || DEADLINE_RE.is_match(trimmed)
+}
+
 fn render_backlinks_panel(graph: &Graph, node: &Node) -> String {
     let mut incoming: BTreeMap<(String, String), &Node> = BTreeMap::new();
     if let Some(backlink_uuids) = graph.backlinks.get(&node.uuid) {
@@ -446,6 +539,12 @@ fn heading_anchor(line_number: usize) -> String {
 fn render_org_body(graph: &Graph, config: &ResolvedConfig, node: &Node, content: &str) -> String {
     let mut html = String::new();
     let lines: Vec<&str> = content.lines().collect();
+    let parsed = parse_note(content);
+    let headings_by_line: BTreeMap<usize, &Heading> = parsed
+        .headings
+        .iter()
+        .map(|heading| (heading.line_number, heading))
+        .collect();
     let mut i = 0;
     let mut paragraph: Vec<&str> = Vec::new();
     let mut in_list = false;
@@ -479,6 +578,13 @@ fn render_org_body(graph: &Graph, config: &ResolvedConfig, node: &Node, content:
             continue;
         }
         if lower.starts_with("#+title:") || lower.starts_with("#+filetags:") {
+            i += 1;
+            continue;
+        }
+        if is_planning_line(trimmed) {
+            flush_paragraph(&mut html, &mut paragraph, graph, config, node);
+            close_list(&mut html, &mut in_list);
+            pending_caption = None;
             i += 1;
             continue;
         }
@@ -589,6 +695,7 @@ fn render_org_body(graph: &Graph, config: &ResolvedConfig, node: &Node, content:
             let level = cap[1].len().saturating_add(1).min(6);
             let todo = cap.get(2).map(|m| m.as_str()).unwrap_or_default();
             let title = cap.get(4).map_or("", |m| m.as_str());
+            let heading = headings_by_line.get(&(i + 1)).copied();
             let anchor = heading_anchor(i + 1);
             if is_closed_todo_state(config, todo) {
                 html.push_str(&format!(
@@ -605,7 +712,13 @@ fn render_org_body(graph: &Graph, config: &ResolvedConfig, node: &Node, content:
                 ));
             }
             html.push_str(&render_inline(graph, config, node, title));
+            if let Some(heading) = heading {
+                html.push_str(&render_heading_tags(&heading.tags));
+            }
             html.push_str(&format!("</h{level}>\n"));
+            if let Some(heading) = heading {
+                html.push_str(&render_heading_dates(heading));
+            }
             i += 1;
             continue;
         }
@@ -1530,9 +1643,11 @@ Preview body.
 :ID:       aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa
 :END:
 #+title: Alpha
+#+filetags: :agenda:projects:
 
-* DONE Finished
-* TODO Active
+* DONE Finished :archive:
+* TODO Active :work:test:
+SCHEDULED: <2026-05-27 Wed> DEADLINE: <2026-05-28 Thu>
 - [x] Ticked item
 - [ ] Open item
 
@@ -1579,10 +1694,13 @@ fn main() {}
         assert!(html.contains(
             "Plain link: <a href=\"https://example.com/path?x=1\" rel=\"noreferrer\">https://example.com/path?x=1</a>."
         ));
-        assert!(html.contains(
-            "<h2 id=\"h-6\" class=\"closed-heading\"><span class=\"todo\">DONE</span> Finished</h2>"
-        ));
-        assert!(html.contains("<h2 id=\"h-7\"><span class=\"todo\">TODO</span> Active</h2>"));
+        assert!(html.contains("<div class=\"tag-list note-tags\" aria-label=\"Note tags\"><span class=\"tag\">#agenda</span><span class=\"tag\">#projects</span></div>"));
+        assert!(html.contains("<h2 id=\"h-7\" class=\"closed-heading\"><span class=\"todo\">DONE</span> Finished <span class=\"heading-tags\" aria-label=\"Heading tags\"><span class=\"tag\">#archive</span></span></h2>"));
+        assert!(html.contains("<h2 id=\"h-8\"><span class=\"todo\">TODO</span> Active <span class=\"heading-tags\" aria-label=\"Heading tags\"><span class=\"tag\">#work</span><span class=\"tag\">#test</span></span></h2>"));
+        assert!(html.contains("<span class=\"planning planning-scheduled\"><span class=\"planning-label\">Scheduled</span> <time datetime=\"2026-05-27\">2026-05-27 Wed</time></span>"));
+        assert!(html.contains("<span class=\"planning planning-deadline\"><span class=\"planning-label\">Deadline</span> <time datetime=\"2026-05-28\">2026-05-28 Thu</time></span>"));
+        assert!(!html.contains("<p>SCHEDULED:"));
+        assert!(!html.contains("<p>DEADLINE:"));
         assert!(html.contains("<li class=\"checked-item\">[x] Ticked item</li>"));
         assert!(html.contains("<li>[ ] Open item</li>"));
         assert!(html.contains("<table>"));
