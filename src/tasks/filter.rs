@@ -250,13 +250,19 @@ fn matches_priority_filter(filter: Option<&str>, item: &TaskItem) -> bool {
     if filter.is_empty() {
         return item.priority.is_none();
     }
-    let targets: Vec<char> = filter
-        .split(',')
+    let targets = priority_filter_targets(filter);
+    priority_matches_target(item.priority_char(), &targets)
+}
+
+pub fn priority_filter_targets(prio: &str) -> Vec<char> {
+    prio.split(',')
         .filter_map(|value| value.trim().chars().next())
         .map(|priority| priority.to_ascii_uppercase())
-        .collect();
-    item.priority_char()
-        .is_some_and(|priority| targets.contains(&priority.to_ascii_uppercase()))
+        .collect()
+}
+
+pub fn priority_matches_target(priority: Option<char>, targets: &[char]) -> bool {
+    priority.is_some_and(|priority| targets.contains(&priority.to_ascii_uppercase()))
 }
 
 fn matches_project_filter(filters: Option<&str>, item: &TaskItem) -> bool {

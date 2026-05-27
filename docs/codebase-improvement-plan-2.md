@@ -64,8 +64,9 @@ refactor commits.
 
 7. [ ] Consolidate task filter duplication.
 
-   Not done. `tasks/filter.rs` and older row/filter helpers in
-   `commands/task_common.rs` still both exist.
+   Partially done. Priority filter target parsing/matching is shared through
+   `tasks/filter.rs`. Broader text filter parsing still exists both in
+   `tasks/filter.rs` and older row/filter helpers in `commands/task_common.rs`.
 
 8. [x] Improve test fixtures with a small builder.
 
@@ -91,8 +92,9 @@ refactor commits.
 
 ## Not Yet Done
 
-- Consolidate task filtering so source-neutral filters and row-oriented filters
-  do not drift.
+- Continue consolidating task filtering so source-neutral filters and
+  row-oriented filters do not drift; priority matching is shared now, text
+  filters remain duplicated.
 - Continue replacing the remaining thin-wrapper `Local::now()` calls in task
   code with explicit dates when the surrounding command logic is refactored.
 - Move more pure command behavior behind typed `execute`/`render` boundaries

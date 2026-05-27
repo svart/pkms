@@ -93,17 +93,6 @@ pub fn apply_type_filter(has_scheduled: bool, has_deadline: bool, filters: &[Fil
     true
 }
 
-pub fn priority_filter_targets(prio: &str) -> Vec<char> {
-    prio.split(',')
-        .filter_map(|value| value.trim().chars().next())
-        .map(|priority| priority.to_ascii_uppercase())
-        .collect()
-}
-
-pub fn priority_matches_filter(priority: Option<char>, targets: &[char]) -> bool {
-    priority.is_some_and(|priority| targets.contains(&priority.to_ascii_uppercase()))
-}
-
 pub fn combine_tags(filetags: &[String], heading_tags: &[String]) -> String {
     let mut seen = HashSet::new();
     let mut result = Vec::new();

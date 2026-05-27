@@ -167,9 +167,9 @@ pub fn run(config: &ResolvedConfig, ctx: &OutputContext, opts: &TodoOptions) -> 
         if prio.is_empty() {
             items.retain(|item| item.priority.is_none());
         } else {
-            let targets = crate::commands::task_common::priority_filter_targets(prio);
+            let targets = crate::tasks::filter::priority_filter_targets(prio);
             items.retain(|item| {
-                crate::commands::task_common::priority_matches_filter(item.priority, &targets)
+                crate::tasks::filter::priority_matches_target(item.priority, &targets)
             });
         }
     }
