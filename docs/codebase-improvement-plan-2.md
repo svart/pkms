@@ -66,11 +66,11 @@ refactor commits.
    Not done. `tasks/filter.rs` and older row/filter helpers in
    `commands/task_common.rs` still both exist.
 
-8. [ ] Improve test fixtures with a small builder.
+8. [x] Improve test fixtures with a small builder.
 
-   Partially done. `ResolvedConfig::for_test_db(...)` was added and adopted in
-   serve renderer tests. A broader `TestDb::new().note(...).task(...)` fixture
-   builder has not been added.
+   Done. `ResolvedConfig::for_test_db(...)` was added and adopted in serve
+   renderer tests. Integration tests also have a small chainable
+   `TestDb::new().note(...).task(...)` fixture builder.
 
 9. [ ] Keep binary tests for contracts, add library tests for logic.
 
@@ -81,7 +81,7 @@ refactor commits.
 ## Suggested Order
 
 1. [x] Add `lib.rs` and keep behavior identical.
-2. [ ] Add focused fixture builder in tests.
+2. [x] Add focused fixture builder in tests.
 3. [ ] Extract task provider modules.
 4. [ ] Extract task mutation/date logic and inject clock.
 5. [x] Split `serve.rs` with move-only commits.
@@ -96,6 +96,5 @@ refactor commits.
   do not drift.
 - Continue replacing the remaining thin-wrapper `Local::now()` calls in task
   code with explicit dates when the surrounding command logic is refactored.
-- Add a focused `TestDb` builder for smaller, clearer tests.
 - Move more pure command behavior behind typed `execute`/`render` boundaries
   when those commands are touched for feature work.

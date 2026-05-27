@@ -29,3 +29,20 @@ fn test_db_writes_focused_roam_fixtures() {
     assert!(status.success());
     assert_eq!(value["results"][0]["title"], "Focused Fixture");
 }
+
+#[test]
+fn test_db_builder_creates_note_and_task_fixtures() {
+    let db = TestDb::new()
+        .note(
+            "tasks.org",
+            "Task Fixtures",
+            "11111111-1111-4111-8111-111111111111",
+        )
+        .task("tasks.org", "TODO", "Exercise builder");
+
+    let (value, status) = db.run_json(&["task", "list"]);
+
+    assert!(status.success());
+    assert_eq!(value["items"][0]["title"], "Task Fixtures");
+    assert_eq!(value["items"][0]["heading_title"], "Exercise builder");
+}

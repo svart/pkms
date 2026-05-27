@@ -437,7 +437,11 @@ pub fn setup_clean_db() -> (tempfile::TempDir, PathBuf) {
 }
 
 pub fn db_write(root: &std::path::Path, name: &str, content: &str) {
-    fs::write(root.join("roam").join(name), content).unwrap();
+    let path = root.join("roam").join(name);
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).unwrap();
+    }
+    fs::write(path, content).unwrap();
 }
 
 pub fn normalize_snapshot(output: &str, root: &std::path::Path) -> String {
@@ -454,7 +458,17 @@ pub struct TestDb {
     root: PathBuf,
 }
 
+impl Default for TestDb {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TestDb {
+    pub fn new() -> Self {
+        Self::clean()
+    }
+
     pub fn fixture() -> Self {
         let db = Self::at_temp_root();
 
@@ -509,6 +523,31 @@ impl TestDb {
 
     pub fn write_roam(&self, name: &str, content: &str) {
         db_write(&self.root, name, content);
+    }
+
+    pub fn note(self, name: &str, title: &str, id: &str) -> Self {
+        self.write_roam(
+            name,
+            &format!(":PROPERTIES:\n:ID:       {id}\n:END:\n#+title: {title}\n"),
+        );
+        self
+    }
+
+    pub fn note_with_content(self, name: &str, content: &str) -> Self {
+        self.write_roam(name, content);
+        self
+    }
+
+    pub fn task(self, note_name: &str, state: &str, title: &str) -> Self {
+        use std::io::Write;
+
+        let path = self.root.join("roam").join(note_name);
+        let mut file = fs::OpenOptions::new()
+            .append(true)
+            .open(&path)
+            .unwrap_or_else(|err| panic!("Failed to open {}: {err}", path.display()));
+        writeln!(file, "\n* {state} {title}").unwrap();
+        self
     }
 
     pub fn run(&self, args: &[&str]) -> (String, String, ExitStatus) {
