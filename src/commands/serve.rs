@@ -5,7 +5,6 @@ use crate::output::OutputContext;
 use crate::parser::{
     DEADLINE_RE, HEADING_RE, Heading, LINK_RE, SCHEDULED_RE, parse_note, strip_org_links,
 };
-use crate::util;
 use anyhow::{Context, Result};
 use regex::Regex;
 use serde::Serialize;
@@ -13,62 +12,21 @@ use std::collections::BTreeMap;
 use std::fmt::Write as FmtWrite;
 use std::io::{self, BufRead, BufReader, Write};
 use std::net::{TcpListener, TcpStream};
-use std::path::{Path, PathBuf};
+#[cfg(test)]
+use std::path::PathBuf;
 use std::sync::LazyLock;
 use syntect::highlighting::{Theme, ThemeSet};
 use syntect::html::{ClassStyle, ClassedHTMLGenerator, css_for_theme_with_class_style};
 use syntect::parsing::{SyntaxReference, SyntaxSet};
 use syntect::util::LinesWithEndings;
 
+mod assets;
+
 static SYNTAX_SET: LazyLock<SyntaxSet> = LazyLock::new(SyntaxSet::load_defaults_newlines);
 static THEME_SET: LazyLock<ThemeSet> = LazyLock::new(ThemeSet::load_defaults);
 static PLAIN_URL_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r#"https?://[^\s<>"']+"#).expect("plain URL regex is valid"));
 const SYNTECT_CLASS_STYLE: ClassStyle = ClassStyle::SpacedPrefixed { prefix: "syn-" };
-
-struct ServedFont {
-    name: &'static str,
-    bytes: &'static [u8],
-    content_type: &'static str,
-}
-
-static SERVED_FONTS: &[ServedFont] = &[
-    ServedFont {
-        name: "Alegreya.ttf",
-        bytes: include_bytes!("serve_fonts/Alegreya.ttf"),
-        content_type: "font/ttf",
-    },
-    ServedFont {
-        name: "Alegreya-Italic.ttf",
-        bytes: include_bytes!("serve_fonts/Alegreya-Italic.ttf"),
-        content_type: "font/ttf",
-    },
-    ServedFont {
-        name: "AlegreyaSans-Regular.ttf",
-        bytes: include_bytes!("serve_fonts/AlegreyaSans-Regular.ttf"),
-        content_type: "font/ttf",
-    },
-    ServedFont {
-        name: "AlegreyaSans-Italic.ttf",
-        bytes: include_bytes!("serve_fonts/AlegreyaSans-Italic.ttf"),
-        content_type: "font/ttf",
-    },
-    ServedFont {
-        name: "AlegreyaSans-Bold.ttf",
-        bytes: include_bytes!("serve_fonts/AlegreyaSans-Bold.ttf"),
-        content_type: "font/ttf",
-    },
-    ServedFont {
-        name: "AlegreyaSans-BoldItalic.ttf",
-        bytes: include_bytes!("serve_fonts/AlegreyaSans-BoldItalic.ttf"),
-        content_type: "font/ttf",
-    },
-    ServedFont {
-        name: "FiraCode.ttf",
-        bytes: include_bytes!("serve_fonts/FiraCode.ttf"),
-        content_type: "font/ttf",
-    },
-];
 
 pub struct ServeOptions {
     pub target: String,
@@ -185,7 +143,7 @@ fn handle_connection(mut stream: TcpStream, state: &ServeState<'_>) -> Result<()
             _ => Ok(HttpResponse::method_not_allowed("Method not allowed")),
         }
     } else if let Some(font_name) = path.strip_prefix("/font/") {
-        Ok(font_response(font_name))
+        Ok(assets::font_response(font_name))
     } else {
         match path {
             "/" => render_response(state, query),
@@ -289,18 +247,20 @@ fn asset_response(state: &ServeState<'_>, query: Option<&str>) -> Result<HttpRes
     let note = state.graph.resolve_target(&note_uuid)?;
     let path = match kind.as_str() {
         "file" => resolve_file_link_path(&target, &note.path, state.config.resolved_db_root()),
-        "attachment" => {
-            resolve_existing_attachment(state.config.resolved_db_root(), &note.uuid, &target)
-        }
+        "attachment" => assets::resolve_existing_attachment(
+            state.config.resolved_db_root(),
+            &note.uuid,
+            &target,
+        ),
         _ => return Ok(HttpResponse::not_found("Unknown asset kind")),
     };
-    if !is_asset_allowed(&path, state.config.resolved_db_root()) || !path.is_file() {
+    if !assets::is_asset_allowed(&path, state.config.resolved_db_root()) || !path.is_file() {
         return Ok(HttpResponse::not_found("Asset not found"));
     }
     let body = std::fs::read(&path)?;
     Ok(HttpResponse {
         status: 200,
-        content_type: mime_type(&path),
+        content_type: assets::mime_type(&path),
         body,
     })
 }
@@ -316,39 +276,6 @@ fn open_response(
     let node = state.graph.resolve_target(&note_uuid)?;
     open::open_target(&state.graph, state.config, &node.uuid, editor, Some(1))?;
     Ok(HttpResponse::text(format!("Opened {}", node.title)))
-}
-
-fn font_response(name: &str) -> HttpResponse {
-    SERVED_FONTS
-        .iter()
-        .find(|font| font.name == name)
-        .map(|font| HttpResponse {
-            status: 200,
-            content_type: font.content_type,
-            body: font.bytes.to_vec(),
-        })
-        .unwrap_or_else(|| HttpResponse::not_found("Font not found"))
-}
-
-fn resolve_existing_attachment(db_root: &Path, uuid: &str, target: &str) -> PathBuf {
-    let bucketed = util::resolve_attachment_path(db_root, uuid, target);
-    if bucketed.exists() {
-        bucketed
-    } else {
-        db_root.join(".attach").join(uuid).join(target)
-    }
-}
-
-fn is_asset_allowed(path: &Path, db_root: &Path) -> bool {
-    let Ok(canonical_path) = std::fs::canonicalize(path) else {
-        return false;
-    };
-    if let Ok(canonical_root) = std::fs::canonicalize(db_root)
-        && canonical_path.starts_with(canonical_root)
-    {
-        return true;
-    }
-    dirs::home_dir().is_some_and(|home| canonical_path.starts_with(home))
 }
 
 fn split_target(target: &str) -> (&str, Option<&str>) {
@@ -1290,7 +1217,7 @@ fn render_link(
     if let Some(path) = target.strip_prefix("file:") {
         let resolved = resolve_file_link_path(path, &node.path, config.resolved_db_root());
         let href = asset_href(&node.uuid, "file", path);
-        if is_image_path(&resolved) {
+        if assets::is_image_path(&resolved) {
             return format!(
                 "<figure><img src=\"{href}\" alt=\"{}\"><figcaption>{}</figcaption></figure>",
                 escape_html(label),
@@ -1300,9 +1227,10 @@ fn render_link(
         return format!("<a href=\"{href}\">{}</a>", render_formatted_text(label));
     }
     if let Some(path) = target.strip_prefix("attachment:") {
-        let resolved = resolve_existing_attachment(config.resolved_db_root(), &node.uuid, path);
+        let resolved =
+            assets::resolve_existing_attachment(config.resolved_db_root(), &node.uuid, path);
         let href = asset_href(&node.uuid, "attachment", path);
-        if is_image_path(&resolved) {
+        if assets::is_image_path(&resolved) {
             return format!(
                 "<figure><img src=\"{href}\" alt=\"{}\"><figcaption>{}</figcaption></figure>",
                 escape_html(label),
@@ -1346,7 +1274,7 @@ fn render_image_link(
 ) -> Option<String> {
     if let Some(path) = target.strip_prefix("file:") {
         let resolved = resolve_file_link_path(path, &node.path, config.resolved_db_root());
-        if is_image_path(&resolved) {
+        if assets::is_image_path(&resolved) {
             return Some(render_image_figure(
                 &asset_href(&node.uuid, "file", path),
                 caption.or(desc).unwrap_or(target),
@@ -1354,8 +1282,9 @@ fn render_image_link(
         }
     }
     if let Some(path) = target.strip_prefix("attachment:") {
-        let resolved = resolve_existing_attachment(config.resolved_db_root(), &node.uuid, path);
-        if is_image_path(&resolved) {
+        let resolved =
+            assets::resolve_existing_attachment(config.resolved_db_root(), &node.uuid, path);
+        if assets::is_image_path(&resolved) {
             return Some(render_image_figure(
                 &asset_href(&node.uuid, "attachment", path),
                 caption.or(desc).unwrap_or(target),
@@ -1752,37 +1681,6 @@ fn percent_decode(text: &str) -> String {
     String::from_utf8_lossy(&decoded).to_string()
 }
 
-fn is_image_path(path: &Path) -> bool {
-    path.extension()
-        .and_then(|e| e.to_str())
-        .is_some_and(|ext| {
-            matches!(
-                ext.to_ascii_lowercase().as_str(),
-                "png" | "jpg" | "jpeg" | "gif" | "webp" | "svg"
-            )
-        })
-}
-
-fn mime_type(path: &Path) -> &'static str {
-    match path
-        .extension()
-        .and_then(|e| e.to_str())
-        .map(|e| e.to_ascii_lowercase())
-        .as_deref()
-    {
-        Some("png") => "image/png",
-        Some("jpg" | "jpeg") => "image/jpeg",
-        Some("gif") => "image/gif",
-        Some("webp") => "image/webp",
-        Some("svg") => "image/svg+xml",
-        Some("pdf") => "application/pdf",
-        Some("txt") => "text/plain; charset=utf-8",
-        Some("html") => "text/html; charset=utf-8",
-        Some("css") => "text/css; charset=utf-8",
-        _ => "application/octet-stream",
-    }
-}
-
 fn page_css() -> String {
     let mut css = include_str!("serve.css").to_string();
     css.push('\n');
@@ -2055,13 +1953,13 @@ mod tests {
 
     #[test]
     fn serves_bundled_font_assets_by_exact_name() {
-        let response = font_response("Alegreya.ttf");
+        let response = assets::font_response("Alegreya.ttf");
 
         assert_eq!(response.status, 200);
         assert_eq!(response.content_type, "font/ttf");
         assert!(response.body.len() > 100_000);
 
-        let missing = font_response("../serve.rs");
+        let missing = assets::font_response("../serve.rs");
 
         assert_eq!(missing.status, 404);
         assert_eq!(missing.content_type, "text/plain; charset=utf-8");
