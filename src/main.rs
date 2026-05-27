@@ -1,28 +1,13 @@
-mod app;
-mod cli;
-mod commands;
-mod config;
-mod corpus;
-mod discovery;
-#[cfg(feature = "embed")]
-mod embed;
-mod graph;
-mod input;
-mod logging;
-mod org_date;
-mod org_edit;
-mod output;
-mod parser;
-pub mod tasks;
-mod tokens;
-mod util;
-mod workspace;
-
 use anyhow::Result;
-use app::App;
 use clap::Parser;
-use cli::{Cli, Command, OutputFormat};
-use output::OutputContext;
+use pkms::app::{self, App};
+use pkms::cli::{Cli, Command, OutputFormat};
+use pkms::commands;
+use pkms::config;
+use pkms::input;
+use pkms::logging;
+use pkms::output::OutputContext;
+use pkms::tokens;
 use std::process::ExitCode;
 
 fn main() -> ExitCode {
