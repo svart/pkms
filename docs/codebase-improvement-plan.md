@@ -151,7 +151,8 @@ Phase 2 progress:
 
 - [x] Extract serve HTTP routing and response writing into
   `commands/serve/http.rs`.
-- [ ] Extract serve inline rendering and codec helpers.
+- [x] Extract serve inline rendering and codec helpers into
+  `commands/serve/inline.rs`.
 - [ ] Extract serve page shell and panels.
 - [ ] Extract serve org body rendering.
 - [ ] Extract serve syntax highlighting.
@@ -267,8 +268,8 @@ targeted extraction around modules that have become too dense.
    `commands/task/id_command.rs`.
 - [x] Extract serve HTTP routing and response writing into
    `commands/serve/http.rs`.
-- [ ] Extract serve inline rendering and codec helpers into
-   `commands/serve/inline.rs`.
+- [x] Extract serve inline rendering and codec helpers into
+  `commands/serve/inline.rs`.
 - [ ] Add a small test config builder used by unit tests that need
    `ResolvedConfig`.
 - [ ] Convert one narrow command, such as `path` or `query`, to an

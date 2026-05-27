@@ -1,4 +1,4 @@
-use super::{assets, percent_decode, render_note_html, render_preview_html};
+use super::{assets, inline::percent_decode, render_note_html, render_preview_html};
 use crate::commands::open;
 use crate::config::ResolvedConfig;
 use crate::graph::{Graph, resolve_file_link_path};
