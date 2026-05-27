@@ -130,34 +130,7 @@ fn run_pipe(producer_args: &[&str], consumer_args: &[&str]) -> (String, String, 
 }
 
 pub fn setup_db() -> (tempfile::TempDir, PathBuf) {
-    let dir = tempfile::tempdir().unwrap();
-    let root = dir.path().to_path_buf();
-
-    let roam = root.join("roam");
-    let common = roam.join("common");
-    let personal = roam.join("personal");
-    fs::create_dir_all(&common).unwrap();
-    fs::create_dir_all(&personal).unwrap();
-
-    write_linked_chain(&common);
-    write_orphan(&personal);
-    write_broken_link(&common);
-    write_tagged(&common);
-    write_aliased(&common);
-    write_headings(&personal);
-    write_file_links(&common);
-    write_attachment_links(&common);
-    write_duplicate_uuid(&personal);
-    write_categorized(&common);
-    write_bad_filetags(&personal);
-    write_daily_note(&personal);
-    write_daily_plan(&personal);
-    write_agenda(&common);
-    write_missing_agenda_tag(&common);
-    write_nested_todos(&common);
-    write_no_id_file(&root);
-
-    (dir, root)
+    TestDb::fixture().into_parts()
 }
 
 fn write_file(dir: &std::path::Path, name: &str, content: &str) {
@@ -455,17 +428,11 @@ fn write_no_id_file(root: &std::path::Path) {
 }
 
 pub fn setup_empty_db() -> (tempfile::TempDir, PathBuf) {
-    let dir = tempfile::tempdir().unwrap();
-    let root = dir.path().to_path_buf();
-    fs::create_dir_all(root.join("empty")).unwrap();
-    (dir, root)
+    TestDb::empty().into_parts()
 }
 
 pub fn setup_clean_db() -> (tempfile::TempDir, PathBuf) {
-    let dir = tempfile::tempdir().unwrap();
-    let root = dir.path().join("db");
-    fs::create_dir_all(root.join("roam")).unwrap();
-    (dir, root)
+    TestDb::clean().into_parts()
 }
 
 pub fn db_write(root: &std::path::Path, name: &str, content: &str) {
@@ -479,4 +446,71 @@ pub fn normalize_snapshot(output: &str, root: &std::path::Path) -> String {
 pub fn run_pipe_ndjson(producer_args: &[&str], consumer_args: &[&str]) -> (String, ExitStatus) {
     let (stdout, _stderr, status) = run_pipe(producer_args, consumer_args);
     (stdout, status)
+}
+
+pub struct TestDb {
+    dir: tempfile::TempDir,
+    root: PathBuf,
+}
+
+impl TestDb {
+    pub fn fixture() -> Self {
+        let db = Self::at_temp_root();
+
+        let common = db.root.join("roam/common");
+        let personal = db.root.join("roam/personal");
+        fs::create_dir_all(&common).unwrap();
+        fs::create_dir_all(&personal).unwrap();
+
+        write_linked_chain(&common);
+        write_orphan(&personal);
+        write_broken_link(&common);
+        write_tagged(&common);
+        write_aliased(&common);
+        write_headings(&personal);
+        write_file_links(&common);
+        write_attachment_links(&common);
+        write_duplicate_uuid(&personal);
+        write_categorized(&common);
+        write_bad_filetags(&personal);
+        write_daily_note(&personal);
+        write_daily_plan(&personal);
+        write_agenda(&common);
+        write_missing_agenda_tag(&common);
+        write_nested_todos(&common);
+        write_no_id_file(&db.root);
+
+        db
+    }
+
+    pub fn empty() -> Self {
+        let db = Self::at_temp_root();
+        fs::create_dir_all(db.root.join("empty")).unwrap();
+        db
+    }
+
+    pub fn clean() -> Self {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("db");
+        fs::create_dir_all(root.join("roam")).unwrap();
+        Self { dir, root }
+    }
+
+    fn at_temp_root() -> Self {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().to_path_buf();
+        Self { dir, root }
+    }
+
+    pub fn root(&self) -> &Path {
+        &self.root
+    }
+
+    pub fn write_roam(&self, name: &str, content: &str) {
+        db_write(&self.root, name, content);
+    }
+
+    pub fn into_parts(self) -> (tempfile::TempDir, PathBuf) {
+        (self.dir, self.root)
+    }
 }
