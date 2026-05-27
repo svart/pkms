@@ -1,12 +1,13 @@
 use crate::cli::OutputFormat;
 use crate::commands::task_common::*;
-use crate::commands::task_index::{TaskRecord, assign_canonical_ids, collect_agenda_records};
+use crate::commands::task_index::{TaskRecord, assign_canonical_ids, collect_agenda_records_on};
 use crate::config::ResolvedConfig;
 use crate::output::{Column, OutputContext};
+use crate::tasks::clock::TaskClock;
 use crate::tasks::filter::parse_text_filters;
 use crate::workspace::Workspace;
 use anyhow::Result;
-use chrono::{Local, NaiveDate};
+use chrono::NaiveDate;
 use serde::Serialize;
 
 impl RowItem for AgendaItem {
@@ -113,18 +114,15 @@ impl From<TaskRecord> for AgendaItem {
     }
 }
 
-pub fn run(config: &ResolvedConfig, ctx: &OutputContext, opts: &AgendaOptions) -> Result<()> {
-    run_on(config, ctx, opts, Local::now().date_naive())
-}
-
-fn run_on(
+pub fn run_with_clock(
     config: &ResolvedConfig,
     ctx: &OutputContext,
     opts: &AgendaOptions,
-    today_date: NaiveDate,
+    clock: TaskClock,
 ) -> Result<()> {
     let workspace = Workspace::load(config)?;
     let graph = &workspace.graph;
+    let today_date = clock.today;
 
     let date_filter = opts
         .date
@@ -141,11 +139,11 @@ fn run_on(
     let state_filters = parse_text_filters(opts.state.as_deref());
     let tags_filters = parse_text_filters(opts.tags.as_deref());
     let type_filters = parse_text_filters(opts.kind.as_deref());
-    let mut records = collect_agenda_records(
+    let mut records = collect_agenda_records_on(
         &workspace.corpus,
         &valid_states,
         &closed_states,
-        today_date,
+        clock,
         &state_filters,
         &tags_filters,
         &type_filters,

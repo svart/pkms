@@ -1,8 +1,9 @@
-use crate::commands::task_common::{extract_date, is_overdue};
+use crate::commands::task_common::{extract_date, is_overdue_on};
 use crate::config::ResolvedConfig;
 use crate::corpus::Corpus;
 use crate::graph::Graph;
 use crate::parser::{Heading, find_daily_file_date, strip_org_links};
+use crate::tasks::clock::TaskClock;
 use crate::tasks::filter::{
     TextFilter, matches_tag_filters, matches_text_filters, matches_type_filters,
 };
@@ -39,19 +40,41 @@ pub fn collect_todo_records(
     tags_filters: &[TextFilter],
     type_filters: &[TextFilter],
 ) -> Vec<TaskRecord> {
-    collect_records(corpus, |parsed, heading, _is_daily| {
-        heading
-            .todo_state
-            .as_ref()
-            .is_some_and(|s| valid_states.iter().any(|vs| vs.eq_ignore_ascii_case(s)))
-            && apply_common_filters(
-                parsed.filetags.iter().chain(heading.tags.iter()),
-                heading,
-                state_filters,
-                tags_filters,
-                type_filters,
-            )
-    })
+    collect_todo_records_on(
+        corpus,
+        valid_states,
+        state_filters,
+        tags_filters,
+        type_filters,
+        TaskClock::now(),
+    )
+}
+
+pub fn collect_todo_records_on(
+    corpus: &Corpus,
+    valid_states: &[String],
+    state_filters: &[TextFilter],
+    tags_filters: &[TextFilter],
+    type_filters: &[TextFilter],
+    clock: TaskClock,
+) -> Vec<TaskRecord> {
+    collect_records(
+        corpus,
+        |parsed, heading, _is_daily| {
+            heading
+                .todo_state
+                .as_ref()
+                .is_some_and(|s| valid_states.iter().any(|vs| vs.eq_ignore_ascii_case(s)))
+                && apply_common_filters(
+                    parsed.filetags.iter().chain(heading.tags.iter()),
+                    heading,
+                    state_filters,
+                    tags_filters,
+                    type_filters,
+                )
+        },
+        clock,
+    )
 }
 
 pub fn collect_agenda_records(
@@ -63,43 +86,67 @@ pub fn collect_agenda_records(
     tags_filters: &[TextFilter],
     type_filters: &[TextFilter],
 ) -> Vec<TaskRecord> {
-    collect_records(corpus, |parsed, heading, is_daily| {
-        let eligible = heading.scheduled.is_some()
-            || heading.deadline.is_some()
-            || (is_daily
-                && heading
-                    .todo_state
-                    .as_ref()
-                    .is_some_and(|s| valid_states.iter().any(|vs| vs.eq_ignore_ascii_case(s))));
+    collect_agenda_records_on(
+        corpus,
+        valid_states,
+        closed_states,
+        TaskClock::at_start_of_day(today),
+        state_filters,
+        tags_filters,
+        type_filters,
+    )
+}
 
-        if !eligible {
-            return false;
-        }
+pub fn collect_agenda_records_on(
+    corpus: &Corpus,
+    valid_states: &[String],
+    closed_states: &[String],
+    clock: TaskClock,
+    state_filters: &[TextFilter],
+    tags_filters: &[TextFilter],
+    type_filters: &[TextFilter],
+) -> Vec<TaskRecord> {
+    collect_records(
+        corpus,
+        |parsed, heading, is_daily| {
+            let eligible = heading.scheduled.is_some()
+                || heading.deadline.is_some()
+                || (is_daily
+                    && heading
+                        .todo_state
+                        .as_ref()
+                        .is_some_and(|s| valid_states.iter().any(|vs| vs.eq_ignore_ascii_case(s))));
 
-        if !closed_states.is_empty()
-            && let Some(ref todo_state) = heading.todo_state
-            && closed_states
-                .iter()
-                .any(|cs| cs.eq_ignore_ascii_case(todo_state))
-        {
-            return false;
-        }
+            if !eligible {
+                return false;
+            }
 
-        apply_common_filters(
-            parsed.filetags.iter().chain(heading.tags.iter()),
-            heading,
-            state_filters,
-            tags_filters,
-            type_filters,
-        )
-    })
+            if !closed_states.is_empty()
+                && let Some(ref todo_state) = heading.todo_state
+                && closed_states
+                    .iter()
+                    .any(|cs| cs.eq_ignore_ascii_case(todo_state))
+            {
+                return false;
+            }
+
+            apply_common_filters(
+                parsed.filetags.iter().chain(heading.tags.iter()),
+                heading,
+                state_filters,
+                tags_filters,
+                type_filters,
+            )
+        },
+        clock,
+    )
     .into_iter()
     .map(|mut record| {
         if record.is_daily_file && record.scheduled.is_none() && record.deadline.is_none() {
             record.is_overdue = record.daily_file_date.as_deref().is_some_and(|d| {
                 NaiveDate::parse_from_str(d, "%Y-%m-%d")
                     .ok()
-                    .is_some_and(|dt| dt < today)
+                    .is_some_and(|dt| dt < clock.today)
             });
         }
         record
@@ -124,6 +171,7 @@ pub fn assign_canonical_ids(config: &ResolvedConfig, graph: &Graph, records: &mu
 fn collect_records(
     corpus: &Corpus,
     mut include_heading: impl FnMut(&crate::parser::ParsedNote, &Heading, bool) -> bool,
+    clock: TaskClock,
 ) -> Vec<TaskRecord> {
     let mut items = Vec::new();
     for result in corpus.results() {
@@ -148,8 +196,8 @@ fn collect_records(
                 continue;
             }
 
-            let item_is_overdue =
-                is_overdue(heading.deadline.as_ref()) || is_overdue(heading.scheduled.as_ref());
+            let item_is_overdue = is_overdue_on(heading.deadline.as_ref(), clock)
+                || is_overdue_on(heading.scheduled.as_ref(), clock);
 
             items.push(TaskRecord {
                 id: 0,

@@ -1,5 +1,7 @@
 use anyhow::{Result, bail};
-use chrono::{Local, NaiveDate, NaiveDateTime};
+use chrono::{NaiveDate, NaiveDateTime};
+
+use crate::tasks::clock::TaskClock;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TaskAddSpec {
@@ -99,7 +101,7 @@ pub fn pkms_priority(value: &str) -> Result<char> {
 }
 
 pub fn parse_add_date_arg(name: &str, value: &str) -> Result<String> {
-    parse_add_date_arg_on(name, value, Local::now().date_naive())
+    parse_add_date_arg_on(name, value, TaskClock::now().today)
 }
 
 pub fn parse_add_date_arg_on(name: &str, value: &str, today: NaiveDate) -> Result<String> {
@@ -123,7 +125,7 @@ pub fn parse_add_date_arg_on(name: &str, value: &str, today: NaiveDate) -> Resul
 }
 
 pub fn validate_pkms_date_arg(name: &str, value: Option<&str>) -> Result<Option<String>> {
-    validate_pkms_date_arg_on(name, value, Local::now().date_naive())
+    validate_pkms_date_arg_on(name, value, TaskClock::now().today)
 }
 
 pub fn validate_pkms_date_arg_on(

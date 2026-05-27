@@ -1,6 +1,7 @@
 use crate::org_date::parse_org_date;
 use crate::output::{ALL_COLUMNS, Column, adaptive_column_widths};
-use chrono::{Local, Timelike};
+use crate::tasks::clock::TaskClock;
+use chrono::Timelike;
 use std::collections::HashSet;
 use tabled::builder::Builder;
 use tabled::settings::object::{Columns, Object, Rows};
@@ -25,6 +26,10 @@ pub fn extract_date(raw: Option<&String>) -> Option<String> {
 }
 
 pub fn is_overdue(raw: Option<&String>) -> bool {
+    is_overdue_on(raw, TaskClock::now())
+}
+
+pub fn is_overdue_on(raw: Option<&String>, clock: TaskClock) -> bool {
     let raw = match raw {
         Some(r) => r,
         None => return false,
@@ -33,16 +38,14 @@ pub fn is_overdue(raw: Option<&String>) -> bool {
         Some(d) => d,
         None => return false,
     };
-    let today = Local::now().date_naive();
     let compare_date = parsed.base_date_end.unwrap_or(parsed.base_date);
-    if compare_date < today {
+    if compare_date < clock.today {
         return true;
     }
-    if compare_date == today
+    if compare_date == clock.today
         && let Some(et) = parsed.time_end
     {
-        let now = Local::now().time();
-        return now > et;
+        return clock.now > et;
     }
     false
 }

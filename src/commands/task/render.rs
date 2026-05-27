@@ -5,7 +5,7 @@ use crate::tasks::filter::SourceSelection;
 use crate::tasks::model::{TaskItem, TaskSourceKind};
 use crate::tasks::provider::TaskMetadataRow;
 use anyhow::Result;
-use chrono::Local;
+use chrono::NaiveDate;
 use serde::Serialize;
 use tabled::builder::Builder;
 use tabled::settings::Style;
@@ -269,6 +269,7 @@ pub(super) fn print_agenda_task_items(
     mut items: Vec<TaskItem>,
     limit: Option<usize>,
     columns: Option<&[Column]>,
+    today: NaiveDate,
 ) -> Result<()> {
     let total = items.len();
     if let Some(limit) = limit {
@@ -276,7 +277,7 @@ pub(super) fn print_agenda_task_items(
     }
 
     match ctx.format {
-        OutputFormat::Text => print_agenda_task_table(&items, total, source, columns),
+        OutputFormat::Text => print_agenda_task_table(&items, total, source, columns, today),
         OutputFormat::Json => {
             #[derive(Serialize)]
             struct TaskListOutput {
@@ -313,8 +314,8 @@ fn print_agenda_task_table(
     total: usize,
     source: SourceSelection,
     columns: Option<&[Column]>,
+    today: NaiveDate,
 ) -> Result<()> {
-    let today = Local::now().date_naive();
     let mut overdue = Vec::new();
     let mut today_items = Vec::new();
     let mut upcoming = Vec::new();

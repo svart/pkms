@@ -1,15 +1,16 @@
 use crate::commands::task_index::TaskRecord;
 use crate::commands::task_index::{
-    assign_canonical_ids, collect_agenda_records, collect_todo_records,
+    assign_canonical_ids, collect_agenda_records_on, collect_todo_records_on,
 };
 use crate::config::ResolvedConfig;
 use crate::parser::find_daily_file_date;
+use crate::tasks::clock::TaskClock;
 use crate::tasks::id::TaskId;
 use crate::tasks::model::{TaskDate, TaskItem, TaskSourceKind, TaskStatus};
 use crate::tasks::pkms_edit;
 use crate::workspace::Workspace;
 use anyhow::{Context, Result};
-use chrono::{Local, NaiveDate};
+use chrono::NaiveDate;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
@@ -20,15 +21,20 @@ pub enum PkmsInboxTarget {
 }
 
 pub fn list_items(config: &ResolvedConfig) -> Result<Vec<TaskItem>> {
+    list_items_on(config, TaskClock::now())
+}
+
+pub fn list_items_on(config: &ResolvedConfig, clock: TaskClock) -> Result<Vec<TaskItem>> {
     let workspace = Workspace::load(config)?;
     let valid_states = config.todo_states();
     let no_filters = Vec::new();
-    let mut records = collect_todo_records(
+    let mut records = collect_todo_records_on(
         &workspace.corpus,
         &valid_states,
         &no_filters,
         &no_filters,
         &no_filters,
+        clock,
     );
     assign_canonical_ids(config, &workspace.graph, &mut records);
     Ok(records
@@ -38,11 +44,16 @@ pub fn list_items(config: &ResolvedConfig) -> Result<Vec<TaskItem>> {
 }
 
 pub fn collect_inbox_items(config: &ResolvedConfig) -> Result<Vec<TaskItem>> {
-    let target = resolve_inbox_target(config, false)?;
+    collect_inbox_items_on(config, TaskClock::now())
+}
+
+pub fn collect_inbox_items_on(config: &ResolvedConfig, clock: TaskClock) -> Result<Vec<TaskItem>> {
+    let target = resolve_inbox_target_on(config, false, clock.today)?;
     let workspace = Workspace::load(config)?;
     let graph = &workspace.graph;
     let valid_states = config.todo_states();
-    let mut records = collect_todo_records(&workspace.corpus, &valid_states, &[], &[], &[]);
+    let mut records =
+        collect_todo_records_on(&workspace.corpus, &valid_states, &[], &[], &[], clock);
     assign_canonical_ids(config, graph, &mut records);
 
     let records: Vec<_> = match target {
@@ -74,7 +85,7 @@ pub fn resolve_inbox_target(
     config: &ResolvedConfig,
     create_daily: bool,
 ) -> Result<PkmsInboxTarget> {
-    resolve_inbox_target_on(config, create_daily, Local::now().date_naive())
+    resolve_inbox_target_on(config, create_daily, TaskClock::now().today)
 }
 
 pub fn resolve_inbox_target_on(
@@ -199,10 +210,20 @@ pub fn find_task_item(
     path: &Path,
     line_number: usize,
 ) -> Result<Option<TaskItem>> {
+    find_task_item_on(config, path, line_number, TaskClock::now())
+}
+
+pub fn find_task_item_on(
+    config: &ResolvedConfig,
+    path: &Path,
+    line_number: usize,
+    clock: TaskClock,
+) -> Result<Option<TaskItem>> {
     let workspace = Workspace::load(config)?;
     let graph = &workspace.graph;
     let valid_states = config.todo_states();
-    let mut records = collect_todo_records(&workspace.corpus, &valid_states, &[], &[], &[]);
+    let mut records =
+        collect_todo_records_on(&workspace.corpus, &valid_states, &[], &[], &[], clock);
     assign_canonical_ids(config, graph, &mut records);
     Ok(records
         .into_iter()
@@ -229,7 +250,7 @@ pub fn agenda_items_for(
         week,
         overdue,
         upcoming,
-        Local::now().date_naive(),
+        TaskClock::now().today,
     )
 }
 
@@ -241,25 +262,43 @@ pub fn agenda_items_for_on(
     upcoming: bool,
     today: NaiveDate,
 ) -> Result<Vec<TaskItem>> {
+    agenda_items_for_clock(
+        config,
+        today_only,
+        week,
+        overdue,
+        upcoming,
+        TaskClock::at_start_of_day(today),
+    )
+}
+
+pub fn agenda_items_for_clock(
+    config: &ResolvedConfig,
+    today_only: bool,
+    week: bool,
+    overdue: bool,
+    upcoming: bool,
+    clock: TaskClock,
+) -> Result<Vec<TaskItem>> {
     let workspace = Workspace::load(config)?;
     let valid_states = config.todo_states();
     let closed_states = config.closed_todo_states();
     let no_filters = Vec::new();
-    let mut records = collect_agenda_records(
+    let mut records = collect_agenda_records_on(
         &workspace.corpus,
         &valid_states,
         &closed_states,
-        today,
+        clock,
         &no_filters,
         &no_filters,
         &no_filters,
     );
 
     if week {
-        let cutoff = today + chrono::Duration::days(7);
+        let cutoff = clock.today + chrono::Duration::days(7);
         records.retain(|item| item_date(item).is_some_and(|date| date <= cutoff));
     } else if today_only {
-        records.retain(|item| item_date(item).is_some_and(|date| date == today));
+        records.retain(|item| item_date(item).is_some_and(|date| date == clock.today));
     }
 
     if overdue {
@@ -267,7 +306,9 @@ pub fn agenda_items_for_on(
     }
 
     if upcoming {
-        records.retain(|item| !item.is_overdue && item_date(item).is_some_and(|date| date > today));
+        records.retain(|item| {
+            !item.is_overdue && item_date(item).is_some_and(|date| date > clock.today)
+        });
     }
 
     assign_canonical_ids(config, &workspace.graph, &mut records);

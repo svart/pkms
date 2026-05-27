@@ -44,13 +44,12 @@ refactor commits.
    `tasks/pkms_mutation.rs`, and Todoist provider API/metadata routing lives in
    `tasks/todoist_provider.rs`.
 
-5. [ ] Inject time where behavior depends on `today`.
+5. [x] Inject time where behavior depends on `today`.
 
-   Partially done. `task agenda` captures one `today` value and threads it
-   through `run_on(...)`. Task provider queries, source-neutral filter
-   application, and PKMS task-add daily/date handling also receive an explicit
-   date from the command path. Some task paths still call `Local::now()`
-   directly where they are thin CLI wrappers.
+   Done. Task paths use `TaskClock` captured at the command boundary and pass
+   it through task indexing, providers, source-neutral filters, agenda grouping,
+   task-add date parsing, daily inbox resolution, and mutation reloads. Direct
+   task clock access is centralized in `tasks/clock.rs`.
 
 6. [x] Split `serve.rs` by responsibility.
 
@@ -86,15 +85,13 @@ refactor commits.
 1. [x] Add `lib.rs` and keep behavior identical.
 2. [x] Add focused fixture builder in tests.
 3. [x] Extract task provider modules.
-4. [ ] Extract task mutation/date logic and inject clock.
+4. [x] Extract task mutation/date logic and inject clock.
 5. [x] Split `serve.rs` with move-only commits.
 6. [x] Convert one command, `path`, to typed output as the model.
 7. [ ] Apply the typed-output pattern as commands are touched for features.
 
 ## Not Yet Done
 
-- Continue replacing the remaining thin-wrapper `Local::now()` calls in task
-  code with explicit dates when the surrounding command logic is refactored.
 - Move more pure command behavior behind typed `execute`/`render` boundaries
   when those commands are touched for feature work; `path` and `orphans` are the
   current examples.

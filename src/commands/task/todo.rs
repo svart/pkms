@@ -1,9 +1,10 @@
 use crate::cli::OutputFormat;
 use crate::commands::task_common::*;
-use crate::commands::task_index::{TaskRecord, assign_canonical_ids, collect_todo_records};
+use crate::commands::task_index::{TaskRecord, assign_canonical_ids, collect_todo_records_on};
 use crate::config::ResolvedConfig;
 use crate::org_date::parse_org_date;
 use crate::output::{Column, OutputContext};
+use crate::tasks::clock::TaskClock;
 use crate::tasks::filter::parse_text_filters;
 use crate::tasks::scope::ResolvedScope;
 use crate::workspace::Workspace;
@@ -139,7 +140,12 @@ fn item_datetimes(item: &TodoItem) -> Vec<NaiveDateTime> {
     result
 }
 
-pub fn run(config: &ResolvedConfig, ctx: &OutputContext, opts: &TodoOptions) -> Result<()> {
+pub fn run_on(
+    config: &ResolvedConfig,
+    ctx: &OutputContext,
+    opts: &TodoOptions,
+    clock: TaskClock,
+) -> Result<()> {
     let workspace = Workspace::load(config)?;
     let graph = &workspace.graph;
 
@@ -148,12 +154,13 @@ pub fn run(config: &ResolvedConfig, ctx: &OutputContext, opts: &TodoOptions) -> 
     let tags_filters = parse_text_filters(opts.tags.as_deref());
     let type_filters = parse_text_filters(opts.kind.as_deref());
 
-    let mut records = collect_todo_records(
+    let mut records = collect_todo_records_on(
         &workspace.corpus,
         &valid_states,
         &state_filters,
         &tags_filters,
         &type_filters,
+        clock,
     );
     assign_canonical_ids(config, graph, &mut records);
     let mut items: Vec<TodoItem> = records.into_iter().map(TodoItem::from).collect();

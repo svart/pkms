@@ -11,8 +11,9 @@ use crate::config::{ColumnSource, ColumnView, ResolvedConfig};
 use crate::input;
 use crate::output::{Column, OutputContext};
 use crate::tasks::add::{
-    TaskAddSpec, org_date, parse_add_date_arg, pkms_priority, validate_pkms_date_arg_on,
+    TaskAddSpec, org_date, parse_add_date_arg_on, pkms_priority, validate_pkms_date_arg_on,
 };
+use crate::tasks::clock::TaskClock;
 use crate::tasks::filter::{
     SourceSelection, TaskFilterContext, TaskFilterCriteria, parse_task_filters,
 };
@@ -25,7 +26,7 @@ use crate::tasks::scope::ResolvedScope;
 use crate::util;
 use crate::workspace::Workspace;
 use anyhow::{Context, Result, bail};
-use chrono::{Local, NaiveDate};
+use chrono::NaiveDate;
 #[cfg(feature = "todoist")]
 use serde::Serialize;
 use std::path::Path;
@@ -113,6 +114,7 @@ fn run_task_list(
         has_criteria = filters.has_criteria(),
         "running task list"
     );
+    let clock = TaskClock::now();
     let scope = task_scope(config, args.from_stdin, &filters.criteria.scope)?;
     if args.group.is_some() && !matches!(filters.source, SourceSelection::Pkms) {
         bail!("task list --group is available only for source:pkms");
@@ -129,7 +131,7 @@ fn run_task_list(
             ColumnView::Tasks,
             args.table.columns.as_deref(),
         )?;
-        return todo::run(
+        return todo::run_on(
             config,
             ctx,
             &todo::TodoOptions {
@@ -146,12 +148,12 @@ fn run_task_list(
                 line_sep: args.table.line_sep,
                 columns,
             },
+            clock,
         );
     }
 
-    let today = Local::now().date_naive();
-    let mut items = providers::collect_task_items(config, &filters, TaskListView::All, today)?;
-    apply_task_filter_criteria_on(config, &mut items, &filters.criteria, today)?;
+    let mut items = providers::collect_task_items(config, &filters, TaskListView::All, clock)?;
+    apply_task_filter_criteria_on(config, &mut items, &filters.criteria, clock.today)?;
     sort_task_items(&mut items, args.sort.as_deref().unwrap_or("priority"))?;
     let columns = resolve_task_table_columns(
         config,
@@ -179,8 +181,8 @@ fn run_shortcut(
     args: &TaskShortcutArgs,
     kind: ShortcutKind,
 ) -> Result<()> {
-    let today = Local::now().date_naive();
-    let mut items = collect_shortcut_items_on(config, &args.filters, kind, today)?;
+    let clock = TaskClock::now();
+    let mut items = collect_shortcut_items_on(config, &args.filters, kind, clock)?;
     let source = shortcut_display_source(&args.filters)?;
     sort_task_items(&mut items, "priority")?;
     let columns = resolve_task_table_columns(
@@ -197,14 +199,14 @@ fn run_upcoming(
     ctx: &OutputContext,
     args: &TaskUpcomingArgs,
 ) -> Result<()> {
-    let today = Local::now().date_naive();
+    let clock = TaskClock::now();
     let mut items = collect_shortcut_items_on(
         config,
         &args.filters,
         ShortcutKind::Upcoming {
             days: args.days.max(0),
         },
-        today,
+        clock,
     )?;
     let source = shortcut_display_source(&args.filters)?;
     sort_task_items(&mut items, "priority")?;
@@ -257,12 +259,12 @@ fn collect_shortcut_items_on(
     config: &ResolvedConfig,
     raw_filters: &[String],
     kind: ShortcutKind,
-    today: NaiveDate,
+    clock: TaskClock,
 ) -> Result<Vec<TaskItem>> {
     let filters = parse_task_filters(raw_filters)?;
     let mut items =
-        providers::collect_task_items(config, &filters, shortcut_task_view(kind), today)?;
-    apply_task_filter_criteria_on(config, &mut items, &filters.criteria, today)?;
+        providers::collect_task_items(config, &filters, shortcut_task_view(kind), clock)?;
+    apply_task_filter_criteria_on(config, &mut items, &filters.criteria, clock.today)?;
     Ok(items)
 }
 
@@ -349,6 +351,7 @@ fn run_agenda(config: &ResolvedConfig, ctx: &OutputContext, args: &TaskAgendaArg
         has_criteria = filters.has_criteria(),
         "running task agenda"
     );
+    let clock = TaskClock::now();
     if matches!(filters.source, SourceSelection::Pkms) && !filters.has_criteria() {
         let columns = resolve_task_columns(
             config,
@@ -356,7 +359,7 @@ fn run_agenda(config: &ResolvedConfig, ctx: &OutputContext, args: &TaskAgendaArg
             ColumnView::Agenda,
             args.table.columns.as_deref(),
         )?;
-        return agenda::run(
+        return agenda::run_with_clock(
             config,
             ctx,
             &agenda::AgendaOptions {
@@ -374,12 +377,12 @@ fn run_agenda(config: &ResolvedConfig, ctx: &OutputContext, args: &TaskAgendaArg
                 line_sep: args.table.line_sep,
                 columns,
             },
+            clock,
         );
     }
 
-    let today = Local::now().date_naive();
-    let mut items = providers::collect_task_items(config, &filters, TaskListView::Agenda, today)?;
-    apply_task_filter_criteria_on(config, &mut items, &filters.criteria, today)?;
+    let mut items = providers::collect_task_items(config, &filters, TaskListView::Agenda, clock)?;
+    apply_task_filter_criteria_on(config, &mut items, &filters.criteria, clock.today)?;
     sort_task_items(&mut items, args.sort.as_deref().unwrap_or("date,priority"))?;
     let columns = resolve_task_table_columns(
         config,
@@ -387,7 +390,14 @@ fn run_agenda(config: &ResolvedConfig, ctx: &OutputContext, args: &TaskAgendaArg
         ColumnView::Agenda,
         args.table.columns.as_deref(),
     )?;
-    render::print_agenda_task_items(ctx, filters.source, items, args.limit, columns.as_deref())
+    render::print_agenda_task_items(
+        ctx,
+        filters.source,
+        items,
+        args.limit,
+        columns.as_deref(),
+        clock.today,
+    )
 }
 
 pub(super) fn run_show(
@@ -537,11 +547,12 @@ pub(super) fn run_done(
 
 fn run_add(config: &ResolvedConfig, ctx: &OutputContext, args: &TaskAddArgs) -> Result<()> {
     let spec = TaskAddSpec::parse(&args.text)?;
+    let clock = TaskClock::now();
     if spec.source.eq_ignore_ascii_case("pkms") {
-        return add_pkms_task(config, ctx, &spec);
+        return add_pkms_task(config, ctx, &spec, clock);
     }
     if spec.source.eq_ignore_ascii_case("todoist") {
-        return add_todoist_task(config, ctx, &spec);
+        return add_todoist_task(config, ctx, &spec, clock);
     }
     bail!(
         "Unknown task source '{}'. Use pkms or todoist.",
@@ -556,9 +567,11 @@ pub(super) fn run_postpone(
 ) -> Result<()> {
     match args.id.parse::<TaskId>()? {
         TaskId::Pkms(canonical_id) => {
-            postpone_pkms_recurring_task(config, ctx, canonical_id, &args.to)
+            postpone_pkms_recurring_task(config, ctx, canonical_id, &args.to, TaskClock::now())
         }
-        TaskId::Todoist(id) => postpone_todoist_recurring_task(config, ctx, &id, &args.to),
+        TaskId::Todoist(id) => {
+            postpone_todoist_recurring_task(config, ctx, &id, &args.to, TaskClock::now())
+        }
         TaskId::External { source, .. } => unsupported_task_source(&source),
     }
 }
@@ -568,6 +581,7 @@ pub(super) fn run_schedule(
     ctx: &OutputContext,
     args: &TaskScheduleArgs,
 ) -> Result<()> {
+    let clock = TaskClock::now();
     match args.id.parse::<TaskId>()? {
         TaskId::Pkms(canonical_id) => set_pkms_task_planning(
             config,
@@ -575,11 +589,11 @@ pub(super) fn run_schedule(
             canonical_id,
             PlanningKind::Scheduled,
             &args.due,
-            "schedule",
-            "unschedule",
+            ("schedule", "unschedule"),
+            clock,
         ),
         TaskId::Todoist(id) => {
-            let due = mutation_date_value(&args.due)?;
+            let due = mutation_date_value(&args.due, clock.today)?;
             mutate_todoist_task(
                 config,
                 ctx,
@@ -601,6 +615,7 @@ pub(super) fn run_deadline(
     ctx: &OutputContext,
     args: &TaskDeadlineArgs,
 ) -> Result<()> {
+    let clock = TaskClock::now();
     match args.id.parse::<TaskId>()? {
         TaskId::Pkms(canonical_id) => set_pkms_task_planning(
             config,
@@ -608,11 +623,11 @@ pub(super) fn run_deadline(
             canonical_id,
             PlanningKind::Deadline,
             &args.deadline,
-            "deadline",
-            "clear-deadline",
+            ("deadline", "clear-deadline"),
+            clock,
         ),
         TaskId::Todoist(id) => {
-            let deadline = mutation_date_value(&args.deadline)?;
+            let deadline = mutation_date_value(&args.deadline, clock.today)?;
             mutate_todoist_task(
                 config,
                 ctx,
@@ -722,11 +737,15 @@ fn canonical_state(config: &ResolvedConfig, requested_state: &str) -> Result<Str
         })
 }
 
-fn add_pkms_task(config: &ResolvedConfig, ctx: &OutputContext, spec: &TaskAddSpec) -> Result<()> {
-    let today = Local::now().date_naive();
+fn add_pkms_task(
+    config: &ResolvedConfig,
+    ctx: &OutputContext,
+    spec: &TaskAddSpec,
+    clock: TaskClock,
+) -> Result<()> {
     let inbox_target = match spec.note.as_deref() {
         Some(note) => pkms::resolve_note_task_target(config, note)?,
-        None => pkms::resolve_inbox_target_on(config, true, today)?,
+        None => pkms::resolve_inbox_target_on(config, true, clock.today)?,
     };
     let title = spec
         .title
@@ -759,8 +778,8 @@ fn add_pkms_task(config: &ResolvedConfig, ctx: &OutputContext, spec: &TaskAddSpe
         PkmsInboxTarget::Daily { .. } => "**",
     };
     let mut entry = format!("{level} {state}{priority} {title}{tags}\n");
-    let due = validate_pkms_date_arg_on("due", spec.due.as_deref(), today)?;
-    let deadline = validate_pkms_date_arg_on("deadline", spec.deadline.as_deref(), today)?;
+    let due = validate_pkms_date_arg_on("due", spec.due.as_deref(), clock.today)?;
+    let deadline = validate_pkms_date_arg_on("deadline", spec.deadline.as_deref(), clock.today)?;
     if due.is_some() || deadline.is_some() {
         let mut planning = Vec::new();
         if let Some(due) = due {
@@ -783,12 +802,13 @@ fn add_pkms_task(config: &ResolvedConfig, ctx: &OutputContext, spec: &TaskAddSpe
     }
 
     let (inbox_path, line_number) = pkms::append_inbox_entry(&inbox_target, &entry)?;
-    let item = pkms::find_task_item(config, &inbox_path, line_number)?.with_context(|| {
-        format!(
-            "Created task but could not reload it from {}",
-            inbox_path.display()
-        )
-    })?;
+    let item =
+        pkms::find_task_item_on(config, &inbox_path, line_number, clock)?.with_context(|| {
+            format!(
+                "Created task but could not reload it from {}",
+                inbox_path.display()
+            )
+        })?;
     render::print_add_output(ctx, item)
 }
 
@@ -798,27 +818,24 @@ fn set_pkms_task_planning(
     canonical_id: usize,
     kind: PlanningKind,
     value: &str,
-    set_action: &'static str,
-    clear_action: &'static str,
+    actions: (&'static str, &'static str),
+    clock: TaskClock,
 ) -> Result<()> {
     let date = if value.eq_ignore_ascii_case("none") {
         None
     } else {
-        Some(parse_mutation_due_date(value)?)
+        Some(parse_mutation_due_date(value, clock.today)?)
     };
     let graph = crate::graph::Graph::load(config)?;
     let (path, line_number) = graph.resolve_canonical_task_id(config, canonical_id)?;
     pkms_mutation::update_heading_planning_date(&path, line_number, kind, date.as_deref())?;
-    let item = pkms::find_task_item(config, Path::new(&path), line_number)?.with_context(|| {
-        format!("Changed task but could not reload it from {path}:{line_number}")
-    })?;
+    let item = pkms::find_task_item_on(config, Path::new(&path), line_number, clock)?
+        .with_context(|| {
+            format!("Changed task but could not reload it from {path}:{line_number}")
+        })?;
     render::print_mutation_output(
         ctx,
-        if date.is_some() {
-            set_action
-        } else {
-            clear_action
-        },
+        if date.is_some() { actions.0 } else { actions.1 },
         item,
     )
 }
@@ -828,14 +845,16 @@ fn postpone_pkms_recurring_task(
     ctx: &OutputContext,
     canonical_id: usize,
     to: &str,
+    clock: TaskClock,
 ) -> Result<()> {
-    let date = parse_mutation_due_date(to)?;
+    let date = parse_mutation_due_date(to, clock.today)?;
     let graph = crate::graph::Graph::load(config)?;
     let (path, line_number) = graph.resolve_canonical_task_id(config, canonical_id)?;
     pkms_mutation::update_recurring_planning_date(&path, line_number, &date)?;
-    let item = pkms::find_task_item(config, Path::new(&path), line_number)?.with_context(|| {
-        format!("Changed task but could not reload it from {path}:{line_number}")
-    })?;
+    let item = pkms::find_task_item_on(config, Path::new(&path), line_number, clock)?
+        .with_context(|| {
+            format!("Changed task but could not reload it from {path}:{line_number}")
+        })?;
     render::print_mutation_output(ctx, "postpone", item)
 }
 
@@ -844,12 +863,13 @@ fn add_todoist_task(
     config: &ResolvedConfig,
     ctx: &OutputContext,
     spec: &TaskAddSpec,
+    clock: TaskClock,
 ) -> Result<()> {
     if spec.note.is_some() {
         bail!("note is available only for PKMS task creation.");
     }
     if is_structured_add(spec) {
-        return create_structured_todoist_task(config, ctx, spec);
+        return create_structured_todoist_task(config, ctx, spec, clock);
     }
     quick_add_todoist_task(config, ctx, spec)
 }
@@ -859,6 +879,7 @@ fn add_todoist_task(
     _config: &ResolvedConfig,
     _ctx: &OutputContext,
     _spec: &TaskAddSpec,
+    _clock: TaskClock,
 ) -> Result<()> {
     bail!("Todoist support is not available in this build. Rebuild with --features todoist.")
 }
@@ -878,6 +899,7 @@ fn create_structured_todoist_task(
     config: &ResolvedConfig,
     ctx: &OutputContext,
     spec: &TaskAddSpec,
+    clock: TaskClock,
 ) -> Result<()> {
     if spec.title.is_some() && spec.text.is_some() {
         bail!("Structured Todoist task creation uses title: or positional text, not both.");
@@ -889,8 +911,8 @@ fn create_structured_todoist_task(
         .filter(|title| !title.trim().is_empty())
         .ok_or_else(|| anyhow::anyhow!("Structured Todoist task creation requires title:"))?;
     let description = spec.description.clone();
-    let due_date = validate_date_arg("due", spec.due.as_deref())?;
-    let deadline_date = validate_date_arg("deadline", spec.deadline.as_deref())?;
+    let due_date = validate_date_arg("due", spec.due.as_deref(), clock.today)?;
+    let deadline_date = validate_date_arg("deadline", spec.deadline.as_deref(), clock.today)?;
     let priority = spec
         .priority
         .as_deref()
@@ -970,6 +992,7 @@ fn postpone_todoist_recurring_task(
     ctx: &OutputContext,
     id: &str,
     to: &str,
+    clock: TaskClock,
 ) -> Result<()> {
     let token = crate::tasks::todoist::ensure_enabled(config)?;
     let client =
@@ -985,7 +1008,7 @@ fn postpone_todoist_recurring_task(
     }
     client.update_task(
         id,
-        &serde_json::json!({ "due_date": parse_mutation_due_date(to)? }),
+        &serde_json::json!({ "due_date": parse_mutation_due_date(to, clock.today)? }),
     )?;
     let task = client.get_task(id)?;
     let metadata = todoist_metadata_for_task(&client, &task)?;
@@ -1000,6 +1023,7 @@ fn postpone_todoist_recurring_task(
     _ctx: &OutputContext,
     _id: &str,
     _to: &str,
+    _clock: TaskClock,
 ) -> Result<()> {
     bail!("Todoist support is not available in this build. Rebuild with --features todoist.")
 }
@@ -1042,21 +1066,23 @@ fn todoist_created_task_id(response: &serde_json::Value) -> Result<String> {
 }
 
 #[cfg(feature = "todoist")]
-fn validate_date_arg(name: &str, value: Option<&str>) -> Result<Option<String>> {
+fn validate_date_arg(name: &str, value: Option<&str>, today: NaiveDate) -> Result<Option<String>> {
     value
-        .map(|value| parse_add_date_arg(name, value))
+        .map(|value| parse_add_date_arg_on(name, value, today))
         .transpose()
 }
 
-fn parse_mutation_due_date(value: &str) -> Result<String> {
-    parse_add_date_arg("due", value)
+fn parse_mutation_due_date(value: &str, today: NaiveDate) -> Result<String> {
+    parse_add_date_arg_on("due", value, today)
 }
 
-fn mutation_date_value(value: &str) -> Result<serde_json::Value> {
+fn mutation_date_value(value: &str, today: NaiveDate) -> Result<serde_json::Value> {
     if value.eq_ignore_ascii_case("none") {
         Ok(serde_json::Value::Null)
     } else {
-        Ok(serde_json::Value::String(parse_mutation_due_date(value)?))
+        Ok(serde_json::Value::String(parse_mutation_due_date(
+            value, today,
+        )?))
     }
 }
 
