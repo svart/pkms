@@ -397,7 +397,7 @@ fn write_headers(
 
 fn render_note_html(graph: &Graph, config: &ResolvedConfig, node: &Node, content: &str) -> String {
     let body = render_org_body(graph, config, node, content);
-    let contents = render_contents_panel(content);
+    let contents = render_contents_panel(config, content);
     let backlinks = render_backlinks_panel(graph, node);
     let tags = render_tag_list("Note tags", &node.filetags, "note-tags");
     let title = escape_html(&node.title);
@@ -461,24 +461,33 @@ struct OutlineHeading {
     title: String,
 }
 
-fn collect_outline_headings(content: &str) -> Vec<OutlineHeading> {
+fn collect_outline_headings(config: &ResolvedConfig, content: &str) -> Vec<OutlineHeading> {
     content
         .lines()
         .enumerate()
         .filter_map(|(idx, line)| {
             let cap = HEADING_RE.captures(line)?;
+            let raw_todo = cap.get(2).map(|m| m.as_str());
+            let todo = raw_todo
+                .filter(|state| is_configured_todo_state(config, state))
+                .map(std::string::ToString::to_string);
+            let title = heading_title_with_unconfigured_todo(
+                raw_todo.filter(|_| todo.is_none()),
+                cap.get(3).map(|m| m.as_str()),
+                cap.get(4).map_or("", |m| m.as_str()),
+            );
             Some(OutlineHeading {
                 level: cap[1].len(),
                 line_number: idx + 1,
-                todo: cap.get(2).map(|m| m.as_str().to_string()),
-                title: cap.get(4).map_or("", |m| m.as_str()).to_string(),
+                todo,
+                title,
             })
         })
         .collect()
 }
 
-fn render_contents_panel(content: &str) -> String {
-    let headings = collect_outline_headings(content);
+fn render_contents_panel(config: &ResolvedConfig, content: &str) -> String {
+    let headings = collect_outline_headings(config, content);
     let mut html = String::from(
         "<details class=\"side-panel contents-panel\" open>\n<summary>Contents</summary>\n",
     );
@@ -772,8 +781,15 @@ fn render_org_body(graph: &Graph, config: &ResolvedConfig, node: &Node, content:
             close_lists(&mut html, &mut list_stack);
             pending_caption = None;
             let level = cap[1].len().saturating_add(1).min(6);
-            let todo = cap.get(2).map(|m| m.as_str()).unwrap_or_default();
-            let title = cap.get(4).map_or("", |m| m.as_str());
+            let raw_todo = cap.get(2).map(|m| m.as_str());
+            let todo = raw_todo
+                .filter(|state| is_configured_todo_state(config, state))
+                .unwrap_or_default();
+            let title = heading_title_with_unconfigured_todo(
+                raw_todo.filter(|_| todo.is_empty()),
+                cap.get(3).map(|m| m.as_str()),
+                cap.get(4).map_or("", |m| m.as_str()),
+            );
             let heading = headings_by_line.get(&(i + 1)).copied();
             let anchor = heading_anchor(i + 1);
             if is_closed_todo_state(config, todo) {
@@ -790,7 +806,7 @@ fn render_org_body(graph: &Graph, config: &ResolvedConfig, node: &Node, content:
                     escape_html(todo)
                 ));
             }
-            html.push_str(&render_inline(graph, config, node, title));
+            html.push_str(&render_inline(graph, config, node, &title));
             if let Some(heading) = heading {
                 html.push_str(&render_heading_tags(&heading.tags));
             }
@@ -1154,6 +1170,34 @@ fn is_closed_todo_state(config: &ResolvedConfig, state: &str) -> bool {
             .any(|closed| closed.eq_ignore_ascii_case(state))
 }
 
+fn is_configured_todo_state(config: &ResolvedConfig, state: &str) -> bool {
+    !state.is_empty()
+        && (config
+            .open_todo_states()
+            .iter()
+            .any(|open| open.eq_ignore_ascii_case(state))
+            || is_closed_todo_state(config, state))
+}
+
+fn heading_title_with_unconfigured_todo(
+    raw_todo: Option<&str>,
+    priority: Option<&str>,
+    title: &str,
+) -> String {
+    let Some(raw_todo) = raw_todo else {
+        return title.to_string();
+    };
+    let mut restored = raw_todo.to_string();
+    if let Some(priority) = priority {
+        let _ = write!(restored, " [#{priority}]");
+    }
+    if !title.is_empty() {
+        restored.push(' ');
+        restored.push_str(title);
+    }
+    restored
+}
+
 fn render_inline(graph: &Graph, config: &ResolvedConfig, node: &Node, text: &str) -> String {
     let mut html = String::new();
     let mut last = 0;
@@ -1370,10 +1414,10 @@ fn render_katex(input: &str, display_mode: bool) -> String {
 
 fn render_org_markup(text: &str) -> String {
     let Some((start, end, style)) = find_emphasis(text) else {
-        return escape_html(text);
+        return render_mentions(text);
     };
     let mut html = String::new();
-    html.push_str(&escape_html(&text[..start]));
+    html.push_str(&render_mentions(&text[..start]));
     let inner_start = start + style.delimiter().len_utf8();
     let inner = &text[inner_start..end];
     match style {
@@ -1412,6 +1456,56 @@ fn render_org_markup(text: &str) -> String {
         &text[end + style.delimiter().len_utf8()..],
     ));
     html
+}
+
+fn render_mentions(text: &str) -> String {
+    let mut html = String::new();
+    let mut last = 0;
+    for (start, _) in text.match_indices('@') {
+        if !is_valid_mention_start(text, start) {
+            continue;
+        }
+        let end = mention_end(text, start + '@'.len_utf8());
+        if end == start + '@'.len_utf8() {
+            continue;
+        }
+        html.push_str(&escape_html(&text[last..start]));
+        html.push_str("<code class=\"inline-code code-mention\">");
+        html.push_str(&escape_html(&text[start..end]));
+        html.push_str("</code>");
+        last = end;
+    }
+    html.push_str(&escape_html(&text[last..]));
+    html
+}
+
+fn is_valid_mention_start(text: &str, start: usize) -> bool {
+    let before = text[..start].chars().next_back();
+    let after = text[start + '@'.len_utf8()..].chars().next();
+    before.is_none_or(is_mention_boundary) && after.is_some_and(is_mention_char)
+}
+
+fn mention_end(text: &str, start: usize) -> usize {
+    let mut end = start;
+    for (offset, c) in text[start..].char_indices() {
+        if !is_mention_char(c) {
+            break;
+        }
+        end = start + offset + c.len_utf8();
+    }
+    end
+}
+
+fn is_mention_char(c: char) -> bool {
+    c.is_alphanumeric() || c == '_' || c == '-'
+}
+
+fn is_mention_boundary(c: char) -> bool {
+    c.is_whitespace()
+        || matches!(
+            c,
+            '(' | '[' | '{' | '<' | '\'' | '"' | ',' | ';' | ':' | '!' | '?'
+        )
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -2084,6 +2178,58 @@ Body.
     }
 
     #[test]
+    fn renders_only_configured_todo_states_as_todo_badges() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().to_path_buf();
+        let roam = root.join("roam");
+        fs::create_dir_all(&roam).unwrap();
+        fs::write(
+            roam.join("a.org"),
+            r#":PROPERTIES:
+:ID:       aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa
+:END:
+#+title: Alpha
+
+* WAITING Plain heading
+* PROBLEM [#A] Priority-looking heading
+* TODO Configured open
+* DONE Configured closed
+"#,
+        )
+        .unwrap();
+        let config = test_config(root);
+        let corpus = Corpus::load(&config).unwrap();
+        let graph = Graph::from_corpus(&corpus);
+        let node = graph
+            .resolve_target("aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa")
+            .unwrap();
+        let content = fs::read_to_string(&node.path).unwrap();
+
+        let html = render_note_html(&graph, &config, node, &content);
+
+        assert!(html.contains("<a href=\"#h-6\">WAITING Plain heading</a>"));
+        assert!(html.contains("<h2 id=\"h-6\">WAITING Plain heading</h2>"));
+        assert!(html.contains("<a href=\"#h-7\">PROBLEM [#A] Priority-looking heading</a>"));
+        assert!(html.contains("<h2 id=\"h-7\">PROBLEM [#A] Priority-looking heading</h2>"));
+        assert!(
+            html.contains("<a href=\"#h-8\"><span class=\"todo\">TODO</span> Configured open</a>")
+        );
+        assert!(
+            html.contains("<h2 id=\"h-8\"><span class=\"todo\">TODO</span> Configured open</h2>")
+        );
+        assert!(
+            html.contains(
+                "<a href=\"#h-9\"><span class=\"todo\">DONE</span> Configured closed</a>"
+            )
+        );
+        assert!(html.contains(
+            "<h2 id=\"h-9\" class=\"closed-heading\"><span class=\"todo\">DONE</span> Configured closed</h2>"
+        ));
+        assert!(!html.contains("<span class=\"todo\">WAITING</span>"));
+        assert!(!html.contains("<span class=\"todo\">PROBLEM</span>"));
+    }
+
+    #[test]
     fn panel_css_uses_page_background_and_stable_backlinks_summary() {
         let css = page_css();
         let side_panel_css = css
@@ -2114,6 +2260,11 @@ Body.
         assert!(css.contains("--tilde-code: #c9672c;"));
         assert!(
             css.contains(".code-orange {\n  color: var(--tilde-code);\n  font-weight: 400;\n}")
+        );
+        assert!(css.contains("--mention-code: #0284c7;"));
+        assert!(css.contains("--mention-code: #7dd3fc;"));
+        assert!(
+            css.contains(".code-mention {\n  color: var(--mention-code);\n  font-weight: 400;\n}")
         );
     }
 
@@ -2333,15 +2484,19 @@ generic export
 
     #[test]
     fn renders_org_inline_formatting() {
-        let html =
-            render_formatted_text("*bold* /italic/ _under_ +gone+ =literal <tag>= ~orange~ $x^2$");
+        let html = render_formatted_text(
+            "*bold* /italic/ _under_ +gone+ =literal @skip <tag>= ~orange @skip~ @alice @bob-dev email@example.com @ $x^2$",
+        );
 
         assert!(html.contains("<strong>bold</strong>"));
         assert!(html.contains("<em>italic</em>"));
         assert!(html.contains("<u>under</u>"));
         assert!(html.contains("<del>gone</del>"));
-        assert!(html.contains("<code class=\"inline-code\">literal &lt;tag&gt;</code>"));
-        assert!(html.contains("<code class=\"inline-code code-orange\">orange</code>"));
+        assert!(html.contains("<code class=\"inline-code\">literal @skip &lt;tag&gt;</code>"));
+        assert!(html.contains("<code class=\"inline-code code-orange\">orange @skip</code>"));
+        assert!(html.contains("<code class=\"inline-code code-mention\">@alice</code>"));
+        assert!(html.contains("<code class=\"inline-code code-mention\">@bob-dev</code>"));
+        assert!(html.contains("email@example.com @ "));
         assert!(html.contains("class=\"katex\""));
         assert!(html.contains("<math"));
     }

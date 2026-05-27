@@ -10,6 +10,7 @@
   --mark: #fff7cc;
   --inline-code: #f3f4f6;
   --tilde-code: #9a3412;
+  --mention-code: #0284c7;
   --tag-bg: #eef6ff;
   --tag-fg: #175cd3;
   --scheduled-bg: #ecfdf3;
@@ -86,6 +87,7 @@
     --mark: #3b3200;
     --inline-code: #1f2937;
     --tilde-code: #c9672c;
+    --mention-code: #7dd3fc;
     --tag-bg: #102a43;
     --tag-fg: #9ac8ff;
     --scheduled-bg: #092f24;
@@ -587,6 +589,11 @@ code {
 
 .code-orange {
   color: var(--tilde-code);
+  font-weight: 400;
+}
+
+.code-mention {
+  color: var(--mention-code);
   font-weight: 400;
 }
 
