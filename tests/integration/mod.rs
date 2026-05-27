@@ -5,6 +5,7 @@ mod context;
 mod error;
 mod fix;
 mod get;
+mod harness;
 mod info;
 mod logging;
 mod new;
@@ -508,6 +509,23 @@ impl TestDb {
 
     pub fn write_roam(&self, name: &str, content: &str) {
         db_write(&self.root, name, content);
+    }
+
+    pub fn run(&self, args: &[&str]) -> (String, String, ExitStatus) {
+        let mut command_args = vec!["--db", self.root.to_str().unwrap()];
+        command_args.extend_from_slice(args);
+        run(&command_args)
+    }
+
+    pub fn run_json(&self, args: &[&str]) -> (serde_json::Value, ExitStatus) {
+        let mut command_args = vec![
+            "--db",
+            self.root.to_str().unwrap(),
+            "--output-format",
+            "json",
+        ];
+        command_args.extend_from_slice(args);
+        run_json(&command_args)
     }
 
     pub fn into_parts(self) -> (tempfile::TempDir, PathBuf) {
