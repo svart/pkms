@@ -1,4 +1,5 @@
 use crate::cli::OrphansArgs;
+use crate::cli::OutputFormat;
 use crate::config::ResolvedConfig;
 use crate::graph::Graph;
 use crate::output::OutputContext;
@@ -37,7 +38,7 @@ impl From<&OrphansArgs> for OrphansOptions {
     }
 }
 
-pub fn run(config: &ResolvedConfig, ctx: &OutputContext, opts: &OrphansOptions) -> Result<()> {
+pub fn execute(config: &ResolvedConfig, opts: &OrphansOptions) -> Result<OrphansOutput> {
     let graph = Graph::load(config)?;
     let mut orphans = if opts.with_dailies {
         graph.orphan_nodes_including_dailies()
@@ -63,28 +64,75 @@ pub fn run(config: &ResolvedConfig, ctx: &OutputContext, opts: &OrphansOptions) 
         })
         .collect();
 
+    Ok(OrphansOutput {
+        count,
+        showed,
+        orphans: entries,
+    })
+}
+
+pub fn render_text(output: &OrphansOutput) -> String {
+    let mut lines = Vec::new();
+    if output.count == output.orphans.len() {
+        lines.push(format!("Orphan notes ({}):", output.count));
+    } else {
+        lines.push(format!(
+            "Orphan notes ({}), showed: {}:",
+            output.count,
+            output.orphans.len()
+        ));
+    }
+    lines.extend(
+        output
+            .orphans
+            .iter()
+            .map(|entry| format!("  {} ({})", entry.title, entry.uuid)),
+    );
+    lines.join("\n")
+}
+
+pub fn render(ctx: &OutputContext, output: &OrphansOutput) -> Result<()> {
     match ctx.format {
-        crate::cli::OutputFormat::Text => {
-            if count == entries.len() {
-                println!("Orphan notes ({}):", count);
-            } else {
-                println!("Orphan notes ({}), showed: {}:", count, entries.len());
-            }
-            for n in &orphans {
-                println!("  {} ({})", n.title, n.uuid);
-            }
+        OutputFormat::Text => {
+            println!("{}", render_text(output));
         }
-        crate::cli::OutputFormat::Json => {
-            ctx.print_json(&OrphansOutput {
-                count,
-                showed,
-                orphans: entries,
-            })?;
+        OutputFormat::Json => {
+            ctx.print_json(output)?;
         }
-        crate::cli::OutputFormat::Ndjson => {
-            ctx.print_ndjson(&entries)?;
+        OutputFormat::Ndjson => {
+            ctx.print_ndjson(&output.orphans)?;
         }
     }
 
     Ok(())
+}
+
+pub fn run(config: &ResolvedConfig, ctx: &OutputContext, opts: &OrphansOptions) -> Result<()> {
+    let output = execute(config, opts)?;
+    render(ctx, &output)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn renders_limited_text_from_typed_output() {
+        let output = OrphansOutput {
+            count: 2,
+            showed: Some(1),
+            orphans: vec![OrphanEntry {
+                uuid: "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa".to_string(),
+                title: "Lonely".to_string(),
+                path: "/db/lonely.org".to_string(),
+                filetags: Vec::new(),
+                categories: Vec::new(),
+            }],
+        };
+
+        assert_eq!(
+            render_text(&output),
+            "Orphan notes (2), showed: 1:\n  Lonely (aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa)"
+        );
+    }
 }

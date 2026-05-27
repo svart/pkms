@@ -75,9 +75,9 @@ refactor commits.
 
 9. [ ] Keep binary tests for contracts, add library tests for logic.
 
-   Partially done. Binary integration tests remain the contract layer, and new
-   unit tests were added for `path` rendering. More command logic still relies
-   primarily on binary integration tests.
+   Partially done. Binary integration tests remain the contract layer, and unit
+   tests were added for `path` and `orphans` rendering. More command logic still
+   relies primarily on binary integration tests.
 
 ## Suggested Order
 
@@ -96,4 +96,5 @@ refactor commits.
 - Continue replacing the remaining thin-wrapper `Local::now()` calls in task
   code with explicit dates when the surrounding command logic is refactored.
 - Move more pure command behavior behind typed `execute`/`render` boundaries
-  when those commands are touched for feature work.
+  when those commands are touched for feature work; `path` and `orphans` are the
+  current examples.
