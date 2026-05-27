@@ -194,6 +194,20 @@ impl Config {
 }
 
 impl ResolvedConfig {
+    #[cfg(test)]
+    pub fn for_test_db(db_root: impl Into<PathBuf>) -> Self {
+        Self {
+            db_root: db_root.into(),
+            new_notes_dir: None,
+            daily_notes_dir: None,
+            ignore_patterns: None,
+            columns: None,
+            tasks: None,
+            agenda: None,
+            todoist: None,
+        }
+    }
+
     pub fn resolve_new_notes_dir(&self) -> PathBuf {
         self.resolve_configured_dir(self.new_notes_dir.as_ref(), "roam")
     }

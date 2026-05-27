@@ -5,8 +5,6 @@ use anyhow::{Context, Result};
 use serde::Serialize;
 use std::io::Write;
 use std::net::TcpListener;
-#[cfg(test)]
-use std::path::PathBuf;
 
 mod assets;
 mod highlight;
@@ -301,19 +299,6 @@ mod tests {
     use std::fs;
     use std::io;
 
-    fn test_config(root: PathBuf) -> ResolvedConfig {
-        ResolvedConfig {
-            db_root: root,
-            new_notes_dir: None,
-            daily_notes_dir: None,
-            ignore_patterns: None,
-            columns: None,
-            tasks: None,
-            agenda: None,
-            todoist: None,
-        }
-    }
-
     #[test]
     fn classifies_client_disconnect_errors() {
         for kind in [
@@ -393,7 +378,7 @@ Preview body.
 "#,
         )
         .unwrap();
-        let config = test_config(root);
+        let config = ResolvedConfig::for_test_db(root);
         let corpus = Corpus::load(&config).unwrap();
         let graph = Graph::from_corpus(&corpus);
         let alpha = graph
@@ -449,7 +434,7 @@ Body.
 "#,
         )
         .unwrap();
-        let config = test_config(root);
+        let config = ResolvedConfig::for_test_db(root);
         let corpus = Corpus::load(&config).unwrap();
         let graph = Graph::from_corpus(&corpus);
         let state = ServeState {
@@ -502,7 +487,7 @@ Body.
 "#,
         )
         .unwrap();
-        let config = test_config(root);
+        let config = ResolvedConfig::for_test_db(root);
         let corpus = Corpus::load(&config).unwrap();
         let graph = Graph::from_corpus(&corpus);
         let node = graph
@@ -552,7 +537,7 @@ Body.
 "#,
         )
         .unwrap();
-        let config = test_config(root);
+        let config = ResolvedConfig::for_test_db(root);
         let corpus = Corpus::load(&config).unwrap();
         let graph = Graph::from_corpus(&corpus);
         let node = graph
@@ -699,7 +684,7 @@ fn main() {}
 "#,
         )
         .unwrap();
-        let config = test_config(root);
+        let config = ResolvedConfig::for_test_db(root);
         let corpus = Corpus::load(&config).unwrap();
         let graph = Graph::from_corpus(&corpus);
         let node = graph
@@ -814,7 +799,7 @@ generic export
 "#,
         )
         .unwrap();
-        let config = test_config(root);
+        let config = ResolvedConfig::for_test_db(root);
         let corpus = Corpus::load(&config).unwrap();
         let graph = Graph::from_corpus(&corpus);
         let node = graph
@@ -905,7 +890,7 @@ generic export
 "#,
         )
         .unwrap();
-        let config = test_config(root);
+        let config = ResolvedConfig::for_test_db(root);
         let corpus = Corpus::load(&config).unwrap();
         let graph = Graph::from_corpus(&corpus);
         let node = graph
@@ -950,7 +935,7 @@ generic export
 "#,
         )
         .unwrap();
-        let config = test_config(root);
+        let config = ResolvedConfig::for_test_db(root);
         let corpus = Corpus::load(&config).unwrap();
         let graph = Graph::from_corpus(&corpus);
         let node = graph

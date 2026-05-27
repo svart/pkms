@@ -236,6 +236,11 @@ Add small helpers that reduce setup cost:
 
 Avoid a large test DSL. The goal is less repeated setup, not another framework.
 
+Phase 6 progress:
+
+- [x] Add `ResolvedConfig::for_test_db(...)` for unit tests and use it in serve
+  renderer tests.
+
 ## Testability Strategy
 
 Use three layers of tests:
@@ -285,7 +290,7 @@ targeted extraction around modules that have become too dense.
    `commands/serve/http.rs`.
 - [x] Extract serve inline rendering and codec helpers into
   `commands/serve/inline.rs`.
-- [ ] Add a small test config builder used by unit tests that need
-   `ResolvedConfig`.
+- [x] Add a small test config builder used by unit tests that need
+  `ResolvedConfig`.
 - [x] Convert one narrow command, `path`, to an `execute`/`render` shape as the
   reference pattern.
