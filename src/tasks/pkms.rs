@@ -74,9 +74,17 @@ pub fn resolve_inbox_target(
     config: &ResolvedConfig,
     create_daily: bool,
 ) -> Result<PkmsInboxTarget> {
+    resolve_inbox_target_on(config, create_daily, Local::now().date_naive())
+}
+
+pub fn resolve_inbox_target_on(
+    config: &ResolvedConfig,
+    create_daily: bool,
+    today: NaiveDate,
+) -> Result<PkmsInboxTarget> {
     let target = config.task_inbox()?;
     if target.eq_ignore_ascii_case("daily") {
-        return resolve_daily_inbox_target(config, create_daily);
+        return resolve_daily_inbox_target(config, create_daily, today);
     }
 
     let graph = crate::graph::Graph::load(config)?;
@@ -118,8 +126,11 @@ pub fn resolve_note_task_target(config: &ResolvedConfig, target: &str) -> Result
         .ok_or_else(|| anyhow::anyhow!("PKMS task target note not found: {target}"))
 }
 
-fn resolve_daily_inbox_target(config: &ResolvedConfig, create: bool) -> Result<PkmsInboxTarget> {
-    let today = Local::now().date_naive();
+fn resolve_daily_inbox_target(
+    config: &ResolvedConfig,
+    create: bool,
+    today: NaiveDate,
+) -> Result<PkmsInboxTarget> {
     let configured_path = config
         .resolve_daily_notes_dir()
         .join(format!("{today}.org"));

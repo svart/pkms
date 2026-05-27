@@ -123,8 +123,16 @@ pub fn parse_add_date_arg_on(name: &str, value: &str, today: NaiveDate) -> Resul
 }
 
 pub fn validate_pkms_date_arg(name: &str, value: Option<&str>) -> Result<Option<String>> {
+    validate_pkms_date_arg_on(name, value, Local::now().date_naive())
+}
+
+pub fn validate_pkms_date_arg_on(
+    name: &str,
+    value: Option<&str>,
+    today: NaiveDate,
+) -> Result<Option<String>> {
     value
-        .map(|value| parse_add_date_arg(name, value))
+        .map(|value| parse_add_date_arg_on(name, value, today))
         .transpose()
 }
 

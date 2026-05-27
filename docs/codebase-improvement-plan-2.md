@@ -47,9 +47,10 @@ refactor commits.
 5. [ ] Inject time where behavior depends on `today`.
 
    Partially done. `task agenda` captures one `today` value and threads it
-   through `run_on(...)`. Task provider queries and source-neutral filter
-   application also receive an explicit date from the command path. Some task
-   paths still call `Local::now()` directly where they are thin CLI wrappers.
+   through `run_on(...)`. Task provider queries, source-neutral filter
+   application, and PKMS task-add daily/date handling also receive an explicit
+   date from the command path. Some task paths still call `Local::now()`
+   directly where they are thin CLI wrappers.
 
 6. [x] Split `serve.rs` by responsibility.
 

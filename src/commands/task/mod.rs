@@ -11,7 +11,7 @@ use crate::config::{ColumnSource, ColumnView, ResolvedConfig};
 use crate::input;
 use crate::output::{Column, OutputContext};
 use crate::tasks::add::{
-    TaskAddSpec, org_date, parse_add_date_arg, pkms_priority, validate_pkms_date_arg,
+    TaskAddSpec, org_date, parse_add_date_arg, pkms_priority, validate_pkms_date_arg_on,
 };
 use crate::tasks::filter::{
     SourceSelection, TaskFilterContext, TaskFilterCriteria, parse_task_filters,
@@ -723,9 +723,10 @@ fn canonical_state(config: &ResolvedConfig, requested_state: &str) -> Result<Str
 }
 
 fn add_pkms_task(config: &ResolvedConfig, ctx: &OutputContext, spec: &TaskAddSpec) -> Result<()> {
+    let today = Local::now().date_naive();
     let inbox_target = match spec.note.as_deref() {
         Some(note) => pkms::resolve_note_task_target(config, note)?,
-        None => pkms::resolve_inbox_target(config, true)?,
+        None => pkms::resolve_inbox_target_on(config, true, today)?,
     };
     let title = spec
         .title
@@ -758,8 +759,8 @@ fn add_pkms_task(config: &ResolvedConfig, ctx: &OutputContext, spec: &TaskAddSpe
         PkmsInboxTarget::Daily { .. } => "**",
     };
     let mut entry = format!("{level} {state}{priority} {title}{tags}\n");
-    let due = validate_pkms_date_arg("due", spec.due.as_deref())?;
-    let deadline = validate_pkms_date_arg("deadline", spec.deadline.as_deref())?;
+    let due = validate_pkms_date_arg_on("due", spec.due.as_deref(), today)?;
+    let deadline = validate_pkms_date_arg_on("deadline", spec.deadline.as_deref(), today)?;
     if due.is_some() || deadline.is_some() {
         let mut planning = Vec::new();
         if let Some(due) = due {
