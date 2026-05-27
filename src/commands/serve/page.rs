@@ -1,5 +1,8 @@
 use super::inline::{escape_html, percent_encode, render_formatted_text};
-use super::{heading_title_with_unconfigured_todo, is_configured_todo_state, page_css, page_js};
+use super::org_html::{
+    heading_title_with_unconfigured_todo, is_configured_todo_state, render_org_body,
+};
+use super::{page_css, page_js};
 use crate::config::ResolvedConfig;
 use crate::graph::{Graph, Node};
 use crate::parser::{HEADING_RE, Heading, strip_org_links};
@@ -12,7 +15,7 @@ pub(super) fn render_note_html(
     node: &Node,
     content: &str,
 ) -> String {
-    let body = super::render_org_body(graph, config, node, content);
+    let body = render_org_body(graph, config, node, content);
     let contents = render_contents_panel(config, content);
     let backlinks = render_backlinks_panel(graph, node);
     let tags = render_tag_list("Note tags", &node.filetags, "note-tags");
@@ -60,7 +63,7 @@ pub(super) fn render_preview_html(
     node: &Node,
     content: &str,
 ) -> String {
-    let body = super::render_org_body(graph, config, node, content);
+    let body = render_org_body(graph, config, node, content);
     let tags = render_tag_list("Note tags", &node.filetags, "note-tags");
     let title = escape_html(&node.title);
     format!(

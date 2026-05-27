@@ -154,7 +154,7 @@ Phase 2 progress:
 - [x] Extract serve inline rendering and codec helpers into
   `commands/serve/inline.rs`.
 - [x] Extract serve page shell and panels into `commands/serve/page.rs`.
-- [ ] Extract serve org body rendering.
+- [x] Extract serve org body rendering into `commands/serve/org_html.rs`.
 - [x] Extract serve syntax highlighting into `commands/serve/highlight.rs`.
 
 ### Phase 3: Add Pure Command Execution Helpers
