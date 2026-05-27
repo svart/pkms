@@ -8,7 +8,7 @@ use regex::Regex;
 use serde::Serialize;
 use std::collections::BTreeMap;
 use std::fmt::Write as FmtWrite;
-use std::io::{BufRead, BufReader, Write};
+use std::io::{self, BufRead, BufReader, Write};
 use std::net::{TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use std::sync::LazyLock;
@@ -73,13 +73,46 @@ pub fn run(config: &ResolvedConfig, ctx: &OutputContext, opts: &ServeOptions) ->
         match stream {
             Ok(stream) => {
                 if let Err(err) = handle_connection(stream, &state) {
-                    eprintln!("serve request failed: {err}");
+                    log_request_error(&err);
                 }
             }
-            Err(err) => eprintln!("serve connection failed: {err}"),
+            Err(err) => log_connection_error(&err),
         }
     }
     Ok(())
+}
+
+fn log_request_error(err: &anyhow::Error) {
+    if is_client_disconnect(err) {
+        tracing::debug!(error = %err, "serve client disconnected before response completed");
+    } else {
+        tracing::warn!(error = %err, "serve request failed");
+    }
+}
+
+fn log_connection_error(err: &io::Error) {
+    if is_client_disconnect_kind(err.kind()) {
+        tracing::debug!(error = %err, "serve client disconnected before request handling");
+    } else {
+        tracing::warn!(error = %err, "serve connection failed");
+    }
+}
+
+fn is_client_disconnect(err: &anyhow::Error) -> bool {
+    err.chain().any(|cause| {
+        cause
+            .downcast_ref::<io::Error>()
+            .is_some_and(|err| is_client_disconnect_kind(err.kind()))
+    })
+}
+
+fn is_client_disconnect_kind(kind: io::ErrorKind) -> bool {
+    matches!(
+        kind,
+        io::ErrorKind::BrokenPipe
+            | io::ErrorKind::ConnectionReset
+            | io::ErrorKind::ConnectionAborted
+    )
 }
 
 fn handle_connection(mut stream: TcpStream, state: &ServeState<'_>) -> Result<()> {
@@ -1319,6 +1352,26 @@ mod tests {
             agenda: None,
             todoist: None,
         }
+    }
+
+    #[test]
+    fn classifies_client_disconnect_errors() {
+        for kind in [
+            io::ErrorKind::BrokenPipe,
+            io::ErrorKind::ConnectionReset,
+            io::ErrorKind::ConnectionAborted,
+        ] {
+            let err = anyhow::Error::new(io::Error::new(kind, "client went away"))
+                .context("failed to write serve response");
+
+            assert!(is_client_disconnect(&err), "kind should match: {kind:?}");
+        }
+
+        let other = anyhow::Error::new(io::Error::new(
+            io::ErrorKind::PermissionDenied,
+            "permission denied",
+        ));
+        assert!(!is_client_disconnect(&other));
     }
 
     #[test]
