@@ -40,13 +40,27 @@ fn test_serve_renders_initial_note_and_linked_note() {
     assert!(response.contains("<h1>Note A</h1>"));
     assert!(response.contains("<details class=\"side-panel contents-panel\" open>"));
     assert!(response.contains("<details class=\"side-panel backlinks-panel\" open>"));
+    assert!(response.contains("id=\"note-preview\""));
     assert!(response.contains("href=\"/?id=bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb\""));
+    assert!(response.contains("data-preview-id=\"bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb\""));
 
     let linked = http_get(host_port, "/?id=bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb");
     assert!(linked.contains("<h1>Note B</h1>"));
     assert!(linked.contains("<summary>Backlinks</summary>"));
     assert!(linked.contains("href=\"/?id=aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa\""));
     assert!(linked.contains("Note A"));
+
+    let preview = http_get(
+        host_port,
+        "/preview?id=bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb",
+    );
+    assert!(preview.contains("HTTP/1.1 200 OK"));
+    assert!(preview.contains("<article class=\"note-body note-preview-body\">"));
+    assert!(preview.contains("href=\"/?id=cccccccc-cccc-4ccc-cccc-cccccccccccc\""));
+    assert!(preview.contains("data-preview-id=\"cccccccc-cccc-4ccc-cccc-cccccccccccc\""));
+    assert!(!preview.contains("contents-panel"));
+    assert!(!preview.contains("backlinks-panel"));
+    assert!(!preview.contains("<html"));
 
     child.kill().unwrap();
     let _ = child.wait();

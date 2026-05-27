@@ -158,6 +158,44 @@ main {
   margin: 0.65rem 0 0;
 }
 
+.note-preview {
+  position: fixed;
+  right: 2rem;
+  z-index: 20;
+  width: min(45vw, 46rem);
+  height: 55vh;
+  overflow: auto;
+  overscroll-behavior: contain;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 1rem 1.1rem;
+  font: 16px/1.58 Alegreya, "Iowan Old Style", Palatino, Georgia, serif;
+}
+
+.note-preview[hidden] {
+  display: none;
+}
+
+.note-preview-header {
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 1rem;
+  padding-bottom: 0.75rem;
+}
+
+.note-preview-header h1 {
+  font-size: 1.45rem;
+  margin: 0;
+}
+
+.note-preview-body h2 {
+  font-size: 1.25rem;
+}
+
+.note-preview-body h3 {
+  font-size: 1.12rem;
+}
+
 @media (max-width: 1360px) {
   .side-panel {
     position: sticky;
@@ -175,6 +213,12 @@ main {
 
   .side-panel:not([open]) {
     width: min(78ch, calc(100% - 32px));
+  }
+
+  .note-preview {
+    right: 1rem;
+    width: min(90vw, 46rem);
+    height: 45vh;
   }
 }
 

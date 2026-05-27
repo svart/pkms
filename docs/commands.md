@@ -81,7 +81,9 @@ formula text is rendered to static KaTeX HTML without client-side JavaScript.
 The page also includes collapsible floating panels: note contents on the left
 from the heading hierarchy, and backlinks on the top right from notes that link
 to the current note. Both panels are open by default and do not change the main
-note column width.
+note column width. Hovering over an internal note link opens a scrollable note
+preview after a short delay; links inside the preview remain clickable, and
+clicking back in the original note closes the preview.
 
 ## Statistics and Discovery
 

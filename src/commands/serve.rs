@@ -99,6 +99,7 @@ fn handle_connection(mut stream: TcpStream, state: &ServeState<'_>) -> Result<()
     let (path, query) = split_target(target);
     let response = match path {
         "/" => render_response(state, query),
+        "/preview" => preview_response(state, query),
         "/asset" => asset_response(state, query),
         _ => Ok(HttpResponse::not_found("Not found")),
     }?;
@@ -145,6 +146,21 @@ fn render_response(state: &ServeState<'_>, query: Option<&str>) -> Result<HttpRe
     let content = std::fs::read_to_string(&node.path)
         .with_context(|| format!("Failed to read {}", node.path.display()))?;
     Ok(HttpResponse::html(render_note_html(
+        &state.graph,
+        state.config,
+        node,
+        &content,
+    )))
+}
+
+fn preview_response(state: &ServeState<'_>, query: Option<&str>) -> Result<HttpResponse> {
+    let Some(requested) = query_param(query, "id") else {
+        return Ok(HttpResponse::not_found("Missing id"));
+    };
+    let node = state.graph.resolve_target(&requested)?;
+    let content = std::fs::read_to_string(&node.path)
+        .with_context(|| format!("Failed to read {}", node.path.display()))?;
+    Ok(HttpResponse::html(render_preview_html(
         &state.graph,
         state.config,
         node,
@@ -263,6 +279,7 @@ fn render_note_html(graph: &Graph, config: &ResolvedConfig, node: &Node, content
 <body>
 {contents}
 {backlinks}
+<aside id="note-preview" class="note-preview" data-preview-url="/preview" aria-live="polite" hidden></aside>
 <main>
 <header class="note-header">
 <p class="eyebrow">pkms note</p>
@@ -273,9 +290,25 @@ fn render_note_html(graph: &Graph, config: &ResolvedConfig, node: &Node, content
 {body}
 </article>
 </main>
+<script>{}</script>
 </body>
 </html>"#,
         page_css(),
+        escape_html(&node.uuid),
+        page_js()
+    )
+}
+
+fn render_preview_html(
+    graph: &Graph,
+    config: &ResolvedConfig,
+    node: &Node,
+    content: &str,
+) -> String {
+    let body = render_org_body(graph, config, node, content);
+    let title = escape_html(&node.title);
+    format!(
+        "<section class=\"note-preview-content\" data-preview-note=\"{}\">\n<header class=\"note-preview-header\">\n<p class=\"eyebrow\">pkms note</p>\n<h1>{title}</h1>\n</header>\n<article class=\"note-body note-preview-body\">\n{body}</article>\n</section>\n",
         escape_html(&node.uuid)
     )
 }
@@ -683,8 +716,9 @@ fn render_link(
             .map(|n| n.uuid.as_str())
             .unwrap_or(uuid);
         return format!(
-            "<a href=\"/?id={}\">{}</a>",
+            "<a href=\"/?id={}\" data-preview-id=\"{}\">{}</a>",
             percent_encode(href_uuid),
+            escape_html(href_uuid),
             render_formatted_text(label)
         );
     }
@@ -1104,6 +1138,128 @@ fn page_css() -> String {
     css
 }
 
+fn page_js() -> &'static str {
+    r#"(() => {
+  const HOVER_DELAY_MS = 450;
+  const preview = document.getElementById("note-preview");
+  const originalNote = document.querySelector(".note-body");
+  if (!preview || !originalNote || !window.fetch) {
+    return;
+  }
+
+  let hoverTimer = 0;
+  let activeController = null;
+  const cache = new Map();
+
+  function hidePreview() {
+    window.clearTimeout(hoverTimer);
+    hoverTimer = 0;
+    if (activeController) {
+      activeController.abort();
+      activeController = null;
+    }
+    preview.hidden = true;
+    preview.innerHTML = "";
+    preview.removeAttribute("data-active-preview");
+  }
+
+  function positionPreview(anchor) {
+    const rect = anchor.getBoundingClientRect();
+    preview.style.top = `${Math.max(16, Math.min(rect.top, window.innerHeight * 0.35))}px`;
+  }
+
+  async function showPreview(anchor) {
+    const uuid = anchor.dataset.previewId;
+    if (!uuid) {
+      return;
+    }
+    positionPreview(anchor);
+    preview.hidden = false;
+    preview.dataset.activePreview = uuid;
+    preview.innerHTML = "<p class=\"panel-empty\">Loading...</p>";
+
+    if (cache.has(uuid)) {
+      preview.innerHTML = cache.get(uuid);
+      return;
+    }
+
+    if (activeController) {
+      activeController.abort();
+    }
+    activeController = new AbortController();
+    const url = `${preview.dataset.previewUrl}?id=${encodeURIComponent(uuid)}`;
+    try {
+      const response = await fetch(url, { signal: activeController.signal });
+      if (!response.ok) {
+        throw new Error(`Preview request failed: ${response.status}`);
+      }
+      const html = await response.text();
+      cache.set(uuid, html);
+      if (preview.dataset.activePreview === uuid) {
+        preview.innerHTML = html;
+      }
+    } catch (error) {
+      if (error.name !== "AbortError" && preview.dataset.activePreview === uuid) {
+        preview.innerHTML = "<p class=\"panel-empty\">Preview unavailable</p>";
+      }
+    }
+  }
+
+  document.addEventListener("mouseover", (event) => {
+    const target = event.target instanceof Element ? event.target : null;
+    const anchor = target ? target.closest("a[data-preview-id]") : null;
+    if (!anchor) {
+      return;
+    }
+    window.clearTimeout(hoverTimer);
+    hoverTimer = window.setTimeout(() => showPreview(anchor), HOVER_DELAY_MS);
+  });
+
+  document.addEventListener("mouseout", (event) => {
+    const target = event.target instanceof Element ? event.target : null;
+    const anchor = target ? target.closest("a[data-preview-id]") : null;
+    if (!anchor || anchor.contains(event.relatedTarget)) {
+      return;
+    }
+    window.clearTimeout(hoverTimer);
+  });
+
+  originalNote.addEventListener("click", (event) => {
+    if (!preview.hidden && !preview.contains(event.target)) {
+      hidePreview();
+    }
+  });
+
+  preview.addEventListener("wheel", (event) => {
+    event.stopPropagation();
+    const lineHeight = 16;
+    const pageHeight = preview.clientHeight;
+    const delta = event.deltaMode === 1
+      ? event.deltaY * lineHeight
+      : event.deltaMode === 2
+        ? event.deltaY * pageHeight
+        : event.deltaY;
+    const maxScrollTop = preview.scrollHeight - preview.clientHeight;
+    const atTop = preview.scrollTop <= 0;
+    const atBottom = preview.scrollTop >= maxScrollTop - 1;
+    const targetScrollTop = preview.scrollTop + delta;
+    if (delta < 0 && (atTop || targetScrollTop < 0)) {
+      event.preventDefault();
+      preview.scrollTop = 0;
+    } else if (delta > 0 && (atBottom || targetScrollTop > maxScrollTop)) {
+      event.preventDefault();
+      preview.scrollTop = maxScrollTop;
+    }
+  }, { passive: false });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      hidePreview();
+    }
+  });
+})();"#
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1122,6 +1278,66 @@ mod tests {
             agenda: None,
             todoist: None,
         }
+    }
+
+    #[test]
+    fn renders_note_preview_hook_and_fragment() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().to_path_buf();
+        let roam = root.join("roam");
+        fs::create_dir_all(&roam).unwrap();
+        fs::write(
+            roam.join("a.org"),
+            r#":PROPERTIES:
+:ID:       aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa
+:END:
+#+title: Alpha
+
+[[id:bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb][Beta]]
+"#,
+        )
+        .unwrap();
+        fs::write(
+            roam.join("b.org"),
+            r#":PROPERTIES:
+:ID:       bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb
+:END:
+#+title: Beta
+
+* Preview heading
+Preview body.
+"#,
+        )
+        .unwrap();
+        let config = test_config(root);
+        let corpus = Corpus::load(&config).unwrap();
+        let graph = Graph::from_corpus(&corpus);
+        let alpha = graph
+            .resolve_target("aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa")
+            .unwrap();
+        let beta = graph
+            .resolve_target("bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb")
+            .unwrap();
+        let alpha_content = fs::read_to_string(&alpha.path).unwrap();
+        let beta_content = fs::read_to_string(&beta.path).unwrap();
+
+        let page = render_note_html(&graph, &config, alpha, &alpha_content);
+        let preview = render_preview_html(&graph, &config, beta, &beta_content);
+
+        assert!(page.contains("data-preview-id=\"bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb\""));
+        assert!(page.contains("id=\"note-preview\""));
+        assert!(page.contains("data-preview-url=\"/preview\""));
+        assert!(page.contains("const HOVER_DELAY_MS = 450;"));
+        assert!(page.contains("originalNote.addEventListener(\"click\""));
+        assert!(page.contains("preview.addEventListener(\"wheel\""));
+        assert!(page.contains("event.preventDefault();"));
+        assert!(page.contains("maxScrollTop"));
+        assert!(preview.contains("<article class=\"note-body note-preview-body\">"));
+        assert!(preview.contains("<h2 id=\"h-6\">Preview heading</h2>"));
+        assert!(preview.contains("Preview body."));
+        assert!(!preview.contains("contents-panel"));
+        assert!(!preview.contains("backlinks-panel"));
+        assert!(!preview.contains("<html"));
     }
 
     #[test]
