@@ -274,22 +274,22 @@ execute/render without flattening every task command into one abstraction.
 
 **Planned changes:**
 
-- [ ] Keep terminal, JSON, and NDJSON rendering in `commands/task/render.rs`.
-- [ ] Let list and agenda runners call rendering with typed execution output.
-- [ ] Avoid moving mutation command output into this flow.
+- [x] Keep terminal, JSON, and NDJSON rendering in `commands/task/render.rs`.
+- [x] Let list and agenda runners call rendering with typed execution output.
+- [x] Avoid moving mutation command output into this flow.
 
 **Benefit:** The task module gains clearer boundaries while preserving the
 existing task source and table abstractions.
 
 ## Explicit Non-Targets
 
-- [ ] Do not convert task mutation commands just for consistency.
-- [ ] Do not convert `open`; it is an editor-launch side effect.
-- [ ] Do not convert `new` unless note creation is later split into a reusable
+- [x] Do not convert task mutation commands just for consistency.
+- [x] Do not convert `open`; it is an editor-launch side effect.
+- [x] Do not convert `new` unless note creation is later split into a reusable
   library workflow.
-- [ ] Do not convert `fix` unless broken-link replacement needs richer dry-run
+- [x] Do not convert `fix` unless broken-link replacement needs richer dry-run
   testing.
-- [ ] Do not change JSON or NDJSON contracts without a separate compatibility
+- [x] Do not change JSON or NDJSON contracts without a separate compatibility
   decision.
 
 ## Suggested Implementation Order
@@ -306,23 +306,30 @@ existing task source and table abstractions.
 10. [x] Refactor task list execution.
 11. [x] Refactor agenda request planning.
 12. [x] Refactor agenda execution.
-13. [ ] Review whether any remaining read-only command still has duplicated
+13. [x] Review whether any remaining read-only command still has duplicated
     execution paths.
 
 ## Verification
 
 After each step:
 
-- [ ] Run focused unit tests for the touched module.
-- [ ] Run the relevant integration test subset.
-- [ ] Run `cargo fmt --check`.
-- [ ] Run `cargo clippy -- -D warnings`.
+- [x] Run focused unit tests for the touched module.
+- [x] Run the relevant integration test subset.
+- [x] Run `cargo fmt --check`.
+- [x] Run `cargo clippy -- -D warnings`.
 
 After changes touching task list or agenda:
 
-- [ ] Run `cargo test --test integration task`.
-- [ ] Run `cargo clippy --features todoist -- -D warnings`.
+- [x] Run `cargo test --test integration task`.
+- [x] Run `cargo clippy --features todoist -- -D warnings`.
 
 After changes touching `query` or `suggest` embed behavior:
 
-- [ ] Run `cargo test --features embed`.
+- [x] Run `cargo test --features embed`.
+
+## Completion Note
+
+All planned conversion and task list/agenda refactor steps have been
+implemented. The remaining commands with direct printing are side-effect-first
+commands (`open`, `new`, `fix`, mutation paths), long-running `serve`, or
+centralized task render helpers intentionally kept outside this conversion.
