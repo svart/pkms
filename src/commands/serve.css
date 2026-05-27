@@ -300,12 +300,42 @@ main {
   padding-bottom: 20px;
 }
 
+.note-header-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin: 0 0 8px;
+}
+
 .eyebrow {
   color: var(--muted);
   font: 600 12px/1.2 "PKMS Alegreya Sans", ui-sans-serif, system-ui, sans-serif;
   letter-spacing: 0;
   text-transform: uppercase;
-  margin: 0 0 8px;
+  margin: 0;
+}
+
+.open-note-button {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--fg);
+  cursor: pointer;
+  font: 600 0.78rem/1.2 "PKMS Alegreya Sans", ui-sans-serif, system-ui, sans-serif;
+  padding: 0.36rem 0.6rem;
+  white-space: nowrap;
+}
+
+.open-note-button:hover,
+.open-note-button:focus-visible {
+  border-color: color-mix(in srgb, var(--accent), var(--border) 35%);
+  color: var(--accent);
+}
+
+.open-note-button[disabled] {
+  cursor: default;
+  opacity: 0.7;
 }
 
 h1,

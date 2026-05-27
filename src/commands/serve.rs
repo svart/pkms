@@ -1,3 +1,4 @@
+use crate::commands::open;
 use crate::config::ResolvedConfig;
 use crate::graph::{Graph, Node, resolve_file_link_path};
 use crate::output::OutputContext;
@@ -168,7 +169,7 @@ fn handle_connection(mut stream: TcpStream, state: &ServeState<'_>) -> Result<()
     let mut parts = request_line.split_whitespace();
     let method = parts.next().unwrap_or_default();
     let target = parts.next().unwrap_or("/");
-    if method != "GET" && method != "HEAD" {
+    if method != "GET" && method != "HEAD" && method != "POST" {
         return write_response(
             &mut stream,
             405,
@@ -178,13 +179,19 @@ fn handle_connection(mut stream: TcpStream, state: &ServeState<'_>) -> Result<()
     }
 
     let (path, query) = split_target(target);
-    let response = if let Some(font_name) = path.strip_prefix("/font/") {
+    let response = if method == "POST" {
+        match path {
+            "/open" => open_response(state, query, open::DEFAULT_EDITOR),
+            _ => Ok(HttpResponse::method_not_allowed("Method not allowed")),
+        }
+    } else if let Some(font_name) = path.strip_prefix("/font/") {
         Ok(font_response(font_name))
     } else {
         match path {
             "/" => render_response(state, query),
             "/preview" => preview_response(state, query),
             "/asset" => asset_response(state, query),
+            "/open" => Ok(HttpResponse::method_not_allowed("Method not allowed")),
             _ => Ok(HttpResponse::not_found("Not found")),
         }
     }?;
@@ -221,6 +228,22 @@ impl HttpResponse {
             status: 404,
             content_type: "text/plain; charset=utf-8",
             body: message.as_bytes().to_vec(),
+        }
+    }
+
+    fn method_not_allowed(message: &str) -> Self {
+        Self {
+            status: 405,
+            content_type: "text/plain; charset=utf-8",
+            body: message.as_bytes().to_vec(),
+        }
+    }
+
+    fn text(message: String) -> Self {
+        Self {
+            status: 200,
+            content_type: "text/plain; charset=utf-8",
+            body: message.into_bytes(),
         }
     }
 }
@@ -280,6 +303,19 @@ fn asset_response(state: &ServeState<'_>, query: Option<&str>) -> Result<HttpRes
         content_type: mime_type(&path),
         body,
     })
+}
+
+fn open_response(
+    state: &ServeState<'_>,
+    query: Option<&str>,
+    editor: &str,
+) -> Result<HttpResponse> {
+    let Some(note_uuid) = query_param(query, "id") else {
+        return Ok(HttpResponse::not_found("Missing id"));
+    };
+    let node = state.graph.resolve_target(&note_uuid)?;
+    open::open_target(&state.graph, state.config, &node.uuid, editor, Some(1))?;
+    Ok(HttpResponse::text(format!("Opened {}", node.title)))
 }
 
 fn font_response(name: &str) -> HttpResponse {
@@ -380,7 +416,10 @@ fn render_note_html(graph: &Graph, config: &ResolvedConfig, node: &Node, content
 <aside id="note-preview" class="note-preview" data-preview-url="/preview" aria-live="polite" hidden></aside>
 <main>
 <header class="note-header">
+<div class="note-header-actions">
 <p class="eyebrow">pkms note</p>
+<button type="button" class="open-note-button" data-open-url="/open?id={}">Open in Emacs</button>
+</div>
 <h1>{title}</h1>
 {tags}
 <p class="uuid">{}</p>
@@ -393,6 +432,7 @@ fn render_note_html(graph: &Graph, config: &ResolvedConfig, node: &Node, content
 </body>
 </html>"#,
         page_css(),
+        percent_encode(&node.uuid),
         escape_html(&node.uuid),
         page_js()
     )
@@ -1539,6 +1579,24 @@ fn page_js() -> &'static str {
   const HOVER_DELAY_MS = 450;
   const preview = document.getElementById("note-preview");
   const originalNote = document.querySelector(".note-body");
+  const openButton = document.querySelector(".open-note-button[data-open-url]");
+  if (openButton && window.fetch) {
+    openButton.addEventListener("click", async () => {
+      const label = openButton.textContent;
+      openButton.disabled = true;
+      try {
+        const response = await fetch(openButton.dataset.openUrl, { method: "POST" });
+        openButton.textContent = response.ok ? "Opened" : "Open failed";
+      } catch (_error) {
+        openButton.textContent = "Open failed";
+      } finally {
+        window.setTimeout(() => {
+          openButton.textContent = label;
+          openButton.disabled = false;
+        }, 1400);
+      }
+    });
+  }
   if (!preview || !originalNote || !window.fetch) {
     return;
   }
@@ -1773,6 +1831,11 @@ Preview body.
         assert!(page.contains("data-preview-id=\"bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb\""));
         assert!(page.contains("id=\"note-preview\""));
         assert!(page.contains("data-preview-url=\"/preview\""));
+        assert!(page.contains("class=\"note-header-actions\""));
+        assert!(page.contains("class=\"open-note-button\""));
+        assert!(page.contains("data-open-url=\"/open?id=aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa\""));
+        assert!(page.contains("Open in Emacs"));
+        assert!(page.contains("fetch(openButton.dataset.openUrl, { method: \"POST\" })"));
         assert!(page.contains("const HOVER_DELAY_MS = 450;"));
         assert!(page.contains("originalNote.addEventListener(\"click\""));
         assert!(page.contains("preview.addEventListener(\"wheel\""));
@@ -1784,6 +1847,46 @@ Preview body.
         assert!(!preview.contains("contents-panel"));
         assert!(!preview.contains("backlinks-panel"));
         assert!(!preview.contains("<html"));
+    }
+
+    #[test]
+    fn open_response_uses_existing_editor_opening() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().to_path_buf();
+        let roam = root.join("roam");
+        fs::create_dir_all(&roam).unwrap();
+        fs::write(
+            roam.join("a.org"),
+            r#":PROPERTIES:
+:ID:       aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa
+:END:
+#+title: Alpha
+
+Body.
+"#,
+        )
+        .unwrap();
+        let config = test_config(root);
+        let corpus = Corpus::load(&config).unwrap();
+        let graph = Graph::from_corpus(&corpus);
+        let state = ServeState {
+            config: &config,
+            graph,
+            initial_uuid: "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa".to_string(),
+        };
+
+        let response = open_response(
+            &state,
+            Some("id=aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa"),
+            "true",
+        )
+        .unwrap();
+        let missing = open_response(&state, None, "true").unwrap();
+
+        assert_eq!(response.status, 200);
+        assert_eq!(response.content_type, "text/plain; charset=utf-8");
+        assert_eq!(String::from_utf8(response.body).unwrap(), "Opened Alpha");
+        assert_eq!(missing.status, 404);
     }
 
     #[test]

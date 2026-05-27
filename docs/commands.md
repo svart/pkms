@@ -81,6 +81,8 @@ tables are rendered as HTML tables, note and heading tags are shown as compact
 chips, heading `SCHEDULED` and `DEADLINE` timestamps are shown as planning
 badges, source blocks are highlighted server-side with Syntect, and TeX formula
 text is rendered to static KaTeX HTML without client-side JavaScript.
+The note header includes an "Open in Emacs" button that opens the rendered note
+file through the same `emacsclient -n` editor path used by task opening.
 The page also includes collapsible floating panels: note contents on the left
 from the heading hierarchy, and backlinks on the top right from notes that link
 to the current note. Both panels are open by default and do not change the main

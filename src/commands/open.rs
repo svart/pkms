@@ -9,6 +9,8 @@ pub struct OpenOptions {
     pub line: Option<usize>,
 }
 
+pub const DEFAULT_EDITOR: &str = "emacsclient -n";
+
 fn find_line_for_node(graph: &Graph, path: &std::path::Path) -> usize {
     graph
         .results
@@ -24,7 +26,7 @@ fn find_line_for_node(graph: &Graph, path: &std::path::Path) -> usize {
         .unwrap_or(1)
 }
 
-fn open_target(
+pub fn open_target(
     graph: &Graph,
     config: &ResolvedConfig,
     target: &str,
