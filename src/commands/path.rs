@@ -1,5 +1,5 @@
 use crate::cli::PathArgs;
-use crate::config::ResolvedConfig;
+use crate::command_context::CommandContext;
 use crate::graph::Graph;
 use crate::output::OutputContext;
 use anyhow::Result;
@@ -41,13 +41,13 @@ impl TryFrom<&PathArgs> for PathOptions {
     }
 }
 
-pub fn run(config: &ResolvedConfig, ctx: &OutputContext, opts: &PathOptions) -> Result<()> {
-    let output = execute(config, opts)?;
-    render(ctx, &output)
+pub fn run(ctx: &CommandContext<'_>, opts: &PathOptions) -> Result<()> {
+    let output = execute(ctx, opts)?;
+    render(ctx.output(), &output)
 }
 
-fn execute(config: &ResolvedConfig, opts: &PathOptions) -> Result<PathOutput> {
-    let graph = Graph::load(config)?;
+fn execute(ctx: &CommandContext<'_>, opts: &PathOptions) -> Result<PathOutput> {
+    let graph = ctx.load_graph()?;
     build_output(&graph, opts)
 }
 

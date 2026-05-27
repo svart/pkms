@@ -1,5 +1,6 @@
 pub mod app;
 pub mod cli;
+pub mod command_context;
 pub mod commands;
 pub mod config;
 pub mod corpus;

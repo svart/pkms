@@ -1,5 +1,6 @@
 use crate::app::{self, App};
 use crate::cli::{Cli, Command, OutputFormat};
+use crate::command_context::CommandContext;
 use crate::commands;
 use crate::config;
 use crate::input;
@@ -20,7 +21,8 @@ pub fn run(cli: Cli) -> ExitCode {
         }
     };
 
-    match dispatch(&cli, &app.config, &app.output) {
+    let command_ctx = CommandContext::new(&app.config, &app.output);
+    match dispatch(&cli, &command_ctx) {
         Ok(code) => {
             tracing::debug!(command = command_name(&cli.command), "command completed");
             code
@@ -54,7 +56,9 @@ fn command_name(command: &Command) -> &'static str {
     }
 }
 
-fn dispatch(cli: &Cli, cfg: &config::ResolvedConfig, ctx: &OutputContext) -> Result<ExitCode> {
+fn dispatch(cli: &Cli, command_ctx: &CommandContext<'_>) -> Result<ExitCode> {
+    let cfg = command_ctx.config();
+    let ctx = command_ctx.output();
     Ok(match &cli.command {
         Command::Check(args) => {
             commands::check::run(cfg, ctx, &commands::check::CheckOptions::from(args))?
@@ -143,7 +147,7 @@ fn dispatch(cli: &Cli, cfg: &config::ResolvedConfig, ctx: &OutputContext) -> Res
             commands::task::run(cfg, ctx, &args.command).map(|()| ExitCode::SUCCESS)?
         }
         Command::Path(args) => {
-            commands::path::run(cfg, ctx, &args.try_into()?).map(|()| ExitCode::SUCCESS)?
+            commands::path::run(command_ctx, &args.try_into()?).map(|()| ExitCode::SUCCESS)?
         }
         #[cfg(feature = "web")]
         Command::Serve(args) => commands::serve::run(
