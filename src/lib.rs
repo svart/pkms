@@ -13,6 +13,7 @@ pub mod org_date;
 pub mod org_edit;
 pub mod output;
 pub mod parser;
+pub mod runner;
 pub mod tasks;
 pub mod tokens;
 pub mod util;
