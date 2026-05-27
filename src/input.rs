@@ -136,7 +136,7 @@ fn parse_column_names<'a>(names: impl Iterator<Item = &'a str>) -> Result<Vec<Co
 
 fn parse_column_name(name: &str) -> Result<Column> {
     let trimmed = name.trim();
-    Column::from_str(trimmed).ok_or_else(|| {
+    trimmed.parse::<Column>().map_err(|_| {
         anyhow::anyhow!(
             "Unknown column '{}'. Available columns: {}",
             trimmed,

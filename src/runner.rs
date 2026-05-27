@@ -83,8 +83,10 @@ fn dispatch(cli: &Cli, cfg: &config::ResolvedConfig, ctx: &OutputContext) -> Res
                     targets,
                     depth: args.depth,
                     max_tokens: args.max_tokens,
-                    encoding: tokens::Encoding::from_str(&args.encoding)
-                        .ok_or_else(|| anyhow::anyhow!("Unknown encoding: {}", args.encoding))?,
+                    encoding: args
+                        .encoding
+                        .parse::<tokens::Encoding>()
+                        .map_err(|_| anyhow::anyhow!("Unknown encoding: {}", args.encoding))?,
                 },
             )
             .map(|()| ExitCode::SUCCESS)?
@@ -126,8 +128,10 @@ fn dispatch(cli: &Cli, cfg: &config::ResolvedConfig, ctx: &OutputContext) -> Res
                     show_links: args.links,
                     show_headings: args.headings,
                     no_content: args.no_content,
-                    encoding: tokens::Encoding::from_str(&args.encoding)
-                        .ok_or_else(|| anyhow::anyhow!("Unknown encoding: {}", args.encoding))?,
+                    encoding: args
+                        .encoding
+                        .parse::<tokens::Encoding>()
+                        .map_err(|_| anyhow::anyhow!("Unknown encoding: {}", args.encoding))?,
                 },
             )
             .map(|()| ExitCode::SUCCESS)?

@@ -1,6 +1,7 @@
 use crate::cli::OutputFormat;
 use anyhow::Result;
 use serde::Serialize;
+use std::str::FromStr;
 
 pub mod table;
 pub use table::adaptive_column_widths;
@@ -30,22 +31,26 @@ pub const ALL_COLUMNS: &[Column; 9] = &[
     Column::Heading,
 ];
 
-impl Column {
-    pub fn from_str(s: &str) -> Option<Column> {
+impl FromStr for Column {
+    type Err = ();
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
-            "id" => Some(Column::Id),
-            "date" => Some(Column::Date),
-            "state" => Some(Column::State),
-            "type" => Some(Column::Type),
-            "prio" => Some(Column::Prio),
-            "tags" => Some(Column::Tags),
-            "project" => Some(Column::Project),
-            "note" => Some(Column::Note),
-            "heading" => Some(Column::Heading),
-            _ => None,
+            "id" => Ok(Column::Id),
+            "date" => Ok(Column::Date),
+            "state" => Ok(Column::State),
+            "type" => Ok(Column::Type),
+            "prio" => Ok(Column::Prio),
+            "tags" => Ok(Column::Tags),
+            "project" => Ok(Column::Project),
+            "note" => Ok(Column::Note),
+            "heading" => Ok(Column::Heading),
+            _ => Err(()),
         }
     }
+}
 
+impl Column {
     pub fn name(&self) -> &'static str {
         match self {
             Column::Id => "Id",
@@ -99,17 +104,17 @@ mod tests {
 
     #[test]
     fn test_column_from_str_valid() {
-        assert_eq!(Column::from_str("id"), Some(Column::Id));
-        assert_eq!(Column::from_str("DATE"), Some(Column::Date));
-        assert_eq!(Column::from_str("Tags"), Some(Column::Tags));
-        assert_eq!(Column::from_str("project"), Some(Column::Project));
-        assert_eq!(Column::from_str("heading"), Some(Column::Heading));
+        assert_eq!("id".parse::<Column>(), Ok(Column::Id));
+        assert_eq!("DATE".parse::<Column>(), Ok(Column::Date));
+        assert_eq!("Tags".parse::<Column>(), Ok(Column::Tags));
+        assert_eq!("project".parse::<Column>(), Ok(Column::Project));
+        assert_eq!("heading".parse::<Column>(), Ok(Column::Heading));
     }
 
     #[test]
     fn test_column_from_str_invalid() {
-        assert_eq!(Column::from_str("invalid"), None);
-        assert_eq!(Column::from_str(""), None);
+        assert!("invalid".parse::<Column>().is_err());
+        assert!("".parse::<Column>().is_err());
     }
 
     #[test]

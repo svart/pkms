@@ -1,3 +1,4 @@
+use std::str::FromStr;
 use tiktoken_rs::CoreBPE;
 use tiktoken_rs::cl100k_base_singleton;
 use tiktoken_rs::o200k_base_singleton;
@@ -8,12 +9,14 @@ pub enum Encoding {
     O200kBase,
 }
 
-impl Encoding {
-    pub fn from_str(s: &str) -> Option<Self> {
+impl FromStr for Encoding {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
-            "cl100k_base" | "cl100k" => Some(Self::Cl100kBase),
-            "o200k_base" | "o200k" => Some(Self::O200kBase),
-            _ => None,
+            "cl100k_base" | "cl100k" => Ok(Self::Cl100kBase),
+            "o200k_base" | "o200k" => Ok(Self::O200kBase),
+            _ => Err(()),
         }
     }
 }
@@ -85,12 +88,9 @@ mod tests {
 
     #[test]
     fn test_encoding_from_str() {
-        assert_eq!(
-            Encoding::from_str("cl100k_base"),
-            Some(Encoding::Cl100kBase)
-        );
-        assert_eq!(Encoding::from_str("CL100K"), Some(Encoding::Cl100kBase));
-        assert_eq!(Encoding::from_str("o200k"), Some(Encoding::O200kBase));
-        assert_eq!(Encoding::from_str("invalid"), None);
+        assert_eq!("cl100k_base".parse::<Encoding>(), Ok(Encoding::Cl100kBase));
+        assert_eq!("CL100K".parse::<Encoding>(), Ok(Encoding::Cl100kBase));
+        assert_eq!("o200k".parse::<Encoding>(), Ok(Encoding::O200kBase));
+        assert!("invalid".parse::<Encoding>().is_err());
     }
 }
