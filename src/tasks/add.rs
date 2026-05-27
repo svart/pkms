@@ -99,11 +99,15 @@ pub fn pkms_priority(value: &str) -> Result<char> {
 }
 
 pub fn parse_add_date_arg(name: &str, value: &str) -> Result<String> {
+    parse_add_date_arg_on(name, value, Local::now().date_naive())
+}
+
+pub fn parse_add_date_arg_on(name: &str, value: &str, today: NaiveDate) -> Result<String> {
     if value.eq_ignore_ascii_case("today") || value.eq_ignore_ascii_case("tod") {
-        return Ok(Local::now().date_naive().format("%Y-%m-%d").to_string());
+        return Ok(today.format("%Y-%m-%d").to_string());
     }
     if value.eq_ignore_ascii_case("tomorrow") || value.eq_ignore_ascii_case("tom") {
-        return Ok((Local::now().date_naive() + chrono::Duration::days(1))
+        return Ok((today + chrono::Duration::days(1))
             .format("%Y-%m-%d")
             .to_string());
     }
@@ -199,6 +203,19 @@ mod tests {
         assert_eq!(
             parse_add_date_arg("due", "2026-05-27 09:30").unwrap(),
             "2026-05-27 09:30"
+        );
+    }
+
+    #[test]
+    fn parses_relative_add_dates_against_explicit_today() {
+        let today = NaiveDate::from_ymd_opt(2026, 5, 27).unwrap();
+        assert_eq!(
+            parse_add_date_arg_on("due", "today", today).unwrap(),
+            "2026-05-27"
+        );
+        assert_eq!(
+            parse_add_date_arg_on("due", "tom", today).unwrap(),
+            "2026-05-28"
         );
     }
 }
