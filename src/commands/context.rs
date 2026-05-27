@@ -18,6 +18,8 @@ pub struct ContextOutput {
     pub estimated_tokens: usize,
     pub encoding: String,
     pub depth: u32,
+    #[serde(skip)]
+    pub max_tokens: Option<usize>,
 }
 
 pub struct ContextOptions {
@@ -102,54 +104,63 @@ fn build_context_output(
         estimated_tokens: final_tokens,
         encoding: encoding.to_string(),
         depth,
+        max_tokens,
     })
 }
 
 pub fn run(config: &ResolvedConfig, ctx: &OutputContext, opts: &ContextOptions) -> Result<()> {
+    let outputs = execute(config, opts)?;
+    render(ctx, &outputs)
+}
+
+pub fn execute(config: &ResolvedConfig, opts: &ContextOptions) -> Result<Vec<ContextOutput>> {
     let graph = Graph::load(config)?;
 
+    opts.targets
+        .iter()
+        .map(|target| {
+            build_context_output(&graph, target, opts.depth, opts.max_tokens, opts.encoding)
+        })
+        .collect()
+}
+
+pub fn render(ctx: &OutputContext, outputs: &[ContextOutput]) -> Result<()> {
     match ctx.format {
         OutputFormat::Text => {
-            for t in &opts.targets {
-                let output =
-                    build_context_output(&graph, t, opts.depth, opts.max_tokens, opts.encoding)?;
-                println!("{}", output.context);
-                eprintln!(
-                    "[context: {} tokens, encoding: {}, depth: {}, max_tokens: {}]",
-                    output.estimated_tokens,
-                    output.encoding,
-                    opts.depth,
-                    opts.max_tokens
-                        .map_or("unlimited".to_string(), |m| m.to_string())
-                );
-                if opts.targets.len() > 1 {
-                    println!();
-                }
+            print!("{}", render_text(outputs));
+            for output in outputs {
+                eprintln!("{}", render_summary(output));
             }
         }
         OutputFormat::Json => {
-            let all_outputs: Vec<ContextOutput> = opts
-                .targets
-                .iter()
-                .map(|t| {
-                    build_context_output(&graph, t, opts.depth, opts.max_tokens, opts.encoding)
-                })
-                .collect::<Result<Vec<_>>>()?;
-            ctx.print_json_adaptive(&all_outputs)?;
+            ctx.print_json_adaptive(outputs)?;
         }
         OutputFormat::Ndjson => {
-            let all_outputs: Vec<ContextOutput> = opts
-                .targets
-                .iter()
-                .map(|t| {
-                    build_context_output(&graph, t, opts.depth, opts.max_tokens, opts.encoding)
-                })
-                .collect::<Result<Vec<_>>>()?;
-            ctx.print_ndjson(&all_outputs)?;
+            ctx.print_ndjson(outputs)?;
         }
     }
 
     Ok(())
+}
+
+pub fn render_text(outputs: &[ContextOutput]) -> String {
+    outputs
+        .iter()
+        .map(|output| format!("{}\n", output.context))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn render_summary(output: &ContextOutput) -> String {
+    format!(
+        "[context: {} tokens, encoding: {}, depth: {}, max_tokens: {}]",
+        output.estimated_tokens,
+        output.encoding,
+        output.depth,
+        output
+            .max_tokens
+            .map_or("unlimited".to_string(), |m| m.to_string())
+    )
 }
 
 #[derive(Serialize)]
@@ -196,6 +207,34 @@ fn truncate_content(s: &str, max_chars: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn output(context: &str) -> ContextOutput {
+        ContextOutput {
+            target: "Note".to_string(),
+            context: context.to_string(),
+            estimated_tokens: 12,
+            encoding: "cl100k".to_string(),
+            depth: 2,
+            max_tokens: Some(100),
+        }
+    }
+
+    #[test]
+    fn renders_context_text_from_typed_output() {
+        let text = render_text(&[output("first"), output("second")]);
+
+        assert_eq!(text, "first\n\nsecond\n");
+    }
+
+    #[test]
+    fn renders_context_summary_from_typed_output() {
+        let summary = render_summary(&output("context"));
+
+        assert_eq!(
+            summary,
+            "[context: 12 tokens, encoding: cl100k, depth: 2, max_tokens: 100]"
+        );
+    }
 
     #[test]
     fn test_render_template_basic() {

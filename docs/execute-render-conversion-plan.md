@@ -193,14 +193,14 @@ commands.
 
 **Planned changes:**
 
-- [ ] Rename or expose the current builder as `execute(...)`.
-- [ ] Add a small `render(ctx, &[ContextOutput])` wrapper.
-- [ ] Preserve the stderr token summary for text output.
+- [x] Rename or expose the current builder as `execute(...)`.
+- [x] Add a small `render(ctx, &[ContextOutput])` wrapper.
+- [x] Preserve the stderr token summary for text output.
 
 **Acceptance criteria:**
 
-- [ ] Existing context text and stderr behavior remains compatible.
-- [ ] JSON and NDJSON output remain compatible.
+- [x] Existing context text and stderr behavior remains compatible.
+- [x] JSON and NDJSON output remain compatible.
 
 ## Task List and Agenda Refactor Plan
 
@@ -301,7 +301,7 @@ existing task source and table abstractions.
 5. [x] Convert `suggest`.
 6. [x] Convert `validate`.
 7. [x] Convert `show`.
-8. [ ] Apply the light `context` cleanup.
+8. [x] Apply the light `context` cleanup.
 9. [ ] Refactor task list request planning.
 10. [ ] Refactor task list execution.
 11. [ ] Refactor agenda request planning.
