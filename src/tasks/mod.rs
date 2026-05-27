@@ -1,3 +1,4 @@
+pub mod add;
 pub mod filter;
 pub mod id;
 pub mod model;

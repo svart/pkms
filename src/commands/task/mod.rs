@@ -14,6 +14,9 @@ use crate::input;
 use crate::org_edit;
 use crate::output::{ALL_COLUMNS, Column, OutputContext};
 use crate::parser::{DEADLINE_RE, HEADING_RE, SCHEDULED_RE, find_daily_file_date};
+use crate::tasks::add::{
+    TaskAddSpec, org_date, parse_add_date_arg, pkms_priority, validate_pkms_date_arg,
+};
 use crate::tasks::filter::{
     SourceSelection, TaskFilterContext, TaskFilterCriteria, TaskFilters, parse_task_filters,
 };
@@ -27,7 +30,7 @@ use crate::tasks::scope::ResolvedScope;
 use crate::util;
 use crate::workspace::Workspace;
 use anyhow::{Context, Result, bail};
-use chrono::{Local, NaiveDate, NaiveDateTime};
+use chrono::{Local, NaiveDate};
 use serde::Serialize;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -60,20 +63,6 @@ enum PkmsInboxTarget {
 enum PlanningKind {
     Scheduled,
     Deadline,
-}
-
-#[derive(Debug, Clone)]
-struct TaskAddSpec {
-    source: String,
-    project: Option<String>,
-    title: Option<String>,
-    due: Option<String>,
-    deadline: Option<String>,
-    labels: Vec<String>,
-    priority: Option<String>,
-    description: Option<String>,
-    note: Option<String>,
-    text: Option<String>,
 }
 
 #[derive(Clone, Copy)]
@@ -1251,7 +1240,7 @@ fn run_done(config: &ResolvedConfig, ctx: &OutputContext, args: &TaskDoneArgs) -
 }
 
 fn run_add(config: &ResolvedConfig, ctx: &OutputContext, args: &TaskAddArgs) -> Result<()> {
-    let spec = parse_task_add_spec(args)?;
+    let spec = TaskAddSpec::parse(&args.text)?;
     if spec.source.eq_ignore_ascii_case("pkms") {
         return add_pkms_task(config, ctx, &spec);
     }
@@ -1262,80 +1251,6 @@ fn run_add(config: &ResolvedConfig, ctx: &OutputContext, args: &TaskAddArgs) -> 
         "Unknown task source '{}'. Use pkms or todoist.",
         spec.source
     )
-}
-
-fn parse_task_add_spec(args: &TaskAddArgs) -> Result<TaskAddSpec> {
-    let mut spec = TaskAddSpec {
-        source: "pkms".to_string(),
-        project: None,
-        title: None,
-        due: None,
-        deadline: None,
-        labels: Vec::new(),
-        priority: None,
-        description: None,
-        note: None,
-        text: None,
-    };
-    let mut text = Vec::new();
-
-    for token in &args.text {
-        if apply_task_add_modifier(&mut spec, token)? {
-            continue;
-        }
-        text.push(token.clone());
-    }
-
-    if !text.is_empty() {
-        set_task_add_option(&mut spec.text, "text", text.join(" "))?;
-    }
-
-    Ok(spec)
-}
-
-fn apply_task_add_modifier(spec: &mut TaskAddSpec, token: &str) -> Result<bool> {
-    let Some((key, value)) = token.split_once(':') else {
-        return Ok(false);
-    };
-    let key = key.trim().to_ascii_lowercase();
-    let value = value.trim();
-    match key.as_str() {
-        "source" | "src" => spec.source = value.to_string(),
-        "title" => set_task_add_option(&mut spec.title, "title", value.to_string())?,
-        "tag" | "tags" | "label" | "labels" => spec.labels.extend(split_task_add_list(value)),
-        "due" | "schedule" | "scheduled" | "sched" | "sch" => {
-            set_task_add_option(&mut spec.due, "schedule", value.to_string())?;
-        }
-        "deadline" | "dead" | "dl" => {
-            set_task_add_option(&mut spec.deadline, "deadline", value.to_string())?;
-        }
-        "project" | "proj" => set_task_add_option(&mut spec.project, "project", value.to_string())?,
-        "priority" | "prio" | "pri" => {
-            set_task_add_option(&mut spec.priority, "priority", value.to_string())?;
-        }
-        "description" | "desc" | "body" => {
-            set_task_add_option(&mut spec.description, "description", value.to_string())?;
-        }
-        "note" => set_task_add_option(&mut spec.note, "note", value.to_string())?,
-        _ => return Ok(false),
-    }
-    Ok(true)
-}
-
-fn split_task_add_list(value: &str) -> impl Iterator<Item = String> + '_ {
-    value
-        .split(',')
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .map(str::to_string)
-}
-
-fn set_task_add_option<T>(target: &mut Option<T>, name: &str, value: T) -> Result<()> {
-    if target.is_some() {
-        bail!("task add {name} was provided more than once");
-    }
-    *target = Some(value);
-    Ok(())
 }
 
 fn run_postpone(
@@ -1713,47 +1628,6 @@ fn add_pkms_task(config: &ResolvedConfig, ctx: &OutputContext, spec: &TaskAddSpe
         )
     })?;
     print_add_output(ctx, item)
-}
-
-fn pkms_priority(value: &str) -> Result<char> {
-    match value.to_ascii_uppercase().as_str() {
-        "A" | "B" | "C" => Ok(value.to_ascii_uppercase().chars().next().unwrap()),
-        _ => bail!("Invalid priority '{value}'. Use A, B, or C."),
-    }
-}
-
-fn validate_pkms_date_arg(name: &str, value: Option<&str>) -> Result<Option<String>> {
-    value
-        .map(|value| parse_add_date_arg(name, value))
-        .transpose()
-}
-
-fn parse_add_date_arg(name: &str, value: &str) -> Result<String> {
-    if value.eq_ignore_ascii_case("today") || value.eq_ignore_ascii_case("tod") {
-        return Ok(Local::now().date_naive().format("%Y-%m-%d").to_string());
-    }
-    if value.eq_ignore_ascii_case("tomorrow") || value.eq_ignore_ascii_case("tom") {
-        return Ok((Local::now().date_naive() + chrono::Duration::days(1))
-            .format("%Y-%m-%d")
-            .to_string());
-    }
-    if let Some(date) = crate::input::parse_date(Some(value)) {
-        return Ok(date.format("%Y-%m-%d").to_string());
-    }
-    if let Ok(datetime) = NaiveDateTime::parse_from_str(value, "%Y-%m-%d %H:%M") {
-        return Ok(datetime.format("%Y-%m-%d %H:%M").to_string());
-    }
-    Err(anyhow::anyhow!(
-        "Invalid {name} date '{value}'. Use today, tomorrow, tod, tom, YYYY-MM-DD, or YYYY-MM-DD HH:MM."
-    ))
-}
-
-fn org_date(date: &str) -> Result<String> {
-    if let Ok(datetime) = NaiveDateTime::parse_from_str(date, "%Y-%m-%d %H:%M") {
-        return Ok(format!("<{}>", datetime.format("%Y-%m-%d %a %H:%M")));
-    }
-    let date = NaiveDate::parse_from_str(date, "%Y-%m-%d")?;
-    Ok(format!("<{}>", date.format("%Y-%m-%d %a")))
 }
 
 fn append_pkms_inbox_entry(target: &PkmsInboxTarget, entry: &str) -> Result<(PathBuf, usize)> {
