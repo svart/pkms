@@ -1,10 +1,11 @@
-use crate::commands::task_common::{
-    Filter, apply_state_filter, apply_tags_filter, apply_type_filter, extract_date, is_overdue,
-};
+use crate::commands::task_common::{extract_date, is_overdue};
 use crate::config::ResolvedConfig;
 use crate::corpus::Corpus;
 use crate::graph::Graph;
 use crate::parser::{Heading, find_daily_file_date, strip_org_links};
+use crate::tasks::filter::{
+    TextFilter, matches_tag_filters, matches_text_filters, matches_type_filters,
+};
 use chrono::NaiveDate;
 
 #[derive(Debug, Clone)]
@@ -34,9 +35,9 @@ pub struct TaskRecord {
 pub fn collect_todo_records(
     corpus: &Corpus,
     valid_states: &[String],
-    state_filters: &[Filter],
-    tags_filters: &[Filter],
-    type_filters: &[Filter],
+    state_filters: &[TextFilter],
+    tags_filters: &[TextFilter],
+    type_filters: &[TextFilter],
 ) -> Vec<TaskRecord> {
     collect_records(corpus, |parsed, heading, _is_daily| {
         heading
@@ -58,9 +59,9 @@ pub fn collect_agenda_records(
     valid_states: &[String],
     closed_states: &[String],
     today: NaiveDate,
-    state_filters: &[Filter],
-    tags_filters: &[Filter],
-    type_filters: &[Filter],
+    state_filters: &[TextFilter],
+    tags_filters: &[TextFilter],
+    type_filters: &[TextFilter],
 ) -> Vec<TaskRecord> {
     collect_records(corpus, |parsed, heading, is_daily| {
         let eligible = heading.scheduled.is_some()
@@ -180,20 +181,20 @@ fn collect_records(
 fn apply_common_filters<'a>(
     tags: impl Iterator<Item = &'a String>,
     heading: &Heading,
-    state_filters: &[Filter],
-    tags_filters: &[Filter],
-    type_filters: &[Filter],
+    state_filters: &[TextFilter],
+    tags_filters: &[TextFilter],
+    type_filters: &[TextFilter],
 ) -> bool {
-    if !apply_state_filter(heading.todo_state.as_deref(), state_filters) {
+    if !matches_text_filters(heading.todo_state.as_deref(), state_filters) {
         return false;
     }
 
     let combined_tags = combined_tags(tags);
-    if !apply_tags_filter(&combined_tags, tags_filters) {
+    if !matches_tag_filters(&combined_tags, tags_filters) {
         return false;
     }
 
-    apply_type_filter(
+    matches_type_filters(
         heading.scheduled.is_some(),
         heading.deadline.is_some(),
         type_filters,

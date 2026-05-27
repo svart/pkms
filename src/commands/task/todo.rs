@@ -4,6 +4,7 @@ use crate::commands::task_index::{TaskRecord, assign_canonical_ids, collect_todo
 use crate::config::ResolvedConfig;
 use crate::org_date::parse_org_date;
 use crate::output::{Column, OutputContext};
+use crate::tasks::filter::parse_text_filters;
 use crate::tasks::scope::ResolvedScope;
 use crate::workspace::Workspace;
 use anyhow::Result;
@@ -143,9 +144,9 @@ pub fn run(config: &ResolvedConfig, ctx: &OutputContext, opts: &TodoOptions) -> 
     let graph = &workspace.graph;
 
     let valid_states = config.todo_states();
-    let state_filters = parse_filters(opts.state.as_deref());
-    let tags_filters = parse_filters(opts.tags.as_deref());
-    let type_filters = parse_filters(opts.kind.as_deref());
+    let state_filters = parse_text_filters(opts.state.as_deref());
+    let tags_filters = parse_text_filters(opts.tags.as_deref());
+    let type_filters = parse_text_filters(opts.kind.as_deref());
 
     let mut records = collect_todo_records(
         &workspace.corpus,

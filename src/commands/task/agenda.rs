@@ -3,6 +3,7 @@ use crate::commands::task_common::*;
 use crate::commands::task_index::{TaskRecord, assign_canonical_ids, collect_agenda_records};
 use crate::config::ResolvedConfig;
 use crate::output::{Column, OutputContext};
+use crate::tasks::filter::parse_text_filters;
 use crate::workspace::Workspace;
 use anyhow::Result;
 use chrono::{Local, NaiveDate};
@@ -137,9 +138,9 @@ fn run_on(
 
     let valid_states = config.todo_states();
     let closed_states = config.closed_todo_states();
-    let state_filters = parse_filters(opts.state.as_deref());
-    let tags_filters = parse_filters(opts.tags.as_deref());
-    let type_filters = parse_filters(opts.kind.as_deref());
+    let state_filters = parse_text_filters(opts.state.as_deref());
+    let tags_filters = parse_text_filters(opts.tags.as_deref());
+    let type_filters = parse_text_filters(opts.kind.as_deref());
     let mut records = collect_agenda_records(
         &workspace.corpus,
         &valid_states,

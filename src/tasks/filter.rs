@@ -186,12 +186,13 @@ impl TaskDateFilter {
     }
 }
 
-enum TextFilter<'a> {
-    Include(&'a str),
-    Exclude(&'a str),
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TextFilter {
+    Include(String),
+    Exclude(String),
 }
 
-fn parse_text_filters(value: Option<&str>) -> Vec<TextFilter<'_>> {
+pub fn parse_text_filters(value: Option<&str>) -> Vec<TextFilter> {
     value
         .map(|value| {
             value
@@ -200,47 +201,63 @@ fn parse_text_filters(value: Option<&str>) -> Vec<TextFilter<'_>> {
                 .filter(|part| !part.is_empty())
                 .map(|part| {
                     part.strip_prefix('!')
-                        .map(TextFilter::Exclude)
-                        .unwrap_or(TextFilter::Include(part))
+                        .map(|part| TextFilter::Exclude(part.to_string()))
+                        .unwrap_or_else(|| TextFilter::Include(part.to_string()))
                 })
                 .collect()
         })
         .unwrap_or_default()
 }
 
-fn matches_text_filter(value: Option<&str>, filters: Option<&str>) -> bool {
-    parse_text_filters(filters)
-        .iter()
-        .all(|filter| match filter {
-            TextFilter::Include(target) => {
-                value.is_some_and(|value| value.eq_ignore_ascii_case(target))
-            }
-            TextFilter::Exclude(target) => {
-                !value.is_some_and(|value| value.eq_ignore_ascii_case(target))
-            }
-        })
+pub fn matches_text_filters(value: Option<&str>, filters: &[TextFilter]) -> bool {
+    filters.iter().all(|filter| match filter {
+        TextFilter::Include(target) => {
+            value.is_some_and(|value| value.eq_ignore_ascii_case(target))
+        }
+        TextFilter::Exclude(target) => {
+            !value.is_some_and(|value| value.eq_ignore_ascii_case(target))
+        }
+    })
 }
 
-fn matches_tags_filter(filters: Option<&str>, tags: &[String]) -> bool {
-    parse_text_filters(filters)
-        .iter()
-        .all(|filter| match filter {
-            TextFilter::Include(target) => tags.iter().any(|tag| tag == target),
-            TextFilter::Exclude(target) => !tags.iter().any(|tag| tag == target),
-        })
+pub fn matches_tag_filters(tags: &[String], filters: &[TextFilter]) -> bool {
+    filters.iter().all(|filter| match filter {
+        TextFilter::Include(target) => tags.iter().any(|tag| tag == target),
+        TextFilter::Exclude(target) => !tags.iter().any(|tag| tag == target),
+    })
 }
 
-fn matches_type_filter(filters: Option<&str>, item: &TaskItem) -> bool {
-    parse_text_filters(filters).iter().all(|filter| {
+pub fn matches_type_filters(
+    has_scheduled: bool,
+    has_deadline: bool,
+    filters: &[TextFilter],
+) -> bool {
+    filters.iter().all(|filter| {
         let matched = match filter {
-            TextFilter::Include(target) | TextFilter::Exclude(target) => match *target {
-                "SCHED" => item.scheduled.is_some(),
-                "DEADL" => item.deadline.is_some(),
+            TextFilter::Include(target) | TextFilter::Exclude(target) => match target.as_str() {
+                "SCHED" => has_scheduled,
+                "DEADL" => has_deadline,
                 _ => false,
             },
         };
         matches!(filter, TextFilter::Include(_)) == matched
     })
+}
+
+fn matches_text_filter(value: Option<&str>, filters: Option<&str>) -> bool {
+    matches_text_filters(value, &parse_text_filters(filters))
+}
+
+fn matches_tags_filter(filters: Option<&str>, tags: &[String]) -> bool {
+    matches_tag_filters(tags, &parse_text_filters(filters))
+}
+
+fn matches_type_filter(filters: Option<&str>, item: &TaskItem) -> bool {
+    matches_type_filters(
+        item.scheduled.is_some(),
+        item.deadline.is_some(),
+        &parse_text_filters(filters),
+    )
 }
 
 fn matches_priority_filter(filter: Option<&str>, item: &TaskItem) -> bool {
