@@ -6,9 +6,7 @@ use crate::cli::{
 use crate::commands::open::OpenOptions;
 use crate::commands::show::{HeadingTarget, ShowOptions};
 use crate::commands::task_common::{RowItem, print_table_with_empty_message};
-use crate::commands::task_index::{
-    assign_canonical_ids, collect_agenda_records, collect_todo_records,
-};
+use crate::commands::task_index::{assign_canonical_ids, collect_todo_records};
 use crate::config::{ColumnSource, ColumnView, ResolvedConfig};
 use crate::input;
 use crate::org_edit;
@@ -22,7 +20,7 @@ use crate::tasks::filter::{
 };
 use crate::tasks::id::TaskId;
 use crate::tasks::model::{TaskItem, TaskSourceKind};
-use crate::tasks::pkms::record_to_task_item;
+use crate::tasks::pkms::{self, record_to_task_item};
 use crate::tasks::provider::{
     TaskListView, TaskMetadataRow, TaskProvider, TaskProviderContext, TaskQuery,
 };
@@ -442,20 +440,20 @@ impl TaskProvider for PkmsTaskProvider<'_> {
 
     fn list(&self, query: &TaskQuery) -> Result<Vec<TaskItem>> {
         match query.view {
-            TaskListView::All => collect_pkms_list_items(self.context.config),
-            TaskListView::Agenda => collect_pkms_agenda_items(self.context.config),
+            TaskListView::All => pkms::list_items(self.context.config),
+            TaskListView::Agenda => pkms::agenda_items(self.context.config),
             TaskListView::Today => {
-                collect_pkms_agenda_items_for(self.context.config, true, false, false, false)
+                pkms::agenda_items_for(self.context.config, true, false, false, false)
             }
             TaskListView::Week => {
-                collect_pkms_agenda_items_for(self.context.config, false, true, false, false)
+                pkms::agenda_items_for(self.context.config, false, true, false, false)
             }
             TaskListView::Overdue => {
-                collect_pkms_agenda_items_for(self.context.config, false, false, true, false)
+                pkms::agenda_items_for(self.context.config, false, false, true, false)
             }
             TaskListView::Upcoming { days } => {
                 let mut items =
-                    collect_pkms_agenda_items_for(self.context.config, false, false, false, true)?;
+                    pkms::agenda_items_for(self.context.config, false, false, false, true)?;
                 retain_upcoming_task_items(&mut items, days);
                 Ok(items)
             }
@@ -832,24 +830,6 @@ fn run_agenda(config: &ResolvedConfig, ctx: &OutputContext, args: &TaskAgendaArg
     print_agenda_task_items(ctx, filters.source, items, args.limit, columns.as_deref())
 }
 
-fn collect_pkms_list_items(config: &ResolvedConfig) -> Result<Vec<TaskItem>> {
-    let workspace = Workspace::load(config)?;
-    let valid_states = config.todo_states();
-    let no_filters = Vec::new();
-    let mut records = collect_todo_records(
-        &workspace.corpus,
-        &valid_states,
-        &no_filters,
-        &no_filters,
-        &no_filters,
-    );
-    assign_canonical_ids(config, &workspace.graph, &mut records);
-    Ok(records
-        .into_iter()
-        .map(|record| record_to_task_item(config, record))
-        .collect())
-}
-
 fn collect_pkms_inbox_items(config: &ResolvedConfig) -> Result<Vec<TaskItem>> {
     let target = resolve_pkms_inbox_target(config, false)?;
     let workspace = Workspace::load(config)?;
@@ -877,54 +857,6 @@ fn collect_pkms_inbox_items(config: &ResolvedConfig) -> Result<Vec<TaskItem>> {
         }
     };
 
-    Ok(records
-        .into_iter()
-        .map(|record| record_to_task_item(config, record))
-        .collect())
-}
-
-fn collect_pkms_agenda_items(config: &ResolvedConfig) -> Result<Vec<TaskItem>> {
-    collect_pkms_agenda_items_for(config, false, false, false, false)
-}
-
-fn collect_pkms_agenda_items_for(
-    config: &ResolvedConfig,
-    today_only: bool,
-    week: bool,
-    overdue: bool,
-    upcoming: bool,
-) -> Result<Vec<TaskItem>> {
-    let workspace = Workspace::load(config)?;
-    let today = Local::now().date_naive();
-    let valid_states = config.todo_states();
-    let closed_states = config.closed_todo_states();
-    let no_filters = Vec::new();
-    let mut records = collect_agenda_records(
-        &workspace.corpus,
-        &valid_states,
-        &closed_states,
-        today,
-        &no_filters,
-        &no_filters,
-        &no_filters,
-    );
-
-    if week {
-        let cutoff = today + chrono::Duration::days(7);
-        records.retain(|item| item_date(item).is_some_and(|date| date <= cutoff));
-    } else if today_only {
-        records.retain(|item| item_date(item).is_some_and(|date| date == today));
-    }
-
-    if overdue {
-        records.retain(|item| item.is_overdue);
-    }
-
-    if upcoming {
-        records.retain(|item| !item.is_overdue && item_date(item).is_some_and(|date| date > today));
-    }
-
-    assign_canonical_ids(config, &workspace.graph, &mut records);
     Ok(records
         .into_iter()
         .map(|record| record_to_task_item(config, record))
@@ -1083,7 +1015,7 @@ fn collect_task_metadata(
 
 fn pkms_project_rows(config: &ResolvedConfig) -> Result<Vec<TaskMetadataRow>> {
     let mut counts = BTreeMap::new();
-    for item in collect_pkms_list_items(config)? {
+    for item in pkms::list_items(config)? {
         if let Some(project) = item.project.filter(|project| !project.trim().is_empty()) {
             *counts.entry(project).or_insert(0) += 1;
         }
@@ -1101,7 +1033,7 @@ fn pkms_project_rows(config: &ResolvedConfig) -> Result<Vec<TaskMetadataRow>> {
 
 fn pkms_tag_rows(config: &ResolvedConfig) -> Result<Vec<TaskMetadataRow>> {
     let mut counts = BTreeMap::new();
-    for item in collect_pkms_list_items(config)? {
+    for item in pkms::list_items(config)? {
         for tag in item.tags {
             if !tag.trim().is_empty() {
                 *counts.entry(tag).or_insert(0) += 1;
@@ -2380,14 +2312,6 @@ fn quick_add_text(text: &str, project: Option<&str>) -> String {
         }
         _ => text.to_string(),
     }
-}
-
-fn item_date(item: &crate::commands::task_index::TaskRecord) -> Option<NaiveDate> {
-    item.scheduled_date
-        .as_deref()
-        .or(item.deadline_date.as_deref())
-        .or(item.daily_file_date.as_deref())
-        .and_then(|date| NaiveDate::parse_from_str(date, "%Y-%m-%d").ok())
 }
 
 fn retain_upcoming_task_items(items: &mut Vec<TaskItem>, days: i64) {

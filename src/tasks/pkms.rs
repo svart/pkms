@@ -1,9 +1,98 @@
 use crate::commands::task_index::TaskRecord;
+use crate::commands::task_index::{
+    assign_canonical_ids, collect_agenda_records, collect_todo_records,
+};
 use crate::config::ResolvedConfig;
 use crate::tasks::id::TaskId;
 use crate::tasks::model::{TaskDate, TaskItem, TaskSourceKind, TaskStatus};
+use crate::workspace::Workspace;
+use anyhow::Result;
+use chrono::{Local, NaiveDate};
 use std::collections::HashSet;
 use std::path::PathBuf;
+
+pub fn list_items(config: &ResolvedConfig) -> Result<Vec<TaskItem>> {
+    let workspace = Workspace::load(config)?;
+    let valid_states = config.todo_states();
+    let no_filters = Vec::new();
+    let mut records = collect_todo_records(
+        &workspace.corpus,
+        &valid_states,
+        &no_filters,
+        &no_filters,
+        &no_filters,
+    );
+    assign_canonical_ids(config, &workspace.graph, &mut records);
+    Ok(records
+        .into_iter()
+        .map(|record| record_to_task_item(config, record))
+        .collect())
+}
+
+pub fn agenda_items(config: &ResolvedConfig) -> Result<Vec<TaskItem>> {
+    agenda_items_for(config, false, false, false, false)
+}
+
+pub fn agenda_items_for(
+    config: &ResolvedConfig,
+    today_only: bool,
+    week: bool,
+    overdue: bool,
+    upcoming: bool,
+) -> Result<Vec<TaskItem>> {
+    agenda_items_for_on(
+        config,
+        today_only,
+        week,
+        overdue,
+        upcoming,
+        Local::now().date_naive(),
+    )
+}
+
+pub fn agenda_items_for_on(
+    config: &ResolvedConfig,
+    today_only: bool,
+    week: bool,
+    overdue: bool,
+    upcoming: bool,
+    today: NaiveDate,
+) -> Result<Vec<TaskItem>> {
+    let workspace = Workspace::load(config)?;
+    let valid_states = config.todo_states();
+    let closed_states = config.closed_todo_states();
+    let no_filters = Vec::new();
+    let mut records = collect_agenda_records(
+        &workspace.corpus,
+        &valid_states,
+        &closed_states,
+        today,
+        &no_filters,
+        &no_filters,
+        &no_filters,
+    );
+
+    if week {
+        let cutoff = today + chrono::Duration::days(7);
+        records.retain(|item| item_date(item).is_some_and(|date| date <= cutoff));
+    } else if today_only {
+        records.retain(|item| item_date(item).is_some_and(|date| date == today));
+    }
+
+    if overdue {
+        records.retain(|item| item.is_overdue);
+    }
+
+    if upcoming {
+        records.retain(|item| !item.is_overdue && item_date(item).is_some_and(|date| date > today));
+    }
+
+    assign_canonical_ids(config, &workspace.graph, &mut records);
+    Ok(records
+        .into_iter()
+        .map(|record| record_to_task_item(config, record))
+        .collect())
+}
 
 pub fn record_to_task_item(config: &ResolvedConfig, record: TaskRecord) -> TaskItem {
     let id = TaskId::Pkms(record.id);
@@ -77,6 +166,14 @@ fn combine_tags(filetags: &[String], heading_tags: &[String]) -> Vec<String> {
         }
     }
     tags
+}
+
+fn item_date(item: &TaskRecord) -> Option<NaiveDate> {
+    item.scheduled_date
+        .as_deref()
+        .or(item.deadline_date.as_deref())
+        .or(item.daily_file_date.as_deref())
+        .and_then(|date| NaiveDate::parse_from_str(date, "%Y-%m-%d").ok())
 }
 
 #[cfg(test)]
