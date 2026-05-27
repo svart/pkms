@@ -776,6 +776,11 @@ fn render_org_body(graph: &Graph, config: &ResolvedConfig, node: &Node, content:
             i += 1;
             continue;
         }
+        if append_list_continuation(&mut html, &list_stack, line, graph, config, node) {
+            pending_caption = None;
+            i += 1;
+            continue;
+        }
         if let Some(cap) = HEADING_RE.captures(line) {
             flush_paragraph(&mut html, &mut paragraph, graph, config, node);
             close_lists(&mut html, &mut list_stack);
@@ -853,15 +858,24 @@ fn flush_paragraph(
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum ListKind {
-    Ordered,
+    OrderedAlpha,
+    OrderedNumber,
     Unordered,
 }
 
 impl ListKind {
     fn tag(self) -> &'static str {
         match self {
-            Self::Ordered => "ol",
+            Self::OrderedAlpha | Self::OrderedNumber => "ol",
             Self::Unordered => "ul",
+        }
+    }
+
+    fn open_tag(self) -> &'static str {
+        match self {
+            Self::OrderedAlpha => r#"<ol type="a">"#,
+            Self::OrderedNumber => "<ol>",
+            Self::Unordered => "<ul>",
         }
     }
 }
@@ -893,8 +907,7 @@ fn render_list_item(
         .last()
         .is_none_or(|frame| frame.indent < item.indent || frame.kind != item.kind)
     {
-        let tag = item.kind.tag();
-        let _ = writeln!(html, "<{tag}>");
+        let _ = writeln!(html, "{}", item.kind.open_tag());
         stack.push(ListFrame {
             kind: item.kind,
             indent: item.indent,
@@ -913,6 +926,30 @@ fn render_list_item(
         frame.open_item = true;
     }
     html.push_str(&render_inline(graph, config, node, item.text));
+}
+
+fn append_list_continuation(
+    html: &mut String,
+    stack: &[ListFrame],
+    line: &str,
+    graph: &Graph,
+    config: &ResolvedConfig,
+    node: &Node,
+) -> bool {
+    let Some(frame) = stack.last().filter(|frame| frame.open_item) else {
+        return false;
+    };
+    let indent = line.len() - line.trim_start_matches([' ', '\t']).len();
+    if indent <= frame.indent {
+        return false;
+    }
+    let text = line.trim();
+    if text.is_empty() {
+        return false;
+    }
+    html.push(' ');
+    html.push_str(&render_inline(graph, config, node, text));
+    true
 }
 
 fn close_lists(html: &mut String, stack: &mut Vec<ListFrame>) {
@@ -1143,14 +1180,27 @@ fn list_item(line: &str) -> Option<ListItem<'_>> {
             });
         }
     }
-    static ORDERED_RE: LazyLock<Regex> =
+    static ORDERED_NUMBER_RE: LazyLock<Regex> =
         LazyLock::new(|| Regex::new(r"^\d+[\.)]\s+(.+)$").unwrap());
-    ORDERED_RE
+    if let Some(text) = ORDERED_NUMBER_RE
+        .captures(trimmed)
+        .and_then(|cap| cap.get(1).map(|m| m.as_str()))
+    {
+        return Some(ListItem {
+            indent,
+            kind: ListKind::OrderedNumber,
+            text,
+            checked: is_checked_item(text),
+        });
+    }
+    static ORDERED_ALPHA_RE: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r"^[A-Za-z][\.)]\s+(.+)$").unwrap());
+    ORDERED_ALPHA_RE
         .captures(trimmed)
         .and_then(|cap| cap.get(1).map(|m| m.as_str()))
         .map(|text| ListItem {
             indent,
-            kind: ListKind::Ordered,
+            kind: ListKind::OrderedAlpha,
             text,
             checked: is_checked_item(text),
         })
@@ -2318,6 +2368,11 @@ SCHEDULED: <2026-05-27 Wed> DEADLINE: <2026-05-28 Thu>
 - First level
   - Second level
 - Back to first
+- Wrapped first line
+  continued first line
+  a) Alpha child first line
+     continued alpha child
+  b) Beta child
 1. Number one
 2. Number two
    1. Number two child
@@ -2377,6 +2432,9 @@ fn main() {}
         assert!(html.contains("<li>[ ] Open item</li>"));
         assert!(html.contains(
             "<li>First level<ul>\n<li>Second level</li>\n</ul>\n</li>\n<li>Back to first</li>"
+        ));
+        assert!(html.contains(
+            "<li>Wrapped first line continued first line<ol type=\"a\">\n<li>Alpha child first line continued alpha child</li>\n<li>Beta child</li>\n</ol>\n</li>"
         ));
         assert!(html.contains(
             "<ol>\n<li>Number one</li>\n<li>Number two<ol>\n<li>Number two child</li>\n</ol>\n</li>\n<li>Number three</li>\n</ol>"
