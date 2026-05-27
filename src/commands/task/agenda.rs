@@ -113,10 +113,17 @@ impl From<TaskRecord> for AgendaItem {
 }
 
 pub fn run(config: &ResolvedConfig, ctx: &OutputContext, opts: &AgendaOptions) -> Result<()> {
+    run_on(config, ctx, opts, Local::now().date_naive())
+}
+
+fn run_on(
+    config: &ResolvedConfig,
+    ctx: &OutputContext,
+    opts: &AgendaOptions,
+    today_date: NaiveDate,
+) -> Result<()> {
     let workspace = Workspace::load(config)?;
     let graph = &workspace.graph;
-
-    let today_date = Local::now().date_naive();
 
     let date_filter = opts
         .date
@@ -170,8 +177,7 @@ pub fn run(config: &ResolvedConfig, ctx: &OutputContext, opts: &AgendaOptions) -
     let mut items: Vec<AgendaItem> = records.into_iter().map(AgendaItem::from).collect();
 
     if opts.upcoming {
-        let today = Local::now().date_naive();
-        let today_str = today.format("%Y-%m-%d").to_string();
+        let today_str = today_date.format("%Y-%m-%d").to_string();
         items.retain(|item| {
             let is_today = item.scheduled_date.as_deref() == Some(today_str.as_str())
                 || item.deadline_date.as_deref() == Some(today_str.as_str())
@@ -214,8 +220,7 @@ pub fn run(config: &ResolvedConfig, ctx: &OutputContext, opts: &AgendaOptions) -
                 let footer = format!("Total: {} planned item(s)", items.len());
                 print_table(&sections, &opts.columns, opts.line_sep, &footer);
             } else {
-                let today = Local::now().date_naive();
-                let today_str = today.format("%Y-%m-%d").to_string();
+                let today_str = today_date.format("%Y-%m-%d").to_string();
 
                 let mut overdue = Vec::new();
                 let mut today_items = Vec::new();

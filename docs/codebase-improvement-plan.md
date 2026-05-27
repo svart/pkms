@@ -214,6 +214,11 @@ fn agenda_items_for_on(config: &ResolvedConfig, view: AgendaView, today: NaiveDa
 This reduces flaky or date-sensitive tests and simplifies edge-case coverage for
 today, week, overdue, and upcoming behavior.
 
+Phase 5 progress:
+
+- [x] Thread one captured `today` value through `task agenda` via `run_on(...)`
+  instead of calling `Local::now()` in multiple agenda branches.
+
 ### Phase 6: Improve Test Helpers
 
 Keep the current binary integration suite. It is valuable because `pkms` is a
