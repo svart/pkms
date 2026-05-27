@@ -536,6 +536,7 @@ pre {
 
 .org-block-content {
   padding: 0.8rem 0.9rem;
+  white-space: pre-wrap;
 }
 
 .org-block-caption {

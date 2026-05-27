@@ -2256,6 +2256,9 @@ Body.
         assert!(css.contains("ul,\nol {\n  margin: 0 0 1em;\n  padding-left: 1.45em;\n}"));
         assert!(css.contains("p:has(+ ul),\np:has(+ ol) {\n  margin-bottom: 0;\n}"));
         assert!(css.contains("li > ul,\nli > ol {\n  margin-bottom: 0;\n}"));
+        assert!(css.contains(
+            ".org-block-content {\n  padding: 0.8rem 0.9rem;\n  white-space: pre-wrap;\n}"
+        ));
         assert!(css.contains("--tilde-code: #9a3412;"));
         assert!(css.contains("--tilde-code: #c9672c;"));
         assert!(
@@ -2397,6 +2400,7 @@ plain source
 
 #+begin_quote
 quoted *text*
+second quoted line
 #+end_quote
 
 #+begin_verse
@@ -2452,7 +2456,7 @@ generic export
         assert!(html.contains("class=\"org-block org-block-example\""));
         assert!(html.contains("&lt;literal example&gt;"));
         assert!(html.contains("class=\"org-block org-block-quote\""));
-        assert!(html.contains("quoted <strong>text</strong>"));
+        assert!(html.contains("quoted <strong>text</strong>\nsecond quoted line"));
         assert!(html.contains("class=\"org-block org-block-verse\""));
         assert!(html.contains("first line\nsecond line"));
         assert!(html.contains("class=\"org-block org-block-center\""));
