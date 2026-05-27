@@ -1,4 +1,3 @@
-use crate::commands::open;
 use crate::config::ResolvedConfig;
 use crate::graph::{Graph, Node, resolve_file_link_path};
 use crate::output::OutputContext;
@@ -10,8 +9,8 @@ use regex::Regex;
 use serde::Serialize;
 use std::collections::BTreeMap;
 use std::fmt::Write as FmtWrite;
-use std::io::{self, BufRead, BufReader, Write};
-use std::net::{TcpListener, TcpStream};
+use std::io::Write;
+use std::net::TcpListener;
 #[cfg(test)]
 use std::path::PathBuf;
 use std::sync::LazyLock;
@@ -21,6 +20,12 @@ use syntect::parsing::{SyntaxReference, SyntaxSet};
 use syntect::util::LinesWithEndings;
 
 mod assets;
+mod http;
+
+use http::HttpResponse;
+use http::ServeState;
+#[cfg(test)]
+use http::{is_client_disconnect, open_response};
 
 static SYNTAX_SET: LazyLock<SyntaxSet> = LazyLock::new(SyntaxSet::load_defaults_newlines);
 static THEME_SET: LazyLock<ThemeSet> = LazyLock::new(ThemeSet::load_defaults);
@@ -40,12 +45,6 @@ struct ServeStarted {
     host: String,
     port: u16,
     uuid: String,
-}
-
-struct ServeState<'a> {
-    config: &'a ResolvedConfig,
-    graph: Graph,
-    initial_uuid: String,
 }
 
 pub fn run(config: &ResolvedConfig, ctx: &OutputContext, opts: &ServeOptions) -> Result<()> {
@@ -77,252 +76,22 @@ pub fn run(config: &ResolvedConfig, ctx: &OutputContext, opts: &ServeOptions) ->
     for stream in listener.incoming() {
         match stream {
             Ok(stream) => {
-                if let Err(err) = handle_connection(stream, &state) {
-                    log_request_error(&err);
+                if let Err(err) = http::handle_connection(stream, &state) {
+                    http::log_request_error(&err);
                 }
             }
-            Err(err) => log_connection_error(&err),
+            Err(err) => http::log_connection_error(&err),
         }
     }
     Ok(())
 }
 
-fn log_request_error(err: &anyhow::Error) {
-    if is_client_disconnect(err) {
-        tracing::debug!(error = %err, "serve client disconnected before response completed");
-    } else {
-        tracing::warn!(error = %err, "serve request failed");
-    }
-}
-
-fn log_connection_error(err: &io::Error) {
-    if is_client_disconnect_kind(err.kind()) {
-        tracing::debug!(error = %err, "serve client disconnected before request handling");
-    } else {
-        tracing::warn!(error = %err, "serve connection failed");
-    }
-}
-
-fn is_client_disconnect(err: &anyhow::Error) -> bool {
-    err.chain().any(|cause| {
-        cause
-            .downcast_ref::<io::Error>()
-            .is_some_and(|err| is_client_disconnect_kind(err.kind()))
-    })
-}
-
-fn is_client_disconnect_kind(kind: io::ErrorKind) -> bool {
-    matches!(
-        kind,
-        io::ErrorKind::BrokenPipe
-            | io::ErrorKind::ConnectionReset
-            | io::ErrorKind::ConnectionAborted
-    )
-}
-
-fn handle_connection(mut stream: TcpStream, state: &ServeState<'_>) -> Result<()> {
-    let mut reader = BufReader::new(stream.try_clone()?);
-    let mut request_line = String::new();
-    reader.read_line(&mut request_line)?;
-    let mut parts = request_line.split_whitespace();
-    let method = parts.next().unwrap_or_default();
-    let target = parts.next().unwrap_or("/");
-    if method != "GET" && method != "HEAD" && method != "POST" {
-        return write_response(
-            &mut stream,
-            405,
-            "text/plain; charset=utf-8",
-            b"Method not allowed",
-        );
-    }
-
-    let (path, query) = split_target(target);
-    let response = if method == "POST" {
-        match path {
-            "/open" => open_response(state, query, open::DEFAULT_EDITOR),
-            _ => Ok(HttpResponse::method_not_allowed("Method not allowed")),
-        }
-    } else if let Some(font_name) = path.strip_prefix("/font/") {
-        Ok(assets::font_response(font_name))
-    } else {
-        match path {
-            "/" => render_response(state, query),
-            "/preview" => preview_response(state, query),
-            "/asset" => asset_response(state, query),
-            "/open" => Ok(HttpResponse::method_not_allowed("Method not allowed")),
-            _ => Ok(HttpResponse::not_found("Not found")),
-        }
-    }?;
-
-    if method == "HEAD" {
-        write_headers(&mut stream, response.status, response.content_type, 0)
-    } else {
-        write_response(
-            &mut stream,
-            response.status,
-            response.content_type,
-            &response.body,
-        )
-    }
-}
-
-struct HttpResponse {
-    status: u16,
-    content_type: &'static str,
-    body: Vec<u8>,
-}
-
-impl HttpResponse {
-    fn html(body: String) -> Self {
-        Self {
-            status: 200,
-            content_type: "text/html; charset=utf-8",
-            body: body.into_bytes(),
-        }
-    }
-
-    fn not_found(message: &str) -> Self {
-        Self {
-            status: 404,
-            content_type: "text/plain; charset=utf-8",
-            body: message.as_bytes().to_vec(),
-        }
-    }
-
-    fn method_not_allowed(message: &str) -> Self {
-        Self {
-            status: 405,
-            content_type: "text/plain; charset=utf-8",
-            body: message.as_bytes().to_vec(),
-        }
-    }
-
-    fn text(message: String) -> Self {
-        Self {
-            status: 200,
-            content_type: "text/plain; charset=utf-8",
-            body: message.into_bytes(),
-        }
-    }
-}
-
-fn render_response(state: &ServeState<'_>, query: Option<&str>) -> Result<HttpResponse> {
-    let requested = query_param(query, "id").unwrap_or_else(|| state.initial_uuid.clone());
-    let node = state.graph.resolve_target(&requested)?;
-    let content = std::fs::read_to_string(&node.path)
-        .with_context(|| format!("Failed to read {}", node.path.display()))?;
-    Ok(HttpResponse::html(render_note_html(
-        &state.graph,
-        state.config,
-        node,
-        &content,
-    )))
-}
-
-fn preview_response(state: &ServeState<'_>, query: Option<&str>) -> Result<HttpResponse> {
-    let Some(requested) = query_param(query, "id") else {
-        return Ok(HttpResponse::not_found("Missing id"));
-    };
-    let node = state.graph.resolve_target(&requested)?;
-    let content = std::fs::read_to_string(&node.path)
-        .with_context(|| format!("Failed to read {}", node.path.display()))?;
-    Ok(HttpResponse::html(render_preview_html(
-        &state.graph,
-        state.config,
-        node,
-        &content,
-    )))
-}
-
-fn asset_response(state: &ServeState<'_>, query: Option<&str>) -> Result<HttpResponse> {
-    let Some(note_uuid) = query_param(query, "note") else {
-        return Ok(HttpResponse::not_found("Missing note"));
-    };
-    let Some(kind) = query_param(query, "kind") else {
-        return Ok(HttpResponse::not_found("Missing kind"));
-    };
-    let Some(target) = query_param(query, "target") else {
-        return Ok(HttpResponse::not_found("Missing target"));
-    };
-    let note = state.graph.resolve_target(&note_uuid)?;
-    let path = match kind.as_str() {
-        "file" => resolve_file_link_path(&target, &note.path, state.config.resolved_db_root()),
-        "attachment" => assets::resolve_existing_attachment(
-            state.config.resolved_db_root(),
-            &note.uuid,
-            &target,
-        ),
-        _ => return Ok(HttpResponse::not_found("Unknown asset kind")),
-    };
-    if !assets::is_asset_allowed(&path, state.config.resolved_db_root()) || !path.is_file() {
-        return Ok(HttpResponse::not_found("Asset not found"));
-    }
-    let body = std::fs::read(&path)?;
-    Ok(HttpResponse {
-        status: 200,
-        content_type: assets::mime_type(&path),
-        body,
-    })
-}
-
-fn open_response(
-    state: &ServeState<'_>,
-    query: Option<&str>,
-    editor: &str,
-) -> Result<HttpResponse> {
-    let Some(note_uuid) = query_param(query, "id") else {
-        return Ok(HttpResponse::not_found("Missing id"));
-    };
-    let node = state.graph.resolve_target(&note_uuid)?;
-    open::open_target(&state.graph, state.config, &node.uuid, editor, Some(1))?;
-    Ok(HttpResponse::text(format!("Opened {}", node.title)))
-}
-
-fn split_target(target: &str) -> (&str, Option<&str>) {
-    match target.split_once('?') {
-        Some((path, query)) => (path, Some(query)),
-        None => (target, None),
-    }
-}
-
-fn query_param(query: Option<&str>, key: &str) -> Option<String> {
-    query?.split('&').find_map(|part| {
-        let (k, v) = part.split_once('=')?;
-        (k == key).then(|| percent_decode(v))
-    })
-}
-
-fn write_response(
-    stream: &mut TcpStream,
-    status: u16,
-    content_type: &'static str,
-    body: &[u8],
-) -> Result<()> {
-    write_headers(stream, status, content_type, body.len())?;
-    stream.write_all(body)?;
-    Ok(())
-}
-
-fn write_headers(
-    stream: &mut TcpStream,
-    status: u16,
-    content_type: &'static str,
-    content_len: usize,
-) -> Result<()> {
-    let reason = match status {
-        200 => "OK",
-        404 => "Not Found",
-        405 => "Method Not Allowed",
-        _ => "OK",
-    };
-    write!(
-        stream,
-        "HTTP/1.1 {status} {reason}\r\nContent-Type: {content_type}\r\nContent-Length: {content_len}\r\nConnection: close\r\nX-Content-Type-Options: nosniff\r\n\r\n"
-    )?;
-    Ok(())
-}
-
-fn render_note_html(graph: &Graph, config: &ResolvedConfig, node: &Node, content: &str) -> String {
+pub(super) fn render_note_html(
+    graph: &Graph,
+    config: &ResolvedConfig,
+    node: &Node,
+    content: &str,
+) -> String {
     let body = render_org_body(graph, config, node, content);
     let contents = render_contents_panel(config, content);
     let backlinks = render_backlinks_panel(graph, node);
@@ -365,7 +134,7 @@ fn render_note_html(graph: &Graph, config: &ResolvedConfig, node: &Node, content
     )
 }
 
-fn render_preview_html(
+pub(super) fn render_preview_html(
     graph: &Graph,
     config: &ResolvedConfig,
     node: &Node,
@@ -1661,7 +1430,7 @@ fn percent_encode(text: &str) -> String {
     encoded
 }
 
-fn percent_decode(text: &str) -> String {
+pub(super) fn percent_decode(text: &str) -> String {
     let bytes = text.as_bytes();
     let mut decoded = Vec::with_capacity(bytes.len());
     let mut i = 0;
@@ -1901,6 +1670,7 @@ mod tests {
     use crate::config::ResolvedConfig;
     use crate::corpus::Corpus;
     use std::fs;
+    use std::io;
 
     fn test_config(root: PathBuf) -> ResolvedConfig {
         ResolvedConfig {

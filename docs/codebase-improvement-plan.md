@@ -147,6 +147,15 @@ Move tests next to the module they exercise:
 
 Keep `tests/integration/serve.rs` as the end-to-end server contract.
 
+Phase 2 progress:
+
+- [x] Extract serve HTTP routing and response writing into
+  `commands/serve/http.rs`.
+- [ ] Extract serve inline rendering and codec helpers.
+- [ ] Extract serve page shell and panels.
+- [ ] Extract serve org body rendering.
+- [ ] Extract serve syntax highlighting.
+
 ### Phase 3: Add Pure Command Execution Helpers
 
 For command modules touched during feature work, move toward this shape:
@@ -256,7 +265,7 @@ targeted extraction around modules that have become too dense.
 
 - [x] Extract task ID-first parsing from `commands/task/mod.rs` into
    `commands/task/id_command.rs`.
-- [ ] Extract serve HTTP routing and response writing into
+- [x] Extract serve HTTP routing and response writing into
    `commands/serve/http.rs`.
 - [ ] Extract serve inline rendering and codec helpers into
    `commands/serve/inline.rs`.
