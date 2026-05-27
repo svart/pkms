@@ -87,6 +87,13 @@ enum TaskListColumns {
     SourceNeutral(Option<Vec<Column>>),
 }
 
+struct TaskListExecution {
+    source: SourceSelection,
+    items: Vec<TaskItem>,
+    limit: Option<usize>,
+    columns: Option<Vec<Column>>,
+}
+
 impl TaskListRequest {
     fn uses_pkms_todo_path(&self) -> bool {
         matches!(self.filters.source, SourceSelection::Pkms)
@@ -168,22 +175,8 @@ fn run_task_list(
         );
     }
 
-    let mut items =
-        providers::collect_task_items(config, &request.filters, TaskListView::All, request.clock)?;
-    apply_task_filter_criteria_on(
-        config,
-        &mut items,
-        &request.filters.criteria,
-        request.clock.today,
-    )?;
-    sort_task_items(&mut items, request.sort.as_deref().unwrap_or("priority"))?;
-    render::print_task_items(
-        ctx,
-        request.filters.source,
-        items,
-        request.limit,
-        request.source_neutral_columns(),
-    )
+    let output = execute_task_list(config, &request)?;
+    render_task_list(ctx, output)
 }
 
 fn plan_task_list_request(
@@ -237,6 +230,37 @@ fn plan_task_list_request(
         columns,
         clock,
     })
+}
+
+fn execute_task_list(
+    config: &ResolvedConfig,
+    request: &TaskListRequest,
+) -> Result<TaskListExecution> {
+    let mut items =
+        providers::collect_task_items(config, &request.filters, TaskListView::All, request.clock)?;
+    apply_task_filter_criteria_on(
+        config,
+        &mut items,
+        &request.filters.criteria,
+        request.clock.today,
+    )?;
+    sort_task_items(&mut items, request.sort.as_deref().unwrap_or("priority"))?;
+    Ok(TaskListExecution {
+        source: request.filters.source,
+        items,
+        limit: request.limit,
+        columns: request.source_neutral_columns().map(<[Column]>::to_vec),
+    })
+}
+
+fn render_task_list(ctx: &OutputContext, output: TaskListExecution) -> Result<()> {
+    render::print_task_items(
+        ctx,
+        output.source,
+        output.items,
+        output.limit,
+        output.columns.as_deref(),
+    )
 }
 
 fn task_scope(

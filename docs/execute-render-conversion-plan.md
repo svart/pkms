@@ -235,11 +235,11 @@ combinations are legal.
 
 **Planned changes:**
 
-- [ ] Add an internal helper such as `execute_task_list(config, request)`.
-- [ ] Return typed rows plus display metadata such as source, limit, and columns.
-- [ ] Keep provider collection, criteria application, sorting, and limiting in
+- [x] Add an internal helper such as `execute_task_list(config, request)`.
+- [x] Return typed rows plus display metadata such as source, limit, and columns.
+- [x] Keep provider collection, criteria application, sorting, and limiting in
   this execution helper.
-- [ ] Preserve the current PKMS fast path until the typed output can represent
+- [x] Preserve the current PKMS fast path until the typed output can represent
   all required table behavior.
 
 **Benefit:** Tests can cover task list source/filter/sort behavior without
@@ -303,7 +303,7 @@ existing task source and table abstractions.
 7. [x] Convert `show`.
 8. [x] Apply the light `context` cleanup.
 9. [x] Refactor task list request planning.
-10. [ ] Refactor task list execution.
+10. [x] Refactor task list execution.
 11. [ ] Refactor agenda request planning.
 12. [ ] Refactor agenda execution.
 13. [ ] Review whether any remaining read-only command still has duplicated
