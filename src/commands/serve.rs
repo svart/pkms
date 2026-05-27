@@ -19,6 +19,8 @@ use syntect::util::LinesWithEndings;
 
 static SYNTAX_SET: LazyLock<SyntaxSet> = LazyLock::new(SyntaxSet::load_defaults_newlines);
 static THEME_SET: LazyLock<ThemeSet> = LazyLock::new(ThemeSet::load_defaults);
+static PLAIN_URL_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r#"https?://[^\s<>"']+"#).expect("plain URL regex is valid"));
 const SYNTECT_CLASS_STYLE: ClassStyle = ClassStyle::SpacedPrefixed { prefix: "syn-" };
 
 pub struct ServeOptions {
@@ -692,13 +694,15 @@ fn render_inline(graph: &Graph, config: &ResolvedConfig, node: &Node, text: &str
         let Some(m) = cap.get(0) else {
             continue;
         };
-        html.push_str(&render_formatted_text(&text[last..m.start()]));
+        html.push_str(&render_formatted_text_with_plain_links(
+            &text[last..m.start()],
+        ));
         let target = cap.get(1).map_or("", |m| m.as_str());
         let desc = cap.get(2).map(|m| m.as_str()).filter(|s| !s.is_empty());
         html.push_str(&render_link(graph, config, node, target, desc));
         last = m.end();
     }
-    html.push_str(&render_formatted_text(&text[last..]));
+    html.push_str(&render_formatted_text_with_plain_links(&text[last..]));
     html
 }
 
@@ -834,6 +838,43 @@ fn render_formatted_text(text: &str) -> String {
     }
     html.push_str(&render_org_markup(rest));
     html
+}
+
+fn render_formatted_text_with_plain_links(text: &str) -> String {
+    let mut html = String::new();
+    let mut last = 0;
+    for m in PLAIN_URL_RE.find_iter(text) {
+        if !starts_plain_url(text, m.start()) {
+            continue;
+        }
+        let url_end = trim_plain_url_end(m.as_str());
+        if url_end == 0 {
+            continue;
+        }
+        let link_end = m.start() + url_end;
+        html.push_str(&render_formatted_text(&text[last..m.start()]));
+        let url = &text[m.start()..link_end];
+        html.push_str(&format!(
+            "<a href=\"{}\" rel=\"noreferrer\">{}</a>",
+            escape_html(url),
+            escape_html(url)
+        ));
+        last = link_end;
+    }
+    html.push_str(&render_formatted_text(&text[last..]));
+    html
+}
+
+fn starts_plain_url(text: &str, start: usize) -> bool {
+    text[..start]
+        .chars()
+        .next_back()
+        .is_none_or(|ch| ch.is_whitespace() || matches!(ch, '(' | '[' | '{' | '<'))
+}
+
+fn trim_plain_url_end(url: &str) -> usize {
+    url.trim_end_matches(['.', ',', ';', ':', '!', '?', ')', ']', '}'])
+        .len()
 }
 
 fn render_inline_math(input: &str) -> String {
@@ -1443,6 +1484,8 @@ Preview body.
 - [ ] Open item
 
 [[id:bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb][Beta]]
+[[https://example.org/docs][Example docs]]
+Plain link: https://example.com/path?x=1.
 [[attachment:pic.png][Picture]]
 
 | Name | Value |
@@ -1475,6 +1518,14 @@ fn main() {}
         let html = render_note_html(&graph, &config, node, &content);
 
         assert!(html.contains("href=\"/?id=bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb\""));
+        assert!(
+            html.contains(
+                "<a href=\"https://example.org/docs\" rel=\"noreferrer\">Example docs</a>"
+            )
+        );
+        assert!(html.contains(
+            "Plain link: <a href=\"https://example.com/path?x=1\" rel=\"noreferrer\">https://example.com/path?x=1</a>."
+        ));
         assert!(html.contains(
             "<h2 id=\"h-6\" class=\"closed-heading\"><span class=\"todo\">DONE</span> Finished</h2>"
         ));
@@ -1511,6 +1562,49 @@ fn main() {}
         assert!(html.contains("<code class=\"inline-code code-orange\">orange</code>"));
         assert!(html.contains("class=\"katex\""));
         assert!(html.contains("<math"));
+    }
+
+    #[test]
+    fn renders_plain_urls_after_org_links() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().to_path_buf();
+        let roam = root.join("roam");
+        fs::create_dir_all(&roam).unwrap();
+        fs::write(
+            roam.join("a.org"),
+            r#":PROPERTIES:
+:ID:       aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa
+:END:
+#+title: Alpha
+
+[[id:bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb][Beta]] https://example.com and xhttps://not-a-link.test
+"#,
+        )
+        .unwrap();
+        fs::write(
+            roam.join("b.org"),
+            r#":PROPERTIES:
+:ID:       bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb
+:END:
+#+title: Beta
+"#,
+        )
+        .unwrap();
+        let config = test_config(root);
+        let corpus = Corpus::load(&config).unwrap();
+        let graph = Graph::from_corpus(&corpus);
+        let node = graph
+            .resolve_target("aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa")
+            .unwrap();
+        let content = fs::read_to_string(&node.path).unwrap();
+
+        let html = render_note_html(&graph, &config, node, &content);
+
+        assert!(html.contains("href=\"/?id=bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb\""));
+        assert!(html.contains(
+            "<a href=\"https://example.com\" rel=\"noreferrer\">https://example.com</a>"
+        ));
+        assert!(!html.contains("href=\"https://not-a-link.test\""));
     }
 
     #[test]

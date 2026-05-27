@@ -75,7 +75,9 @@ pkms serve <target> --port 0
 HTML. Internal `id:` links navigate to `/?id=<uuid>`, so the browser address bar
 tracks the rendered note. Local `file:` links and `attachment:` links are served
 as assets when they resolve under the database root or the user's home
-directory; image assets are embedded in the page. Org tables are rendered as
+directory; image assets are embedded in the page. Free-standing `http://` and
+`https://` URLs in rendered text are clickable after org links are resolved. Org
+tables are rendered as
 HTML tables, source blocks are highlighted server-side with Syntect, and TeX
 formula text is rendered to static KaTeX HTML without client-side JavaScript.
 The page also includes collapsible floating panels: note contents on the left
