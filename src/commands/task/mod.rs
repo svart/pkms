@@ -36,9 +36,6 @@ mod providers;
 mod render;
 mod todo;
 
-#[cfg(feature = "todoist")]
-const PKMS_NOTE_MARKER_PREFIX: &str = "pkms:id:";
-
 pub fn run(config: &ResolvedConfig, ctx: &OutputContext, command: &TaskCommand) -> Result<()> {
     match command {
         TaskCommand::List(args) => run_list(config, ctx, args),
@@ -448,7 +445,7 @@ fn show_todoist_task(config: &ResolvedConfig, ctx: &OutputContext, id: &str) -> 
         None
     };
     let mut item = crate::tasks::todoist::task_to_item_with_metadata(task, metadata.as_ref());
-    enrich_todoist_items_with_pkms_notes(config, std::slice::from_mut(&mut item))?;
+    crate::tasks::todoist::enrich_items_with_pkms_notes(config, std::slice::from_mut(&mut item))?;
     match ctx.format {
         OutputFormat::Text => render::print_task_table(&[item], 1, SourceSelection::Todoist, None),
         OutputFormat::Json => ctx.print_json(&item),
@@ -632,42 +629,6 @@ pub(super) fn run_deadline(
     }
 }
 
-#[cfg(feature = "todoist")]
-fn pkms_note_marker_uuid(description: &str) -> Option<String> {
-    description.split_whitespace().find_map(|part| {
-        part.strip_prefix(PKMS_NOTE_MARKER_PREFIX)
-            .filter(|uuid| !uuid.is_empty())
-            .map(str::to_string)
-    })
-}
-
-#[cfg(feature = "todoist")]
-pub(super) fn enrich_todoist_items_with_pkms_notes(
-    config: &ResolvedConfig,
-    items: &mut [TaskItem],
-) -> Result<()> {
-    if !items.iter().any(|item| {
-        item.body
-            .as_deref()
-            .and_then(pkms_note_marker_uuid)
-            .is_some()
-    }) {
-        return Ok(());
-    }
-
-    let graph = crate::graph::Graph::load(config)?;
-    for item in items {
-        let Some(uuid) = item.body.as_deref().and_then(pkms_note_marker_uuid) else {
-            continue;
-        };
-        item.note_uuid = Some(uuid.clone());
-        if let Some(node) = graph.find_node(&uuid) {
-            item.note_title = Some(node.title.clone());
-        }
-    }
-    Ok(())
-}
-
 fn set_pkms_task_state(
     config: &ResolvedConfig,
     ctx: &OutputContext,
@@ -725,7 +686,10 @@ fn set_todoist_task_state(
             let metadata = todoist_metadata_for_task(&client, &task)?;
             let mut item =
                 crate::tasks::todoist::task_to_item_with_metadata(task, metadata.as_ref());
-            enrich_todoist_items_with_pkms_notes(config, std::slice::from_mut(&mut item))?;
+            crate::tasks::todoist::enrich_items_with_pkms_notes(
+                config,
+                std::slice::from_mut(&mut item),
+            )?;
             render::print_mutation_output(ctx, "state-open", item)
         }
         _ => bail!("Todoist state supports only 'open' and 'done'."),
@@ -952,7 +916,7 @@ fn create_structured_todoist_task(
 
     let task = client.create_task(&request)?;
     let mut item = crate::tasks::todoist::task_to_item_with_metadata(task, Some(&metadata));
-    enrich_todoist_items_with_pkms_notes(config, std::slice::from_mut(&mut item))?;
+    crate::tasks::todoist::enrich_items_with_pkms_notes(config, std::slice::from_mut(&mut item))?;
     render::print_add_output(ctx, item)
 }
 
@@ -976,7 +940,7 @@ fn quick_add_todoist_task(
     let task = client.get_task(&id)?;
     let metadata = crate::tasks::todoist::TodoistMetadata::new(client.list_projects()?);
     let mut item = crate::tasks::todoist::task_to_item_with_metadata(task, Some(&metadata));
-    enrich_todoist_items_with_pkms_notes(config, std::slice::from_mut(&mut item))?;
+    crate::tasks::todoist::enrich_items_with_pkms_notes(config, std::slice::from_mut(&mut item))?;
     render::print_add_output(ctx, item)
 }
 
@@ -995,7 +959,7 @@ fn mutate_todoist_task(
     let task = client.get_task(id)?;
     let metadata = todoist_metadata_for_task(&client, &task)?;
     let mut item = crate::tasks::todoist::task_to_item_with_metadata(task, metadata.as_ref());
-    enrich_todoist_items_with_pkms_notes(config, std::slice::from_mut(&mut item))?;
+    crate::tasks::todoist::enrich_items_with_pkms_notes(config, std::slice::from_mut(&mut item))?;
     render::print_mutation_output(ctx, action, item)
 }
 
@@ -1025,7 +989,7 @@ fn postpone_todoist_recurring_task(
     let task = client.get_task(id)?;
     let metadata = todoist_metadata_for_task(&client, &task)?;
     let mut item = crate::tasks::todoist::task_to_item_with_metadata(task, metadata.as_ref());
-    enrich_todoist_items_with_pkms_notes(config, std::slice::from_mut(&mut item))?;
+    crate::tasks::todoist::enrich_items_with_pkms_notes(config, std::slice::from_mut(&mut item))?;
     render::print_mutation_output(ctx, "postpone", item)
 }
 

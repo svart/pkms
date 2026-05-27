@@ -5,6 +5,7 @@ use crate::tasks::pkms;
 use crate::tasks::provider::{
     TaskListView, TaskMetadataRow, TaskProvider, TaskProviderContext, TaskQuery,
 };
+use crate::tasks::todoist_provider;
 use anyhow::Result;
 use chrono::NaiveDate;
 use std::collections::BTreeMap;
@@ -189,28 +190,28 @@ impl TaskProvider for TodoistTaskProvider<'_> {
                     .filters
                     .todoist_filter
                     .clone()
-                    .or_else(|| task_view_todoist_filter(TaskListView::Agenda)),
+                    .or_else(|| todoist_provider::task_view_filter(TaskListView::Agenda)),
             ),
             TaskListView::Today
             | TaskListView::Week
             | TaskListView::Overdue
             | TaskListView::Upcoming { .. }
             | TaskListView::Inbox => {
-                let shortcut = task_view_todoist_filter(query.view);
+                let shortcut = todoist_provider::task_view_filter(query.view);
                 query
                     .filters
                     .with_todoist_filter(query.filters.todoist_filter.clone().or(shortcut))
             }
         };
-        collect_todoist_items(self.context.config, &filters)
+        todoist_provider::list_items(self.context.config, &filters)
     }
 
     fn projects(&self) -> Result<Vec<TaskMetadataRow>> {
-        todoist_project_rows(self.context.config)
+        todoist_provider::project_rows(self.context.config)
     }
 
     fn tags(&self) -> Result<Vec<TaskMetadataRow>> {
-        todoist_label_rows(self.context.config)
+        todoist_provider::label_rows(self.context.config)
     }
 }
 
@@ -249,58 +250,6 @@ pub(super) fn collect_task_metadata(
     TaskProviders::new(config).metadata(source, kind)
 }
 
-fn task_view_todoist_filter(view: TaskListView) -> Option<String> {
-    match view {
-        TaskListView::All => None,
-        TaskListView::Agenda => Some("!no date".to_string()),
-        TaskListView::Today => Some("today".to_string()),
-        TaskListView::Week => Some("next 7 days".to_string()),
-        TaskListView::Overdue => Some("overdue".to_string()),
-        TaskListView::Upcoming { days } => Some(format!("due after: today & next {days} days")),
-        TaskListView::Inbox => Some("#Inbox".to_string()),
-    }
-}
-
-#[cfg(feature = "todoist")]
-fn collect_todoist_items(config: &ResolvedConfig, filters: &TaskFilters) -> Result<Vec<TaskItem>> {
-    let token = crate::tasks::todoist::ensure_enabled(config)?;
-    let client =
-        crate::tasks::todoist::TodoistClient::with_base_url(config.todoist_api_base_url(), token);
-    let tasks = match filters
-        .todoist_filter
-        .as_deref()
-        .or_else(|| config.todoist_default_filter())
-    {
-        Some(filter) => client.filter_tasks(filter)?,
-        None => client.list_tasks()?,
-    };
-    let metadata = if tasks.iter().any(|task| task.project_id.is_some()) {
-        Some(crate::tasks::todoist::TodoistMetadata::new(
-            client.list_projects()?,
-        ))
-    } else {
-        None
-    };
-    Ok(tasks
-        .into_iter()
-        .map(|task| crate::tasks::todoist::task_to_item_with_metadata(task, metadata.as_ref()))
-        .collect::<Vec<_>>())
-    .and_then(|mut items| {
-        super::enrich_todoist_items_with_pkms_notes(config, &mut items)?;
-        Ok(items)
-    })
-}
-
-#[cfg(not(feature = "todoist"))]
-fn collect_todoist_items(
-    _config: &ResolvedConfig,
-    _filters: &TaskFilters,
-) -> Result<Vec<TaskItem>> {
-    anyhow::bail!(
-        "Todoist support is not available in this build. Rebuild with --features todoist."
-    )
-}
-
 fn pkms_project_rows(config: &ResolvedConfig) -> Result<Vec<TaskMetadataRow>> {
     let mut counts = BTreeMap::new();
     for item in pkms::list_items(config)? {
@@ -337,52 +286,4 @@ fn pkms_tag_rows(config: &ResolvedConfig) -> Result<Vec<TaskMetadataRow>> {
             count: Some(count),
         })
         .collect())
-}
-
-#[cfg(feature = "todoist")]
-fn todoist_project_rows(config: &ResolvedConfig) -> Result<Vec<TaskMetadataRow>> {
-    let token = crate::tasks::todoist::ensure_enabled(config)?;
-    let client =
-        crate::tasks::todoist::TodoistClient::with_base_url(config.todoist_api_base_url(), token);
-    Ok(client
-        .list_projects()?
-        .into_iter()
-        .map(|project| TaskMetadataRow {
-            source: TaskSourceKind::Todoist,
-            id: project.id,
-            name: project.name,
-            count: None,
-        })
-        .collect())
-}
-
-#[cfg(not(feature = "todoist"))]
-fn todoist_project_rows(_config: &ResolvedConfig) -> Result<Vec<TaskMetadataRow>> {
-    anyhow::bail!(
-        "Todoist support is not available in this build. Rebuild with --features todoist."
-    )
-}
-
-#[cfg(feature = "todoist")]
-fn todoist_label_rows(config: &ResolvedConfig) -> Result<Vec<TaskMetadataRow>> {
-    let token = crate::tasks::todoist::ensure_enabled(config)?;
-    let client =
-        crate::tasks::todoist::TodoistClient::with_base_url(config.todoist_api_base_url(), token);
-    Ok(client
-        .list_labels()?
-        .into_iter()
-        .map(|label| TaskMetadataRow {
-            source: TaskSourceKind::Todoist,
-            id: label.id,
-            name: label.name,
-            count: None,
-        })
-        .collect())
-}
-
-#[cfg(not(feature = "todoist"))]
-fn todoist_label_rows(_config: &ResolvedConfig) -> Result<Vec<TaskMetadataRow>> {
-    anyhow::bail!(
-        "Todoist support is not available in this build. Rebuild with --features todoist."
-    )
 }

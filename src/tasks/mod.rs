@@ -9,3 +9,4 @@ pub mod provider;
 pub mod scope;
 #[cfg(feature = "todoist")]
 pub mod todoist;
+pub mod todoist_provider;

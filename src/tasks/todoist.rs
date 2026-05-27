@@ -6,6 +6,7 @@ use std::collections::HashMap;
 
 const DEFAULT_BASE_URL: &str = "https://api.todoist.com/api/v1";
 const HTTP_LOG_TARGET: &str = "pkms::tasks::todoist::http";
+const PKMS_NOTE_MARKER_PREFIX: &str = "pkms:id:";
 
 pub struct TodoistClient {
     base_url: String,
@@ -102,6 +103,40 @@ impl TodoistMetadata {
             ),
         }
     }
+}
+
+pub fn pkms_note_marker_uuid(description: &str) -> Option<String> {
+    description.split_whitespace().find_map(|part| {
+        part.strip_prefix(PKMS_NOTE_MARKER_PREFIX)
+            .filter(|uuid| !uuid.is_empty())
+            .map(str::to_string)
+    })
+}
+
+pub fn enrich_items_with_pkms_notes(
+    config: &crate::config::ResolvedConfig,
+    items: &mut [TaskItem],
+) -> Result<()> {
+    if !items.iter().any(|item| {
+        item.body
+            .as_deref()
+            .and_then(pkms_note_marker_uuid)
+            .is_some()
+    }) {
+        return Ok(());
+    }
+
+    let graph = crate::graph::Graph::load(config)?;
+    for item in items {
+        let Some(uuid) = item.body.as_deref().and_then(pkms_note_marker_uuid) else {
+            continue;
+        };
+        item.note_uuid = Some(uuid.clone());
+        if let Some(node) = graph.find_node(&uuid) {
+            item.note_title = Some(node.title.clone());
+        }
+    }
+    Ok(())
 }
 
 #[derive(Debug, Serialize)]

@@ -36,13 +36,13 @@ refactor commits.
    Started with `path`: it now has `execute(...) -> Result<PathOutput>`,
    `render(...)`, and focused `render_text(...)` unit tests.
 
-4. [ ] Move task provider implementation out of `commands/task/mod.rs`.
+4. [x] Move task provider implementation out of `commands/task/mod.rs`.
 
-   Partially done. `commands/task/id_command.rs`,
-   `commands/task/providers.rs`, and `commands/task/render.rs` were extracted.
-   PKMS inbox/provider collection now lives in `tasks/pkms.rs`, and org-file
-   PKMS task mutations now live in `tasks/pkms_mutation.rs`. Todoist provider
-   routing still needs a narrower home.
+   Done. `commands/task/id_command.rs`, `commands/task/providers.rs`, and
+   `commands/task/render.rs` were extracted. PKMS inbox/provider collection now
+   lives in `tasks/pkms.rs`, org-file PKMS task mutations live in
+   `tasks/pkms_mutation.rs`, and Todoist provider API/metadata routing lives in
+   `tasks/todoist_provider.rs`.
 
 5. [ ] Inject time where behavior depends on `today`.
 
@@ -83,7 +83,7 @@ refactor commits.
 
 1. [x] Add `lib.rs` and keep behavior identical.
 2. [x] Add focused fixture builder in tests.
-3. [ ] Extract task provider modules.
+3. [x] Extract task provider modules.
 4. [ ] Extract task mutation/date logic and inject clock.
 5. [x] Split `serve.rs` with move-only commits.
 6. [x] Convert one command, `path`, to typed output as the model.
@@ -91,7 +91,6 @@ refactor commits.
 
 ## Not Yet Done
 
-- Move remaining Todoist provider routing into a narrower `tasks/*` module.
 - Consolidate task filtering so source-neutral filters and row-oriented filters
   do not drift.
 - Continue replacing the remaining thin-wrapper `Local::now()` calls in task
