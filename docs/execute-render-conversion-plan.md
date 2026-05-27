@@ -94,19 +94,19 @@ label construction, and presentation.
 
 **Planned changes:**
 
-- [ ] Move scanning/filtering/limiting/query label construction into
+- [x] Move scanning/filtering/limiting/query label construction into
   `execute(config, opts) -> Result<ResolveOutput>`.
-- [ ] Keep field filtering as a render-time concern, since it is output-format
+- [x] Keep field filtering as a render-time concern, since it is output-format
   specific.
-- [ ] Add `render_text(&ResolveOutput, fields)` and `render_ndjson(...)`
+- [x] Add `render_text(&ResolveOutput, fields)` and `render_ndjson(...)`
   helpers.
-- [ ] Add unit tests for text field selection and query/limit metadata.
+- [x] Add unit tests for text field selection and query/limit metadata.
 
 **Acceptance criteria:**
 
-- [ ] Existing `--fields` behavior remains compatible.
-- [ ] JSON output continues to include the full `ResolveOutput`.
-- [ ] NDJSON field filtering remains compatible.
+- [x] Existing `--fields` behavior remains compatible.
+- [x] JSON output continues to include the full `ResolveOutput`.
+- [x] NDJSON field filtering remains compatible.
 
 ### Step 4: Convert `query`
 
@@ -296,7 +296,7 @@ existing task source and table abstractions.
 
 1. [x] Convert `check`.
 2. [x] Convert `get`.
-3. [ ] Convert `resolve`.
+3. [x] Convert `resolve`.
 4. [ ] Convert `query`.
 5. [ ] Convert `suggest`.
 6. [ ] Convert `validate`.

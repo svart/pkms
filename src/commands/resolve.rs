@@ -7,6 +7,7 @@ use crate::parser::{ParsedNoteSummary, parse_note_summary};
 use anyhow::Result;
 use serde::Serialize;
 use std::collections::HashSet;
+use std::fmt::Write;
 use std::path::Path;
 
 #[derive(Debug, Clone, Serialize)]
@@ -107,6 +108,11 @@ pub struct ResolveOptions {
     pub todos: bool,
 }
 
+pub struct ResolveCommandOutput {
+    pub output: ResolveOutput,
+    pub fields: Option<HashSet<String>>,
+}
+
 impl From<&ResolveArgs> for ResolveOptions {
     fn from(args: &ResolveArgs) -> Self {
         ResolveOptions {
@@ -121,6 +127,11 @@ impl From<&ResolveArgs> for ResolveOptions {
 }
 
 pub fn run(config: &ResolvedConfig, ctx: &OutputContext, opts: &ResolveOptions) -> Result<()> {
+    let output = execute(config, opts)?;
+    render(ctx, &output)
+}
+
+pub fn execute(config: &ResolvedConfig, opts: &ResolveOptions) -> Result<ResolveCommandOutput> {
     let db_root = config.resolved_db_root();
     let ignore = config.resolve_ignore_patterns();
     let notes = scan_files(db_root, &ignore, opts.uuid.as_deref());
@@ -189,76 +200,82 @@ pub fn run(config: &ResolvedConfig, ctx: &OutputContext, opts: &ResolveOptions) 
         .unwrap_or_default()
         .to_string();
 
-    print_resolve_output(ctx, &shown, total, showed, field_set.as_ref(), &query_str)?;
-
-    Ok(())
+    Ok(ResolveCommandOutput {
+        output: ResolveOutput {
+            query: query_str,
+            total,
+            showed,
+            results: shown,
+        },
+        fields: field_set,
+    })
 }
 
-fn print_resolve_output(
-    ctx: &OutputContext,
-    results: &[ResolvedNote],
-    total: usize,
-    showed: Option<usize>,
-    field_set: Option<&HashSet<String>>,
-    query_str: &str,
-) -> Result<()> {
+pub fn render(ctx: &OutputContext, output: &ResolveCommandOutput) -> Result<()> {
     match ctx.format {
         OutputFormat::Text => {
-            if total == results.len() {
-                println!("Total: {}", results.len());
-            } else {
-                println!("Total: {}, showed: {}", total, results.len());
-            }
-            for note in results {
-                if let Some(fs) = field_set {
-                    if fs.contains("title") {
-                        println!("  {}", note.title);
-                    }
-                    if fs.contains("uuid") {
-                        println!("         UUID: {}", note.uuid);
-                    }
-                    if fs.contains("path") {
-                        println!("         Path: {}", note.path);
-                    }
-                    if fs.contains("tags") && !note.filetags.is_empty() {
-                        println!("         Tags: {}", note.filetags.join(", "));
-                    }
-                    if fs.contains("categories") && !note.categories.is_empty() {
-                        println!("         Cats: {}", note.categories.join(", "));
-                    }
-                    if fs.contains("aliases") && !note.aliases.is_empty() {
-                        println!("         Aliases: {}", note.aliases.join(", "));
-                    }
-                } else {
-                    println!("  {}", note.title);
-                    println!("         UUID: {}", note.uuid);
-                    if !note.filetags.is_empty() {
-                        println!("         Tags: {}", note.filetags.join(", "));
-                    }
-                    if !note.categories.is_empty() {
-                        println!("         Cats: {}", note.categories.join(", "));
-                    }
-                }
-            }
+            print!("{}", render_text(&output.output, output.fields.as_ref()));
         }
         OutputFormat::Json => {
-            let output = ResolveOutput {
-                query: query_str.to_string(),
-                total,
-                showed,
-                results: results.to_vec(),
-            };
-            ctx.print_json(&output)?;
+            ctx.print_json(&output.output)?;
         }
         OutputFormat::Ndjson => {
-            for note in results {
-                let v = filter_fields(&serde_json::to_value(note)?, field_set);
+            for note in &output.output.results {
+                let v = filter_fields(&serde_json::to_value(note)?, output.fields.as_ref());
                 println!("{}", serde_json::to_string(&v)?);
             }
         }
     }
 
     Ok(())
+}
+
+pub fn render_text(output: &ResolveOutput, field_set: Option<&HashSet<String>>) -> String {
+    let mut text = String::new();
+
+    if output.total == output.results.len() {
+        let _ = writeln!(text, "Total: {}", output.results.len());
+    } else {
+        let _ = writeln!(
+            text,
+            "Total: {}, showed: {}",
+            output.total,
+            output.results.len()
+        );
+    }
+    for note in &output.results {
+        if let Some(fs) = field_set {
+            if fs.contains("title") {
+                let _ = writeln!(text, "  {}", note.title);
+            }
+            if fs.contains("uuid") {
+                let _ = writeln!(text, "         UUID: {}", note.uuid);
+            }
+            if fs.contains("path") {
+                let _ = writeln!(text, "         Path: {}", note.path);
+            }
+            if fs.contains("tags") && !note.filetags.is_empty() {
+                let _ = writeln!(text, "         Tags: {}", note.filetags.join(", "));
+            }
+            if fs.contains("categories") && !note.categories.is_empty() {
+                let _ = writeln!(text, "         Cats: {}", note.categories.join(", "));
+            }
+            if fs.contains("aliases") && !note.aliases.is_empty() {
+                let _ = writeln!(text, "         Aliases: {}", note.aliases.join(", "));
+            }
+        } else {
+            let _ = writeln!(text, "  {}", note.title);
+            let _ = writeln!(text, "         UUID: {}", note.uuid);
+            if !note.filetags.is_empty() {
+                let _ = writeln!(text, "         Tags: {}", note.filetags.join(", "));
+            }
+            if !note.categories.is_empty() {
+                let _ = writeln!(text, "         Cats: {}", note.categories.join(", "));
+            }
+        }
+    }
+
+    text
 }
 
 fn filter_fields(value: &serde_json::Value, fields: Option<&HashSet<String>>) -> serde_json::Value {
@@ -282,6 +299,56 @@ fn filter_fields(value: &serde_json::Value, fields: Option<&HashSet<String>>) ->
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn resolved_note() -> ResolvedNote {
+        ResolvedNote {
+            uuid: "11111111-1111-4111-8111-111111111111".to_string(),
+            title: "Note A".to_string(),
+            path: "/notes/a.org".to_string(),
+            filetags: vec!["tag".to_string()],
+            categories: vec!["cat".to_string()],
+            aliases: vec!["Alias A".to_string()],
+            matched_heading_uuid: None,
+            has_todos: false,
+        }
+    }
+
+    #[test]
+    fn renders_default_text_from_typed_output() {
+        let output = ResolveOutput {
+            query: "Note".to_string(),
+            total: 1,
+            showed: None,
+            results: vec![resolved_note()],
+        };
+
+        let text = render_text(&output, None);
+
+        assert!(text.contains("Total: 1"));
+        assert!(text.contains("  Note A"));
+        assert!(text.contains("         UUID: 11111111-1111-4111-8111-111111111111"));
+        assert!(text.contains("         Tags: tag"));
+        assert!(text.contains("         Cats: cat"));
+    }
+
+    #[test]
+    fn renders_selected_text_fields_and_limit_metadata() {
+        let output = ResolveOutput {
+            query: "Note".to_string(),
+            total: 3,
+            showed: Some(1),
+            results: vec![resolved_note()],
+        };
+        let fields = HashSet::from(["title".to_string(), "path".to_string()]);
+
+        let text = render_text(&output, Some(&fields));
+
+        assert!(text.contains("Total: 3, showed: 1"));
+        assert!(text.contains("  Note A"));
+        assert!(text.contains("         Path: /notes/a.org"));
+        assert!(!text.contains("UUID:"));
+        assert!(!text.contains("Tags:"));
+    }
 
     #[test]
     fn test_filter_fields_none() {
