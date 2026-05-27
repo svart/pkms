@@ -116,16 +116,16 @@ function.
 
 **Planned changes:**
 
-- [ ] Move text/embedding search, TODO filtering, and limit handling into
+- [x] Move text/embedding search, TODO filtering, and limit handling into
   `execute(config, opts) -> Result<QueryOutput>`.
-- [ ] Convert `print_query_output(...)` into `render(ctx, &QueryOutput)`.
-- [ ] Extract a pure `render_text(&QueryOutput) -> String`.
-- [ ] Add unit tests for result counts, `showed`, and text rendering.
+- [x] Convert `print_query_output(...)` into `render(ctx, &QueryOutput)`.
+- [x] Extract a pure `render_text(&QueryOutput) -> String`.
+- [x] Add unit tests for result counts, `showed`, and text rendering.
 
 **Acceptance criteria:**
 
-- [ ] Default and `embed` feature builds still pass.
-- [ ] Text, JSON, and NDJSON output preserve existing contracts.
+- [x] Default and `embed` feature builds still pass.
+- [x] Text, JSON, and NDJSON output preserve existing contracts.
 
 ### Step 5: Convert `suggest`
 
@@ -297,7 +297,7 @@ existing task source and table abstractions.
 1. [x] Convert `check`.
 2. [x] Convert `get`.
 3. [x] Convert `resolve`.
-4. [ ] Convert `query`.
+4. [x] Convert `query`.
 5. [ ] Convert `suggest`.
 6. [ ] Convert `validate`.
 7. [ ] Convert `show`.

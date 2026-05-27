@@ -7,6 +7,7 @@ use crate::graph::search::SearchFields;
 use crate::output::OutputContext;
 use anyhow::Result;
 use serde::Serialize;
+use std::fmt::Write;
 
 #[derive(Serialize)]
 pub struct QueryOutput {
@@ -69,6 +70,11 @@ impl TryFrom<&QueryArgs> for QueryOptions {
 }
 
 pub fn run(config: &ResolvedConfig, ctx: &OutputContext, opts: &QueryOptions) -> Result<()> {
+    let output = execute(config, opts)?;
+    render(ctx, &output)
+}
+
+pub fn execute(config: &ResolvedConfig, opts: &QueryOptions) -> Result<QueryOutput> {
     let graph = Graph::load(config)?;
 
     let mut combined = if opts.embed {
@@ -95,9 +101,12 @@ pub fn run(config: &ResolvedConfig, ctx: &OutputContext, opts: &QueryOptions) ->
         shown
     });
 
-    print_query_output(ctx, &opts.terms, combined, total_results, showed)?;
-
-    Ok(())
+    Ok(QueryOutput {
+        query: opts.terms.clone(),
+        total_results,
+        showed,
+        results: combined,
+    })
 }
 
 fn search_by_text(
@@ -219,50 +228,136 @@ fn search_by_embedding(graph: &Graph, query: &str) -> Result<Vec<QueryResultEntr
     Ok(entries)
 }
 
-fn print_query_output(
-    ctx: &OutputContext,
-    terms: &str,
-    results: Vec<QueryResultEntry>,
-    total_results: usize,
-    showed: Option<usize>,
-) -> Result<()> {
+pub fn render(ctx: &OutputContext, output: &QueryOutput) -> Result<()> {
     match ctx.format {
         OutputFormat::Text => {
-            println!("Query: {terms}");
-            if total_results == results.len() {
-                println!("Results: {}", results.len());
-            } else {
-                println!("Results: {}, showed: {}", total_results, results.len());
-            }
-            println!();
-            for (i, r) in results.iter().enumerate() {
-                println!("{:3}. {}  (score: {:.1})", i + 1, r.title, r.score);
-                println!("       UUID: {}", r.uuid);
-                if !r.matches.is_empty() {
-                    println!("       Matches: {}", r.matches.join(", "));
-                }
-                if !r.content_matches.is_empty() {
-                    for cm in &r.content_matches[..std::cmp::min(3, r.content_matches.len())] {
-                        println!("       > {}", cm.text);
-                    }
-                    if r.content_matches.len() > 3 {
-                        println!("       ... and {} more", r.content_matches.len() - 3);
-                    }
-                }
-            }
+            print!("{}", render_text(output));
         }
         OutputFormat::Json => {
-            ctx.print_json(&QueryOutput {
-                query: terms.to_string(),
-                total_results,
-                showed,
-                results,
-            })?;
+            ctx.print_json(output)?;
         }
         OutputFormat::Ndjson => {
-            ctx.print_ndjson(&results)?;
+            ctx.print_ndjson(&output.results)?;
         }
     }
 
     Ok(())
+}
+
+pub fn render_text(output: &QueryOutput) -> String {
+    let mut text = String::new();
+
+    let _ = writeln!(text, "Query: {}", output.query);
+    if output.total_results == output.results.len() {
+        let _ = writeln!(text, "Results: {}", output.results.len());
+    } else {
+        let _ = writeln!(
+            text,
+            "Results: {}, showed: {}",
+            output.total_results,
+            output.results.len()
+        );
+    }
+    text.push('\n');
+    for (i, r) in output.results.iter().enumerate() {
+        let _ = writeln!(text, "{:3}. {}  (score: {:.1})", i + 1, r.title, r.score);
+        let _ = writeln!(text, "       UUID: {}", r.uuid);
+        if !r.matches.is_empty() {
+            let _ = writeln!(text, "       Matches: {}", r.matches.join(", "));
+        }
+        if !r.content_matches.is_empty() {
+            for cm in &r.content_matches[..std::cmp::min(3, r.content_matches.len())] {
+                let _ = writeln!(text, "       > {}", cm.text);
+            }
+            if r.content_matches.len() > 3 {
+                let _ = writeln!(text, "       ... and {} more", r.content_matches.len() - 3);
+            }
+        }
+    }
+
+    text
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn entry(title: &str, score: f64) -> QueryResultEntry {
+        QueryResultEntry {
+            uuid: "11111111-1111-4111-8111-111111111111".to_string(),
+            title: title.to_string(),
+            path: "/notes/a.org".to_string(),
+            filetags: vec!["tag".to_string()],
+            score,
+            matches: vec!["title".to_string()],
+            content_matches: vec![],
+        }
+    }
+
+    #[test]
+    fn renders_query_text_from_typed_output() {
+        let output = QueryOutput {
+            query: "alpha".to_string(),
+            total_results: 1,
+            showed: None,
+            results: vec![entry("Alpha Note", 10.0)],
+        };
+
+        let text = render_text(&output);
+
+        assert!(text.contains("Query: alpha"));
+        assert!(text.contains("Results: 1"));
+        assert!(text.contains("  1. Alpha Note  (score: 10.0)"));
+        assert!(text.contains("       Matches: title"));
+    }
+
+    #[test]
+    fn renders_limited_result_count_from_typed_output() {
+        let output = QueryOutput {
+            query: "alpha".to_string(),
+            total_results: 4,
+            showed: Some(1),
+            results: vec![entry("Alpha Note", 10.0)],
+        };
+
+        let text = render_text(&output);
+
+        assert!(text.contains("Results: 4, showed: 1"));
+    }
+
+    #[test]
+    fn renders_first_three_content_matches() {
+        let mut result = entry("Alpha Note", 1.0);
+        result.content_matches = vec![
+            ContextLine {
+                line: 1,
+                text: "one".to_string(),
+            },
+            ContextLine {
+                line: 2,
+                text: "two".to_string(),
+            },
+            ContextLine {
+                line: 3,
+                text: "three".to_string(),
+            },
+            ContextLine {
+                line: 4,
+                text: "four".to_string(),
+            },
+        ];
+        let output = QueryOutput {
+            query: "alpha".to_string(),
+            total_results: 1,
+            showed: None,
+            results: vec![result],
+        };
+
+        let text = render_text(&output);
+
+        assert!(text.contains("       > one"));
+        assert!(text.contains("       > three"));
+        assert!(!text.contains("       > four"));
+        assert!(text.contains("       ... and 1 more"));
+    }
 }
