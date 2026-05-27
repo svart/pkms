@@ -195,6 +195,11 @@ file scans.
 This preserves the stateless model because the workspace is still per command
 invocation. It only avoids duplicate work inside one invocation.
 
+Phase 4 progress:
+
+- [x] Reuse parsed graph scan results in `stats --todos` instead of rereading
+  and reparsing note files.
+
 ### Phase 5: Isolate Time
 
 Task behavior should accept an explicit `today: NaiveDate` in core logic.

@@ -238,9 +238,8 @@ fn print_todo_stats(ctx: &OutputContext, graph: &Graph) -> Result<()> {
     }
 
     for node in graph.nodes.values() {
-        if let Ok(content) = std::fs::read_to_string(&node.path) {
-            let parsed = crate::parser::parse_note(&content);
-            for heading in &parsed.headings {
+        if let Some(result) = graph.results.iter().find(|result| result.path == node.path) {
+            for heading in &result.parsed.headings {
                 if let Some(ref state) = heading.todo_state {
                     *by_state.entry(state.to_uppercase()).or_default() += 1;
                 }
