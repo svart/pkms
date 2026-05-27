@@ -173,16 +173,16 @@ coupling is text rendering that still needs graph lookups for link titles.
 
 **Planned changes:**
 
-- [ ] Add resolved link labels to `ShowOutput` or a text-specific typed child
+- [x] Add resolved link labels to `ShowOutput` or a text-specific typed child
   structure during execution.
-- [ ] Convert text rendering to use only typed output.
-- [ ] Add unit tests for rendering parent chain, subtasks, outgoing links, and
+- [x] Convert text rendering to use only typed output.
+- [x] Add unit tests for rendering parent chain, subtasks, outgoing links, and
   content.
 
 **Acceptance criteria:**
 
-- [ ] Text output remains compatible.
-- [ ] JSON output remains compatible unless new fields are skipped or explicitly
+- [x] Text output remains compatible.
+- [x] JSON output remains compatible unless new fields are skipped or explicitly
   documented.
 
 ### Step 8: Light cleanup for `context`
@@ -300,7 +300,7 @@ existing task source and table abstractions.
 4. [x] Convert `query`.
 5. [x] Convert `suggest`.
 6. [x] Convert `validate`.
-7. [ ] Convert `show`.
+7. [x] Convert `show`.
 8. [ ] Apply the light `context` cleanup.
 9. [ ] Refactor task list request planning.
 10. [ ] Refactor task list execution.

@@ -5,6 +5,7 @@ use crate::output::OutputContext;
 use crate::parser::{Link, strip_org_links};
 use anyhow::Result;
 use serde::Serialize;
+use std::fmt::Write;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct RelatedTaskHeading {
@@ -20,6 +21,8 @@ pub struct OutgoingLink {
     pub link_type: String,
     pub target: String,
     pub description: Option<String>,
+    #[serde(skip)]
+    pub resolved_title: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -135,6 +138,7 @@ fn extract_outgoing(links: &[Link]) -> Vec<OutgoingLink> {
                 link_type,
                 target,
                 description: None,
+                resolved_title: None,
             }
         })
         .collect()
@@ -342,38 +346,89 @@ fn process_one_show(
     )
 }
 
-fn print_one_show_text(output: &ShowOutput, graph: &Graph) {
-    println!("Task:       {}", output.heading_title);
-    println!("  File:     {}", output.path);
-    println!("  Lines:    {} – {}", output.line_number, output.end_line);
+fn resolve_outgoing_titles(output: &mut ShowOutput, graph: &Graph) {
+    for link in &mut output.outgoing {
+        if link.link_type == "id" {
+            link.resolved_title = graph.find_node(&link.target).map(|node| node.title.clone());
+        }
+    }
+}
+
+pub fn execute(config: &ResolvedConfig, opts: &ShowOptions) -> Result<Vec<ShowOutput>> {
+    let graph = Graph::load(config)?;
+    opts.targets
+        .iter()
+        .map(|target| {
+            let mut output = process_one_show(&graph, config, target)?;
+            resolve_outgoing_titles(&mut output, &graph);
+            Ok(output)
+        })
+        .collect()
+}
+
+pub fn render(ctx: &OutputContext, outputs: &[ShowOutput]) -> Result<()> {
+    match ctx.format {
+        OutputFormat::Text => {
+            print!("{}", render_text(outputs));
+        }
+        OutputFormat::Json => {
+            ctx.print_json_adaptive(outputs)?;
+        }
+        OutputFormat::Ndjson => {
+            ctx.print_ndjson(outputs)?;
+        }
+    }
+
+    Ok(())
+}
+
+pub fn render_text(outputs: &[ShowOutput]) -> String {
+    outputs
+        .iter()
+        .map(render_one_text)
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn render_one_text(output: &ShowOutput) -> String {
+    let mut text = String::new();
+
+    let _ = writeln!(text, "Task:       {}", output.heading_title);
+    let _ = writeln!(text, "  File:     {}", output.path);
+    let _ = writeln!(
+        text,
+        "  Lines:    {} – {}",
+        output.line_number, output.end_line
+    );
     if let Some(ref state) = output.todo_state {
-        println!("  State:    {}", state);
+        let _ = writeln!(text, "  State:    {}", state);
     }
     if let Some(p) = output.priority {
-        println!("  Priority: [#{}]", p);
+        let _ = writeln!(text, "  Priority: [#{}]", p);
     }
     if !output.tags.is_empty() {
-        println!("  Tags:     {}", output.tags.join(", "));
+        let _ = writeln!(text, "  Tags:     {}", output.tags.join(", "));
     }
     if let Some(ref s) = output.scheduled {
-        println!("  Scheduled: {}", s);
+        let _ = writeln!(text, "  Scheduled: {}", s);
     }
     if let Some(ref d) = output.deadline {
-        println!("  Deadline:  {}", d);
+        let _ = writeln!(text, "  Deadline:  {}", d);
     }
-    println!("  Note:     {}", output.note_title);
-    println!("  Note UUID: {}", output.note_uuid);
+    let _ = writeln!(text, "  Note:     {}", output.note_title);
+    let _ = writeln!(text, "  Note UUID: {}", output.note_uuid);
     if let Some(ref huuid) = output.heading_uuid {
-        println!("  Heading UUID: {}", huuid);
+        let _ = writeln!(text, "  Heading UUID: {}", huuid);
     }
 
     if !output.parents.is_empty() {
-        println!();
-        println!("Parent chain (depends on):");
+        text.push('\n');
+        text.push_str("Parent chain (depends on):\n");
         for p in &output.parents {
             let state_display = p.todo_state.as_deref().unwrap_or("");
             let prio_display = p.priority.map(|c| format!(" [#{}]", c)).unwrap_or_default();
-            println!(
+            let _ = writeln!(
+                text,
                 "  {} {}{} (line {}, level {})",
                 state_display, p.title, prio_display, p.line_number, p.level
             );
@@ -381,12 +436,13 @@ fn print_one_show_text(output: &ShowOutput, graph: &Graph) {
     }
 
     if !output.children.is_empty() {
-        println!();
-        println!("Subtasks (blocks):");
+        text.push('\n');
+        text.push_str("Subtasks (blocks):\n");
         for c in &output.children {
             let state_display = c.todo_state.as_deref().unwrap_or("");
             let prio_display = c.priority.map(|c| format!(" [#{}]", c)).unwrap_or_default();
-            println!(
+            let _ = writeln!(
+                text,
                 "  {} {}{} (line {}, level {})",
                 state_display, c.title, prio_display, c.line_number, c.level
             );
@@ -394,59 +450,86 @@ fn print_one_show_text(output: &ShowOutput, graph: &Graph) {
     }
 
     if !output.outgoing.is_empty() {
-        println!();
-        println!("Outgoing links:");
+        text.push('\n');
+        text.push_str("Outgoing links:\n");
         for link in &output.outgoing {
-            let resolved = if link.link_type == "id" {
-                graph
-                    .find_node(&link.target)
-                    .map(|n| format!(" → {}", n.title))
-                    .unwrap_or_default()
-            } else {
-                String::new()
-            };
-            println!("  {}:{}{}", link.link_type, link.target, resolved);
+            let resolved = link
+                .resolved_title
+                .as_ref()
+                .map(|title| format!(" → {title}"))
+                .unwrap_or_default();
+            let _ = writeln!(text, "  {}:{}{}", link.link_type, link.target, resolved);
         }
     }
 
     if !output.content.is_empty() {
-        println!();
-        println!("--- Content ---");
-        println!("{}", output.content);
-        println!("--- End Content ---");
+        text.push('\n');
+        text.push_str("--- Content ---\n");
+        let _ = writeln!(text, "{}", output.content);
+        text.push_str("--- End Content ---\n");
     }
+
+    text
 }
 
 pub fn run(config: &ResolvedConfig, ctx: &OutputContext, opts: &ShowOptions) -> Result<()> {
-    let graph = Graph::load(config)?;
+    let outputs = execute(config, opts)?;
+    render(ctx, &outputs)
+}
 
-    match ctx.format {
-        OutputFormat::Text => {
-            for target in &opts.targets {
-                let output = process_one_show(&graph, config, target)?;
-                print_one_show_text(&output, &graph);
-                if opts.targets.len() > 1 {
-                    println!();
-                }
-            }
-        }
-        OutputFormat::Json => {
-            let all_outputs: Vec<ShowOutput> = opts
-                .targets
-                .iter()
-                .map(|target| process_one_show(&graph, config, target))
-                .collect::<Result<Vec<_>>>()?;
-            ctx.print_json_adaptive(&all_outputs)?;
-        }
-        OutputFormat::Ndjson => {
-            let all_outputs: Vec<ShowOutput> = opts
-                .targets
-                .iter()
-                .map(|target| process_one_show(&graph, config, target))
-                .collect::<Result<Vec<_>>>()?;
-            ctx.print_ndjson(&all_outputs)?;
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn output() -> ShowOutput {
+        ShowOutput {
+            heading_title: "Task heading".to_string(),
+            line_number: 10,
+            end_line: 14,
+            todo_state: Some("TODO".to_string()),
+            priority: Some('A'),
+            tags: vec!["work".to_string()],
+            filetags: vec!["project".to_string()],
+            scheduled: Some("<2026-05-28 Thu>".to_string()),
+            deadline: None,
+            path: "/notes/task.org".to_string(),
+            note_title: "Task Note".to_string(),
+            note_uuid: "11111111-1111-4111-8111-111111111111".to_string(),
+            heading_uuid: Some("22222222-2222-4222-8222-222222222222".to_string()),
+            parents: vec![RelatedTaskHeading {
+                title: "Parent".to_string(),
+                todo_state: Some("TODO".to_string()),
+                priority: None,
+                line_number: 5,
+                level: 1,
+            }],
+            children: vec![RelatedTaskHeading {
+                title: "Child".to_string(),
+                todo_state: Some("NEXT".to_string()),
+                priority: Some('B'),
+                line_number: 12,
+                level: 3,
+            }],
+            outgoing: vec![OutgoingLink {
+                link_type: "id".to_string(),
+                target: "33333333-3333-4333-8333-333333333333".to_string(),
+                description: None,
+                resolved_title: Some("Linked Note".to_string()),
+            }],
+            content: "* TODO Task heading\nBody".to_string(),
         }
     }
 
-    Ok(())
+    #[test]
+    fn renders_show_text_from_typed_output() {
+        let text = render_text(&[output()]);
+
+        assert!(text.contains("Task:       Task heading"));
+        assert!(text.contains("  Lines:    10 – 14"));
+        assert!(text.contains("  Priority: [#A]"));
+        assert!(text.contains("Parent chain (depends on):"));
+        assert!(text.contains("Subtasks (blocks):"));
+        assert!(text.contains("id:33333333-3333-4333-8333-333333333333 → Linked Note"));
+        assert!(text.contains("--- Content ---\n* TODO Task heading\nBody\n--- End Content ---"));
+    }
 }
