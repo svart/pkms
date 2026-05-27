@@ -25,6 +25,50 @@ static PLAIN_URL_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r#"https?://[^\s<>"']+"#).expect("plain URL regex is valid"));
 const SYNTECT_CLASS_STYLE: ClassStyle = ClassStyle::SpacedPrefixed { prefix: "syn-" };
 
+struct ServedFont {
+    name: &'static str,
+    bytes: &'static [u8],
+    content_type: &'static str,
+}
+
+static SERVED_FONTS: &[ServedFont] = &[
+    ServedFont {
+        name: "Alegreya.ttf",
+        bytes: include_bytes!("serve_fonts/Alegreya.ttf"),
+        content_type: "font/ttf",
+    },
+    ServedFont {
+        name: "Alegreya-Italic.ttf",
+        bytes: include_bytes!("serve_fonts/Alegreya-Italic.ttf"),
+        content_type: "font/ttf",
+    },
+    ServedFont {
+        name: "AlegreyaSans-Regular.ttf",
+        bytes: include_bytes!("serve_fonts/AlegreyaSans-Regular.ttf"),
+        content_type: "font/ttf",
+    },
+    ServedFont {
+        name: "AlegreyaSans-Italic.ttf",
+        bytes: include_bytes!("serve_fonts/AlegreyaSans-Italic.ttf"),
+        content_type: "font/ttf",
+    },
+    ServedFont {
+        name: "AlegreyaSans-Bold.ttf",
+        bytes: include_bytes!("serve_fonts/AlegreyaSans-Bold.ttf"),
+        content_type: "font/ttf",
+    },
+    ServedFont {
+        name: "AlegreyaSans-BoldItalic.ttf",
+        bytes: include_bytes!("serve_fonts/AlegreyaSans-BoldItalic.ttf"),
+        content_type: "font/ttf",
+    },
+    ServedFont {
+        name: "FiraCode.ttf",
+        bytes: include_bytes!("serve_fonts/FiraCode.ttf"),
+        content_type: "font/ttf",
+    },
+];
+
 pub struct ServeOptions {
     pub target: String,
     pub host: String,
@@ -134,11 +178,15 @@ fn handle_connection(mut stream: TcpStream, state: &ServeState<'_>) -> Result<()
     }
 
     let (path, query) = split_target(target);
-    let response = match path {
-        "/" => render_response(state, query),
-        "/preview" => preview_response(state, query),
-        "/asset" => asset_response(state, query),
-        _ => Ok(HttpResponse::not_found("Not found")),
+    let response = if let Some(font_name) = path.strip_prefix("/font/") {
+        Ok(font_response(font_name))
+    } else {
+        match path {
+            "/" => render_response(state, query),
+            "/preview" => preview_response(state, query),
+            "/asset" => asset_response(state, query),
+            _ => Ok(HttpResponse::not_found("Not found")),
+        }
     }?;
 
     if method == "HEAD" {
@@ -232,6 +280,18 @@ fn asset_response(state: &ServeState<'_>, query: Option<&str>) -> Result<HttpRes
         content_type: mime_type(&path),
         body,
     })
+}
+
+fn font_response(name: &str) -> HttpResponse {
+    SERVED_FONTS
+        .iter()
+        .find(|font| font.name == name)
+        .map(|font| HttpResponse {
+            status: 200,
+            content_type: font.content_type,
+            body: font.bytes.to_vec(),
+        })
+        .unwrap_or_else(|| HttpResponse::not_found("Font not found"))
 }
 
 fn resolve_existing_attachment(db_root: &Path, uuid: &str, target: &str) -> PathBuf {
@@ -1634,6 +1694,36 @@ mod tests {
             "permission denied",
         ));
         assert!(!is_client_disconnect(&other));
+    }
+
+    #[test]
+    fn page_css_uses_bundled_font_faces() {
+        let css = page_css();
+
+        assert!(css.contains("@font-face"));
+        assert!(css.contains("font-family: \"PKMS Alegreya\""));
+        assert!(css.contains("font-family: \"PKMS Alegreya Sans\""));
+        assert!(css.contains("font-family: \"PKMS Fira Code\""));
+        assert!(css.contains("url(\"/font/Alegreya.ttf\")"));
+        assert!(css.contains("url(\"/font/Alegreya-Italic.ttf\")"));
+        assert!(css.contains("url(\"/font/AlegreyaSans-Regular.ttf\")"));
+        assert!(css.contains("url(\"/font/AlegreyaSans-Bold.ttf\")"));
+        assert!(css.contains("url(\"/font/FiraCode.ttf\")"));
+        assert!(css.contains("font-display: swap;"));
+    }
+
+    #[test]
+    fn serves_bundled_font_assets_by_exact_name() {
+        let response = font_response("Alegreya.ttf");
+
+        assert_eq!(response.status, 200);
+        assert_eq!(response.content_type, "font/ttf");
+        assert!(response.body.len() > 100_000);
+
+        let missing = font_response("../serve.rs");
+
+        assert_eq!(missing.status, 404);
+        assert_eq!(missing.content_type, "text/plain; charset=utf-8");
     }
 
     #[test]

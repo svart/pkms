@@ -18,6 +18,62 @@
   --deadline-fg: #b93815;
 }
 
+@font-face {
+  font-family: "PKMS Alegreya";
+  src: url("/font/Alegreya.ttf") format("truetype");
+  font-display: swap;
+  font-style: normal;
+  font-weight: 400 700;
+}
+
+@font-face {
+  font-family: "PKMS Alegreya";
+  src: url("/font/Alegreya-Italic.ttf") format("truetype");
+  font-display: swap;
+  font-style: italic;
+  font-weight: 400 700;
+}
+
+@font-face {
+  font-family: "PKMS Alegreya Sans";
+  src: url("/font/AlegreyaSans-Regular.ttf") format("truetype");
+  font-display: swap;
+  font-style: normal;
+  font-weight: 400;
+}
+
+@font-face {
+  font-family: "PKMS Alegreya Sans";
+  src: url("/font/AlegreyaSans-Italic.ttf") format("truetype");
+  font-display: swap;
+  font-style: italic;
+  font-weight: 400;
+}
+
+@font-face {
+  font-family: "PKMS Alegreya Sans";
+  src: url("/font/AlegreyaSans-Bold.ttf") format("truetype");
+  font-display: swap;
+  font-style: normal;
+  font-weight: 600 700;
+}
+
+@font-face {
+  font-family: "PKMS Alegreya Sans";
+  src: url("/font/AlegreyaSans-BoldItalic.ttf") format("truetype");
+  font-display: swap;
+  font-style: italic;
+  font-weight: 600 700;
+}
+
+@font-face {
+  font-family: "PKMS Fira Code";
+  src: url("/font/FiraCode.ttf") format("truetype");
+  font-display: swap;
+  font-style: normal;
+  font-weight: 400 700;
+}
+
 @media (prefers-color-scheme: dark) {
   :root {
     --bg: #0d1117;
@@ -47,7 +103,7 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--fg);
-  font: 18px/1.68 Alegreya, "Iowan Old Style", Palatino, Georgia, serif;
+  font: 18px/1.68 "PKMS Alegreya", "Iowan Old Style", Palatino, Georgia, serif;
 }
 
 main {
@@ -65,7 +121,7 @@ main {
   background: var(--bg);
   border-radius: 6px;
   padding: 0.65rem 0.75rem 0.75rem;
-  font: 14px/1.45 "Alegreya Sans", ui-sans-serif, system-ui, sans-serif;
+  font: 14px/1.45 "PKMS Alegreya Sans", ui-sans-serif, system-ui, sans-serif;
 }
 
 .contents-panel {
@@ -182,7 +238,7 @@ main {
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 1rem 1.1rem;
-  font: 16px/1.58 Alegreya, "Iowan Old Style", Palatino, Georgia, serif;
+  font: 16px/1.58 "PKMS Alegreya", "Iowan Old Style", Palatino, Georgia, serif;
 }
 
 .note-preview[hidden] {
@@ -246,7 +302,7 @@ main {
 
 .eyebrow {
   color: var(--muted);
-  font: 600 12px/1.2 "Alegreya Sans", ui-sans-serif, system-ui, sans-serif;
+  font: 600 12px/1.2 "PKMS Alegreya Sans", ui-sans-serif, system-ui, sans-serif;
   letter-spacing: 0;
   text-transform: uppercase;
   margin: 0 0 8px;
@@ -258,7 +314,7 @@ h3,
 h4,
 h5,
 h6 {
-  font-family: Alegreya, "Iowan Old Style", Palatino, Georgia, serif;
+  font-family: "PKMS Alegreya", "Iowan Old Style", Palatino, Georgia, serif;
   line-height: 1.2;
   margin: 1.5em 0 0.45em;
   font-weight: 700;
@@ -278,7 +334,7 @@ h3 {
 }
 
 .uuid {
-  font: 13px/1.4 "Fira Code", "Fira Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font: 13px/1.4 "PKMS Fira Code", "Fira Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   color: var(--muted);
   overflow-wrap: anywhere;
   margin: 0.75rem 0 0;
@@ -308,14 +364,14 @@ h3 {
   border-radius: 999px;
   background: var(--tag-bg);
   color: var(--tag-fg);
-  font: 600 0.72rem/1.2 "Alegreya Sans", ui-sans-serif, system-ui, sans-serif;
+  font: 600 0.72rem/1.2 "PKMS Alegreya Sans", ui-sans-serif, system-ui, sans-serif;
   padding: 0.12rem 0.45rem;
   white-space: nowrap;
 }
 
 .heading-meta {
   margin: -0.35rem 0 0.95rem;
-  font: 600 0.78rem/1.35 "Alegreya Sans", ui-sans-serif, system-ui, sans-serif;
+  font: 600 0.78rem/1.35 "PKMS Alegreya Sans", ui-sans-serif, system-ui, sans-serif;
 }
 
 .planning {
@@ -382,7 +438,7 @@ table {
   width: 100%;
   border-collapse: collapse;
   margin: 1.2em 0;
-  font-family: "Alegreya Sans", ui-sans-serif, system-ui, sans-serif;
+  font-family: "PKMS Alegreya Sans", ui-sans-serif, system-ui, sans-serif;
   font-size: 0.95em;
 }
 
@@ -403,7 +459,7 @@ pre {
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 1rem;
-  font: 14px/1.55 "Fira Code", "Fira Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font: 14px/1.55 "PKMS Fira Code", "Fira Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
 .org-block {
@@ -418,7 +474,7 @@ pre {
   border-bottom: 1px solid var(--border);
   color: var(--muted);
   background: color-mix(in srgb, var(--surface), var(--border) 16%);
-  font: 700 0.78rem/1.35 "Alegreya Sans", ui-sans-serif, system-ui, sans-serif;
+  font: 700 0.78rem/1.35 "PKMS Alegreya Sans", ui-sans-serif, system-ui, sans-serif;
   padding: 0.42rem 0.7rem;
 }
 
@@ -436,7 +492,7 @@ pre {
 .org-block-caption {
   border-top: 1px solid var(--border);
   color: var(--muted);
-  font: 0.9rem/1.45 "Alegreya Sans", ui-sans-serif, system-ui, sans-serif;
+  font: 0.9rem/1.45 "PKMS Alegreya Sans", ui-sans-serif, system-ui, sans-serif;
   padding: 0.55rem 0.75rem;
 }
 
@@ -470,7 +526,7 @@ pre {
 }
 
 code {
-  font-family: "Fira Code", "Fira Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-family: "PKMS Fira Code", "Fira Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-variant-ligatures: contextual;
 }
 
@@ -492,7 +548,7 @@ figure {
 }
 
 .code figcaption {
-  font: 12px/1.4 "Alegreya Sans", ui-sans-serif, system-ui, sans-serif;
+  font: 12px/1.4 "PKMS Alegreya Sans", ui-sans-serif, system-ui, sans-serif;
   color: var(--muted);
   margin-bottom: 0.35rem;
 }
@@ -635,7 +691,7 @@ figcaption {
 }
 
 .katex .mord.text {
-  font-family: Alegreya, "Iowan Old Style", Palatino, Georgia, serif;
+  font-family: "PKMS Alegreya", "Iowan Old Style", Palatino, Georgia, serif;
 }
 
 .katex .mathnormal {
