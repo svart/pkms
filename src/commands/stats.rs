@@ -21,6 +21,8 @@ pub struct StatsOutput {
     pub broken_links: usize,
     pub disk_size_bytes: u64,
     pub directories: Vec<DirEntry>,
+    #[serde(skip_serializing)]
+    pub recent_days: Option<u32>,
     pub recent_notes: Option<Vec<RecentNote>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub todo_stats: Option<TodoStats>,
@@ -97,6 +99,15 @@ pub struct TagNote {
     pub path: String,
 }
 
+#[derive(Serialize)]
+#[serde(untagged)]
+pub enum StatsCommandOutput {
+    Stats(StatsOutput),
+    Hubs(HubsOutput),
+    Tags(TagsOutput),
+    Todos(TodoStats),
+}
+
 pub struct StatsOptions {
     pub days: Option<u32>,
     pub hubs: Option<usize>,
@@ -116,28 +127,63 @@ impl From<&StatsArgs> for StatsOptions {
 }
 
 pub fn run(config: &ResolvedConfig, ctx: &OutputContext, opts: &StatsOptions) -> Result<()> {
+    let output = execute(config, opts)?;
+    render(ctx, &output)
+}
+
+pub fn execute(config: &ResolvedConfig, opts: &StatsOptions) -> Result<StatsCommandOutput> {
     let graph = Graph::load(config)?;
     let db_root = config.resolved_db_root();
 
     if let Some(limit) = opts.hubs {
-        return print_hubs(ctx, &graph, limit);
+        return Ok(StatsCommandOutput::Hubs(build_hubs_output(&graph, limit)));
     }
 
     if opts.tags {
-        return print_tags(ctx, &graph);
+        return Ok(StatsCommandOutput::Tags(build_tags_output(&graph)));
     }
 
     if opts.todos {
-        return print_todo_stats(ctx, &graph);
+        return Ok(StatsCommandOutput::Todos(build_todo_stats(&graph)));
     }
 
-    print_stats(ctx, opts.days, &graph, db_root)
+    Ok(StatsCommandOutput::Stats(build_stats_output(
+        opts.days, &graph, db_root,
+    )))
 }
 
-fn print_hubs(ctx: &OutputContext, graph: &Graph, limit: usize) -> Result<()> {
+pub fn render(ctx: &OutputContext, output: &StatsCommandOutput) -> Result<()> {
+    match (&ctx.format, output) {
+        (OutputFormat::Text, StatsCommandOutput::Stats(output)) => {
+            println!("{}", render_stats_text(output));
+        }
+        (OutputFormat::Text, StatsCommandOutput::Hubs(output)) => {
+            println!("{}", render_hubs_text(output));
+        }
+        (OutputFormat::Text, StatsCommandOutput::Tags(output)) => {
+            println!("{}", render_tags_text(output));
+        }
+        (OutputFormat::Text, StatsCommandOutput::Todos(output)) => {
+            println!("{}", render_todo_stats_text(output));
+        }
+        (OutputFormat::Json, output) => ctx.print_json(output)?,
+        (OutputFormat::Ndjson, StatsCommandOutput::Stats(output)) => ctx.print_ndjson(&[output])?,
+        (OutputFormat::Ndjson, StatsCommandOutput::Hubs(output)) => {
+            ctx.print_ndjson(&output.hubs)?;
+        }
+        (OutputFormat::Ndjson, StatsCommandOutput::Tags(output)) => {
+            ctx.print_ndjson(&output.tags)?;
+        }
+        (OutputFormat::Ndjson, StatsCommandOutput::Todos(output)) => ctx.print_ndjson(&[output])?,
+    }
+
+    Ok(())
+}
+
+fn build_hubs_output(graph: &Graph, limit: usize) -> HubsOutput {
     let hubs = graph.hubs(limit);
 
-    let entries: Vec<HubEntryDetailed> = hubs
+    let hubs: Vec<HubEntryDetailed> = hubs
         .iter()
         .enumerate()
         .map(|(i, (n, deg))| {
@@ -158,47 +204,12 @@ fn print_hubs(ctx: &OutputContext, graph: &Graph, limit: usize) -> Result<()> {
         })
         .collect();
 
-    match ctx.format {
-        OutputFormat::Text => {
-            println!("Top {limit} hubs:");
-            for (i, (node, deg)) in hubs.iter().enumerate() {
-                let outgoing = node
-                    .outgoing
-                    .iter()
-                    .filter(|l| matches!(l, Link::Internal(_)))
-                    .count();
-                let incoming = graph
-                    .backlinks
-                    .get(&node.uuid)
-                    .map_or(0, std::vec::Vec::len);
-                println!(
-                    "  {:3}. {:40} {} links ({} out / {} in)  {}",
-                    i + 1,
-                    node.title,
-                    deg,
-                    outgoing,
-                    incoming,
-                    node.uuid
-                );
-            }
-        }
-        OutputFormat::Json => {
-            ctx.print_json(&HubsOutput {
-                limit,
-                hubs: entries,
-            })?;
-        }
-        OutputFormat::Ndjson => {
-            ctx.print_ndjson(&entries)?;
-        }
-    }
-
-    Ok(())
+    HubsOutput { limit, hubs }
 }
 
-fn print_tags(ctx: &OutputContext, graph: &Graph) -> Result<()> {
+fn build_tags_output(graph: &Graph) -> TagsOutput {
     let tags = graph.all_tags();
-    let entries: Vec<TagEntry> = tags
+    let tags: Vec<TagEntry> = tags
         .iter()
         .map(|(tag, count)| TagEntry {
             tag: tag.clone(),
@@ -207,27 +218,10 @@ fn print_tags(ctx: &OutputContext, graph: &Graph) -> Result<()> {
         })
         .collect();
 
-    match ctx.format {
-        OutputFormat::Text => {
-            println!("Filetags (count):");
-            for (tag, count) in &tags {
-                println!("  {tag:30} {count}");
-            }
-            println!();
-            println!("Total unique tags: {}", tags.len());
-        }
-        OutputFormat::Json => {
-            ctx.print_json(&TagsOutput { tags: entries })?;
-        }
-        OutputFormat::Ndjson => {
-            ctx.print_ndjson(&entries)?;
-        }
-    }
-
-    Ok(())
+    TagsOutput { tags }
 }
 
-fn print_todo_stats(ctx: &OutputContext, graph: &Graph) -> Result<()> {
+fn build_todo_stats(graph: &Graph) -> TodoStats {
     let mut by_state: BTreeMap<String, usize> = BTreeMap::new();
     let mut files_with_todos = 0;
 
@@ -253,41 +247,15 @@ fn print_todo_stats(ctx: &OutputContext, graph: &Graph) -> Result<()> {
         .map(|(state, count)| TodoStateEntry { state, count })
         .collect();
 
-    let stats = TodoStats {
+    TodoStats {
         total_todo_headings: total,
         files_with_todos,
         by_state: state_entries,
-    };
-
-    match ctx.format {
-        OutputFormat::Text => {
-            println!("TODO Statistics:");
-            println!("  Total TODO headings: {}", stats.total_todo_headings);
-            println!("  Files with TODOs:    {}", stats.files_with_todos);
-            println!();
-            println!("  By state:");
-            for entry in &stats.by_state {
-                println!("    {:20} {}", entry.state, entry.count);
-            }
-        }
-        OutputFormat::Json => {
-            ctx.print_json(&stats)?;
-        }
-        OutputFormat::Ndjson => {
-            println!("{}", serde_json::to_string(&stats)?);
-        }
     }
-
-    Ok(())
 }
 
 #[allow(clippy::cast_precision_loss)]
-fn print_stats(
-    ctx: &OutputContext,
-    days: Option<u32>,
-    graph: &Graph,
-    db_root: &std::path::Path,
-) -> Result<()> {
+fn build_stats_output(days: Option<u32>, graph: &Graph, db_root: &std::path::Path) -> StatsOutput {
     let stats = graph.stats();
 
     let avg = if stats.total_notes > 0 {
@@ -299,54 +267,149 @@ fn print_stats(
     let dirs = graph.directory_breakdown(db_root);
     let disk_size = graph.disk_size();
 
-    if ctx.is_json() {
-        let output = StatsOutput {
-            db_root: db_root.display().to_string(),
-            total_notes: stats.total_notes,
-            total_links: stats.total_links,
-            internal_links: stats.total_internal_links,
-            file_links: stats.total_file_links,
-            url_links: stats.total_url_links,
-            avg_links_per_note: avg,
-            orphans: stats.orphan_notes,
-            broken_links: stats.broken_link_count,
-            disk_size_bytes: disk_size,
-            directories: dirs
+    StatsOutput {
+        db_root: db_root.display().to_string(),
+        total_notes: stats.total_notes,
+        total_links: stats.total_links,
+        internal_links: stats.total_internal_links,
+        file_links: stats.total_file_links,
+        url_links: stats.total_url_links,
+        avg_links_per_note: avg,
+        orphans: stats.orphan_notes,
+        broken_links: stats.broken_link_count,
+        disk_size_bytes: disk_size,
+        directories: dirs
+            .into_iter()
+            .map(|(d, c)| DirEntry {
+                directory: d,
+                count: c,
+            })
+            .collect(),
+        recent_notes: days.map(|d| {
+            graph
+                .notes_since(d)
                 .into_iter()
-                .map(|(d, c)| DirEntry {
-                    directory: d,
-                    count: c,
-                })
-                .collect(),
-            recent_notes: days.map(|d| {
-                graph
-                    .notes_since(d)
-                    .into_iter()
-                    .map(RecentNote::from)
-                    .collect()
-            }),
+                .map(RecentNote::from)
+                .collect()
+        }),
+        recent_days: days,
+        todo_stats: None,
+    }
+}
+
+pub fn render_stats_text(output: &StatsOutput) -> String {
+    let mut lines = vec![
+        format!("Database: {}", output.db_root),
+        format!("  Notes:             {}", output.total_notes),
+        format!(
+            "  Links:             {} (avg: {:.2}/note)",
+            output.total_links, output.avg_links_per_note
+        ),
+        format!("    Internal:        {}", output.internal_links),
+        format!("    File:            {}", output.file_links),
+        format!("    URL:             {}", output.url_links),
+        format!("  Orphans:           {}", output.orphans),
+        format!("  Broken links:      {}", output.broken_links),
+        format!(
+            "  Disk size:         {}",
+            format_size(output.disk_size_bytes)
+        ),
+        String::new(),
+    ];
+    if let (Some(days), Some(recent)) = (output.recent_days, &output.recent_notes) {
+        lines.push(format!("  Recent ({days} days):   {}", recent.len()));
+    }
+    lines.join("\n")
+}
+
+pub fn render_hubs_text(output: &HubsOutput) -> String {
+    let mut lines = vec![format!("Top {} hubs:", output.limit)];
+    lines.extend(output.hubs.iter().map(|entry| {
+        format!(
+            "  {:3}. {:40} {} links ({} out / {} in)  {}",
+            entry.rank, entry.title, entry.degree, entry.outgoing, entry.incoming, entry.uuid
+        )
+    }));
+    lines.join("\n")
+}
+
+pub fn render_tags_text(output: &TagsOutput) -> String {
+    let mut lines = vec!["Filetags (count):".to_string()];
+    lines.extend(
+        output
+            .tags
+            .iter()
+            .map(|entry| format!("  {:30} {}", entry.tag, entry.count)),
+    );
+    lines.push(String::new());
+    lines.push(format!("Total unique tags: {}", output.tags.len()));
+    lines.join("\n")
+}
+
+pub fn render_todo_stats_text(output: &TodoStats) -> String {
+    let mut lines = vec![
+        "TODO Statistics:".to_string(),
+        format!("  Total TODO headings: {}", output.total_todo_headings),
+        format!("  Files with TODOs:    {}", output.files_with_todos),
+        String::new(),
+        "  By state:".to_string(),
+    ];
+    lines.extend(
+        output
+            .by_state
+            .iter()
+            .map(|entry| format!("    {:20} {}", entry.state, entry.count)),
+    );
+    lines.join("\n")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn renders_stats_text_from_typed_output() {
+        let output = StatsOutput {
+            db_root: "/db".to_string(),
+            total_notes: 2,
+            total_links: 3,
+            internal_links: 1,
+            file_links: 1,
+            url_links: 1,
+            avg_links_per_note: 1.5,
+            orphans: 1,
+            broken_links: 0,
+            disk_size_bytes: 1024,
+            directories: vec![DirEntry {
+                directory: "roam".to_string(),
+                count: 2,
+            }],
+            recent_days: None,
+            recent_notes: None,
             todo_stats: None,
         };
-        ctx.print_json(&output)?;
-    } else {
-        println!("Database: {}", db_root.display());
-        println!("  Notes:             {}", stats.total_notes);
-        println!(
-            "  Links:             {} (avg: {:.2}/note)",
-            stats.total_links, avg
-        );
-        println!("    Internal:        {}", stats.total_internal_links);
-        println!("    File:            {}", stats.total_file_links);
-        println!("    URL:             {}", stats.total_url_links);
-        println!("  Orphans:           {}", stats.orphan_notes);
-        println!("  Broken links:      {}", stats.broken_link_count);
-        println!("  Disk size:         {}", format_size(disk_size));
-        println!();
-        if let Some(d) = days {
-            let recent = graph.notes_since(d);
-            println!("  Recent ({} days):   {}", d, recent.len());
-        }
+
+        let text = render_stats_text(&output);
+
+        assert!(text.contains("Database: /db"));
+        assert!(text.contains("  Links:             3 (avg: 1.50/note)"));
+        assert!(text.contains("  Disk size:         1.0 KB"));
     }
 
-    Ok(())
+    #[test]
+    fn renders_todo_stats_text_from_typed_output() {
+        let output = TodoStats {
+            total_todo_headings: 2,
+            files_with_todos: 1,
+            by_state: vec![TodoStateEntry {
+                state: "TODO".to_string(),
+                count: 2,
+            }],
+        };
+
+        assert_eq!(
+            render_todo_stats_text(&output),
+            "TODO Statistics:\n  Total TODO headings: 2\n  Files with TODOs:    1\n\n  By state:\n    TODO                 2"
+        );
+    }
 }

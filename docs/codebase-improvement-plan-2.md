@@ -12,9 +12,11 @@ refactor commits.
   orchestration, and rendering helpers have been extracted.
 - `serve.rs` has been split by responsibility into HTTP, assets, page
   rendering, org rendering, inline rendering, and syntax highlighting modules.
-- Some command behavior is easier to unit test now, especially `path`, which has
-  a typed output and text-rendering unit tests.
+- Some command behavior is easier to unit test now, especially `path`,
+  `orphans`, and `stats`, which have typed output and text-rendering unit
+  tests.
 - Testability has improved incrementally with `ResolvedConfig::for_test_db(...)`
+  the integration `TestDb` builder, task clock injection, shared task filters,
   and by reducing repeated parsing in `stats --todos`.
 
 ## Improvement Plan
@@ -33,8 +35,9 @@ refactor commits.
 
 3. [x] Split command execution from presentation incrementally.
 
-   Started with `path`: it now has `execute(...) -> Result<PathOutput>`,
-   `render(...)`, and focused `render_text(...)` unit tests.
+   Done for the current plan scope. `path`, `orphans`, and `stats` now have
+   typed `execute(...)` / `render(...)` boundaries with focused text-rendering
+   unit tests.
 
 4. [x] Move task provider implementation out of `commands/task/mod.rs`.
 
@@ -74,11 +77,12 @@ refactor commits.
    renderer tests. Integration tests also have a small chainable
    `TestDb::new().note(...).task(...)` fixture builder.
 
-9. [ ] Keep binary tests for contracts, add library tests for logic.
+9. [x] Keep binary tests for contracts, add library tests for logic.
 
-   Partially done. Binary integration tests remain the contract layer, and unit
-   tests were added for `path` and `orphans` rendering. More command logic still
-   relies primarily on binary integration tests.
+   Done. Binary integration tests remain the contract layer, while command
+   rendering and pure logic have focused unit tests for `path`, `orphans`, and
+   `stats`, plus the extracted task filter, clock, provider, and mutation
+   helpers.
 
 ## Suggested Order
 
@@ -88,10 +92,9 @@ refactor commits.
 4. [x] Extract task mutation/date logic and inject clock.
 5. [x] Split `serve.rs` with move-only commits.
 6. [x] Convert one command, `path`, to typed output as the model.
-7. [ ] Apply the typed-output pattern as commands are touched for features.
+7. [x] Apply the typed-output pattern as commands are touched for features.
 
 ## Not Yet Done
 
-- Move more pure command behavior behind typed `execute`/`render` boundaries
-  when those commands are touched for feature work; `path` and `orphans` are the
-  current examples.
+All listed second-plan work is implemented. Future command changes should keep
+following the typed `execute`/`render` pattern where it reduces coupling.
