@@ -112,7 +112,7 @@ Phase 1 progress:
   `commands/task/id_command.rs`.
 - [x] Extract provider orchestration and source selection into
   `commands/task/providers.rs`.
-- [ ] Extract task rendering helpers.
+- [x] Extract task rendering helpers into `commands/task/render.rs`.
 
 ### Phase 2: Split `serve.rs`
 

@@ -1,16 +1,17 @@
+#[cfg(feature = "todoist")]
+use crate::cli::OutputFormat;
 use crate::cli::{
-    OutputFormat, TaskAddArgs, TaskAgendaArgs, TaskAgendaCommand, TaskCommand, TaskDeadlineArgs,
-    TaskDoneArgs, TaskListArgs, TaskOpenArgs, TaskPostponeArgs, TaskScheduleArgs, TaskShortcutArgs,
+    TaskAddArgs, TaskAgendaArgs, TaskAgendaCommand, TaskCommand, TaskDeadlineArgs, TaskDoneArgs,
+    TaskListArgs, TaskOpenArgs, TaskPostponeArgs, TaskScheduleArgs, TaskShortcutArgs,
     TaskStateArgs, TaskTargetArgs, TaskUpcomingArgs,
 };
 use crate::commands::open::OpenOptions;
 use crate::commands::show::{HeadingTarget, ShowOptions};
-use crate::commands::task_common::{RowItem, print_table_with_empty_message};
 use crate::commands::task_index::{assign_canonical_ids, collect_todo_records};
 use crate::config::{ColumnSource, ColumnView, ResolvedConfig};
 use crate::input;
 use crate::org_edit;
-use crate::output::{ALL_COLUMNS, Column, OutputContext};
+use crate::output::{Column, OutputContext};
 use crate::parser::{DEADLINE_RE, HEADING_RE, SCHEDULED_RE, find_daily_file_date};
 use crate::tasks::add::{
     TaskAddSpec, org_date, parse_add_date_arg, pkms_priority, validate_pkms_date_arg,
@@ -28,28 +29,18 @@ use crate::util;
 use crate::workspace::Workspace;
 use anyhow::{Context, Result, bail};
 use chrono::{Local, NaiveDate};
+#[cfg(feature = "todoist")]
 use serde::Serialize;
 use std::path::{Path, PathBuf};
-use tabled::builder::Builder;
-use tabled::settings::Style;
 
 mod agenda;
 mod id_command;
 mod providers;
+mod render;
 mod todo;
 
 #[cfg(feature = "todoist")]
 const PKMS_NOTE_MARKER_PREFIX: &str = "pkms:id:";
-
-#[derive(Debug, Serialize)]
-struct TaskStateChangeOutput {
-    id: String,
-    path: String,
-    line_number: usize,
-    old_state: String,
-    new_state: String,
-    dry_run: bool,
-}
 
 #[derive(Debug, Clone)]
 enum PkmsInboxTarget {
@@ -61,76 +52,6 @@ enum PkmsInboxTarget {
 enum PlanningKind {
     Scheduled,
     Deadline,
-}
-
-#[derive(Clone, Copy)]
-struct TaskRow<'a> {
-    item: &'a TaskItem,
-    source: SourceSelection,
-}
-
-impl RowItem for TaskRow<'_> {
-    fn id(&self) -> usize {
-        0
-    }
-
-    fn display_id(&self) -> String {
-        match self.source {
-            SourceSelection::All => match self.item.source {
-                TaskSourceKind::Pkms => format!("p{}", self.item.source_id),
-                TaskSourceKind::Todoist => format!("t{}", self.item.source_id),
-            },
-            SourceSelection::Pkms | SourceSelection::Todoist => self.item.source_id.clone(),
-        }
-    }
-
-    fn todo_state(&self) -> Option<&str> {
-        self.item.state.as_deref()
-    }
-
-    fn priority(&self) -> Option<char> {
-        self.item.priority_char()
-    }
-
-    fn title(&self) -> &str {
-        self.item.note_title.as_deref().unwrap_or_default()
-    }
-
-    fn heading_title(&self) -> &str {
-        &self.item.title
-    }
-
-    fn project(&self) -> Option<&str> {
-        self.item.project.as_deref()
-    }
-
-    fn filetags(&self) -> &[String] {
-        &self.item.tags
-    }
-
-    fn heading_tags(&self) -> &[String] {
-        &[]
-    }
-
-    fn scheduled(&self) -> Option<&str> {
-        self.item.scheduled.as_ref().map(|date| date.raw.as_str())
-    }
-
-    fn deadline(&self) -> Option<&str> {
-        self.item.deadline.as_ref().map(|date| date.raw.as_str())
-    }
-
-    fn daily_file_date(&self) -> Option<&str> {
-        self.item.daily_file_date.as_deref()
-    }
-
-    fn scheduled_date_str(&self) -> Option<&str> {
-        self.item.scheduled_date_str()
-    }
-
-    fn deadline_date_str(&self) -> Option<&str> {
-        self.item.deadline_date_str()
-    }
 }
 
 pub fn run(config: &ResolvedConfig, ctx: &OutputContext, command: &TaskCommand) -> Result<()> {
@@ -255,7 +176,7 @@ fn run_task_list(
         ColumnView::Tasks,
         args.table.columns.as_deref(),
     )?;
-    print_task_items(ctx, filters.source, items, args.limit, columns.as_deref())
+    render::print_task_items(ctx, filters.source, items, args.limit, columns.as_deref())
 }
 
 fn task_scope(
@@ -284,7 +205,7 @@ fn run_shortcut(
         shortcut_column_view(kind),
         args.table.columns.as_deref(),
     )?;
-    print_task_items(ctx, source, items, args.limit, columns.as_deref())
+    render::print_task_items(ctx, source, items, args.limit, columns.as_deref())
 }
 
 fn run_upcoming(
@@ -307,7 +228,7 @@ fn run_upcoming(
         ColumnView::Agenda,
         args.table.columns.as_deref(),
     )?;
-    print_task_items(ctx, source, items, args.limit, columns.as_deref())
+    render::print_task_items(ctx, source, items, args.limit, columns.as_deref())
 }
 
 fn shortcut_display_source(raw_filters: &[String]) -> Result<SourceSelection> {
@@ -476,7 +397,7 @@ fn run_agenda(config: &ResolvedConfig, ctx: &OutputContext, args: &TaskAgendaArg
         ColumnView::Agenda,
         args.table.columns.as_deref(),
     )?;
-    print_agenda_task_items(ctx, filters.source, items, args.limit, columns.as_deref())
+    render::print_agenda_task_items(ctx, filters.source, items, args.limit, columns.as_deref())
 }
 
 pub(super) fn collect_pkms_inbox_items(config: &ResolvedConfig) -> Result<Vec<TaskItem>> {
@@ -569,7 +490,7 @@ fn show_todoist_task(config: &ResolvedConfig, ctx: &OutputContext, id: &str) -> 
     let mut item = crate::tasks::todoist::task_to_item_with_metadata(task, metadata.as_ref());
     enrich_todoist_items_with_pkms_notes(config, std::slice::from_mut(&mut item))?;
     match ctx.format {
-        OutputFormat::Text => print_task_table(&[item], 1, SourceSelection::Todoist, None),
+        OutputFormat::Text => render::print_task_table(&[item], 1, SourceSelection::Todoist, None),
         OutputFormat::Json => ctx.print_json(&item),
         OutputFormat::Ndjson => ctx.print_ndjson(&[item]),
     }
@@ -594,7 +515,7 @@ fn run_projects(config: &ResolvedConfig, ctx: &OutputContext, filters: &[String]
         providers::MetadataKind::Projects,
     )?;
     sort_metadata_rows(&mut rows);
-    print_metadata_rows(ctx, "project", &rows)
+    render::print_metadata_rows(ctx, "project", &rows)
 }
 
 fn run_tags(config: &ResolvedConfig, ctx: &OutputContext, filters: &[String]) -> Result<()> {
@@ -608,7 +529,7 @@ fn run_tags(config: &ResolvedConfig, ctx: &OutputContext, filters: &[String]) ->
     let mut rows =
         providers::collect_task_metadata(config, filters.source, providers::MetadataKind::Tags)?;
     sort_metadata_rows(&mut rows);
-    print_metadata_rows(ctx, "tag", &rows)
+    render::print_metadata_rows(ctx, "tag", &rows)
 }
 
 fn sort_metadata_rows(rows: &mut [TaskMetadataRow]) {
@@ -624,44 +545,6 @@ fn source_sort_key(source: &TaskSourceKind) -> u8 {
     match source {
         TaskSourceKind::Pkms => 0,
         TaskSourceKind::Todoist => 1,
-    }
-}
-
-fn print_metadata_rows(ctx: &OutputContext, kind: &str, rows: &[TaskMetadataRow]) -> Result<()> {
-    match ctx.format {
-        OutputFormat::Text => {
-            if rows.is_empty() {
-                println!("No task {kind}s found.");
-                return Ok(());
-            }
-            let mut builder = Builder::new();
-            builder.push_record(["Source", "Name", "Count"]);
-            for row in rows {
-                builder.push_record([
-                    format!("{:?}", row.source).to_ascii_lowercase(),
-                    row.name.clone(),
-                    row.count.map(|count| count.to_string()).unwrap_or_default(),
-                ]);
-            }
-            let mut table = builder.build();
-            table.with(Style::blank());
-            println!("{table}");
-            println!();
-            println!("Total: {} task {kind}(s)", rows.len());
-            Ok(())
-        }
-        OutputFormat::Json => {
-            #[derive(Serialize)]
-            struct MetadataOutput<'a> {
-                total: usize,
-                items: &'a [TaskMetadataRow],
-            }
-            ctx.print_json(&MetadataOutput {
-                total: rows.len(),
-                items: rows,
-            })
-        }
-        OutputFormat::Ndjson => ctx.print_ndjson(rows),
     }
 }
 
@@ -844,9 +727,9 @@ fn set_pkms_task_state(
     let graph = crate::graph::Graph::load(config)?;
     let (path, line_number) = graph.resolve_canonical_task_id(config, canonical_id)?;
     let output = replace_heading_state(&path, line_number, &new_state, dry_run)?;
-    print_state_change(
+    render::print_state_change(
         ctx,
-        &TaskStateChangeOutput {
+        &render::TaskStateChangeOutput {
             id: TaskId::Pkms(canonical_id).display_id(),
             path: output.path,
             line_number: output.line_number,
@@ -883,7 +766,7 @@ fn set_todoist_task_state(
             let mut item =
                 crate::tasks::todoist::task_to_item_with_metadata(task, metadata.as_ref());
             enrich_todoist_items_with_pkms_notes(config, std::slice::from_mut(&mut item))?;
-            print_mutation_output(ctx, "state-open", item)
+            render::print_mutation_output(ctx, "state-open", item)
         }
         _ => bail!("Todoist state supports only 'open' and 'done'."),
     }
@@ -1083,7 +966,7 @@ fn add_pkms_task(config: &ResolvedConfig, ctx: &OutputContext, spec: &TaskAddSpe
             inbox_path.display()
         )
     })?;
-    print_add_output(ctx, item)
+    render::print_add_output(ctx, item)
 }
 
 fn append_pkms_inbox_entry(target: &PkmsInboxTarget, entry: &str) -> Result<(PathBuf, usize)> {
@@ -1124,7 +1007,7 @@ fn replace_heading_state(
     line_number: usize,
     new_state: &str,
     dry_run: bool,
-) -> Result<TaskStateChangeOutput> {
+) -> Result<render::TaskStateChangeOutput> {
     let mut lines = org_edit::read_lines(path)?;
     let idx = line_number
         .checked_sub(1)
@@ -1142,7 +1025,7 @@ fn replace_heading_state(
         .ok_or_else(|| anyhow::anyhow!("Task line {line_number} does not have a TODO state"))?;
     let old_state = state_match.as_str().to_string();
     if old_state == new_state {
-        return Ok(TaskStateChangeOutput {
+        return Ok(render::TaskStateChangeOutput {
             id: String::new(),
             path: path.to_string(),
             line_number,
@@ -1159,7 +1042,7 @@ fn replace_heading_state(
         org_edit::write_lines(path, &lines)?;
     }
 
-    Ok(TaskStateChangeOutput {
+    Ok(render::TaskStateChangeOutput {
         id: String::new(),
         path: path.to_string(),
         line_number,
@@ -1167,25 +1050,6 @@ fn replace_heading_state(
         new_state: new_state.to_string(),
         dry_run,
     })
-}
-
-fn print_state_change(ctx: &OutputContext, output: &TaskStateChangeOutput) -> Result<()> {
-    match ctx.format {
-        OutputFormat::Text => {
-            let action = if output.dry_run {
-                "Would change"
-            } else {
-                "Changed"
-            };
-            println!(
-                "{action} {}:{} from {} to {}",
-                output.path, output.line_number, output.old_state, output.new_state
-            );
-            Ok(())
-        }
-        OutputFormat::Json => ctx.print_json(output),
-        OutputFormat::Ndjson => ctx.print_ndjson(std::slice::from_ref(output)),
-    }
 }
 
 fn set_pkms_task_planning(
@@ -1208,7 +1072,7 @@ fn set_pkms_task_planning(
     let item = find_pkms_task_item(config, Path::new(&path), line_number)?.with_context(|| {
         format!("Changed task but could not reload it from {path}:{line_number}")
     })?;
-    print_mutation_output(
+    render::print_mutation_output(
         ctx,
         if date.is_some() {
             set_action
@@ -1232,7 +1096,7 @@ fn postpone_pkms_recurring_task(
     let item = find_pkms_task_item(config, Path::new(&path), line_number)?.with_context(|| {
         format!("Changed task but could not reload it from {path}:{line_number}")
     })?;
-    print_mutation_output(ctx, "postpone", item)
+    render::print_mutation_output(ctx, "postpone", item)
 }
 
 fn update_heading_planning_date(
@@ -1471,7 +1335,7 @@ fn create_structured_todoist_task(
     let task = client.create_task(&request)?;
     let mut item = crate::tasks::todoist::task_to_item_with_metadata(task, Some(&metadata));
     enrich_todoist_items_with_pkms_notes(config, std::slice::from_mut(&mut item))?;
-    print_add_output(ctx, item)
+    render::print_add_output(ctx, item)
 }
 
 #[cfg(feature = "todoist")]
@@ -1495,28 +1359,7 @@ fn quick_add_todoist_task(
     let metadata = crate::tasks::todoist::TodoistMetadata::new(client.list_projects()?);
     let mut item = crate::tasks::todoist::task_to_item_with_metadata(task, Some(&metadata));
     enrich_todoist_items_with_pkms_notes(config, std::slice::from_mut(&mut item))?;
-    print_add_output(ctx, item)
-}
-
-fn print_add_output(ctx: &OutputContext, item: TaskItem) -> Result<()> {
-    #[derive(Serialize)]
-    struct AddOutput {
-        created: bool,
-        item: TaskItem,
-    }
-
-    let output = AddOutput {
-        created: true,
-        item,
-    };
-    match ctx.format {
-        OutputFormat::Text => {
-            print_created_task(&output.item);
-            Ok(())
-        }
-        OutputFormat::Json => ctx.print_json(&output),
-        OutputFormat::Ndjson => ctx.print_ndjson(&[output]),
-    }
+    render::print_add_output(ctx, item)
 }
 
 #[cfg(feature = "todoist")]
@@ -1535,7 +1378,7 @@ fn mutate_todoist_task(
     let metadata = todoist_metadata_for_task(&client, &task)?;
     let mut item = crate::tasks::todoist::task_to_item_with_metadata(task, metadata.as_ref());
     enrich_todoist_items_with_pkms_notes(config, std::slice::from_mut(&mut item))?;
-    print_mutation_output(ctx, action, item)
+    render::print_mutation_output(ctx, action, item)
 }
 
 #[cfg(feature = "todoist")]
@@ -1565,7 +1408,7 @@ fn postpone_todoist_recurring_task(
     let metadata = todoist_metadata_for_task(&client, &task)?;
     let mut item = crate::tasks::todoist::task_to_item_with_metadata(task, metadata.as_ref());
     enrich_todoist_items_with_pkms_notes(config, std::slice::from_mut(&mut item))?;
-    print_mutation_output(ctx, "postpone", item)
+    render::print_mutation_output(ctx, "postpone", item)
 }
 
 #[cfg(not(feature = "todoist"))]
@@ -1603,35 +1446,6 @@ fn todoist_metadata_for_task(
     }
 }
 
-fn print_mutation_output(ctx: &OutputContext, action: &'static str, item: TaskItem) -> Result<()> {
-    #[derive(Serialize)]
-    struct MutationOutput {
-        changed: bool,
-        action: &'static str,
-        item: TaskItem,
-    }
-
-    let output = MutationOutput {
-        changed: true,
-        action,
-        item,
-    };
-    match ctx.format {
-        OutputFormat::Text => {
-            println!(
-                "Changed {} task: {} (action {}; id {})",
-                source_name(&output.item),
-                output.item.title,
-                action,
-                output.item.display_id
-            );
-            Ok(())
-        }
-        OutputFormat::Json => ctx.print_json(&output),
-        OutputFormat::Ndjson => ctx.print_ndjson(&[output]),
-    }
-}
-
 #[cfg(feature = "todoist")]
 fn todoist_created_task_id(response: &serde_json::Value) -> Result<String> {
     response
@@ -1642,35 +1456,6 @@ fn todoist_created_task_id(response: &serde_json::Value) -> Result<String> {
         .filter(|id| !id.is_empty())
         .map(str::to_string)
         .ok_or_else(|| anyhow::anyhow!("Todoist create response did not include a task id"))
-}
-
-fn print_created_task(item: &TaskItem) {
-    let mut details = vec![format!("id {}", item.display_id)];
-    if let Some(date) = item.effective_date() {
-        details.push(format!("date {date}"));
-    }
-    if let Some(priority) = item.priority.as_deref() {
-        details.push(format!("priority {priority}"));
-    }
-    if let Some(project) = item.project.as_deref() {
-        details.push(format!("project {project}"));
-    }
-    if !item.tags.is_empty() {
-        details.push(format!("labels {}", item.tags.join(", ")));
-    }
-    println!(
-        "Created {} task: {} ({})",
-        source_display_name(item),
-        item.title,
-        details.join("; ")
-    );
-}
-
-fn source_display_name(item: &TaskItem) -> &'static str {
-    match item.source {
-        TaskSourceKind::Pkms => "PKMS",
-        TaskSourceKind::Todoist => "Todoist",
-    }
 }
 
 #[cfg(feature = "todoist")]
@@ -1788,7 +1573,7 @@ fn sort_task_items(items: &mut [TaskItem], sort: &str) -> Result<()> {
                 "scheduled" => a.scheduled_date_str().cmp(&b.scheduled_date_str()),
                 "deadline" => a.deadline_date_str().cmp(&b.deadline_date_str()),
                 "file" => a.note_title.cmp(&b.note_title),
-                "source" => source_name(a).cmp(source_name(b)),
+                "source" => render::source_name(a).cmp(render::source_name(b)),
                 "state" => a.state.cmp(&b.state),
                 "task" | "title" => a.title.cmp(&b.title),
                 "project" => a.project.cmp(&b.project),
@@ -1798,8 +1583,8 @@ fn sort_task_items(items: &mut [TaskItem], sort: &str) -> Result<()> {
                 return ord;
             }
         }
-        source_name(a)
-            .cmp(source_name(b))
+        render::source_name(a)
+            .cmp(render::source_name(b))
             .then_with(|| a.source_id.cmp(&b.source_id))
             .then_with(|| a.title.cmp(&b.title))
     });
@@ -1825,137 +1610,6 @@ fn parse_task_sort_fields(sort: &str) -> Result<Vec<&str>> {
         }
     }
     Ok(fields)
-}
-
-fn print_task_items(
-    ctx: &OutputContext,
-    source: SourceSelection,
-    mut items: Vec<TaskItem>,
-    limit: Option<usize>,
-    columns: Option<&[Column]>,
-) -> Result<()> {
-    let total = items.len();
-    if let Some(limit) = limit {
-        items.truncate(limit);
-    }
-
-    match ctx.format {
-        OutputFormat::Text => print_task_table(&items, total, source, columns),
-        OutputFormat::Json => {
-            #[derive(Serialize)]
-            struct TaskListOutput {
-                total: usize,
-                items: Vec<TaskItem>,
-            }
-            ctx.print_json(&TaskListOutput { total, items })
-        }
-        OutputFormat::Ndjson => ctx.print_ndjson(&items),
-    }
-}
-
-fn print_agenda_task_items(
-    ctx: &OutputContext,
-    source: SourceSelection,
-    mut items: Vec<TaskItem>,
-    limit: Option<usize>,
-    columns: Option<&[Column]>,
-) -> Result<()> {
-    let total = items.len();
-    if let Some(limit) = limit {
-        items.truncate(limit);
-    }
-
-    match ctx.format {
-        OutputFormat::Text => print_agenda_task_table(&items, total, source, columns),
-        OutputFormat::Json => {
-            #[derive(Serialize)]
-            struct TaskListOutput {
-                total: usize,
-                items: Vec<TaskItem>,
-            }
-            ctx.print_json(&TaskListOutput { total, items })
-        }
-        OutputFormat::Ndjson => ctx.print_ndjson(&items),
-    }
-}
-
-fn print_task_table(
-    items: &[TaskItem],
-    total: usize,
-    source: SourceSelection,
-    columns: Option<&[Column]>,
-) -> Result<()> {
-    let rows = task_rows(items, source);
-    let sections = [("", rows.as_slice())];
-    let footer = format!("Shown: {}, Total: {} task(s)", rows.len(), total);
-    print_table_with_empty_message(
-        &sections,
-        task_columns(columns),
-        false,
-        &footer,
-        "No tasks found.",
-    );
-    Ok(())
-}
-
-fn print_agenda_task_table(
-    items: &[TaskItem],
-    total: usize,
-    source: SourceSelection,
-    columns: Option<&[Column]>,
-) -> Result<()> {
-    let today = Local::now().date_naive();
-    let mut overdue = Vec::new();
-    let mut today_items = Vec::new();
-    let mut upcoming = Vec::new();
-
-    for item in items {
-        if item.is_overdue_on(today) {
-            overdue.push(item.clone());
-        } else if item.is_today_on(today) {
-            today_items.push(item.clone());
-        } else if item.effective_date().is_some() {
-            upcoming.push(item.clone());
-        }
-    }
-
-    overdue.sort_by(|a, b| a.effective_date().cmp(&b.effective_date()));
-    today_items.sort_by(|a, b| a.effective_date().cmp(&b.effective_date()));
-    upcoming.sort_by(|a, b| a.effective_date().cmp(&b.effective_date()));
-
-    let overdue_rows = task_rows(&overdue, source);
-    let today_rows = task_rows(&today_items, source);
-    let upcoming_rows = task_rows(&upcoming, source);
-    let sections = [
-        ("=== Overdue ===", overdue_rows.as_slice()),
-        ("=== Today ===", today_rows.as_slice()),
-        ("=== Upcoming ===", upcoming_rows.as_slice()),
-    ];
-    let item_count = overdue_rows.len() + today_rows.len() + upcoming_rows.len();
-    let footer = format!("Shown: {}, Total: {} task(s)", item_count, total);
-    print_table_with_empty_message(
-        &sections,
-        task_columns(columns),
-        false,
-        &footer,
-        "No tasks found.",
-    );
-    Ok(())
-}
-
-fn task_rows(items: &[TaskItem], source: SourceSelection) -> Vec<TaskRow<'_>> {
-    items.iter().map(|item| TaskRow { item, source }).collect()
-}
-
-fn task_columns(columns: Option<&[Column]>) -> &[Column] {
-    columns.unwrap_or(ALL_COLUMNS.as_slice())
-}
-
-fn source_name(item: &TaskItem) -> &'static str {
-    match item.source {
-        crate::tasks::model::TaskSourceKind::Pkms => "pkms",
-        crate::tasks::model::TaskSourceKind::Todoist => "todoist",
-    }
 }
 
 fn unsupported_task_source(source: &str) -> Result<()> {
