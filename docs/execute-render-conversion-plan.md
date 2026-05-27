@@ -222,11 +222,11 @@ inside the task module.
 
 **Planned changes:**
 
-- [ ] Add a small internal request type that represents the parsed task list
+- [x] Add a small internal request type that represents the parsed task list
   request after CLI args and raw filters have been validated.
-- [ ] Include source selection, criteria, scope, sort, limit, grouping, columns,
+- [x] Include source selection, criteria, scope, sort, limit, grouping, columns,
   and clock in the request.
-- [ ] Keep validation errors near request construction.
+- [x] Keep validation errors near request construction.
 
 **Benefit:** The command runner stops being responsible for remembering which
 combinations are legal.
@@ -302,7 +302,7 @@ existing task source and table abstractions.
 6. [x] Convert `validate`.
 7. [x] Convert `show`.
 8. [x] Apply the light `context` cleanup.
-9. [ ] Refactor task list request planning.
+9. [x] Refactor task list request planning.
 10. [ ] Refactor task list execution.
 11. [ ] Refactor agenda request planning.
 12. [ ] Refactor agenda execution.

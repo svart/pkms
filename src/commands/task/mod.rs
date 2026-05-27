@@ -15,7 +15,7 @@ use crate::tasks::add::{
 };
 use crate::tasks::clock::TaskClock;
 use crate::tasks::filter::{
-    SourceSelection, TaskFilterContext, TaskFilterCriteria, parse_task_filters,
+    SourceSelection, TaskFilterContext, TaskFilterCriteria, TaskFilters, parse_task_filters,
 };
 use crate::tasks::id::TaskId;
 use crate::tasks::model::{TaskItem, TaskSourceKind};
@@ -70,6 +70,44 @@ enum TaskListMode {
     Tags,
 }
 
+struct TaskListRequest {
+    filters: TaskFilters,
+    scope: Vec<String>,
+    sort: Option<String>,
+    limit: Option<usize>,
+    group: Option<String>,
+    from_stdin: bool,
+    line_sep: bool,
+    columns: TaskListColumns,
+    clock: TaskClock,
+}
+
+enum TaskListColumns {
+    Pkms(Vec<Column>),
+    SourceNeutral(Option<Vec<Column>>),
+}
+
+impl TaskListRequest {
+    fn uses_pkms_todo_path(&self) -> bool {
+        matches!(self.filters.source, SourceSelection::Pkms)
+            && (!self.filters.has_criteria() || self.group.is_some() || self.from_stdin)
+    }
+
+    fn pkms_columns(&self) -> &[Column] {
+        match &self.columns {
+            TaskListColumns::Pkms(columns) => columns,
+            TaskListColumns::SourceNeutral(_) => unreachable!("expected PKMS task columns"),
+        }
+    }
+
+    fn source_neutral_columns(&self) -> Option<&[Column]> {
+        match &self.columns {
+            TaskListColumns::SourceNeutral(columns) => columns.as_deref(),
+            TaskListColumns::Pkms(_) => unreachable!("expected source-neutral task columns"),
+        }
+    }
+}
+
 impl SourceSelection {
     fn column_source(self) -> ColumnSource {
         match self {
@@ -106,6 +144,53 @@ fn run_task_list(
     args: &TaskListArgs,
     raw_filters: &[String],
 ) -> Result<()> {
+    let request = plan_task_list_request(config, args, raw_filters)?;
+    if request.uses_pkms_todo_path() {
+        let columns = request.pkms_columns().to_vec();
+        return todo::run_on(
+            config,
+            ctx,
+            &todo::TodoOptions {
+                state: request.filters.criteria.state.clone(),
+                tags: request.filters.criteria.tags.clone(),
+                kind: request.filters.criteria.kind.clone(),
+                sort: request.sort.clone(),
+                limit: request.limit,
+                group: request.group.clone(),
+                scope: request.scope,
+                after: request.filters.criteria.after,
+                before: request.filters.criteria.before,
+                prio: request.filters.criteria.prio.clone(),
+                line_sep: request.line_sep,
+                columns,
+            },
+            request.clock,
+        );
+    }
+
+    let mut items =
+        providers::collect_task_items(config, &request.filters, TaskListView::All, request.clock)?;
+    apply_task_filter_criteria_on(
+        config,
+        &mut items,
+        &request.filters.criteria,
+        request.clock.today,
+    )?;
+    sort_task_items(&mut items, request.sort.as_deref().unwrap_or("priority"))?;
+    render::print_task_items(
+        ctx,
+        request.filters.source,
+        items,
+        request.limit,
+        request.source_neutral_columns(),
+    )
+}
+
+fn plan_task_list_request(
+    config: &ResolvedConfig,
+    args: &TaskListArgs,
+    raw_filters: &[String],
+) -> Result<TaskListRequest> {
     let filters = parse_task_filters(raw_filters)?;
     tracing::debug!(
         source = ?filters.source,
@@ -122,46 +207,36 @@ fn run_task_list(
     if args.from_stdin && !matches!(filters.source, SourceSelection::Pkms) {
         bail!("task list --from-stdin is available only for source:pkms");
     }
-    if matches!(filters.source, SourceSelection::Pkms)
-        && (!filters.has_criteria() || args.group.is_some() || args.from_stdin)
-    {
-        let columns = resolve_task_columns(
+
+    let uses_pkms_todo_path = matches!(filters.source, SourceSelection::Pkms)
+        && (!filters.has_criteria() || args.group.is_some() || args.from_stdin);
+    let columns = if uses_pkms_todo_path {
+        TaskListColumns::Pkms(resolve_task_columns(
             config,
             SourceSelection::Pkms,
             ColumnView::Tasks,
             args.table.columns.as_deref(),
-        )?;
-        return todo::run_on(
+        )?)
+    } else {
+        TaskListColumns::SourceNeutral(resolve_task_table_columns(
             config,
-            ctx,
-            &todo::TodoOptions {
-                state: filters.criteria.state.clone(),
-                tags: filters.criteria.tags.clone(),
-                kind: filters.criteria.kind.clone(),
-                sort: args.sort.clone(),
-                limit: args.limit,
-                group: args.group.clone(),
-                scope,
-                after: filters.criteria.after,
-                before: filters.criteria.before,
-                prio: filters.criteria.prio.clone(),
-                line_sep: args.table.line_sep,
-                columns,
-            },
-            clock,
-        );
-    }
+            filters.source,
+            ColumnView::Tasks,
+            args.table.columns.as_deref(),
+        )?)
+    };
 
-    let mut items = providers::collect_task_items(config, &filters, TaskListView::All, clock)?;
-    apply_task_filter_criteria_on(config, &mut items, &filters.criteria, clock.today)?;
-    sort_task_items(&mut items, args.sort.as_deref().unwrap_or("priority"))?;
-    let columns = resolve_task_table_columns(
-        config,
-        filters.source,
-        ColumnView::Tasks,
-        args.table.columns.as_deref(),
-    )?;
-    render::print_task_items(ctx, filters.source, items, args.limit, columns.as_deref())
+    Ok(TaskListRequest {
+        filters,
+        scope,
+        sort: args.sort.clone(),
+        limit: args.limit,
+        group: args.group.clone(),
+        from_stdin: args.from_stdin,
+        line_sep: args.table.line_sep,
+        columns,
+        clock,
+    })
 }
 
 fn task_scope(
