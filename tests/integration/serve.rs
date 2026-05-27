@@ -38,10 +38,15 @@ fn test_serve_renders_initial_note_and_linked_note() {
     let response = http_get(host_port, &format!("/{path}"));
     assert!(response.contains("HTTP/1.1 200 OK"));
     assert!(response.contains("<h1>Note A</h1>"));
+    assert!(response.contains("<details class=\"side-panel contents-panel\" open>"));
+    assert!(response.contains("<details class=\"side-panel backlinks-panel\" open>"));
     assert!(response.contains("href=\"/?id=bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb\""));
 
     let linked = http_get(host_port, "/?id=bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb");
     assert!(linked.contains("<h1>Note B</h1>"));
+    assert!(linked.contains("<summary>Backlinks</summary>"));
+    assert!(linked.contains("href=\"/?id=aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa\""));
+    assert!(linked.contains("Note A"));
 
     child.kill().unwrap();
     let _ = child.wait();

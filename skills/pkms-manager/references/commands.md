@@ -53,7 +53,8 @@ pkms serve <target>
 
 It starts a foreground local web viewer. Internal links navigate with
 `/?id=<uuid>`; local file and attachment links are served as static assets when
-they resolve to allowed local paths.
+they resolve to allowed local paths. The viewer shows collapsible floating
+contents and backlinks panels by default.
 
 ## Create and Repair
 

@@ -1,11 +1,13 @@
 use crate::config::ResolvedConfig;
 use crate::graph::{Graph, Node, resolve_file_link_path};
 use crate::output::OutputContext;
-use crate::parser::{HEADING_RE, LINK_RE};
+use crate::parser::{HEADING_RE, LINK_RE, strip_org_links};
 use crate::util;
 use anyhow::{Context, Result};
 use regex::Regex;
 use serde::Serialize;
+use std::collections::BTreeMap;
+use std::fmt::Write as FmtWrite;
 use std::io::{BufRead, BufReader, Write};
 use std::net::{TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
@@ -246,6 +248,8 @@ fn write_headers(
 
 fn render_note_html(graph: &Graph, config: &ResolvedConfig, node: &Node, content: &str) -> String {
     let body = render_org_body(graph, config, node, content);
+    let contents = render_contents_panel(content);
+    let backlinks = render_backlinks_panel(graph, node);
     let title = escape_html(&node.title);
     format!(
         r#"<!doctype html>
@@ -257,6 +261,8 @@ fn render_note_html(graph: &Graph, config: &ResolvedConfig, node: &Node, content
 <style>{}</style>
 </head>
 <body>
+{contents}
+{backlinks}
 <main>
 <header class="note-header">
 <p class="eyebrow">pkms note</p>
@@ -272,6 +278,101 @@ fn render_note_html(graph: &Graph, config: &ResolvedConfig, node: &Node, content
         page_css(),
         escape_html(&node.uuid)
     )
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct OutlineHeading {
+    level: usize,
+    line_number: usize,
+    todo: Option<String>,
+    title: String,
+}
+
+fn collect_outline_headings(content: &str) -> Vec<OutlineHeading> {
+    content
+        .lines()
+        .enumerate()
+        .filter_map(|(idx, line)| {
+            let cap = HEADING_RE.captures(line)?;
+            Some(OutlineHeading {
+                level: cap[1].len(),
+                line_number: idx + 1,
+                todo: cap.get(2).map(|m| m.as_str().to_string()),
+                title: cap.get(4).map_or("", |m| m.as_str()).to_string(),
+            })
+        })
+        .collect()
+}
+
+fn render_contents_panel(content: &str) -> String {
+    let headings = collect_outline_headings(content);
+    let mut html = String::from(
+        "<details class=\"side-panel contents-panel\" open>\n<summary>Contents</summary>\n",
+    );
+    if headings.is_empty() {
+        html.push_str("<p class=\"panel-empty\">No headings</p>\n");
+    } else {
+        html.push_str("<nav aria-label=\"Note contents\"><ol class=\"outline-list\">\n");
+        for heading in headings {
+            let indent = heading.level.saturating_sub(1);
+            let _ = writeln!(
+                html,
+                "<li style=\"--outline-depth: {indent}\"><a href=\"#{}\">{}</a></li>",
+                heading_anchor(heading.line_number),
+                render_outline_heading_label(&heading)
+            );
+        }
+        html.push_str("</ol></nav>\n");
+    }
+    html.push_str("</details>\n");
+    html
+}
+
+fn render_outline_heading_label(heading: &OutlineHeading) -> String {
+    let mut label = String::new();
+    if let Some(todo) = heading.todo.as_deref().filter(|todo| !todo.is_empty()) {
+        let _ = write!(label, "<span class=\"todo\">{}</span> ", escape_html(todo));
+    }
+    label.push_str(&render_formatted_text(&strip_org_links(&heading.title)));
+    label
+}
+
+fn render_backlinks_panel(graph: &Graph, node: &Node) -> String {
+    let mut incoming: BTreeMap<(String, String), &Node> = BTreeMap::new();
+    if let Some(backlink_uuids) = graph.backlinks.get(&node.uuid) {
+        for uuid in backlink_uuids {
+            if let Some(source) = graph.nodes.get(uuid) {
+                incoming.insert(
+                    (source.title.to_ascii_lowercase(), source.uuid.clone()),
+                    source,
+                );
+            }
+        }
+    }
+
+    let mut html = String::from(
+        "<details class=\"side-panel backlinks-panel\" open>\n<summary>Backlinks</summary>\n",
+    );
+    if incoming.is_empty() {
+        html.push_str("<p class=\"panel-empty\">No backlinks</p>\n");
+    } else {
+        html.push_str("<nav aria-label=\"Backlinks\"><ol class=\"backlink-list\">\n");
+        for source in incoming.values() {
+            let _ = writeln!(
+                html,
+                "<li><a href=\"/?id={}\">{}</a></li>",
+                percent_encode(&source.uuid),
+                escape_html(&source.title)
+            );
+        }
+        html.push_str("</ol></nav>\n");
+    }
+    html.push_str("</details>\n");
+    html
+}
+
+fn heading_anchor(line_number: usize) -> String {
+    format!("h-{line_number}")
 }
 
 fn render_org_body(graph: &Graph, config: &ResolvedConfig, node: &Node, content: &str) -> String {
@@ -420,10 +521,14 @@ fn render_org_body(graph: &Graph, config: &ResolvedConfig, node: &Node, content:
             let level = cap[1].len().saturating_add(1).min(6);
             let todo = cap.get(2).map(|m| m.as_str()).unwrap_or_default();
             let title = cap.get(4).map_or("", |m| m.as_str());
+            let anchor = heading_anchor(i + 1);
             if is_closed_todo_state(config, todo) {
-                html.push_str(&format!("<h{level} class=\"closed-heading\">"));
+                html.push_str(&format!(
+                    "<h{level} id=\"{}\" class=\"closed-heading\">",
+                    escape_html(&anchor)
+                ));
             } else {
-                html.push_str(&format!("<h{level}>"));
+                html.push_str(&format!("<h{level} id=\"{}\">", escape_html(&anchor)));
             }
             if !todo.is_empty() {
                 html.push_str(&format!(
@@ -1020,6 +1125,84 @@ mod tests {
     }
 
     #[test]
+    fn renders_outline_and_backlinks_panels() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().to_path_buf();
+        let roam = root.join("roam");
+        fs::create_dir_all(&roam).unwrap();
+        fs::write(
+            roam.join("a.org"),
+            r#":PROPERTIES:
+:ID:       aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa
+:END:
+#+title: Alpha
+
+* TODO First
+** DONE Child
+* [[id:bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb][Universal ping utility]]
+"#,
+        )
+        .unwrap();
+        fs::write(
+            roam.join("b.org"),
+            r#":PROPERTIES:
+:ID:       bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb
+:END:
+#+title: Beta
+
+[[id:aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa][Alpha]]
+"#,
+        )
+        .unwrap();
+        let config = test_config(root);
+        let corpus = Corpus::load(&config).unwrap();
+        let graph = Graph::from_corpus(&corpus);
+        let node = graph
+            .resolve_target("aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa")
+            .unwrap();
+        let content = fs::read_to_string(&node.path).unwrap();
+
+        let html = render_note_html(&graph, &config, node, &content);
+
+        assert!(html.contains("<details class=\"side-panel contents-panel\" open>"));
+        assert!(html.contains("<summary>Contents</summary>"));
+        assert!(html.contains("href=\"#h-6\""));
+        assert!(html.contains("<a href=\"#h-6\"><span class=\"todo\">TODO</span> First</a>"));
+        assert!(html.contains("<h2 id=\"h-6\"><span class=\"todo\">TODO</span> First</h2>"));
+        assert!(html.contains("href=\"#h-7\""));
+        assert!(html.contains("<a href=\"#h-7\"><span class=\"todo\">DONE</span> Child</a>"));
+        assert!(html.contains(
+            "<h3 id=\"h-7\" class=\"closed-heading\"><span class=\"todo\">DONE</span> Child</h3>"
+        ));
+        assert!(html.contains("<a href=\"#h-8\">Universal ping utility</a>"));
+        assert!(!html.contains(
+            "<a href=\"#h-8\">[[id:bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb][Universal ping utility]]</a>"
+        ));
+        assert!(html.contains("<details class=\"side-panel backlinks-panel\" open>"));
+        assert!(html.contains("<summary>Backlinks</summary>"));
+        assert!(html.contains("href=\"/?id=bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb\""));
+        assert!(html.contains("Beta"));
+    }
+
+    #[test]
+    fn panel_css_uses_page_background_and_stable_backlinks_summary() {
+        let css = page_css();
+        let side_panel_css = css
+            .split(".contents-panel")
+            .next()
+            .expect("side panel rules should precede contents panel");
+
+        assert!(css.contains(".side-panel"));
+        assert!(css.contains("background: var(--bg);"));
+        assert!(!side_panel_css.contains("border: 1px solid var(--border);"));
+        assert!(css.contains(".backlinks-panel summary"));
+        assert!(css.contains("justify-content: flex-end;"));
+        assert!(css.contains("text-align: right;"));
+        assert!(css.contains(".backlinks-panel summary::after"));
+        assert!(css.contains("border-right: 0.42rem solid currentColor;"));
+    }
+
+    #[test]
     fn renders_links_tables_code_math_and_images() {
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path().to_path_buf();
@@ -1077,9 +1260,9 @@ fn main() {}
 
         assert!(html.contains("href=\"/?id=bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb\""));
         assert!(html.contains(
-            "<h2 class=\"closed-heading\"><span class=\"todo\">DONE</span> Finished</h2>"
+            "<h2 id=\"h-6\" class=\"closed-heading\"><span class=\"todo\">DONE</span> Finished</h2>"
         ));
-        assert!(html.contains("<h2><span class=\"todo\">TODO</span> Active</h2>"));
+        assert!(html.contains("<h2 id=\"h-7\"><span class=\"todo\">TODO</span> Active</h2>"));
         assert!(html.contains("<li class=\"checked-item\">[x] Ticked item</li>"));
         assert!(html.contains("<li>[ ] Open item</li>"));
         assert!(html.contains("<table>"));

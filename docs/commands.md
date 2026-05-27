@@ -78,6 +78,10 @@ as assets when they resolve under the database root or the user's home
 directory; image assets are embedded in the page. Org tables are rendered as
 HTML tables, source blocks are highlighted server-side with Syntect, and TeX
 formula text is rendered to static KaTeX HTML without client-side JavaScript.
+The page also includes collapsible floating panels: note contents on the left
+from the heading hierarchy, and backlinks on the top right from notes that link
+to the current note. Both panels are open by default and do not change the main
+note column width.
 
 ## Statistics and Discovery
 
