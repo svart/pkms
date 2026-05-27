@@ -40,8 +40,9 @@ refactor commits.
 
    Partially done. `commands/task/id_command.rs`,
    `commands/task/providers.rs`, and `commands/task/render.rs` were extracted.
-   PKMS inbox/provider collection now lives in `tasks/pkms.rs`. Todoist
-   provider routing and PKMS mutation helpers still need narrower homes.
+   PKMS inbox/provider collection now lives in `tasks/pkms.rs`, and org-file
+   PKMS task mutations now live in `tasks/pkms_mutation.rs`. Todoist provider
+   routing still needs a narrower home.
 
 5. [ ] Inject time where behavior depends on `today`.
 
@@ -90,8 +91,7 @@ refactor commits.
 
 ## Not Yet Done
 
-- Move remaining task provider and mutation implementation into narrower
-  `tasks/*` modules.
+- Move remaining Todoist provider routing into a narrower `tasks/*` module.
 - Consolidate task filtering so source-neutral filters and row-oriented filters
   do not drift.
 - Continue replacing the remaining thin-wrapper `Local::now()` calls in task

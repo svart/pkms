@@ -4,6 +4,7 @@ pub mod id;
 pub mod model;
 pub mod pkms;
 pub mod pkms_edit;
+pub mod pkms_mutation;
 pub mod provider;
 pub mod scope;
 #[cfg(feature = "todoist")]
