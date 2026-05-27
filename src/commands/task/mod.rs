@@ -21,6 +21,7 @@ use crate::tasks::filter::{
 use crate::tasks::id::TaskId;
 use crate::tasks::model::{TaskItem, TaskSourceKind};
 use crate::tasks::pkms::{self, record_to_task_item};
+use crate::tasks::pkms_edit;
 use crate::tasks::provider::{
     TaskListView, TaskMetadataRow, TaskProvider, TaskProviderContext, TaskQuery,
 };
@@ -1565,86 +1566,16 @@ fn add_pkms_task(config: &ResolvedConfig, ctx: &OutputContext, spec: &TaskAddSpe
 fn append_pkms_inbox_entry(target: &PkmsInboxTarget, entry: &str) -> Result<(PathBuf, usize)> {
     match target {
         PkmsInboxTarget::Note(path) => {
-            append_org_entry(path, entry).map(|line| (path.clone(), line))
+            pkms_edit::append_org_entry(path, entry).map(|line| (path.clone(), line))
         }
         PkmsInboxTarget::Daily { path } => {
-            append_daily_inbox_entry(path, entry).map(|line| (path.clone(), line))
+            pkms_edit::append_daily_inbox_entry(path, entry).map(|line| (path.clone(), line))
         }
-    }
-}
-
-fn append_org_entry(path: &Path, entry: &str) -> Result<usize> {
-    let mut content = std::fs::read_to_string(path)
-        .with_context(|| format!("Failed to read inbox note: {}", path.display()))?;
-    if !content.ends_with('\n') {
-        content.push('\n');
-    }
-    if !content.ends_with("\n\n") {
-        content.push('\n');
-    }
-    let line_number = content.lines().count() + 1;
-    std::fs::write(path, format!("{content}{entry}"))
-        .with_context(|| format!("Failed to write inbox note: {}", path.display()))?;
-    Ok(line_number)
-}
-
-fn append_daily_inbox_entry(path: &Path, entry: &str) -> Result<usize> {
-    let mut content = std::fs::read_to_string(path)
-        .with_context(|| format!("Failed to read daily note: {}", path.display()))?;
-    normalize_trailing_newline(&mut content);
-
-    if let Some((_start, end)) = inbox_section_range_from_content(&content) {
-        let mut lines: Vec<String> = content.split_inclusive('\n').map(str::to_string).collect();
-        let insert_idx = end.saturating_sub(1);
-        lines.insert(insert_idx, entry.to_string());
-        std::fs::write(path, lines.concat())
-            .with_context(|| format!("Failed to write daily note: {}", path.display()))?;
-        return Ok(insert_idx + 1);
-    }
-
-    if !content.ends_with("\n\n") {
-        content.push('\n');
-    }
-    let inbox_heading_line = content.lines().count() + 1;
-    content.push_str("* Inbox\n");
-    content.push_str(entry);
-    std::fs::write(path, content)
-        .with_context(|| format!("Failed to write daily note: {}", path.display()))?;
-    Ok(inbox_heading_line + 1)
-}
-
-fn normalize_trailing_newline(content: &mut String) {
-    if !content.ends_with('\n') {
-        content.push('\n');
     }
 }
 
 fn inbox_section_range(path: &Path) -> Result<Option<(usize, usize)>> {
-    let content = std::fs::read_to_string(path)
-        .with_context(|| format!("Failed to read daily note: {}", path.display()))?;
-    Ok(inbox_section_range_from_content(&content))
-}
-
-fn inbox_section_range_from_content(content: &str) -> Option<(usize, usize)> {
-    let mut start = None;
-    for (idx, line) in content.lines().enumerate() {
-        let line_number = idx + 1;
-        let Some(captures) = HEADING_RE.captures(line) else {
-            continue;
-        };
-        let level = captures.get(1).map_or("", |m| m.as_str()).len();
-        if level != 1 {
-            continue;
-        }
-        if start.is_some() {
-            return Some((start?, line_number));
-        }
-        let title = captures.get(4).map_or("", |m| m.as_str()).trim();
-        if title.eq_ignore_ascii_case("Inbox") {
-            start = Some(line_number);
-        }
-    }
-    start.map(|start| (start, content.lines().count() + 1))
+    pkms_edit::inbox_section_range(path)
 }
 
 fn find_pkms_task_item(
