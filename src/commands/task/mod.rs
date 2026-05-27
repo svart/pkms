@@ -7,12 +7,11 @@ use crate::cli::{
 };
 use crate::commands::open::OpenOptions;
 use crate::commands::show::{HeadingTarget, ShowOptions};
-use crate::commands::task_index::{assign_canonical_ids, collect_todo_records};
 use crate::config::{ColumnSource, ColumnView, ResolvedConfig};
 use crate::input;
 use crate::org_edit;
 use crate::output::{Column, OutputContext};
-use crate::parser::{DEADLINE_RE, HEADING_RE, SCHEDULED_RE, find_daily_file_date};
+use crate::parser::{DEADLINE_RE, HEADING_RE, SCHEDULED_RE};
 use crate::tasks::add::{
     TaskAddSpec, org_date, parse_add_date_arg, pkms_priority, validate_pkms_date_arg,
 };
@@ -21,8 +20,7 @@ use crate::tasks::filter::{
 };
 use crate::tasks::id::TaskId;
 use crate::tasks::model::{TaskItem, TaskSourceKind};
-use crate::tasks::pkms::record_to_task_item;
-use crate::tasks::pkms_edit;
+use crate::tasks::pkms::{self, PkmsInboxTarget};
 use crate::tasks::provider::{TaskListView, TaskMetadataRow};
 use crate::tasks::scope::ResolvedScope;
 use crate::util;
@@ -31,7 +29,7 @@ use anyhow::{Context, Result, bail};
 use chrono::{Local, NaiveDate};
 #[cfg(feature = "todoist")]
 use serde::Serialize;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 mod agenda;
 mod id_command;
@@ -41,12 +39,6 @@ mod todo;
 
 #[cfg(feature = "todoist")]
 const PKMS_NOTE_MARKER_PREFIX: &str = "pkms:id:";
-
-#[derive(Debug, Clone)]
-enum PkmsInboxTarget {
-    Note(PathBuf),
-    Daily { path: PathBuf },
-}
 
 #[derive(Debug, Clone, Copy)]
 enum PlanningKind {
@@ -398,39 +390,6 @@ fn run_agenda(config: &ResolvedConfig, ctx: &OutputContext, args: &TaskAgendaArg
         args.table.columns.as_deref(),
     )?;
     render::print_agenda_task_items(ctx, filters.source, items, args.limit, columns.as_deref())
-}
-
-pub(super) fn collect_pkms_inbox_items(config: &ResolvedConfig) -> Result<Vec<TaskItem>> {
-    let target = resolve_pkms_inbox_target(config, false)?;
-    let workspace = Workspace::load(config)?;
-    let graph = &workspace.graph;
-    let valid_states = config.todo_states();
-    let mut records = collect_todo_records(&workspace.corpus, &valid_states, &[], &[], &[]);
-    assign_canonical_ids(config, graph, &mut records);
-
-    let records: Vec<_> = match target {
-        PkmsInboxTarget::Note(path) => records
-            .into_iter()
-            .filter(|record| record.path == path.display().to_string())
-            .collect(),
-        PkmsInboxTarget::Daily { path } => {
-            let section = inbox_section_range(&path)?;
-            records
-                .into_iter()
-                .filter(|record| {
-                    record.path == path.display().to_string()
-                        && section.is_some_and(|(start, end)| {
-                            record.line_number > start && record.line_number < end
-                        })
-                })
-                .collect()
-        }
-    };
-
-    Ok(records
-        .into_iter()
-        .map(|record| record_to_task_item(config, record))
-        .collect())
 }
 
 pub(super) fn run_show(
@@ -798,112 +757,10 @@ fn canonical_state(config: &ResolvedConfig, requested_state: &str) -> Result<Str
         })
 }
 
-fn resolve_pkms_inbox_target(
-    config: &ResolvedConfig,
-    create_daily: bool,
-) -> Result<PkmsInboxTarget> {
-    let target = config.task_inbox()?;
-    if target.eq_ignore_ascii_case("daily") {
-        return resolve_daily_inbox_target(config, create_daily);
-    }
-
-    let graph = crate::graph::Graph::load(config)?;
-    if let Some(node) = graph.find_node(target) {
-        return Ok(PkmsInboxTarget::Note(node.path.clone()));
-    }
-
-    let configured = PathBuf::from(target);
-    let candidates = if configured.is_absolute() {
-        vec![configured]
-    } else {
-        vec![config.resolved_db_root().join(&configured), configured]
-    };
-
-    candidates
-        .into_iter()
-        .find(|path| path.exists())
-        .map(PkmsInboxTarget::Note)
-        .ok_or_else(|| anyhow::anyhow!("PKMS task inbox note not found: {target}"))
-}
-
-fn resolve_pkms_note_task_target(config: &ResolvedConfig, target: &str) -> Result<PkmsInboxTarget> {
-    let graph = crate::graph::Graph::load(config)?;
-    if let Some(node) = graph.find_node(target) {
-        return Ok(PkmsInboxTarget::Note(node.path.clone()));
-    }
-
-    let configured = PathBuf::from(target);
-    let candidates = if configured.is_absolute() {
-        vec![configured]
-    } else {
-        vec![config.resolved_db_root().join(&configured), configured]
-    };
-
-    candidates
-        .into_iter()
-        .find(|path| path.exists())
-        .map(PkmsInboxTarget::Note)
-        .ok_or_else(|| anyhow::anyhow!("PKMS task target note not found: {target}"))
-}
-
-fn resolve_daily_inbox_target(config: &ResolvedConfig, create: bool) -> Result<PkmsInboxTarget> {
-    let today = Local::now().date_naive();
-    let configured_path = config
-        .resolve_daily_notes_dir()
-        .join(format!("{today}.org"));
-    if config.daily_notes_dir.is_some() || configured_path.exists() {
-        if create {
-            ensure_daily_note_exists(&configured_path, today)?;
-        }
-        return Ok(PkmsInboxTarget::Daily {
-            path: configured_path,
-        });
-    }
-
-    let graph = crate::graph::Graph::load(config)?;
-    if let Some(result) = graph
-        .results
-        .iter()
-        .find(|result| find_daily_file_date(&result.path) == Some(today))
-    {
-        return Ok(PkmsInboxTarget::Daily {
-            path: result.path.clone(),
-        });
-    }
-
-    if !create {
-        return Ok(PkmsInboxTarget::Daily {
-            path: configured_path,
-        });
-    }
-
-    ensure_daily_note_exists(&configured_path, today)?;
-    Ok(PkmsInboxTarget::Daily {
-        path: configured_path,
-    })
-}
-
-fn ensure_daily_note_exists(path: &Path, today: chrono::NaiveDate) -> Result<()> {
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent).with_context(|| {
-            format!(
-                "Failed to create daily note directory: {}",
-                parent.display()
-            )
-        })?;
-    }
-    if !path.exists() {
-        let title = today.format("%Y-%m-%d").to_string();
-        std::fs::write(path, format!("#+title: {title}\n#+filetags: :daily:\n\n"))
-            .with_context(|| format!("Failed to create daily note: {}", path.display()))?;
-    }
-    Ok(())
-}
-
 fn add_pkms_task(config: &ResolvedConfig, ctx: &OutputContext, spec: &TaskAddSpec) -> Result<()> {
     let inbox_target = match spec.note.as_deref() {
-        Some(note) => resolve_pkms_note_task_target(config, note)?,
-        None => resolve_pkms_inbox_target(config, true)?,
+        Some(note) => pkms::resolve_note_task_target(config, note)?,
+        None => pkms::resolve_inbox_target(config, true)?,
     };
     let title = spec
         .title
@@ -959,47 +816,14 @@ fn add_pkms_task(config: &ResolvedConfig, ctx: &OutputContext, spec: &TaskAddSpe
         entry.push('\n');
     }
 
-    let (inbox_path, line_number) = append_pkms_inbox_entry(&inbox_target, &entry)?;
-    let item = find_pkms_task_item(config, &inbox_path, line_number)?.with_context(|| {
+    let (inbox_path, line_number) = pkms::append_inbox_entry(&inbox_target, &entry)?;
+    let item = pkms::find_task_item(config, &inbox_path, line_number)?.with_context(|| {
         format!(
             "Created task but could not reload it from {}",
             inbox_path.display()
         )
     })?;
     render::print_add_output(ctx, item)
-}
-
-fn append_pkms_inbox_entry(target: &PkmsInboxTarget, entry: &str) -> Result<(PathBuf, usize)> {
-    match target {
-        PkmsInboxTarget::Note(path) => {
-            pkms_edit::append_org_entry(path, entry).map(|line| (path.clone(), line))
-        }
-        PkmsInboxTarget::Daily { path } => {
-            pkms_edit::append_daily_inbox_entry(path, entry).map(|line| (path.clone(), line))
-        }
-    }
-}
-
-fn inbox_section_range(path: &Path) -> Result<Option<(usize, usize)>> {
-    pkms_edit::inbox_section_range(path)
-}
-
-fn find_pkms_task_item(
-    config: &ResolvedConfig,
-    path: &Path,
-    line_number: usize,
-) -> Result<Option<TaskItem>> {
-    let workspace = Workspace::load(config)?;
-    let graph = &workspace.graph;
-    let valid_states = config.todo_states();
-    let mut records = collect_todo_records(&workspace.corpus, &valid_states, &[], &[], &[]);
-    assign_canonical_ids(config, graph, &mut records);
-    Ok(records
-        .into_iter()
-        .find(|record| {
-            record.path == path.display().to_string() && record.line_number == line_number
-        })
-        .map(|record| record_to_task_item(config, record)))
 }
 
 fn replace_heading_state(
@@ -1069,7 +893,7 @@ fn set_pkms_task_planning(
     let graph = crate::graph::Graph::load(config)?;
     let (path, line_number) = graph.resolve_canonical_task_id(config, canonical_id)?;
     update_heading_planning_date(&path, line_number, kind, date.as_deref())?;
-    let item = find_pkms_task_item(config, Path::new(&path), line_number)?.with_context(|| {
+    let item = pkms::find_task_item(config, Path::new(&path), line_number)?.with_context(|| {
         format!("Changed task but could not reload it from {path}:{line_number}")
     })?;
     render::print_mutation_output(
@@ -1093,7 +917,7 @@ fn postpone_pkms_recurring_task(
     let graph = crate::graph::Graph::load(config)?;
     let (path, line_number) = graph.resolve_canonical_task_id(config, canonical_id)?;
     update_recurring_planning_date(&path, line_number, &date)?;
-    let item = find_pkms_task_item(config, Path::new(&path), line_number)?.with_context(|| {
+    let item = pkms::find_task_item(config, Path::new(&path), line_number)?.with_context(|| {
         format!("Changed task but could not reload it from {path}:{line_number}")
     })?;
     render::print_mutation_output(ctx, "postpone", item)

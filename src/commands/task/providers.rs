@@ -134,7 +134,7 @@ impl TaskProvider for PkmsTaskProvider<'_> {
                 super::retain_upcoming_task_items(&mut items, days);
                 Ok(items)
             }
-            TaskListView::Inbox => super::collect_pkms_inbox_items(self.context.config),
+            TaskListView::Inbox => pkms::collect_inbox_items(self.context.config),
         }
     }
 

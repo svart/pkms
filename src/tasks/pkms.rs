@@ -3,13 +3,21 @@ use crate::commands::task_index::{
     assign_canonical_ids, collect_agenda_records, collect_todo_records,
 };
 use crate::config::ResolvedConfig;
+use crate::parser::find_daily_file_date;
 use crate::tasks::id::TaskId;
 use crate::tasks::model::{TaskDate, TaskItem, TaskSourceKind, TaskStatus};
+use crate::tasks::pkms_edit;
 use crate::workspace::Workspace;
-use anyhow::Result;
+use anyhow::{Context, Result};
 use chrono::{Local, NaiveDate};
 use std::collections::HashSet;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+
+#[derive(Debug, Clone)]
+pub enum PkmsInboxTarget {
+    Note(PathBuf),
+    Daily { path: PathBuf },
+}
 
 pub fn list_items(config: &ResolvedConfig) -> Result<Vec<TaskItem>> {
     let workspace = Workspace::load(config)?;
@@ -27,6 +35,170 @@ pub fn list_items(config: &ResolvedConfig) -> Result<Vec<TaskItem>> {
         .into_iter()
         .map(|record| record_to_task_item(config, record))
         .collect())
+}
+
+pub fn collect_inbox_items(config: &ResolvedConfig) -> Result<Vec<TaskItem>> {
+    let target = resolve_inbox_target(config, false)?;
+    let workspace = Workspace::load(config)?;
+    let graph = &workspace.graph;
+    let valid_states = config.todo_states();
+    let mut records = collect_todo_records(&workspace.corpus, &valid_states, &[], &[], &[]);
+    assign_canonical_ids(config, graph, &mut records);
+
+    let records: Vec<_> = match target {
+        PkmsInboxTarget::Note(path) => records
+            .into_iter()
+            .filter(|record| record.path == path.display().to_string())
+            .collect(),
+        PkmsInboxTarget::Daily { path } => {
+            let section = pkms_edit::inbox_section_range(&path)?;
+            records
+                .into_iter()
+                .filter(|record| {
+                    record.path == path.display().to_string()
+                        && section.is_some_and(|(start, end)| {
+                            record.line_number > start && record.line_number < end
+                        })
+                })
+                .collect()
+        }
+    };
+
+    Ok(records
+        .into_iter()
+        .map(|record| record_to_task_item(config, record))
+        .collect())
+}
+
+pub fn resolve_inbox_target(
+    config: &ResolvedConfig,
+    create_daily: bool,
+) -> Result<PkmsInboxTarget> {
+    let target = config.task_inbox()?;
+    if target.eq_ignore_ascii_case("daily") {
+        return resolve_daily_inbox_target(config, create_daily);
+    }
+
+    let graph = crate::graph::Graph::load(config)?;
+    if let Some(node) = graph.find_node(target) {
+        return Ok(PkmsInboxTarget::Note(node.path.clone()));
+    }
+
+    let configured = PathBuf::from(target);
+    let candidates = if configured.is_absolute() {
+        vec![configured]
+    } else {
+        vec![config.resolved_db_root().join(&configured), configured]
+    };
+
+    candidates
+        .into_iter()
+        .find(|path| path.exists())
+        .map(PkmsInboxTarget::Note)
+        .ok_or_else(|| anyhow::anyhow!("PKMS task inbox note not found: {target}"))
+}
+
+pub fn resolve_note_task_target(config: &ResolvedConfig, target: &str) -> Result<PkmsInboxTarget> {
+    let graph = crate::graph::Graph::load(config)?;
+    if let Some(node) = graph.find_node(target) {
+        return Ok(PkmsInboxTarget::Note(node.path.clone()));
+    }
+
+    let configured = PathBuf::from(target);
+    let candidates = if configured.is_absolute() {
+        vec![configured]
+    } else {
+        vec![config.resolved_db_root().join(&configured), configured]
+    };
+
+    candidates
+        .into_iter()
+        .find(|path| path.exists())
+        .map(PkmsInboxTarget::Note)
+        .ok_or_else(|| anyhow::anyhow!("PKMS task target note not found: {target}"))
+}
+
+fn resolve_daily_inbox_target(config: &ResolvedConfig, create: bool) -> Result<PkmsInboxTarget> {
+    let today = Local::now().date_naive();
+    let configured_path = config
+        .resolve_daily_notes_dir()
+        .join(format!("{today}.org"));
+    if config.daily_notes_dir.is_some() || configured_path.exists() {
+        if create {
+            ensure_daily_note_exists(&configured_path, today)?;
+        }
+        return Ok(PkmsInboxTarget::Daily {
+            path: configured_path,
+        });
+    }
+
+    let graph = crate::graph::Graph::load(config)?;
+    if let Some(result) = graph
+        .results
+        .iter()
+        .find(|result| find_daily_file_date(&result.path) == Some(today))
+    {
+        return Ok(PkmsInboxTarget::Daily {
+            path: result.path.clone(),
+        });
+    }
+
+    if !create {
+        return Ok(PkmsInboxTarget::Daily {
+            path: configured_path,
+        });
+    }
+
+    ensure_daily_note_exists(&configured_path, today)?;
+    Ok(PkmsInboxTarget::Daily {
+        path: configured_path,
+    })
+}
+
+fn ensure_daily_note_exists(path: &Path, today: chrono::NaiveDate) -> Result<()> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).with_context(|| {
+            format!(
+                "Failed to create daily note directory: {}",
+                parent.display()
+            )
+        })?;
+    }
+    if !path.exists() {
+        let title = today.format("%Y-%m-%d").to_string();
+        std::fs::write(path, format!("#+title: {title}\n#+filetags: :daily:\n\n"))
+            .with_context(|| format!("Failed to create daily note: {}", path.display()))?;
+    }
+    Ok(())
+}
+
+pub fn append_inbox_entry(target: &PkmsInboxTarget, entry: &str) -> Result<(PathBuf, usize)> {
+    match target {
+        PkmsInboxTarget::Note(path) => {
+            pkms_edit::append_org_entry(path, entry).map(|line| (path.clone(), line))
+        }
+        PkmsInboxTarget::Daily { path } => {
+            pkms_edit::append_daily_inbox_entry(path, entry).map(|line| (path.clone(), line))
+        }
+    }
+}
+
+pub fn find_task_item(
+    config: &ResolvedConfig,
+    path: &Path,
+    line_number: usize,
+) -> Result<Option<TaskItem>> {
+    let workspace = Workspace::load(config)?;
+    let graph = &workspace.graph;
+    let valid_states = config.todo_states();
+    let mut records = collect_todo_records(&workspace.corpus, &valid_states, &[], &[], &[]);
+    assign_canonical_ids(config, graph, &mut records);
+    Ok(records
+        .into_iter()
+        .find(|record| {
+            record.path == path.display().to_string() && record.line_number == line_number
+        })
+        .map(|record| record_to_task_item(config, record)))
 }
 
 pub fn agenda_items(config: &ResolvedConfig) -> Result<Vec<TaskItem>> {

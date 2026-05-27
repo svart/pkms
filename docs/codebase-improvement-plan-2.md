@@ -40,9 +40,8 @@ refactor commits.
 
    Partially done. `commands/task/id_command.rs`,
    `commands/task/providers.rs`, and `commands/task/render.rs` were extracted.
-   The provider implementation was not moved into the originally proposed
-   `tasks/pkms_provider.rs`, `tasks/todoist_provider.rs`,
-   `tasks/pkms_mutation.rs`, or `tasks/mutation.rs` modules.
+   PKMS inbox/provider collection now lives in `tasks/pkms.rs`. Todoist
+   provider routing and PKMS mutation helpers still need narrower homes.
 
 5. [ ] Inject time where behavior depends on `today`.
 
