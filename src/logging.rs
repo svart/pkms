@@ -16,6 +16,7 @@ pub fn init() {
     match format {
         LogFormat::Text => {
             let _ = tracing_subscriber::fmt()
+                .with_ansi(false)
                 .with_env_filter(filter)
                 .with_writer(std::io::stderr)
                 .try_init();
