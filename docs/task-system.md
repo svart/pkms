@@ -343,15 +343,13 @@ When changing task behavior:
 - Add focused integration tests under `tests/integration/task.rs`.
 - Verify default and relevant feature builds.
 
-Use the full repository verification sequence from `AGENTS.md` before
-finalizing code or documentation changes:
+Use the development workflow in [Development](development.md) before finalizing
+code or documentation changes. For normal local work, run the fast pre-commit
+gate plus relevant feature-specific checks. CI runs the full gate.
 
 ```bash
 cargo fmt --check
 cargo clippy -- -D warnings
 cargo build
-cargo build --features=embed
 cargo test
-cargo test --test integration
-cargo run -- --help
 ```

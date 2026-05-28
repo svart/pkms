@@ -1,43 +1,44 @@
-# AGENTS.md — pkms Project Guide for AI Agents
+# AGENTS.md - pkms Project Guide for AI Agents
 
-This file is the operating guide for coding agents working in this repository.
-Keep it focused on agent behavior, project invariants, and implementation
-workflow. User-facing documentation belongs in `README.md` and `docs/`.
+This file is the compact operating guide for agents working in this repository.
+Keep detailed command recipes and contributor workflows in
+[docs/development.md](docs/development.md).
 
-## First Response to Bug Reports
+## Project Target
 
-When a user reports behavior of the tool against an available notes database,
-reproduce it first with the binary built from the current checkout:
+`pkms` is a local-first personal knowledge management CLI for org-roam style
+notes. The project optimizes for predictable command-line behavior, parseable
+output, deterministic IDs, and safe operation on a user's notes database.
 
-```bash
-cargo build
-target/debug/pkms --db <db-root> <command>
-```
+The philosophy is simple:
 
-Do not rely on an installed `pkms` binary unless the user explicitly asks to
-debug the installed version. If the user provides example files from the notes
-database, inspect those files before broader analysis.
+- Keep the tool stateless by default: read files, compute, print, exit.
+- Prefer explicit CLI behavior over background services or hidden state.
+- Keep human output useful and structured output stable.
+- Optimize the fresh scan, parse, and graph build path instead of adding
+  persistent derived state.
+- Treat notes databases as user data: inspect examples carefully, avoid broad
+  assumptions, and preserve parseable stdout.
 
-## Build, Lint, and Test
+## Workflow Source of Truth
 
-Refer to the [iterative checks section](docs/development.md#iterative-checks)
-for specific commands and usecases.
+Use [docs/development.md](docs/development.md) for specific workflows:
 
-All checks must pass. Fix clippy warnings directly; do not suppress clippy lints
-unless the user explicitly instructs otherwise.
+- [Bug reproduction](docs/development.md#bug-reproduction)
+- [Local development loop](docs/development.md#local-development-loop)
+- [Fast pre-commit gate](docs/development.md#fast-pre-commit-gate)
+- [Feature-specific checks](docs/development.md#feature-specific-checks)
+- [Full CI gate](docs/development.md#full-ci-gate)
+- [Adding or changing commands](docs/development.md#adding-or-changing-commands)
+- [Output contracts](docs/development.md#output-contracts)
+- [Task-system changes](docs/development.md#task-system-changes)
+- [Diagnostics](docs/development.md#diagnostics)
+- [Documentation and release workflow](docs/development.md#documentation-and-release-workflow)
 
-## Committing Changes
+All checks that are part of the selected workflow must pass. Fix clippy warnings
+directly; do not suppress lints unless the user explicitly asks.
 
-Only commit when the user asks for a commit. Before committing:
-
-- Check whether `AGENTS.md`, `README.md`, `docs/`, and `skills/` need updates.
-- Keep `README.md` concise; put detailed usage in `docs/`.
-- Update `skills/pkms-manager/` only when CLI behavior or agent workflows change.
-- Update the package version in `Cargo.toml` and the corresponding `Cargo.lock`
-  entry.
-- Run the full verification sequence above.
-
-## Project Structure
+## Project Map
 
 ```text
 src/
@@ -59,6 +60,7 @@ src/
 tests/integration/    # binary-level integration tests with mock databases
 docs/                 # detailed user and contributor docs
 skills/               # Codex skills for note and pkms workflows
+.gitea/workflows/     # CI and release automation
 ```
 
 Prefer checking the current source over trusting this outline when a file has
@@ -77,98 +79,102 @@ moved or behavior has changed.
   `ResolvedConfig`.
 - `db_root` resolution happens once through CLI `--db`, then `PKMS_DB_ROOT`, then
   config file `db_root`.
-- Command implementations read paths from `ResolvedConfig`, usually through
-  `resolved_db_root()`, `resolve_new_notes_dir()`, or `resolve_ignore_patterns()`.
+- Commands read paths from `ResolvedConfig`, usually through
+  `resolved_db_root()`, `resolve_new_notes_dir()`, or
+  `resolve_ignore_patterns()`.
 
-If performance needs improvement, optimize the fresh discovery, parse, and graph
-construction path. Do not persist derived state between invocations.
+## Command and Output Conventions
 
-## Command Pattern
-
-When adding or changing commands, follow the existing shape:
-
-1. Define CLI args in `src/cli.rs`.
-2. Dispatch from `src/main.rs`.
-3. Put behavior in `src/commands/<name>.rs`, or in `src/commands/<name>/`
-   when the command is a namespace with subcommands.
-4. Use option structs for command input when more than trivial args are needed.
-5. Accept `&ResolvedConfig` and `&OutputContext`.
-6. Load the graph with `Graph::load(config)` only when the command needs graph
-   data.
-7. Dispatch structured output through `OutputContext` helpers:
-   `print_json`, `print_ndjson`, or `print_json_adaptive`.
-8. Add or update integration tests under `tests/integration/`.
-
-Commands should return `anyhow::Result`; `check` may return an `ExitCode` to
-represent unhealthy database state.
-
-## Code Conventions
-
-- Use `anyhow::Result` for fallible functions. Do not add custom error types
-  without a strong local reason.
+- Define CLI args in `src/cli.rs` and dispatch from `src/main.rs`.
+- Put behavior in `src/commands/<name>.rs`, or `src/commands/<name>/` for a
+  namespace with subcommands.
+- Use option structs for command input when arguments are more than trivial.
+- Command implementations usually accept `&ResolvedConfig` and `&OutputContext`.
+- Load the graph with `Graph::load(config)` only when the command needs graph
+  data.
+- Return `anyhow::Result`; `check` may return an `ExitCode` for unhealthy
+  database state.
 - Derive `serde::Serialize` for command output structs.
 - Every command should support `--output-format json`; stream-like commands
   should support `ndjson` when practical.
-- Prefer shared parsing helpers in `input.rs` and output helpers in `output.rs`.
-- Keep comments sparse and useful. Add them for non-obvious logic, not for
-  restating code.
-- Preserve the stateless model even when optimizing.
+- Dispatch structured output through `OutputContext` helpers:
+  `print_json`, `print_ndjson`, or `print_json_adaptive`.
 
-## Canonical Task IDs
+## Core Domain Rules
 
-TODO headings receive deterministic global IDs shared by `todo`, `agenda`,
-`show`, and `open`. IDs are based on task status grouping and stable ordering
-within the parsed database. Filtered views can show non-contiguous IDs because
-excluded tasks still occupy their global positions.
+Canonical task IDs:
 
-Use the shared task-index helpers rather than implementing a parallel task ID
-scheme.
+- TODO headings receive deterministic global IDs shared by `todo`, `agenda`,
+  `show`, and `open`.
+- IDs are based on task status grouping and stable ordering within the parsed
+  database.
+- Filtered views can show non-contiguous IDs because excluded tasks still occupy
+  their global positions.
+- Use the shared task-index helpers rather than implementing a parallel task ID
+  scheme.
 
-## Heading Nodes
+Heading nodes:
 
-Each org-mode heading with an `:ID:` property is a first-class graph node. Code
-that resolves UUIDs, validates duplicate IDs, checks links, or builds
-neighborhoods must account for both note-level and heading-level IDs.
+- Each org-mode heading with an `:ID:` property is a first-class graph node.
+- UUID resolution, duplicate-ID validation, links, and neighborhoods must account
+  for both note-level and heading-level IDs.
 
-## Testing Patterns
+Command pipelining:
 
-- Unit tests live next to module code under `#[cfg(test)]`.
-- Integration tests spawn `target/debug/pkms` with temporary mock databases.
-- Property-based tests cover parser and graph panic resistance.
-- JSON support is guarded by the all-commands JSON integration test.
-- Pipeline behavior is tested with NDJSON producer/consumer integration tests.
-- Mock database helpers live in `tests/integration/mod.rs`.
+- NDJSON producers emit one JSON object per line, usually with a `uuid` field.
+- Consumers read targets from stdin via automatic pipe detection or
+  `--from-stdin`.
+- Producers: `resolve`, `query`, `orphans`, `stats --hubs`, `suggest`.
+- Consumers: `get`, `suggest`, `validate`, `context`, `todo`, `show`.
 
-For a narrow change, add focused tests near the changed behavior. For shared
-parsing, graph, task, output, or command-dispatch behavior, broaden coverage to
-the relevant integration tests.
-
-## Feature Flags
+Feature flags:
 
 | Feature | Default | Description |
 |---------|---------|-------------|
 | `embed` | off | Enables embedding-based `query` and `suggest` behavior through `fastembed`. |
+| `todoist` | off | Enables Todoist task reads and writes through `ureq`. |
 | `web` | off | Enables the local `serve` web viewer and static rendering through `katex` and `syntect`. |
 
-Always verify both default and `embed` builds. When changing `serve` or rendered
-HTML behavior, also verify the `web` feature build and tests.
+## Scenario Guide
 
-## Command Pipelining
+Bug reports: first reproduce with the binary built from the current checkout.
+Use the workflow in [Bug reproduction](docs/development.md#bug-reproduction).
+Do not rely on an installed `pkms` binary unless the user asks to debug it.
 
-NDJSON producers emit one JSON object per line, usually with a `uuid` field.
-Consumers read targets from stdin via automatic pipe detection or `--from-stdin`.
+Normal code changes: keep the edit narrow, add focused tests near the changed
+behavior, and use [Local development loop](docs/development.md#local-development-loop).
 
-- Producers: `resolve`, `query`, `orphans`, `stats --hubs`, `suggest`
-- Consumers: `get`, `suggest`, `validate`, `context`, `todo`, `show`
+Before committing or handing off: run the
+[Fast pre-commit gate](docs/development.md#fast-pre-commit-gate), plus any
+[Feature-specific checks](docs/development.md#feature-specific-checks) for code
+you touched. CI owns the full matrix in
+[Full CI gate](docs/development.md#full-ci-gate).
 
-Keep producer and consumer contracts compatible when changing structured output.
+Adding or changing commands: follow
+[Adding or changing commands](docs/development.md#adding-or-changing-commands),
+update integration tests, and update user docs for visible behavior.
 
-## Documentation Boundaries
+Task behavior: preserve canonical task IDs and source semantics. Follow
+[Task-system changes](docs/development.md#task-system-changes).
 
-- `README.md`: short project overview, quick start, core examples, links.
-- `docs/`: detailed installation, configuration, commands, database format,
-  TODO/agenda behavior, pipelining, JSON/NDJSON, workflows, development.
-- `skills/pkms-manager/`: agent workflow knowledge for operating `pkms`.
+Structured output or pipelining: preserve JSON and NDJSON contracts. Follow
+[Output contracts](docs/development.md#output-contracts) and update schemas under
+`skills/pkms-manager/schemas/` when output changes.
 
-When changing CLI behavior, update the command reference and any affected
-workflow docs. When changing agent workflows, update the relevant skill.
+Todoist changes: keep token handling out of logs and stdout. Use
+`PKMS_LOG_HTTP=1` only for scrubbed request metadata, and run the Todoist checks
+from [Feature-specific checks](docs/development.md#feature-specific-checks).
+
+Web viewer changes: keep `serve` foreground-only and free of persistent derived
+state. Run the web checks from
+[Feature-specific checks](docs/development.md#feature-specific-checks).
+
+Documentation changes: keep `README.md` concise, put detailed usage in `docs/`,
+and update `skills/pkms-manager/` only when CLI behavior or agent workflows
+change. See
+[Documentation and release workflow](docs/development.md#documentation-and-release-workflow).
+
+Commits and releases: only commit when the user asks. Before a release commit,
+update `Cargo.toml` and the corresponding `Cargo.lock` package entry, then use
+the release workflow in
+[Documentation and release workflow](docs/development.md#documentation-and-release-workflow).
