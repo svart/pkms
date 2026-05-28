@@ -197,10 +197,72 @@ Expected outcome: new features remain easy to integrate and hard to regress.
 
 ### 7. Final Maintainability and Testability Report
 
-- [ ] After completing the plan, add a comprehensive status report here covering
+- [x] After completing the plan, add a comprehensive status report here covering
   architecture, task command maintainability, test harness determinism, fixture
   quality, characterization coverage, verification results, and any remaining
   risks or follow-up work.
+
+#### Final Status
+
+The codebase remains aligned with the intended stateless CLI architecture. The
+main command path still parses CLI input, resolves configuration once, loads the
+current notes database, computes output, prints, and exits. No persistent cache,
+background state, or daemon behavior was introduced.
+
+The task command layer is materially easier to navigate than at the start of
+this plan. `src/commands/task/mod.rs` was reduced from roughly 1,463 lines to
+roughly 289 lines and now acts primarily as the namespace entry point for task
+dispatch, list/agenda routing, metadata routing, and ID-oriented show/open
+delegation. Responsibility-specific code now lives in:
+
+- `src/commands/task/plan.rs` for argument-to-request planning, column defaults,
+  shortcut planning, and PKMS-native versus source-neutral path selection.
+- `src/commands/task/execution.rs` for source-neutral collection, scoping,
+  filtering, sorting, and list/agenda execution outputs.
+- `src/commands/task/providers.rs` for provider collection and metadata
+  composition.
+- `src/commands/task/render.rs` for task table, JSON, NDJSON, metadata, and
+  mutation output rendering.
+- `src/commands/task/mutations.rs` for add, state, done, schedule, deadline, and
+  postpone routing across PKMS and Todoist sources.
+
+The integration harness is more deterministic. Broad JSON smoke coverage now
+runs through the same isolated command helper as the rest of the suite, and the
+harness has shared assertions for JSON values, JSON objects, JSON error objects,
+and NDJSON streams. This reduces duplicated parsing logic and makes future
+tests less sensitive to local configuration or PKMS-related environment
+variables.
+
+Fixture quality improved for new task characterization tests. The large shared
+fixture remains available for broad regression coverage, but new task boundary
+tests use `TestDb::new()`, chainable note/task builders, and explicit one-note
+org fixtures where the behavior depends on exact task ordering, planning data,
+or source-neutral output shape.
+
+Task refactor safety is stronger. Characterization coverage now includes the
+PKMS-native list and agenda shapes, source-neutral PKMS list output, source
+restrictions for grouping, configured-column behavior, stdin scoping, Todoist
+filter precedence under the Todoist feature, ID-first task actions, and stable
+canonical PKMS IDs when filtered views exclude earlier tasks.
+
+Verification passed with:
+
+```bash
+cargo fmt --check
+cargo clippy -- -D warnings
+cargo test
+cargo build
+cargo test --all-features
+cargo clippy --all-targets --all-features -- -D warnings
+```
+
+Remaining risks are non-blocking. The task namespace is much smaller, but it
+still has several coupled concepts because compatibility with PKMS-native
+output, source-neutral output, and Todoist behavior must remain exact. Future
+task feature work should continue adding focused characterization tests before
+moving responsibility boundaries. The large fixture should remain reserved for
+broad smoke/regression cases, not become the default setup for narrow behavior
+tests.
 
 ## Verification Baseline
 
