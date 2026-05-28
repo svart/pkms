@@ -161,7 +161,11 @@ impl TaskProvider for PkmsTaskProvider<'_> {
                     true,
                     query.clock,
                 )?;
-                super::retain_upcoming_task_items_on(&mut items, days, query.clock.today);
+                super::execution::retain_upcoming_task_items_on(
+                    &mut items,
+                    days,
+                    query.clock.today,
+                );
                 Ok(items)
             }
             TaskListView::Inbox => pkms::collect_inbox_items_on(self.context.config, query.clock),

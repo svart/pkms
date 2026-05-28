@@ -1,4 +1,3 @@
-use super::{apply_task_filter_criteria_on, providers};
 use crate::cli::{
     TaskAgendaArgs, TaskAgendaCommand, TaskListArgs, TaskShortcutArgs, TaskUpcomingArgs,
 };
@@ -7,7 +6,6 @@ use crate::input;
 use crate::output::Column;
 use crate::tasks::clock::TaskClock;
 use crate::tasks::filter::{SourceSelection, TaskFilters, parse_task_filters};
-use crate::tasks::model::TaskItem;
 use crate::tasks::provider::TaskListView;
 use crate::util;
 use anyhow::{Result, bail};
@@ -223,19 +221,6 @@ fn resolve_task_columns(
         raw_columns,
         config.default_columns(source.column_source(), view)?,
     )
-}
-
-pub(super) fn collect_shortcut_items_on(
-    config: &ResolvedConfig,
-    raw_filters: &[String],
-    kind: ShortcutKind,
-    clock: TaskClock,
-) -> Result<Vec<TaskItem>> {
-    let filters = parse_task_filters(raw_filters)?;
-    let mut items =
-        providers::collect_task_items(config, &filters, shortcut_task_view(kind), clock)?;
-    apply_task_filter_criteria_on(config, &mut items, &filters.criteria, clock.today)?;
-    Ok(items)
 }
 
 pub(super) fn shortcut_task_view(kind: ShortcutKind) -> TaskListView {

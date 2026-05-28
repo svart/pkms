@@ -150,7 +150,7 @@ reasonable target structure is:
   metadata rendering.
 - [x] `commands/task/mutations.rs`: route add, state, done, schedule, deadline, and
   postpone operations.
-- [ ] `commands/task/mod.rs`: remain a small dispatch facade.
+- [x] `commands/task/mod.rs`: remain a small dispatch facade.
 
 Do not introduce a framework or a generic command pipeline. The goal is to make
 the existing responsibilities easier to find and test, not to generalize command
