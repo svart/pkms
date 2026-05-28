@@ -25,23 +25,23 @@ pub(super) fn run(config: &ResolvedConfig, ctx: &OutputContext, args: &[String])
         }
         "state" => {
             let args = parse_state_args(id, command_args)?;
-            super::run_state(config, ctx, &args)
+            super::mutations::run_state(config, ctx, &args)
         }
         "done" => {
             let args = parse_done_args(id, command_args)?;
-            super::run_done(config, ctx, &args)
+            super::mutations::run_done(config, ctx, &args)
         }
         "postpone" => {
             let args = parse_postpone_args(id, command_args)?;
-            super::run_postpone(config, ctx, &args)
+            super::mutations::run_postpone(config, ctx, &args)
         }
         "schedule" => {
             let args = parse_schedule_args(id, command_args)?;
-            super::run_schedule(config, ctx, &args)
+            super::mutations::run_schedule(config, ctx, &args)
         }
         "deadline" => {
             let args = parse_deadline_args(id, command_args)?;
-            super::run_deadline(config, ctx, &args)
+            super::mutations::run_deadline(config, ctx, &args)
         }
         other => bail!(
             "Unknown task subcommand '{other}' after ID. Expected one of: show, open, state, done, postpone, schedule, deadline"

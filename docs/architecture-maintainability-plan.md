@@ -148,7 +148,7 @@ reasonable target structure is:
   composition.
 - [x] `commands/task/render.rs`: keep task table, JSON, NDJSON, mutation, and
   metadata rendering.
-- [ ] `commands/task/mutations.rs`: route add, state, done, schedule, deadline, and
+- [x] `commands/task/mutations.rs`: route add, state, done, schedule, deadline, and
   postpone operations.
 - [ ] `commands/task/mod.rs`: remain a small dispatch facade.
 
