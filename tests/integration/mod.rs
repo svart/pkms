@@ -78,6 +78,11 @@ pub fn run_with_config(args: &[&str], config: &str) -> (String, String, ExitStat
 
 pub fn run_json(args: &[&str]) -> (serde_json::Value, ExitStatus) {
     let (stdout, _stderr, status) = run(args);
+    let v = assert_json_output(args, &stdout);
+    (v, status)
+}
+
+pub fn assert_json_output(args: &[&str], stdout: &str) -> serde_json::Value {
     let trimmed = stdout.trim();
     if trimmed.is_empty() {
         panic!("No JSON output for args {:?}\nstdout: {}", args, stdout);
@@ -87,7 +92,42 @@ pub fn run_json(args: &[&str]) -> (serde_json::Value, ExitStatus) {
     }
     let v: serde_json::Value = serde_json::from_str(trimmed)
         .unwrap_or_else(|e| panic!("Invalid JSON for {:?}: {}\nError: {}", args, trimmed, e));
-    (v, status)
+    v
+}
+
+pub fn assert_json_object_output(args: &[&str], stdout: &str) -> serde_json::Value {
+    let value = assert_json_output(args, stdout);
+    assert!(value.is_object(), "Expected JSON object for {:?}", args);
+    value
+}
+
+pub fn assert_json_error_output(args: &[&str], stdout: &str) -> serde_json::Value {
+    let value = assert_json_object_output(args, stdout);
+    assert!(
+        value.get("error").is_some(),
+        "Missing error key for {:?}",
+        args
+    );
+    value
+}
+
+pub fn assert_ndjson_output(args: &[&str], stdout: &str) -> Vec<serde_json::Value> {
+    assert!(!stdout.trim().is_empty(), "No NDJSON output for {:?}", args);
+    stdout
+        .lines()
+        .enumerate()
+        .map(|(index, line)| {
+            serde_json::from_str(line).unwrap_or_else(|e| {
+                panic!(
+                    "Invalid NDJSON line {} for {:?}: {}\nError: {}",
+                    index + 1,
+                    args,
+                    line,
+                    e
+                )
+            })
+        })
+        .collect()
 }
 
 fn run_pipe(producer_args: &[&str], consumer_args: &[&str]) -> (String, String, ExitStatus) {

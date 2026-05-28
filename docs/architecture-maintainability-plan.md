@@ -84,12 +84,12 @@ precedence, and ID-first task actions.
 
 Add or strengthen shared helpers in `tests/integration/`:
 
-- [ ] Run broad command smoke tests through the same isolated `XDG_CONFIG_HOME`,
+- [x] Run broad command smoke tests through the same isolated `XDG_CONFIG_HOME`,
   `PKMS_DB_ROOT`, `PKMS_LOG`, `PKMS_LOG_FORMAT`, and `PKMS_LOG_HTTP` setup used
   by the rest of the harness.
-- [ ] Add small assertion helpers for JSON object output, NDJSON line output, and
+- [x] Add small assertion helpers for JSON object output, NDJSON line output, and
   JSON error output.
-- [ ] Prefer harness helpers over direct `Command::new(pkms_binary())` in new tests,
+- [x] Prefer harness helpers over direct `Command::new(pkms_binary())` in new tests,
   unless the test is specifically about process environment setup.
 
 Expected outcome: integration tests become easier to write and less sensitive to

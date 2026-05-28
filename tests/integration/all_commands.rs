@@ -1,6 +1,4 @@
 use super::*;
-use std::process::Command;
-
 #[test]
 fn test_all_commands_json() {
     let (_dir, root) = setup_db();
@@ -245,31 +243,16 @@ fn test_all_commands_json() {
     ];
     for (args, expect_success) in &cases {
         let args_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
-        let output = Command::new(pkms_binary())
-            .args(&args_refs)
-            .output()
-            .unwrap();
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        let stderr = String::from_utf8_lossy(&output.stderr);
+        let (stdout, stderr, status) = run(&args_refs);
         if *expect_success {
             assert!(
-                output.status.success(),
+                status.success(),
                 "Expected success for {:?}\nstdout: {}\nstderr: {}",
                 args_refs,
                 stdout,
                 stderr
             );
         }
-        let trimmed = stdout.trim();
-        assert!(
-            trimmed.starts_with('{'),
-            "Expected JSON object for {:?}\nstdout: {}\nstderr: {}",
-            args_refs,
-            stdout,
-            stderr
-        );
-        let v: serde_json::Value = serde_json::from_str(trimmed)
-            .unwrap_or_else(|_| panic!("Invalid JSON for {:?}: {}", args_refs, stdout));
-        assert!(v.is_object(), "Expected object for {:?}", args_refs);
+        assert_json_object_output(&args_refs, &stdout);
     }
 }

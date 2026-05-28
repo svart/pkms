@@ -42,20 +42,7 @@ fn test_error_note_not_found_json() {
         let args_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
         let (stdout, _stderr, status) = run(&args_refs);
         assert!(!status.success(), "Expected failure for {:?}", args_refs);
-        let trimmed = stdout.trim();
-        assert!(
-            trimmed.starts_with('{'),
-            "Expected JSON error for {:?}, got: {}",
-            args_refs,
-            stdout
-        );
-        let v: serde_json::Value = serde_json::from_str(trimmed)
-            .unwrap_or_else(|_| panic!("Invalid JSON for {:?}: {}", args_refs, stdout));
-        assert!(
-            v.get("error").is_some(),
-            "Missing error key for {:?}",
-            args_refs
-        );
+        assert_json_error_output(&args_refs, &stdout);
     }
 }
 
@@ -72,7 +59,18 @@ fn test_error_path_not_found_json() {
         "Note A",
     ]);
     assert!(!status.success());
-    let v: serde_json::Value = serde_json::from_str(stdout.trim()).unwrap();
+    let v = assert_json_error_output(
+        &[
+            "--db",
+            root.to_str().unwrap(),
+            "--output-format",
+            "json",
+            "path",
+            "Nonexistent",
+            "Note A",
+        ],
+        &stdout,
+    );
     assert!(v.get("error").is_some());
 }
 
@@ -131,9 +129,7 @@ fn test_missing_db_json_error() {
         .unwrap();
     let stdout = String::from_utf8_lossy(&output.stdout).to_string();
     assert!(!output.status.success());
-    let v: serde_json::Value = serde_json::from_str(stdout.trim())
-        .unwrap_or_else(|_| panic!("Expected JSON error, got: {}", stdout));
-    assert!(v.get("error").is_some());
+    assert_json_error_output(&["--output-format", "json", "stats"], &stdout);
 }
 
 #[test]
@@ -178,19 +174,6 @@ fn test_json_error_exit_code() {
         let args_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
         let (stdout, _stderr, status) = run(&args_refs);
         assert!(!status.success(), "Expected failure for {:?}", args_refs);
-        let trimmed = stdout.trim();
-        assert!(
-            trimmed.starts_with('{'),
-            "Expected JSON for {:?}",
-            args_refs
-        );
-        let v: serde_json::Value = serde_json::from_str(trimmed).unwrap_or_else(|_| {
-            panic!("Invalid JSON on error path for {:?}: {}", args_refs, stdout)
-        });
-        assert!(
-            v.get("error").is_some(),
-            "Expected error key for {:?}",
-            args_refs
-        );
+        assert_json_error_output(&args_refs, &stdout);
     }
 }

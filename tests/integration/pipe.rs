@@ -21,15 +21,8 @@ fn test_pipe_query_to_get() {
         "pipe query|get failed:\nstdout: {}\n",
         stdout
     );
-    assert!(!stdout.is_empty(), "expected output from pipe");
-    for line in stdout.lines() {
-        let v: serde_json::Value = serde_json::from_str(line)
-            .unwrap_or_else(|e| panic!("Bad JSON line '{}': {}", line, e));
-        assert!(
-            v.get("node").is_some(),
-            "expected get output, got: {}",
-            line
-        );
+    for v in assert_ndjson_output(&["query", "get"], &stdout) {
+        assert!(v.get("node").is_some(), "expected get output, got: {}", v);
     }
 }
 
@@ -62,15 +55,8 @@ fn test_pipe_resolve_to_get() {
         "pipe resolve|get failed:\nstdout: {}\n",
         stdout
     );
-    assert!(!stdout.is_empty(), "expected output from pipe");
-    for line in stdout.lines() {
-        let v: serde_json::Value = serde_json::from_str(line)
-            .unwrap_or_else(|e| panic!("Bad JSON line '{}': {}", line, e));
-        assert!(
-            v.get("node").is_some(),
-            "expected get output, got: {}",
-            line
-        );
+    for v in assert_ndjson_output(&["resolve", "get"], &stdout) {
+        assert!(v.get("node").is_some(), "expected get output, got: {}", v);
     }
 }
 
@@ -95,15 +81,8 @@ fn test_pipe_orphans_to_get() {
         "pipe orphans|get failed:\nstdout: {}\n",
         stdout
     );
-    assert!(!stdout.is_empty(), "expected output from pipe");
-    for line in stdout.lines() {
-        let v: serde_json::Value = serde_json::from_str(line)
-            .unwrap_or_else(|e| panic!("Bad JSON line '{}': {}", line, e));
-        assert!(
-            v.get("node").is_some(),
-            "expected get output, got: {}",
-            line
-        );
+    for v in assert_ndjson_output(&["orphans", "get"], &stdout) {
+        assert!(v.get("node").is_some(), "expected get output, got: {}", v);
     }
 }
 
@@ -137,19 +116,16 @@ fn test_pipe_resolve_to_suggest() {
         "pipe resolve|suggest failed:\nstdout: {}\n",
         stdout
     );
-    assert!(!stdout.is_empty(), "expected output from pipe");
-    for line in stdout.lines() {
-        let v: serde_json::Value = serde_json::from_str(line)
-            .unwrap_or_else(|e| panic!("Bad JSON line '{}': {}", line, e));
+    for v in assert_ndjson_output(&["resolve", "suggest"], &stdout) {
         assert!(
             v.get("uuid").is_some(),
             "expected suggest output with uuid, got: {}",
-            line
+            v
         );
         assert!(
             v.get("score").is_some(),
             "expected suggest output with score, got: {}",
-            line
+            v
         );
     }
 }
@@ -182,19 +158,16 @@ fn test_pipe_resolve_to_validate() {
         "pipe resolve|validate failed:\nstdout: {}\n",
         stdout
     );
-    assert!(!stdout.is_empty(), "expected output from pipe");
-    for line in stdout.lines() {
-        let v: serde_json::Value = serde_json::from_str(line)
-            .unwrap_or_else(|e| panic!("Bad JSON line '{}': {}", line, e));
+    for v in assert_ndjson_output(&["resolve", "validate"], &stdout) {
         assert!(
             v.get("uuid").is_some(),
             "expected validate output, got: {}",
-            line
+            v
         );
         assert!(
             v.get("healthy").is_some(),
             "expected healthy field, got: {}",
-            line
+            v
         );
     }
 }
@@ -228,14 +201,11 @@ fn test_pipe_resolve_to_task_list() {
         "pipe resolve|task list failed:\nstdout: {}\n",
         stdout
     );
-    assert!(!stdout.is_empty(), "expected output from pipe");
-    for line in stdout.lines() {
-        let v: serde_json::Value = serde_json::from_str(line)
-            .unwrap_or_else(|e| panic!("Bad JSON line '{}': {}", line, e));
+    for v in assert_ndjson_output(&["resolve", "task", "list"], &stdout) {
         assert!(
             v.get("uuid").is_some(),
             "expected task list output with uuid, got: {}",
-            line
+            v
         );
     }
 }
@@ -270,14 +240,7 @@ fn test_pipe_suggest_to_get() {
         "pipe suggest|get failed:\nstdout: {}\n",
         stdout
     );
-    assert!(!stdout.is_empty(), "expected output from pipe");
-    for line in stdout.lines() {
-        let v: serde_json::Value = serde_json::from_str(line)
-            .unwrap_or_else(|e| panic!("Bad JSON line '{}': {}", line, e));
-        assert!(
-            v.get("node").is_some(),
-            "expected get output, got: {}",
-            line
-        );
+    for v in assert_ndjson_output(&["suggest", "get"], &stdout) {
+        assert!(v.get("node").is_some(), "expected get output, got: {}", v);
     }
 }
