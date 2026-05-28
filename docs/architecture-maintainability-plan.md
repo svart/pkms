@@ -100,9 +100,9 @@ the developer machine or shell environment.
 Keep `TestDb::fixture()` for broad smoke and regression coverage. For new tests,
 prefer:
 
-- [ ] `TestDb::clean()` for a blank roam tree.
-- [ ] Chainable `TestDb` builder methods for one-note or one-task scenarios.
-- [ ] Explicit fixture content when testing parser, graph, task ID, or output edge
+- [x] `TestDb::clean()` for a blank roam tree.
+- [x] Chainable `TestDb` builder methods for one-note or one-task scenarios.
+- [x] Explicit fixture content when testing parser, graph, task ID, or output edge
   cases.
 
 Add builder methods only when they remove repeated org boilerplate without
@@ -116,17 +116,17 @@ and the large fixture does not become a hidden dependency for unrelated behavior
 
 Before moving task command code, cover these behavior boundaries:
 
-- [ ] PKMS-native `task list` text, JSON, and NDJSON output.
-- [ ] PKMS-native `task agenda` grouped text and structured output.
-- [ ] Source-neutral task output for `source:pkms`, `source:todoist`, and
+- [x] PKMS-native `task list` text, JSON, and NDJSON output.
+- [x] PKMS-native `task agenda` grouped text and structured output.
+- [x] Source-neutral task output for `source:pkms`, `source:todoist`, and
   `source:all`.
-- [ ] `task list --from-stdin` scoping behavior.
-- [ ] `task list --group` behavior and source restrictions.
-- [ ] Configured column defaults and explicit `--columns` overrides.
-- [ ] Todoist `todoist.filter` precedence over default filters and shortcut filters.
-- [ ] ID-first actions such as `task p<ID> show`, `open`, `state`, `done`,
+- [x] `task list --from-stdin` scoping behavior.
+- [x] `task list --group` behavior and source restrictions.
+- [x] Configured column defaults and explicit `--columns` overrides.
+- [x] Todoist `todoist.filter` precedence over default filters and shortcut filters.
+- [x] ID-first actions such as `task p<ID> show`, `open`, `state`, `done`,
   `schedule`, `deadline`, and `postpone`.
-- [ ] Stable canonical PKMS task IDs when filters exclude earlier tasks.
+- [x] Stable canonical PKMS task IDs when filters exclude earlier tasks.
 
 Expected outcome: task refactors can be reviewed as structure-only changes with
 high confidence that current behavior is preserved.

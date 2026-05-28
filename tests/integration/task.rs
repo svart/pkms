@@ -1093,6 +1093,106 @@ fn test_task_list_ndjson() {
 }
 
 #[test]
+fn test_task_list_source_pkms_uses_source_neutral_json() {
+    let db = TestDb::new()
+        .note(
+            "focused.org",
+            "Focused Tasks",
+            "11111111-1111-4111-8111-111111111111",
+        )
+        .task("focused.org", "TODO", "Source neutral PKMS task");
+
+    let (v, status) = db.run_json(&["task", "list", "source:pkms", "state:todo"]);
+
+    assert!(status.success());
+    assert_eq!(v["total"], 1);
+    assert_eq!(v["items"][0]["source"], "pkms");
+    assert_eq!(v["items"][0]["title"], "Source neutral PKMS task");
+}
+
+#[test]
+fn test_task_agenda_focused_pkms_json_keeps_planned_item_shape() {
+    let db = TestDb::new().note_with_content(
+        "planned.org",
+        r#":PROPERTIES:
+:ID:       22222222-2222-4222-8222-222222222222
+:END:
+#+title: Focused Agenda
+
+* TODO Focused planned task
+SCHEDULED: <2026-05-29 Fri>
+"#,
+    );
+
+    let (v, status) = db.run_json(&["task", "agenda"]);
+
+    assert!(status.success());
+    assert_eq!(v["total"], 1);
+    assert_eq!(v["items"][0]["title"], "Focused Agenda");
+    assert_eq!(v["items"][0]["heading_title"], "Focused planned task");
+    assert_eq!(v["items"][0]["scheduled_date"], "2026-05-29");
+}
+
+#[test]
+fn test_task_list_rejects_group_for_source_all() {
+    let db = TestDb::new()
+        .note(
+            "tasks.org",
+            "Grouped Tasks",
+            "33333333-3333-4333-8333-333333333333",
+        )
+        .task("tasks.org", "TODO", "Grouped task");
+
+    let (stdout, _stderr, status) = db.run(&[
+        "--output-format",
+        "json",
+        "task",
+        "list",
+        "--group",
+        "state",
+        "source:all",
+    ]);
+
+    assert!(!status.success());
+    let v = assert_json_error_output(&["task", "list", "--group", "state", "source:all"], &stdout);
+    assert_eq!(
+        v["error"],
+        "task list --group is available only for source:pkms"
+    );
+}
+
+#[test]
+fn test_task_list_filtered_view_preserves_canonical_pkms_ids() {
+    let db = TestDb::new().note_with_content(
+        "ids.org",
+        r#":PROPERTIES:
+:ID:       44444444-4444-4444-8444-444444444444
+:END:
+#+title: Stable IDs
+
+* TODO Earlier excluded task :excluded:
+* TODO Later included task :included:
+"#,
+    );
+
+    let (all, all_status) = db.run_json(&["task", "list"]);
+    assert!(all_status.success());
+    let all_items = all["items"].as_array().unwrap();
+    let included_id = all_items
+        .iter()
+        .find(|item| item["heading_title"] == "Later included task")
+        .and_then(|item| item["id"].as_u64())
+        .unwrap();
+
+    let (filtered, filtered_status) = db.run_json(&["task", "list", "tag:included"]);
+
+    assert!(filtered_status.success());
+    assert_eq!(filtered["total"], 1);
+    assert_eq!(filtered["items"][0]["source_id"], included_id.to_string());
+    assert_eq!(filtered["items"][0]["title"], "Later included task");
+}
+
+#[test]
 fn test_task_list_rejects_todoist_filter_for_default_pkms_source() {
     let (_dir, root) = setup_db();
     let (stdout, _stderr, status) = run(&[
