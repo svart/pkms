@@ -142,11 +142,11 @@ commands::task::run(config, ctx, command)
 Move internals only when tests already characterize the affected behavior. A
 reasonable target structure is:
 
-- [ ] `commands/task/plan.rs`: parse task command args into request structs and
+- [x] `commands/task/plan.rs`: parse task command args into request structs and
   choose PKMS-native versus source-neutral execution paths.
-- [ ] `commands/task/providers.rs`: keep provider collection and metadata
+- [x] `commands/task/providers.rs`: keep provider collection and metadata
   composition.
-- [ ] `commands/task/render.rs`: keep task table, JSON, NDJSON, mutation, and
+- [x] `commands/task/render.rs`: keep task table, JSON, NDJSON, mutation, and
   metadata rendering.
 - [ ] `commands/task/mutations.rs`: route add, state, done, schedule, deadline, and
   postpone operations.

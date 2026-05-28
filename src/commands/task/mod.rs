@@ -1,21 +1,20 @@
 #[cfg(feature = "todoist")]
 use crate::cli::OutputFormat;
 use crate::cli::{
-    TaskAddArgs, TaskAgendaArgs, TaskAgendaCommand, TaskCommand, TaskDeadlineArgs, TaskDoneArgs,
-    TaskListArgs, TaskOpenArgs, TaskPostponeArgs, TaskScheduleArgs, TaskShortcutArgs,
-    TaskStateArgs, TaskTargetArgs, TaskUpcomingArgs,
+    TaskAddArgs, TaskAgendaArgs, TaskCommand, TaskDeadlineArgs, TaskDoneArgs, TaskListArgs,
+    TaskOpenArgs, TaskPostponeArgs, TaskScheduleArgs, TaskShortcutArgs, TaskStateArgs,
+    TaskTargetArgs,
 };
 use crate::commands::open::OpenOptions;
 use crate::commands::show::{HeadingTarget, ShowOptions};
-use crate::config::{ColumnSource, ColumnView, ResolvedConfig};
-use crate::input;
+use crate::config::ResolvedConfig;
 use crate::output::{Column, OutputContext};
 use crate::tasks::add::{
     TaskAddSpec, org_date, parse_add_date_arg_on, pkms_priority, validate_pkms_date_arg_on,
 };
 use crate::tasks::clock::TaskClock;
 use crate::tasks::filter::{
-    SourceSelection, TaskFilterContext, TaskFilterCriteria, TaskFilters, parse_task_filters,
+    SourceSelection, TaskFilterContext, TaskFilterCriteria, parse_task_filters,
 };
 use crate::tasks::id::TaskId;
 use crate::tasks::model::{TaskItem, TaskSourceKind};
@@ -23,7 +22,6 @@ use crate::tasks::pkms::{self, PkmsInboxTarget};
 use crate::tasks::pkms_mutation::{self, PlanningKind};
 use crate::tasks::provider::{TaskListView, TaskMetadataRow};
 use crate::tasks::scope::ResolvedScope;
-use crate::util;
 use crate::workspace::Workspace;
 use anyhow::{Context, Result, bail};
 use chrono::NaiveDate;
@@ -33,9 +31,15 @@ use std::path::Path;
 
 mod agenda;
 mod id_command;
+mod plan;
 mod providers;
 mod render;
 mod todo;
+
+use plan::{
+    AgendaRenderKind, AgendaRequest, ShortcutKind, TaskListMode, TaskListRequest,
+    plan_agenda_request, plan_task_list_request, split_task_list_mode,
+};
 
 pub fn run(config: &ResolvedConfig, ctx: &OutputContext, command: &TaskCommand) -> Result<()> {
     match command {
@@ -54,66 +58,11 @@ pub fn run(config: &ResolvedConfig, ctx: &OutputContext, command: &TaskCommand) 
     }
 }
 
-#[derive(Debug, Clone, Copy)]
-enum ShortcutKind {
-    Today,
-    Week,
-    Overdue,
-    Upcoming { days: i64 },
-    Inbox,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum TaskListMode {
-    Tasks,
-    Projects,
-    Tags,
-}
-
-struct TaskListRequest {
-    filters: TaskFilters,
-    scope: Vec<String>,
-    sort: Option<String>,
-    limit: Option<usize>,
-    group: Option<String>,
-    from_stdin: bool,
-    line_sep: bool,
-    columns: TaskListColumns,
-    clock: TaskClock,
-}
-
-enum TaskListColumns {
-    Pkms(Vec<Column>),
-    SourceNeutral(Option<Vec<Column>>),
-}
-
 struct TaskListExecution {
     source: SourceSelection,
     items: Vec<TaskItem>,
     limit: Option<usize>,
     columns: Option<Vec<Column>>,
-}
-
-struct AgendaRequest {
-    filters: TaskFilters,
-    sort: Option<String>,
-    limit: Option<usize>,
-    line_sep: bool,
-    columns: AgendaColumns,
-    clock: TaskClock,
-    view: TaskListView,
-    render_kind: AgendaRenderKind,
-}
-
-enum AgendaColumns {
-    Pkms(Vec<Column>),
-    SourceNeutral(Option<Vec<Column>>),
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum AgendaRenderKind {
-    TaskItems,
-    AgendaGroups,
 }
 
 struct AgendaExecution {
@@ -125,74 +74,12 @@ struct AgendaExecution {
     render_kind: AgendaRenderKind,
 }
 
-impl TaskListRequest {
-    fn uses_pkms_todo_path(&self) -> bool {
-        matches!(self.filters.source, SourceSelection::Pkms)
-            && (!self.filters.has_criteria() || self.group.is_some() || self.from_stdin)
-    }
-
-    fn pkms_columns(&self) -> &[Column] {
-        match &self.columns {
-            TaskListColumns::Pkms(columns) => columns,
-            TaskListColumns::SourceNeutral(_) => unreachable!("expected PKMS task columns"),
-        }
-    }
-
-    fn source_neutral_columns(&self) -> Option<&[Column]> {
-        match &self.columns {
-            TaskListColumns::SourceNeutral(columns) => columns.as_deref(),
-            TaskListColumns::Pkms(_) => unreachable!("expected source-neutral task columns"),
-        }
-    }
-}
-
-impl AgendaRequest {
-    fn uses_pkms_agenda_path(&self) -> bool {
-        matches!(&self.columns, AgendaColumns::Pkms(_))
-    }
-
-    fn pkms_columns(&self) -> &[Column] {
-        match &self.columns {
-            AgendaColumns::Pkms(columns) => columns,
-            AgendaColumns::SourceNeutral(_) => unreachable!("expected PKMS agenda columns"),
-        }
-    }
-
-    fn source_neutral_columns(&self) -> Option<&[Column]> {
-        match &self.columns {
-            AgendaColumns::SourceNeutral(columns) => columns.as_deref(),
-            AgendaColumns::Pkms(_) => unreachable!("expected source-neutral agenda columns"),
-        }
-    }
-}
-
-impl SourceSelection {
-    fn column_source(self) -> ColumnSource {
-        match self {
-            SourceSelection::Pkms => ColumnSource::Pkms,
-            SourceSelection::Todoist => ColumnSource::Todoist,
-            SourceSelection::All => ColumnSource::All,
-        }
-    }
-}
-
 fn run_list(config: &ResolvedConfig, ctx: &OutputContext, args: &TaskListArgs) -> Result<()> {
     let (mode, filters) = split_task_list_mode(&args.filters);
     match mode {
         TaskListMode::Tasks => run_task_list(config, ctx, args, &filters),
         TaskListMode::Projects => run_projects(config, ctx, &filters),
         TaskListMode::Tags => run_tags(config, ctx, &filters),
-    }
-}
-
-fn split_task_list_mode(filters: &[String]) -> (TaskListMode, Vec<String>) {
-    let Some((first, rest)) = filters.split_first() else {
-        return (TaskListMode::Tasks, Vec::new());
-    };
-    match first.as_str() {
-        "projects" => (TaskListMode::Projects, rest.to_vec()),
-        "tags" | "labels" => (TaskListMode::Tags, rest.to_vec()),
-        _ => (TaskListMode::Tasks, filters.to_vec()),
     }
 }
 
@@ -230,59 +117,6 @@ fn run_task_list(
     render_task_list(ctx, output)
 }
 
-fn plan_task_list_request(
-    config: &ResolvedConfig,
-    args: &TaskListArgs,
-    raw_filters: &[String],
-) -> Result<TaskListRequest> {
-    let filters = parse_task_filters(raw_filters)?;
-    tracing::debug!(
-        source = ?filters.source,
-        filter_count = raw_filters.len(),
-        has_todoist_filter = filters.todoist_filter.is_some(),
-        has_criteria = filters.has_criteria(),
-        "running task list"
-    );
-    let clock = TaskClock::now();
-    let scope = task_scope(config, args.from_stdin, &filters.criteria.scope)?;
-    if args.group.is_some() && !matches!(filters.source, SourceSelection::Pkms) {
-        bail!("task list --group is available only for source:pkms");
-    }
-    if args.from_stdin && !matches!(filters.source, SourceSelection::Pkms) {
-        bail!("task list --from-stdin is available only for source:pkms");
-    }
-
-    let uses_pkms_todo_path = matches!(filters.source, SourceSelection::Pkms)
-        && (!filters.has_criteria() || args.group.is_some() || args.from_stdin);
-    let columns = if uses_pkms_todo_path {
-        TaskListColumns::Pkms(resolve_task_columns(
-            config,
-            SourceSelection::Pkms,
-            ColumnView::Tasks,
-            args.table.columns.as_deref(),
-        )?)
-    } else {
-        TaskListColumns::SourceNeutral(resolve_task_table_columns(
-            config,
-            filters.source,
-            ColumnView::Tasks,
-            args.table.columns.as_deref(),
-        )?)
-    };
-
-    Ok(TaskListRequest {
-        filters,
-        scope,
-        sort: args.sort.clone(),
-        limit: args.limit,
-        group: args.group.clone(),
-        from_stdin: args.from_stdin,
-        line_sep: args.table.line_sep,
-        columns,
-        clock,
-    })
-}
-
 fn execute_task_list(
     config: &ResolvedConfig,
     request: &TaskListRequest,
@@ -314,17 +148,6 @@ fn render_task_list(ctx: &OutputContext, output: TaskListExecution) -> Result<()
     )
 }
 
-fn task_scope(
-    _config: &ResolvedConfig,
-    from_stdin: bool,
-    filter_scope: &[String],
-) -> Result<Vec<String>> {
-    if from_stdin {
-        return util::read_stdin_ndjson();
-    }
-    Ok(filter_scope.to_vec())
-}
-
 fn run_shortcut(
     config: &ResolvedConfig,
     ctx: &OutputContext,
@@ -332,85 +155,16 @@ fn run_shortcut(
     kind: ShortcutKind,
 ) -> Result<()> {
     let clock = TaskClock::now();
-    let mut items = collect_shortcut_items_on(config, &args.filters, kind, clock)?;
-    let source = shortcut_display_source(&args.filters)?;
+    let mut items = plan::collect_shortcut_items_on(config, &args.filters, kind, clock)?;
+    let source = plan::shortcut_display_source(&args.filters)?;
     sort_task_items(&mut items, "priority")?;
-    let columns = resolve_task_table_columns(
+    let columns = plan::resolve_task_table_columns(
         config,
         source,
-        shortcut_column_view(kind),
+        plan::shortcut_column_view(kind),
         args.table.columns.as_deref(),
     )?;
     render::print_task_items(ctx, source, items, args.limit, columns.as_deref())
-}
-
-fn shortcut_display_source(raw_filters: &[String]) -> Result<SourceSelection> {
-    let filters = parse_task_filters(raw_filters)?;
-    Ok(filters.source)
-}
-
-fn resolve_task_table_columns(
-    config: &ResolvedConfig,
-    source: SourceSelection,
-    view: ColumnView,
-    raw_columns: Option<&str>,
-) -> Result<Option<Vec<Column>>> {
-    if let Some(raw_columns) = raw_columns
-        && !input::columns_has_adjustment(raw_columns)
-    {
-        return input::resolve_columns(Some(raw_columns), None).map(Some);
-    }
-
-    let default_columns = config.default_columns(source.column_source(), view)?;
-    if raw_columns.is_none() && default_columns.is_none() {
-        return Ok(None);
-    }
-    input::resolve_columns(raw_columns, default_columns).map(Some)
-}
-
-fn resolve_task_columns(
-    config: &ResolvedConfig,
-    source: SourceSelection,
-    view: ColumnView,
-    raw_columns: Option<&str>,
-) -> Result<Vec<Column>> {
-    input::resolve_columns(
-        raw_columns,
-        config.default_columns(source.column_source(), view)?,
-    )
-}
-
-fn collect_shortcut_items_on(
-    config: &ResolvedConfig,
-    raw_filters: &[String],
-    kind: ShortcutKind,
-    clock: TaskClock,
-) -> Result<Vec<TaskItem>> {
-    let filters = parse_task_filters(raw_filters)?;
-    let mut items =
-        providers::collect_task_items(config, &filters, shortcut_task_view(kind), clock)?;
-    apply_task_filter_criteria_on(config, &mut items, &filters.criteria, clock.today)?;
-    Ok(items)
-}
-
-fn shortcut_task_view(kind: ShortcutKind) -> TaskListView {
-    match kind {
-        ShortcutKind::Today => TaskListView::Today,
-        ShortcutKind::Week => TaskListView::Week,
-        ShortcutKind::Overdue => TaskListView::Overdue,
-        ShortcutKind::Upcoming { days } => TaskListView::Upcoming { days },
-        ShortcutKind::Inbox => TaskListView::Inbox,
-    }
-}
-
-fn shortcut_column_view(kind: ShortcutKind) -> ColumnView {
-    match kind {
-        ShortcutKind::Today
-        | ShortcutKind::Week
-        | ShortcutKind::Overdue
-        | ShortcutKind::Upcoming { .. } => ColumnView::Agenda,
-        ShortcutKind::Inbox => ColumnView::Tasks,
-    }
 }
 
 fn apply_task_filter_criteria_on(
@@ -481,111 +235,6 @@ fn run_agenda(config: &ResolvedConfig, ctx: &OutputContext, args: &TaskAgendaArg
 
     let output = execute_task_agenda(config, &request)?;
     render_task_agenda(ctx, output)
-}
-
-fn plan_agenda_request(config: &ResolvedConfig, args: &TaskAgendaArgs) -> Result<AgendaRequest> {
-    match &args.command {
-        Some(TaskAgendaCommand::Today(args)) => {
-            return plan_agenda_shortcut_request(config, args, ShortcutKind::Today);
-        }
-        Some(TaskAgendaCommand::Week(args)) => {
-            return plan_agenda_shortcut_request(config, args, ShortcutKind::Week);
-        }
-        Some(TaskAgendaCommand::Overdue(args)) => {
-            return plan_agenda_shortcut_request(config, args, ShortcutKind::Overdue);
-        }
-        Some(TaskAgendaCommand::Upcoming(args)) => {
-            return plan_agenda_upcoming_request(config, args);
-        }
-        None => {}
-    }
-
-    let filters = parse_task_filters(&args.filters)?;
-    tracing::debug!(
-        source = ?filters.source,
-        filter_count = args.filters.len(),
-        has_todoist_filter = filters.todoist_filter.is_some(),
-        has_criteria = filters.has_criteria(),
-        "running task agenda"
-    );
-    let clock = TaskClock::now();
-    let columns = if matches!(filters.source, SourceSelection::Pkms) && !filters.has_criteria() {
-        AgendaColumns::Pkms(resolve_task_columns(
-            config,
-            SourceSelection::Pkms,
-            ColumnView::Agenda,
-            args.table.columns.as_deref(),
-        )?)
-    } else {
-        AgendaColumns::SourceNeutral(resolve_task_table_columns(
-            config,
-            filters.source,
-            ColumnView::Agenda,
-            args.table.columns.as_deref(),
-        )?)
-    };
-    Ok(AgendaRequest {
-        filters,
-        sort: args.sort.clone(),
-        limit: args.limit,
-        line_sep: args.table.line_sep,
-        columns,
-        clock,
-        view: TaskListView::Agenda,
-        render_kind: AgendaRenderKind::AgendaGroups,
-    })
-}
-
-fn plan_agenda_shortcut_request(
-    config: &ResolvedConfig,
-    args: &TaskShortcutArgs,
-    kind: ShortcutKind,
-) -> Result<AgendaRequest> {
-    let filters = parse_task_filters(&args.filters)?;
-    let clock = TaskClock::now();
-    let columns = resolve_task_table_columns(
-        config,
-        filters.source,
-        shortcut_column_view(kind),
-        args.table.columns.as_deref(),
-    )?;
-    Ok(AgendaRequest {
-        filters,
-        sort: Some("priority".to_string()),
-        limit: args.limit,
-        line_sep: args.table.line_sep,
-        columns: AgendaColumns::SourceNeutral(columns),
-        clock,
-        view: shortcut_task_view(kind),
-        render_kind: AgendaRenderKind::TaskItems,
-    })
-}
-
-fn plan_agenda_upcoming_request(
-    config: &ResolvedConfig,
-    args: &TaskUpcomingArgs,
-) -> Result<AgendaRequest> {
-    let filters = parse_task_filters(&args.filters)?;
-    let clock = TaskClock::now();
-    let kind = ShortcutKind::Upcoming {
-        days: args.days.max(0),
-    };
-    let columns = resolve_task_table_columns(
-        config,
-        filters.source,
-        shortcut_column_view(kind),
-        args.table.columns.as_deref(),
-    )?;
-    Ok(AgendaRequest {
-        filters,
-        sort: Some("priority".to_string()),
-        limit: args.limit,
-        line_sep: args.table.line_sep,
-        columns: AgendaColumns::SourceNeutral(columns),
-        clock,
-        view: shortcut_task_view(kind),
-        render_kind: AgendaRenderKind::TaskItems,
-    })
 }
 
 fn execute_task_agenda(
