@@ -40,31 +40,10 @@ directly; do not suppress lints unless the user explicitly asks.
 
 ## Project Map
 
-```text
-src/
-  main.rs             # CLI parse, App setup, command dispatch
-  app.rs              # App construction, output context, error formatting
-  cli.rs              # clap derive structs and Command enum
-  config.rs           # config loading, db_root resolution, ResolvedConfig
-  discovery.rs        # recursive .org discovery with ignore patterns
-  parser.rs           # org parser for note metadata, links, headings, tasks
-  org_date.rs         # org timestamp parser
-  graph/              # in-memory graph build, search, traversal, validation
-  commands/           # one module per subcommand; task/ owns task subcommands
-  input.rs            # target/stdin/date/column parsing helpers
-  output.rs           # OutputContext and output format helpers
-  output/table.rs     # adaptive table layout
-  corpus.rs           # text corpus helpers
-  tokens.rs           # token counting and truncation
-  workspace.rs        # workspace/path helpers
-tests/integration/    # binary-level integration tests with mock databases
-docs/                 # detailed user and contributor docs
-skills/               # Codex skills for note and pkms workflows
-.gitea/workflows/     # CI and release automation
-```
-
-Prefer checking the current source over trusting this outline when a file has
-moved or behavior has changed.
+The filesystem structure is documented in
+[docs/development.md#project-structure](docs/development.md#project-structure).
+Prefer checking the current source over trusting any map when a file has moved
+or behavior has changed.
 
 ## Architecture Invariants
 
@@ -85,13 +64,13 @@ moved or behavior has changed.
 
 ## Command and Output Conventions
 
-- Define CLI args in `src/cli.rs` and dispatch from `src/main.rs`.
+- Define CLI args in `src/cli.rs` and dispatch from `src/runner.rs`.
 - Put behavior in `src/commands/<name>.rs`, or `src/commands/<name>/` for a
   namespace with subcommands.
 - Use option structs for command input when arguments are more than trivial.
-- Command implementations usually accept `&ResolvedConfig` and `&OutputContext`.
-- Load the graph with `Graph::load(config)` only when the command needs graph
-  data.
+- Command implementations usually accept `&ResolvedConfig` and `&OutputContext`;
+  use `&CommandContext` when shared graph/workspace loader helpers are useful.
+- Load the graph or workspace only when the command needs that data.
 - Return `anyhow::Result`; `check` may return an `ExitCode` for unhealthy
   database state.
 - Derive `serde::Serialize` for command output structs.
@@ -99,13 +78,18 @@ moved or behavior has changed.
   should support `ndjson` when practical.
 - Dispatch structured output through `OutputContext` helpers:
   `print_json`, `print_ndjson`, or `print_json_adaptive`.
+- For read-only commands with non-trivial shaping, prefer an internal
+  `execute(...)` / `render(...)` split with pure text-rendering helpers. Do not
+  force this onto side-effect-first commands such as `open`, `new`, `fix`, task
+  mutations, or long-running `serve`.
 
 ## Core Domain Rules
 
 Canonical task IDs:
 
-- TODO headings receive deterministic global IDs shared by `todo`, `agenda`,
-  `show`, and `open`.
+- TODO headings receive deterministic global IDs shared by `task list`,
+  `task agenda`, and ID-first task actions such as `task p<ID> show` and
+  `task p<ID> open`.
 - IDs are based on task status grouping and stable ordering within the parsed
   database.
 - Filtered views can show non-contiguous IDs because excluded tasks still occupy
@@ -125,7 +109,7 @@ Command pipelining:
 - Consumers read targets from stdin via automatic pipe detection or
   `--from-stdin`.
 - Producers: `resolve`, `query`, `orphans`, `stats --hubs`, `suggest`.
-- Consumers: `get`, `suggest`, `validate`, `context`, `todo`, `show`.
+- Consumers: `get`, `suggest`, `validate`, `context`, `task list`.
 
 Feature flags:
 

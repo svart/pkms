@@ -48,6 +48,10 @@ Unit tests live next to module code under `#[cfg(test)]`. Integration tests
 spawn `target/debug/pkms` with temporary mock databases from
 `tests/integration/`.
 
+Use the existing small fixtures instead of open-coded setup when they fit:
+`ResolvedConfig::for_test_db(...)` is available for unit tests, and the
+integration suite has a chainable `TestDb` builder for notes and tasks.
+
 ## Fast Pre-Commit Gate
 
 Before committing or handing work off for review, run the fast default-feature
@@ -143,20 +147,29 @@ gate. If the documented gate changes, update CI in the same change.
 
 ```text
 src/
-  main.rs             # CLI parse, App setup, command dispatch
+  main.rs             # thin binary wrapper: logging, CLI parse, runner call
+  lib.rs              # library crate surface used by the binary and tests
+  runner.rs           # App setup, CommandContext construction, command dispatch
+  command_context.rs  # shared config/output access plus graph/workspace loaders
   app.rs              # App construction, output context, error formatting
   cli.rs              # clap derive structs and Command enum
   config.rs           # config loading, db_root resolution, ResolvedConfig
+  logging.rs          # PKMS_LOG and PKMS_LOG_FORMAT setup
   discovery.rs        # recursive .org discovery with ignore patterns
   parser.rs           # org parser for note metadata, links, headings, tasks
   org_date.rs         # org timestamp parser
+  org_edit.rs         # local org file editing helpers
   graph/              # in-memory graph build, search, traversal, validation
-  commands/           # one module per subcommand; task/ owns task subcommands
+  commands/           # one module per subcommand; task/ and serve/ own helpers
+  commands/task/      # task ID parsing, providers, agenda/todo paths, rendering
+  commands/serve/     # HTTP, assets, page, org HTML, inline, highlighting
+  tasks/              # source-neutral task model, filters, providers, mutations
   input.rs            # target/stdin/date/column parsing helpers
   output.rs           # OutputContext and output format helpers
   output/table.rs     # adaptive table layout
   corpus.rs           # text corpus helpers
   tokens.rs           # token counting and truncation
+  util.rs             # small shared utility helpers
   workspace.rs        # workspace/path helpers
 tests/integration/    # binary-level integration tests with mock databases
 docs/                 # detailed user and contributor docs
@@ -169,13 +182,16 @@ skills/               # Codex skills for note and pkms workflows
 Follow the existing command shape:
 
 1. Define CLI args in `src/cli.rs`.
-2. Dispatch from `src/main.rs`.
+2. Dispatch from `src/runner.rs`.
 3. Put behavior in `src/commands/<name>.rs`, or in `src/commands/<name>/` when
    the command is a namespace with subcommands.
 4. Use option structs for command input when more than trivial args are needed.
-5. Accept `&ResolvedConfig` and `&OutputContext`.
-6. Load the graph with `Graph::load(config)` only when the command needs graph
-   data.
+5. Accept `&ResolvedConfig` and `&OutputContext`, or `&CommandContext` when the
+   command benefits from shared graph/workspace loader helpers.
+6. Load the graph only when the command needs graph data. Use
+   `Graph::load(config)` or `CommandContext::load_graph()`. Use
+   `Workspace::load(config)` or `CommandContext::load_workspace()` when a
+   command needs both parsed files and graph data.
 7. Dispatch structured output through `OutputContext` helpers:
    `print_json`, `print_ndjson`, or `print_json_adaptive`.
 8. Add or update integration tests under `tests/integration/`.
@@ -183,6 +199,28 @@ Follow the existing command shape:
 
 Commands should return `anyhow::Result`; `check` may return an `ExitCode` to
 represent unhealthy database state.
+
+For read-only commands that shape non-trivial output, prefer an internal
+`execute(...)` / `render(...)` split:
+
+```rust
+fn execute(config: &ResolvedConfig, opts: &Options) -> Result<CommandOutput>
+fn render(ctx: &OutputContext, output: &CommandOutput) -> Result<()>
+```
+
+`execute(...)` should own graph/workspace loading, file reads, filtering,
+sorting, limiting, and typed output shaping. `render(...)` should only choose
+text, JSON, or NDJSON presentation; text formatting should usually be a pure
+`render_text(...) -> String` helper with focused unit tests. Do not force this
+shape onto side-effect-first commands such as `open`, `new`, `fix`, task
+mutations, or the long-running `serve` command unless a concrete change makes
+the split useful.
+
+The web viewer keeps its public command entry point in `src/commands/serve.rs`.
+Keep responsibility-specific helpers in `src/commands/serve/`: HTTP routing and
+responses in `http.rs`, static/font assets in `assets.rs`, page shell and panels
+in `page.rs`, org body rendering in `org_html.rs`, inline markup and percent
+codec helpers in `inline.rs`, and syntax highlighting in `highlight.rs`.
 
 ## Output Contracts
 
@@ -196,15 +234,16 @@ Consumers read targets from stdin via automatic pipe detection or
 
 Producers: `resolve`, `query`, `orphans`, `stats --hubs`, `suggest`.
 
-Consumers: `get`, `suggest`, `validate`, `context`, `todo`, `show`.
+Consumers: `get`, `suggest`, `validate`, `context`, `task list`.
 
 Keep producer and consumer contracts compatible when changing structured output.
 Update schemas under `skills/pkms-manager/schemas/` when JSON output changes.
 
 ## Task-System Changes
 
-TODO headings receive deterministic global IDs shared by `todo`, `agenda`,
-`show`, and `open`. IDs are based on task status grouping and stable ordering
+TODO headings receive deterministic global IDs shared by `task list`,
+`task agenda`, and ID-first task actions such as `task p<ID> show` and
+`task p<ID> open`. IDs are based on task status grouping and stable ordering
 within the parsed database. Filtered views can show non-contiguous IDs because
 excluded tasks still occupy their global positions.
 

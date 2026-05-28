@@ -89,13 +89,19 @@ The source-neutral task model lives under `src/tasks/`:
 
 ```text
 src/tasks/
+  add.rs
+  clock.rs
+  filter.rs
+  id.rs
   mod.rs
   model.rs
-  id.rs
-  filter.rs
+  pkms_edit.rs
+  pkms_mutation.rs
   pkms.rs
   provider.rs
+  scope.rs
   todoist.rs
+  todoist_provider.rs
 ```
 
 `TaskItem` is the common shape used by task views and mutations. It carries
@@ -109,6 +115,31 @@ heading metadata, and PKMS tasks should not need remote metadata.
 Todoist support is compiled behind the non-default `todoist` feature. Local
 PKMS commands must not require Todoist configuration or network access unless
 the selected source set includes Todoist.
+
+## Implementation Boundaries
+
+Task command orchestration lives under `src/commands/task/`:
+
+```text
+src/commands/task/
+  mod.rs          # command dispatch, list/agenda request planning and execution
+  id_command.rs   # ID-first parsing and dispatch adapter
+  providers.rs    # source selection and provider orchestration
+  render.rs       # text, JSON, NDJSON, table, and mutation output helpers
+  agenda.rs       # PKMS agenda grouping path
+  todo.rs         # PKMS TODO listing path
+```
+
+Keep provider and mutation logic in `src/tasks/` unless it is only command-line
+or presentation glue. List and agenda commands use internal request-planning and
+execution helpers before calling centralized rendering. This keeps validation,
+source selection, clock-sensitive date windows, provider collection, sorting,
+limiting, and output presentation separate enough to test without creating a new
+task framework.
+
+Clock-sensitive task behavior should use `TaskClock` from `src/tasks/clock.rs`
+captured at the command boundary. Avoid direct scattered calls to local time in
+task filtering, agenda grouping, task-add date parsing, and mutation reloads.
 
 ## IDs And Actions
 
