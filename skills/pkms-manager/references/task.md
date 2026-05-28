@@ -159,8 +159,8 @@ or comma-separate tag modifiers for multiple labels. `project:` accepts either a
 Todoist project id or an exact project name. If a project name is duplicated
 case-insensitively, use the project id. Todoist task creation rejects `note:`.
 
-Legacy Todoist descriptions containing `pkms:id:<uuid>` are still detected by
-`task list source:todoist` and `task todoist:<remote-id> show`.
+Todoist descriptions containing `pkms:id:<uuid>` PKMS note markers are detected
+by `task list source:todoist` and `task todoist:<remote-id> show`.
 
 Use `task list projects` and `task list tags` when you need task metadata. With
 `source:pkms`, projects come from note-level or heading-level `PROJECT`

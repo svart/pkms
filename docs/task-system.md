@@ -2,8 +2,8 @@
 
 This note records the current task design, implementation guardrails, and
 maintenance checklist for the `pkms task` namespace. It replaces older planning
-notes and compatibility-era documentation: the legacy top-level task command
-surface has been removed, and task workflows now live under `pkms task`.
+notes and documentation for removed top-level task command drafts; task
+workflows now live under `pkms task`.
 
 User-facing command details belong in `docs/todo-agenda.md`,
 `docs/commands.md`, and `skills/pkms-manager/references/task.md`. Keep this
@@ -342,7 +342,7 @@ Todoist responsibilities currently include:
 
 Todoist task IDs used for mutation must be `todoist:<remote-id>`.
 
-Listing or showing Todoist tasks detects legacy `pkms:id:<uuid>` markers in
+Listing or showing Todoist tasks detects `pkms:id:<uuid>` PKMS note markers in
 Todoist descriptions and fills `note_uuid` and `note_title` when the note exists
 locally. Treat that marker as a privacy boundary: the PKMS UUID leaves the local
 database.

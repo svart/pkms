@@ -330,7 +330,7 @@ Todoist project id or an exact project name. If a name matches multiple projects
 case-insensitively, `pkms` fails before creating the task and asks for the
 project id. Todoist task creation rejects `note:`.
 
-Listing or showing Todoist tasks still detects legacy `pkms:id:<uuid>` markers in
+Listing or showing Todoist tasks detects `pkms:id:<uuid>` PKMS note markers in
 Todoist descriptions and populates `note_uuid` and `note_title` when the note
 exists locally.
 

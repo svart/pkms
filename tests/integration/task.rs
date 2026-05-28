@@ -749,7 +749,7 @@ fn test_task_list_accepts_scope_after_and_before_filters() {
 }
 
 #[test]
-fn test_task_list_source_neutral_sort_supports_legacy_file_field() {
+fn test_task_list_source_neutral_sort_supports_file_sort_field() {
     let (_dir, root) = setup_db();
     let (v, status) = run_json(&[
         "--db",
@@ -795,7 +795,7 @@ fn test_task_list_rejects_unknown_sort_field() {
 }
 
 #[test]
-fn test_task_agenda_source_neutral_sort_supports_legacy_fields() {
+fn test_task_agenda_source_neutral_sort_supports_date_sort_fields() {
     let (_dir, root) = setup_db();
     let (v, status) = run_json(&[
         "--db",
@@ -2438,7 +2438,7 @@ fn test_task_add_daily_inbox_uses_configured_daily_notes_dir() {
 fn test_task_add_daily_inbox_prefers_configured_daily_notes_dir_over_other_daily_file() {
     let (_dir, root) = setup_db();
     let today = chrono::Local::now().date_naive();
-    let legacy_daily_path = root
+    let root_daily_path = root
         .join("roam")
         .join(format!("{}.org", today.format("%Y-%m-%d")));
     let configured_daily_path = root
@@ -2446,13 +2446,13 @@ fn test_task_add_daily_inbox_prefers_configured_daily_notes_dir_over_other_daily
         .join(format!("{}.org", today.format("%Y-%m-%d")));
     std::fs::create_dir_all(configured_daily_path.parent().unwrap()).unwrap();
     std::fs::write(
-        &legacy_daily_path,
+        &root_daily_path,
         format!(
             r#"#+title: {}
 #+filetags: :daily:
 
 * Inbox
-** TODO Legacy inbox task
+** TODO Root inbox task
 "#,
             today.format("%Y-%m-%d")
         ),
@@ -2486,9 +2486,9 @@ fn test_task_add_daily_inbox_prefers_configured_daily_notes_dir_over_other_daily
         &config,
     );
     assert!(status.success(), "task add failed:\n{stdout}\n{stderr}");
-    let legacy_content = std::fs::read_to_string(&legacy_daily_path).unwrap();
+    let root_content = std::fs::read_to_string(&root_daily_path).unwrap();
     let configured_content = std::fs::read_to_string(&configured_daily_path).unwrap();
-    assert!(!legacy_content.contains("Daily configured preferred"));
+    assert!(!root_content.contains("Daily configured preferred"));
     assert!(configured_content.contains("** TODO Daily configured preferred"));
 }
 

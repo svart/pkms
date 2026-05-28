@@ -103,7 +103,6 @@ struct AgendaRequest {
     clock: TaskClock,
     view: TaskListView,
     render_kind: AgendaRenderKind,
-    legacy_pkms: bool,
 }
 
 enum AgendaColumns {
@@ -149,7 +148,7 @@ impl TaskListRequest {
 
 impl AgendaRequest {
     fn uses_pkms_agenda_path(&self) -> bool {
-        self.legacy_pkms
+        matches!(&self.columns, AgendaColumns::Pkms(_))
     }
 
     fn pkms_columns(&self) -> &[Column] {
@@ -525,8 +524,6 @@ fn plan_agenda_request(config: &ResolvedConfig, args: &TaskAgendaArgs) -> Result
             args.table.columns.as_deref(),
         )?)
     };
-    let legacy_pkms = matches!(columns, AgendaColumns::Pkms(_));
-
     Ok(AgendaRequest {
         filters,
         sort: args.sort.clone(),
@@ -536,7 +533,6 @@ fn plan_agenda_request(config: &ResolvedConfig, args: &TaskAgendaArgs) -> Result
         clock,
         view: TaskListView::Agenda,
         render_kind: AgendaRenderKind::AgendaGroups,
-        legacy_pkms,
     })
 }
 
@@ -562,7 +558,6 @@ fn plan_agenda_shortcut_request(
         clock,
         view: shortcut_task_view(kind),
         render_kind: AgendaRenderKind::TaskItems,
-        legacy_pkms: false,
     })
 }
 
@@ -590,7 +585,6 @@ fn plan_agenda_upcoming_request(
         clock,
         view: shortcut_task_view(kind),
         render_kind: AgendaRenderKind::TaskItems,
-        legacy_pkms: false,
     })
 }
 
