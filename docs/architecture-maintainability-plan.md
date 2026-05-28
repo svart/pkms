@@ -84,12 +84,12 @@ precedence, and ID-first task actions.
 
 Add or strengthen shared helpers in `tests/integration/`:
 
-- Run broad command smoke tests through the same isolated `XDG_CONFIG_HOME`,
+- [ ] Run broad command smoke tests through the same isolated `XDG_CONFIG_HOME`,
   `PKMS_DB_ROOT`, `PKMS_LOG`, `PKMS_LOG_FORMAT`, and `PKMS_LOG_HTTP` setup used
   by the rest of the harness.
-- Add small assertion helpers for JSON object output, NDJSON line output, and
+- [ ] Add small assertion helpers for JSON object output, NDJSON line output, and
   JSON error output.
-- Prefer harness helpers over direct `Command::new(pkms_binary())` in new tests,
+- [ ] Prefer harness helpers over direct `Command::new(pkms_binary())` in new tests,
   unless the test is specifically about process environment setup.
 
 Expected outcome: integration tests become easier to write and less sensitive to
@@ -100,9 +100,9 @@ the developer machine or shell environment.
 Keep `TestDb::fixture()` for broad smoke and regression coverage. For new tests,
 prefer:
 
-- `TestDb::clean()` for a blank roam tree.
-- Chainable `TestDb` builder methods for one-note or one-task scenarios.
-- Explicit fixture content when testing parser, graph, task ID, or output edge
+- [ ] `TestDb::clean()` for a blank roam tree.
+- [ ] Chainable `TestDb` builder methods for one-note or one-task scenarios.
+- [ ] Explicit fixture content when testing parser, graph, task ID, or output edge
   cases.
 
 Add builder methods only when they remove repeated org boilerplate without
@@ -116,17 +116,17 @@ and the large fixture does not become a hidden dependency for unrelated behavior
 
 Before moving task command code, cover these behavior boundaries:
 
-- PKMS-native `task list` text, JSON, and NDJSON output.
-- PKMS-native `task agenda` grouped text and structured output.
-- Source-neutral task output for `source:pkms`, `source:todoist`, and
+- [ ] PKMS-native `task list` text, JSON, and NDJSON output.
+- [ ] PKMS-native `task agenda` grouped text and structured output.
+- [ ] Source-neutral task output for `source:pkms`, `source:todoist`, and
   `source:all`.
-- `task list --from-stdin` scoping behavior.
-- `task list --group` behavior and source restrictions.
-- Configured column defaults and explicit `--columns` overrides.
-- Todoist `todoist.filter` precedence over default filters and shortcut filters.
-- ID-first actions such as `task p<ID> show`, `open`, `state`, `done`,
+- [ ] `task list --from-stdin` scoping behavior.
+- [ ] `task list --group` behavior and source restrictions.
+- [ ] Configured column defaults and explicit `--columns` overrides.
+- [ ] Todoist `todoist.filter` precedence over default filters and shortcut filters.
+- [ ] ID-first actions such as `task p<ID> show`, `open`, `state`, `done`,
   `schedule`, `deadline`, and `postpone`.
-- Stable canonical PKMS task IDs when filters exclude earlier tasks.
+- [ ] Stable canonical PKMS task IDs when filters exclude earlier tasks.
 
 Expected outcome: task refactors can be reviewed as structure-only changes with
 high confidence that current behavior is preserved.
@@ -142,15 +142,15 @@ commands::task::run(config, ctx, command)
 Move internals only when tests already characterize the affected behavior. A
 reasonable target structure is:
 
-- `commands/task/plan.rs`: parse task command args into request structs and
+- [ ] `commands/task/plan.rs`: parse task command args into request structs and
   choose PKMS-native versus source-neutral execution paths.
-- `commands/task/providers.rs`: keep provider collection and metadata
+- [ ] `commands/task/providers.rs`: keep provider collection and metadata
   composition.
-- `commands/task/render.rs`: keep task table, JSON, NDJSON, mutation, and
+- [ ] `commands/task/render.rs`: keep task table, JSON, NDJSON, mutation, and
   metadata rendering.
-- `commands/task/mutations.rs`: route add, state, done, schedule, deadline, and
+- [ ] `commands/task/mutations.rs`: route add, state, done, schedule, deadline, and
   postpone operations.
-- `commands/task/mod.rs`: remain a small dispatch facade.
+- [ ] `commands/task/mod.rs`: remain a small dispatch facade.
 
 Do not introduce a framework or a generic command pipeline. The goal is to make
 the existing responsibilities easier to find and test, not to generalize command
@@ -194,6 +194,13 @@ For each new command or user-visible feature:
 9. Update schemas under `skills/pkms-manager/schemas/` when JSON output changes.
 
 Expected outcome: new features remain easy to integrate and hard to regress.
+
+### 7. Final Maintainability and Testability Report
+
+- [ ] After completing the plan, add a comprehensive status report here covering
+  architecture, task command maintainability, test harness determinism, fixture
+  quality, characterization coverage, verification results, and any remaining
+  risks or follow-up work.
 
 ## Verification Baseline
 
