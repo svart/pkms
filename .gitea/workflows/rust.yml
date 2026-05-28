@@ -63,8 +63,8 @@ jobs:
       - name: Run web feature tests
         run: cargo test --locked --features web
 
-      - name: Run all feature tests
-        run: cargo test --locked --all-features
+      - name: Run combined non-embed feature tests
+        run: cargo test --locked --features todoist,web
 
       - name: Check default help
         run: cargo run --locked -- --help

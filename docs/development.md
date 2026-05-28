@@ -133,12 +133,17 @@ cargo build --locked --all-features
 cargo test --locked
 cargo test --locked --features todoist
 cargo test --locked --features web
-cargo test --locked --all-features
+cargo test --locked --features todoist,web
 cargo run --locked -- --help
 cargo run --locked --features todoist -- --help
 cargo run --locked --features web -- --help
 cargo build --locked --release
 ```
+
+CI intentionally does not run tests with the `embed` feature enabled. The
+feature is covered by build and clippy checks; runtime tests would execute
+ONNX Runtime binaries through `fastembed`, which are not compatible with the
+current Gitea runner CPU.
 
 The Gitea workflow in `.gitea/workflows/rust.yml` is expected to match this
 gate. If the documented gate changes, update CI in the same change.
