@@ -94,7 +94,7 @@ pkms task list projects source:todoist
 pkms task list tags source:todoist
 pkms task todoist:<remote-id> show
 pkms task add "Capture local task"
-pkms task add title:"Call Alice" sch:tom dead:2026-05-30 tag:phone prio:B
+pkms task add title:"Call Alice" sch:mon dead:to tag:phone prio:B
 pkms task add note:"Project Alpha" title:"Follow up"
 pkms task add source:todoist "Buy milk tomorrow"
 pkms task add source:todoist title:"Call Alice" due:2026-05-24 priority:B

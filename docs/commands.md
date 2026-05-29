@@ -163,7 +163,7 @@ pkms task list projects source:todoist
 pkms task list tags source:todoist
 pkms task todoist:<remote-id> show
 pkms task add "Capture local task"
-pkms task add title:"Call Alice" sch:tom dead:2026-05-30 tag:phone prio:B
+pkms task add title:"Call Alice" sch:mon dead:to tag:phone prio:B
 pkms task add note:"Project Alpha" title:"Follow up"
 pkms task add source:todoist "Buy milk tomorrow"
 pkms task add source:todoist title:"Call Alice" due:2026-05-24 priority:B
@@ -185,6 +185,10 @@ as `[tasks].inbox`. The value can be a note title, UUID, absolute path, or path
 relative to `db_root`. Set it to `daily` to use today's daily note and place
 new tasks under `* Inbox`. New daily notes are created under `daily_notes_dir`,
 or `new_notes_dir` when `daily_notes_dir` is unset.
+
+Task schedule and deadline dates accept unambiguous prefixes of `today`,
+`tomorrow`, or weekday names; weekdays resolve to the next upcoming matching
+weekday.
 
 Todoist task reads require a build with `--features todoist` and a token from
 `TODOIST_API_TOKEN` or `[todoist].token` in config. Prefer the environment

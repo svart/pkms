@@ -1,4 +1,5 @@
 use super::*;
+use chrono::{Datelike, Weekday};
 #[cfg(feature = "todoist")]
 use std::io::{Read, Write};
 #[cfg(feature = "todoist")]
@@ -19,6 +20,19 @@ const TODOIST_MOCK_READ_TIMEOUT: Duration = Duration::from_secs(2);
 
 fn org_date(days_from_today: i64) -> String {
     (chrono::Local::now().date_naive() + chrono::Duration::days(days_from_today))
+        .format("%Y-%m-%d")
+        .to_string()
+}
+
+fn upcoming_weekday_date(weekday: Weekday) -> String {
+    let today = chrono::Local::now().date_naive();
+    let today_index = today.weekday().num_days_from_monday() as i64;
+    let target_index = weekday.num_days_from_monday() as i64;
+    let mut days_until = (target_index - today_index).rem_euclid(7);
+    if days_until == 0 {
+        days_until = 7;
+    }
+    (today + chrono::Duration::days(days_until))
         .format("%Y-%m-%d")
         .to_string()
 }
@@ -2447,6 +2461,66 @@ fn test_task_add_pkms_accepts_modifiers_and_note_target() {
     assert!(content.contains("SCHEDULED: <"));
     assert!(content.contains("DEADLINE: <"));
     assert!(content.contains("Body text"));
+}
+
+#[test]
+fn test_task_add_pkms_accepts_weekday_and_word_prefix_dates() {
+    let (_dir, root) = setup_db();
+    let target_path = root.join("roam/personal/20260525000001-capture-target.org");
+    std::fs::write(
+        &target_path,
+        r#":PROPERTIES:
+:ID:       26262626-2626-4626-8626-262626262626
+:END:
+#+title: Capture Target
+"#,
+    )
+    .unwrap();
+
+    let (stdout, stderr, status) = run_with_config(
+        &[
+            "--db",
+            root.to_str().unwrap(),
+            "--output-format",
+            "json",
+            "task",
+            "add",
+            "title:Weekday task",
+            "sch:mon",
+            "dead:to",
+            "note:Capture Target",
+        ],
+        TEST_CONFIG,
+    );
+    assert!(status.success(), "task add failed:\n{stdout}\n{stderr}");
+    let v: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    assert_eq!(
+        v["item"]["scheduled"]["date"],
+        upcoming_weekday_date(Weekday::Mon)
+    );
+    assert_eq!(v["item"]["deadline"]["date"], org_date(0));
+
+    let (stdout, _stderr, status) = run_with_config(
+        &[
+            "--db",
+            root.to_str().unwrap(),
+            "--output-format",
+            "json",
+            "task",
+            "add",
+            "title:Ambiguous date",
+            "sch:t",
+            "note:Capture Target",
+        ],
+        TEST_CONFIG,
+    );
+    assert!(!status.success());
+    let v: serde_json::Value = serde_json::from_str(stdout.trim()).unwrap();
+    let error = v["error"].as_str().unwrap();
+    assert!(error.contains("Ambiguous due date 't'"));
+    assert!(error.contains("today"));
+    assert!(error.contains("tuesday"));
+    assert!(error.contains("thursday"));
 }
 
 #[test]

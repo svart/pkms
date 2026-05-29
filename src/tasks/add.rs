@@ -1,5 +1,5 @@
 use anyhow::{Result, bail};
-use chrono::{NaiveDate, NaiveDateTime};
+use chrono::{Datelike, NaiveDate, NaiveDateTime, Weekday};
 
 use crate::tasks::clock::TaskClock;
 
@@ -105,13 +105,8 @@ pub fn parse_add_date_arg(name: &str, value: &str) -> Result<String> {
 }
 
 pub fn parse_add_date_arg_on(name: &str, value: &str, today: NaiveDate) -> Result<String> {
-    if value.eq_ignore_ascii_case("today") || value.eq_ignore_ascii_case("tod") {
-        return Ok(today.format("%Y-%m-%d").to_string());
-    }
-    if value.eq_ignore_ascii_case("tomorrow") || value.eq_ignore_ascii_case("tom") {
-        return Ok((today + chrono::Duration::days(1))
-            .format("%Y-%m-%d")
-            .to_string());
+    if let Some(date) = parse_word_date(name, value, today)? {
+        return Ok(date.format("%Y-%m-%d").to_string());
     }
     if let Some(date) = crate::input::parse_date(Some(value)) {
         return Ok(date.format("%Y-%m-%d").to_string());
@@ -120,8 +115,107 @@ pub fn parse_add_date_arg_on(name: &str, value: &str, today: NaiveDate) -> Resul
         return Ok(datetime.format("%Y-%m-%d %H:%M").to_string());
     }
     Err(anyhow::anyhow!(
-        "Invalid {name} date '{value}'. Use today, tomorrow, tod, tom, YYYY-MM-DD, or YYYY-MM-DD HH:MM."
+        "Invalid {name} date '{value}'. Use an unambiguous prefix of today, tomorrow, or a weekday; YYYY-MM-DD; or YYYY-MM-DD HH:MM."
     ))
+}
+
+#[derive(Copy, Clone)]
+enum DateWordKind {
+    Today,
+    Tomorrow,
+    Weekday(Weekday),
+}
+
+struct DateWord {
+    word: &'static str,
+    min_prefix_len: usize,
+    kind: DateWordKind,
+}
+
+const DATE_WORDS: &[DateWord] = &[
+    DateWord {
+        word: "today",
+        min_prefix_len: 1,
+        kind: DateWordKind::Today,
+    },
+    DateWord {
+        word: "tomorrow",
+        min_prefix_len: 3,
+        kind: DateWordKind::Tomorrow,
+    },
+    DateWord {
+        word: "monday",
+        min_prefix_len: 1,
+        kind: DateWordKind::Weekday(Weekday::Mon),
+    },
+    DateWord {
+        word: "tuesday",
+        min_prefix_len: 1,
+        kind: DateWordKind::Weekday(Weekday::Tue),
+    },
+    DateWord {
+        word: "wednesday",
+        min_prefix_len: 1,
+        kind: DateWordKind::Weekday(Weekday::Wed),
+    },
+    DateWord {
+        word: "thursday",
+        min_prefix_len: 1,
+        kind: DateWordKind::Weekday(Weekday::Thu),
+    },
+    DateWord {
+        word: "friday",
+        min_prefix_len: 1,
+        kind: DateWordKind::Weekday(Weekday::Fri),
+    },
+    DateWord {
+        word: "saturday",
+        min_prefix_len: 1,
+        kind: DateWordKind::Weekday(Weekday::Sat),
+    },
+    DateWord {
+        word: "sunday",
+        min_prefix_len: 1,
+        kind: DateWordKind::Weekday(Weekday::Sun),
+    },
+];
+
+fn parse_word_date(name: &str, value: &str, today: NaiveDate) -> Result<Option<NaiveDate>> {
+    let normalized = value.to_ascii_lowercase();
+    let matches = DATE_WORDS
+        .iter()
+        .filter(|candidate| {
+            normalized.len() >= candidate.min_prefix_len
+                && candidate.word.starts_with(normalized.as_str())
+        })
+        .collect::<Vec<_>>();
+
+    match matches.as_slice() {
+        [] => Ok(None),
+        [candidate] => Ok(Some(match candidate.kind {
+            DateWordKind::Today => today,
+            DateWordKind::Tomorrow => today + chrono::Duration::days(1),
+            DateWordKind::Weekday(weekday) => upcoming_weekday(today, weekday),
+        })),
+        _ => {
+            let words = matches
+                .iter()
+                .map(|candidate| candidate.word)
+                .collect::<Vec<_>>()
+                .join(", ");
+            bail!("Ambiguous {name} date '{value}'. Could match: {words}. Use a longer date word.")
+        }
+    }
+}
+
+fn upcoming_weekday(today: NaiveDate, weekday: Weekday) -> NaiveDate {
+    let today_index = today.weekday().num_days_from_monday() as i64;
+    let target_index = weekday.num_days_from_monday() as i64;
+    let mut days_until = (target_index - today_index).rem_euclid(7);
+    if days_until == 0 {
+        days_until = 7;
+    }
+    today + chrono::Duration::days(days_until)
 }
 
 pub fn validate_pkms_date_arg(name: &str, value: Option<&str>) -> Result<Option<String>> {
@@ -227,5 +321,54 @@ mod tests {
             parse_add_date_arg_on("due", "tom", today).unwrap(),
             "2026-05-28"
         );
+    }
+
+    #[test]
+    fn parses_weekday_add_dates_as_upcoming_days() {
+        let friday = NaiveDate::from_ymd_opt(2026, 5, 29).unwrap();
+        assert_eq!(
+            parse_add_date_arg_on("due", "mon", friday).unwrap(),
+            "2026-06-01"
+        );
+        assert_eq!(
+            parse_add_date_arg_on("due", "monday", friday).unwrap(),
+            "2026-06-01"
+        );
+        assert_eq!(
+            parse_add_date_arg_on("due", "fri", friday).unwrap(),
+            "2026-06-05"
+        );
+    }
+
+    #[test]
+    fn parses_unambiguous_word_prefix_dates_case_insensitively() {
+        let today = NaiveDate::from_ymd_opt(2026, 5, 29).unwrap();
+        assert_eq!(
+            parse_add_date_arg_on("due", "Tod", today).unwrap(),
+            "2026-05-29"
+        );
+        assert_eq!(
+            parse_add_date_arg_on("due", "toda", today).unwrap(),
+            "2026-05-29"
+        );
+        assert_eq!(
+            parse_add_date_arg_on("due", "to", today).unwrap(),
+            "2026-05-29"
+        );
+        assert_eq!(
+            parse_add_date_arg_on("due", "thu", today).unwrap(),
+            "2026-06-04"
+        );
+    }
+
+    #[test]
+    fn rejects_ambiguous_word_prefix_dates() {
+        let today = NaiveDate::from_ymd_opt(2026, 5, 29).unwrap();
+        let err = parse_add_date_arg_on("due", "t", today).unwrap_err();
+        let message = err.to_string();
+        assert!(message.contains("Ambiguous due date 't'"));
+        assert!(message.contains("today"));
+        assert!(message.contains("tuesday"));
+        assert!(message.contains("thursday"));
     }
 }

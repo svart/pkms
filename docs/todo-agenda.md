@@ -322,9 +322,11 @@ Add modifiers mirror task filters where practical:
 | `desc:<text>` | `description:`, `body:` | Set description/body text. |
 | `note:<target>` | | PKMS only; append to this note instead of the configured inbox. |
 
-`schedule:`/`deadline:` values accept `today`, `tomorrow`, `tod`, `tom`,
-`YYYY-MM-DD`, or `YYYY-MM-DD HH:MM`. Priorities use the source-neutral `A`, `B`,
-or `C` convention.
+`schedule:`/`deadline:` values accept unambiguous case-insensitive prefixes of
+`today`, `tomorrow`, or weekday names, plus `YYYY-MM-DD` or
+`YYYY-MM-DD HH:MM`. Weekday names resolve to the next upcoming matching weekday,
+so `sch:fri` on a Friday means next Friday. Ambiguous prefixes fail with an
+error. Priorities use the source-neutral `A`, `B`, or `C` convention.
 Label modifiers can be repeated or comma-separated. `project:` accepts either a
 Todoist project id or an exact project name. If a name matches multiple projects
 case-insensitively, `pkms` fails before creating the task and asks for the

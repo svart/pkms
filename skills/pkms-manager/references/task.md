@@ -135,7 +135,7 @@ to append into:
 ```bash
 pkms task add "Capture local task"
 pkms task add title:"Call Alice" due:2026-05-24 deadline:2026-05-30 tag:phone priority:B
-pkms task add title:"Call Alice" sch:tod dead:tom tag:phone prio:B
+pkms task add title:"Call Alice" sch:mon dead:to tag:phone prio:B
 pkms task add note:"Project Alpha" title:"Follow up" schedule:tomorrow
 ```
 
@@ -153,11 +153,13 @@ Add modifiers: `source:`/`src:`, `title:`, `tag:`/`tags:`/`label:`/`labels:`,
 `project:`/`proj:`, `prio:`/`priority:`/`pri:`, `desc:`/`description:`/`body:`,
 and PKMS-only `note:`.
 
-Structured due and deadline values accept `today`, `tomorrow`, `tod`, `tom`,
-`YYYY-MM-DD`, or `YYYY-MM-DD HH:MM`. Priority must be `A`, `B`, or `C`. Repeat
-or comma-separate tag modifiers for multiple labels. `project:` accepts either a
-Todoist project id or an exact project name. If a project name is duplicated
-case-insensitively, use the project id. Todoist task creation rejects `note:`.
+Structured due and deadline values accept unambiguous case-insensitive prefixes
+of `today`, `tomorrow`, or weekday names, plus `YYYY-MM-DD` or
+`YYYY-MM-DD HH:MM`. Weekday names resolve to the next upcoming matching weekday.
+Priority must be `A`, `B`, or `C`. Repeat or comma-separate tag modifiers for
+multiple labels. `project:` accepts either a Todoist project id or an exact
+project name. If a project name is duplicated case-insensitively, use the
+project id. Todoist task creation rejects `note:`.
 
 Todoist descriptions containing `pkms:id:<uuid>` PKMS note markers are detected
 by `task list source:todoist` and `task todoist:<remote-id> show`.

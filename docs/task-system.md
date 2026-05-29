@@ -24,7 +24,7 @@ pkms task inbox
 pkms task list projects
 pkms task list tags
 pkms task add "Capture local task"
-pkms task add title:"Call Alice" sch:tod dead:tom tag:phone prio:B
+pkms task add title:"Call Alice" sch:mon dead:to tag:phone prio:B
 pkms task p<ID> show
 pkms task p<ID> open
 pkms task p<ID> state WAITING
@@ -288,8 +288,10 @@ PKMS add modifiers:
 | `desc:<text>` | `description:`, `body:` | Add body text. |
 | `note:<target>` | | Choose destination note. |
 
-Dates accept `today`, `tomorrow`, `tod`, `tom`, `YYYY-MM-DD`, or
-`YYYY-MM-DD HH:MM`.
+Dates accept unambiguous case-insensitive prefixes of `today`, `tomorrow`, or
+weekday names, plus `YYYY-MM-DD` or `YYYY-MM-DD HH:MM`. Weekday names resolve
+to the next upcoming matching weekday, so `sch:fri` on a Friday means next
+Friday. Ambiguous prefixes fail with an error.
 
 Local mutation rules:
 

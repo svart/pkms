@@ -82,6 +82,7 @@ pub struct Graph {
     pub(crate) results: Vec<FileScanResult>,
 }
 
+#[cfg(feature = "web")]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct HeadingLocation {
     pub(crate) primary_uuid: String,
@@ -231,12 +232,14 @@ impl Graph {
             .ok_or_else(|| anyhow::anyhow!("Note not found: {target}"))
     }
 
+    #[cfg(feature = "web")]
     pub(crate) fn primary_uuid_for_heading(&self, heading_uuid: &str) -> Option<&str> {
         self.heading_uuid_to_primary
             .get(heading_uuid)
             .map(String::as_str)
     }
 
+    #[cfg(feature = "web")]
     pub(crate) fn heading_location(&self, heading_uuid: &str) -> Option<HeadingLocation> {
         let primary_uuid = self.primary_uuid_for_heading(heading_uuid)?;
         let primary = self.nodes.get(primary_uuid)?;
