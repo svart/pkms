@@ -45,6 +45,14 @@ static SERVED_FONTS: &[ServedFont] = &[
     },
 ];
 
+pub(super) fn favicon_response() -> super::HttpResponse {
+    super::HttpResponse {
+        status: 200,
+        content_type: "image/svg+xml",
+        body: include_str!("favicon.svg").as_bytes().to_vec(),
+    }
+}
+
 pub(super) fn font_response(name: &str) -> super::HttpResponse {
     SERVED_FONTS
         .iter()

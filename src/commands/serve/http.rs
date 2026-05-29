@@ -74,6 +74,7 @@ pub(super) fn handle_connection(mut stream: TcpStream, state: &ServeState<'_>) -
             "/" => render_response(state, query),
             "/preview" => preview_response(state, query),
             "/asset" => asset_response(state, query),
+            "/favicon.svg" => Ok(assets::favicon_response()),
             "/open" => Ok(HttpResponse::method_not_allowed("Method not allowed")),
             _ => Ok(HttpResponse::not_found("Not found")),
         }
