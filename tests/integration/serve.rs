@@ -68,6 +68,96 @@ fn test_serve_renders_initial_note_and_linked_note() {
 }
 
 #[test]
+fn test_serve_heading_id_link_anchors_and_preview_block() {
+    let db = TestDb::clean()
+        .note_with_content(
+            "a.org",
+            r#":PROPERTIES:
+:ID:       aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa
+:END:
+#+title: Note A
+
+[[id:dddddddd-dddd-4ddd-8ddd-dddddddddddd][Target section]]
+"#,
+        )
+        .note_with_content(
+            "b.org",
+            r#":PROPERTIES:
+:ID:       bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb
+:END:
+#+title: Note B
+
+* Before
+Before body.
+* Target Section
+:PROPERTIES:
+:ID:       dddddddd-dddd-4ddd-8ddd-dddddddddddd
+:END:
+Target body.
+** Target Child
+Child body.
+* Sibling
+Sibling body.
+"#,
+        );
+    let (_dir, root) = db.into_parts();
+    let config_home = setup_test_config_home();
+    let mut child = Command::new(pkms_binary())
+        .args([
+            "--db",
+            root.to_str().unwrap(),
+            "serve",
+            "Note A",
+            "--port",
+            "0",
+        ])
+        .env("XDG_CONFIG_HOME", config_home.path())
+        .env_remove("PKMS_DB_ROOT")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("failed to spawn pkms serve");
+
+    let stdout = child.stdout.take().unwrap();
+    let mut reader = BufReader::new(stdout);
+    let mut line = String::new();
+    reader.read_line(&mut line).unwrap();
+    assert!(
+        line.starts_with("Serving http://"),
+        "unexpected line: {line}"
+    );
+    let url = line.trim().strip_prefix("Serving ").unwrap();
+    let (_, rest) = url.split_once("://").unwrap();
+    let (host_port, path) = rest.split_once('/').unwrap();
+
+    let response = http_get(host_port, &format!("/{path}"));
+    assert!(response.contains(
+        "href=\"/?id=bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb#h-8\" data-preview-id=\"dddddddd-dddd-4ddd-8ddd-dddddddddddd\""
+    ));
+
+    let linked_by_heading_id = http_get(host_port, "/?id=dddddddd-dddd-4ddd-8ddd-dddddddddddd");
+    assert!(linked_by_heading_id.contains("<h1>Note B</h1>"));
+    assert!(linked_by_heading_id.contains("<h2 id=\"h-8\">Target Section</h2>"));
+
+    let preview = http_get(
+        host_port,
+        "/preview?id=dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+    );
+    assert!(preview.contains("HTTP/1.1 200 OK"));
+    assert!(preview.contains("<h1>Target Section</h1>"));
+    assert!(preview.contains("<h2 id=\"h-1\">Target Section</h2>"));
+    assert!(preview.contains("Target body."));
+    assert!(preview.contains("<h3 id=\"h-6\">Target Child</h3>"));
+    assert!(preview.contains("Child body."));
+    assert!(!preview.contains("<h1>Note B</h1>"));
+    assert!(!preview.contains("Before body."));
+    assert!(!preview.contains("Sibling body."));
+
+    child.kill().unwrap();
+    let _ = child.wait();
+}
+
+#[test]
 fn test_serve_accepts_db_relative_note_path() {
     let (_dir, root) = setup_db();
     let config_home = setup_test_config_home();

@@ -134,6 +134,11 @@ impl HttpResponse {
 fn render_response(state: &ServeState<'_>, query: Option<&str>) -> Result<HttpResponse> {
     let requested = query_param(query, "id").unwrap_or_else(|| state.initial_uuid.clone());
     let node = state.graph.resolve_target(&requested)?;
+    let node = if let Some(primary_uuid) = state.graph.primary_uuid_for_heading(&node.uuid) {
+        state.graph.resolve_target(primary_uuid)?
+    } else {
+        node
+    };
     let content = std::fs::read_to_string(&node.path)
         .with_context(|| format!("Failed to read {}", node.path.display()))?;
     Ok(HttpResponse::html(render_note_html(

@@ -418,6 +418,72 @@ Preview body.
     }
 
     #[test]
+    fn renders_heading_id_links_to_note_anchor_and_heading_preview() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().to_path_buf();
+        let roam = root.join("roam");
+        fs::create_dir_all(&roam).unwrap();
+        fs::write(
+            roam.join("a.org"),
+            r#":PROPERTIES:
+:ID:       aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa
+:END:
+#+title: Alpha
+
+[[id:dddddddd-dddd-4ddd-8ddd-dddddddddddd][Target section]]
+"#,
+        )
+        .unwrap();
+        fs::write(
+            roam.join("b.org"),
+            r#":PROPERTIES:
+:ID:       bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb
+:END:
+#+title: Beta
+
+* Before
+Before body.
+* Target Section
+:PROPERTIES:
+:ID:       dddddddd-dddd-4ddd-8ddd-dddddddddddd
+:END:
+Target body.
+** Target Child
+Child body.
+* Sibling
+Sibling body.
+"#,
+        )
+        .unwrap();
+        let config = ResolvedConfig::for_test_db(root);
+        let corpus = Corpus::load(&config).unwrap();
+        let graph = Graph::from_corpus(&corpus);
+        let alpha = graph
+            .resolve_target("aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa")
+            .unwrap();
+        let target_heading = graph
+            .resolve_target("dddddddd-dddd-4ddd-8ddd-dddddddddddd")
+            .unwrap();
+        let alpha_content = fs::read_to_string(&alpha.path).unwrap();
+        let beta_content = fs::read_to_string(&target_heading.path).unwrap();
+
+        let page = render_note_html(&graph, &config, alpha, &alpha_content);
+        let preview = render_preview_html(&graph, &config, target_heading, &beta_content);
+
+        assert!(page.contains(
+            "href=\"/?id=bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb#h-8\" data-preview-id=\"dddddddd-dddd-4ddd-8ddd-dddddddddddd\""
+        ));
+        assert!(preview.contains("<h1>Target Section</h1>"));
+        assert!(preview.contains("<h2 id=\"h-1\">Target Section</h2>"));
+        assert!(preview.contains("Target body."));
+        assert!(preview.contains("<h3 id=\"h-6\">Target Child</h3>"));
+        assert!(preview.contains("Child body."));
+        assert!(!preview.contains("<h1>Beta</h1>"));
+        assert!(!preview.contains("Before body."));
+        assert!(!preview.contains("Sibling body."));
+    }
+
+    #[test]
     fn open_response_uses_existing_editor_opening() {
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path().to_path_buf();

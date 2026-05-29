@@ -82,6 +82,12 @@ pub struct Graph {
     pub(crate) results: Vec<FileScanResult>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct HeadingLocation {
+    pub(crate) primary_uuid: String,
+    pub(crate) line_number: usize,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct SelfLinkEntry {
     pub source_uuid: String,
@@ -223,6 +229,30 @@ impl Graph {
     pub fn resolve_target(&self, target: &str) -> anyhow::Result<&Node> {
         self.find_node(target)
             .ok_or_else(|| anyhow::anyhow!("Note not found: {target}"))
+    }
+
+    pub(crate) fn primary_uuid_for_heading(&self, heading_uuid: &str) -> Option<&str> {
+        self.heading_uuid_to_primary
+            .get(heading_uuid)
+            .map(String::as_str)
+    }
+
+    pub(crate) fn heading_location(&self, heading_uuid: &str) -> Option<HeadingLocation> {
+        let primary_uuid = self.primary_uuid_for_heading(heading_uuid)?;
+        let primary = self.nodes.get(primary_uuid)?;
+        let heading = self
+            .results
+            .iter()
+            .find(|result| result.path == primary.path)?
+            .parsed
+            .headings
+            .iter()
+            .find(|heading| heading.uuid.as_deref() == Some(heading_uuid))?;
+
+        Some(HeadingLocation {
+            primary_uuid: primary_uuid.to_string(),
+            line_number: heading.line_number,
+        })
     }
 }
 

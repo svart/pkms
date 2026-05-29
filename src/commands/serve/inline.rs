@@ -1,4 +1,5 @@
 use super::assets;
+use super::page::heading_anchor;
 use crate::config::ResolvedConfig;
 use crate::graph::{Graph, Node, resolve_file_link_path};
 use crate::parser::LINK_RE;
@@ -41,14 +42,32 @@ fn render_link(
 ) -> String {
     let label = desc.unwrap_or(target);
     if let Some(uuid) = target.strip_prefix("id:") {
-        let href_uuid = graph
-            .resolve_target(uuid)
-            .map(|n| n.uuid.as_str())
-            .unwrap_or(uuid);
+        let (href_uuid, anchor, preview_uuid) = if let Some(location) = graph.heading_location(uuid)
+        {
+            let preview_uuid = graph
+                .resolve_target(uuid)
+                .map(|node| node.uuid.clone())
+                .unwrap_or_else(|_| uuid.to_string());
+            (
+                location.primary_uuid,
+                Some(heading_anchor(location.line_number)),
+                preview_uuid,
+            )
+        } else {
+            let resolved_uuid = graph
+                .resolve_target(uuid)
+                .map(|node| node.uuid.clone())
+                .unwrap_or_else(|_| uuid.to_string());
+            (resolved_uuid.clone(), None, resolved_uuid)
+        };
+        let anchor = anchor
+            .map(|anchor| format!("#{}", percent_encode(&anchor)))
+            .unwrap_or_default();
         return format!(
-            "<a href=\"/?id={}\" data-preview-id=\"{}\">{}</a>",
-            percent_encode(href_uuid),
-            escape_html(href_uuid),
+            "<a href=\"/?id={}{}\" data-preview-id=\"{}\">{}</a>",
+            percent_encode(&href_uuid),
+            anchor,
+            escape_html(&preview_uuid),
             render_formatted_text(label)
         );
     }

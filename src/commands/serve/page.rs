@@ -5,7 +5,7 @@ use super::org_html::{
 use super::{page_css, page_js};
 use crate::config::ResolvedConfig;
 use crate::graph::{Graph, Node};
-use crate::parser::{HEADING_RE, Heading, strip_org_links};
+use crate::parser::{HEADING_RE, Heading, parse_note, strip_org_links};
 use std::collections::BTreeMap;
 use std::fmt::Write as FmtWrite;
 
@@ -63,13 +63,43 @@ pub(super) fn render_preview_html(
     node: &Node,
     content: &str,
 ) -> String {
-    let body = render_org_body(graph, config, node, content);
+    let body = if let Some(block) = heading_preview_content(graph, node, content) {
+        render_org_body(graph, config, node, &block)
+    } else {
+        render_org_body(graph, config, node, content)
+    };
     let tags = render_tag_list("Note tags", &node.filetags, "note-tags");
     let title = escape_html(&node.title);
     format!(
         "<section class=\"note-preview-content\" data-preview-note=\"{}\">\n<header class=\"note-preview-header\">\n<p class=\"eyebrow\">pkms note</p>\n<h1>{title}</h1>\n{tags}</header>\n<article class=\"note-body note-preview-body\">\n{body}</article>\n</section>\n",
         escape_html(&node.uuid)
     )
+}
+
+fn heading_preview_content(graph: &Graph, node: &Node, content: &str) -> Option<String> {
+    graph.primary_uuid_for_heading(&node.uuid)?;
+
+    let parsed = parse_note(content);
+    let headings = parsed.headings;
+    let target_idx = headings
+        .iter()
+        .position(|heading| heading.uuid.as_deref() == Some(node.uuid.as_str()))?;
+    let target = &headings[target_idx];
+    let start = target.line_number.checked_sub(1)?;
+    let end = headings
+        .iter()
+        .skip(target_idx + 1)
+        .find(|heading| heading.level <= target.level)
+        .and_then(|heading| heading.line_number.checked_sub(1))
+        .unwrap_or_else(|| content.lines().count());
+
+    let lines: Vec<&str> = content.lines().collect();
+    if start >= lines.len() || end <= start {
+        return None;
+    }
+    let mut block = lines[start..end].join("\n");
+    block.push('\n');
+    Some(block)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
