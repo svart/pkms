@@ -393,10 +393,7 @@ fn combine_tags(filetags: &[String], heading_tags: &[String]) -> Vec<String> {
 }
 
 fn item_date(item: &TaskRecord) -> Option<NaiveDate> {
-    item.scheduled_date
-        .as_deref()
-        .or(item.deadline_date.as_deref())
-        .or(item.daily_file_date.as_deref())
+    item.effective_date()
         .and_then(|date| NaiveDate::parse_from_str(date, "%Y-%m-%d").ok())
 }
 

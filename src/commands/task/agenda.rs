@@ -151,21 +151,13 @@ pub fn run_with_clock(
 
     if let Some(cutoff) = week_cutoff {
         records.retain(|item| {
-            item.scheduled_date
-                .as_deref()
-                .or(item.deadline_date.as_deref())
-                .or(item.daily_file_date.as_deref())
+            item.effective_date()
                 .and_then(|d| NaiveDate::parse_from_str(d, "%Y-%m-%d").ok())
                 .is_some_and(|d| d <= cutoff)
         });
     } else if let Some(filter_date) = date_filter {
         let filter_date = filter_date.format("%Y-%m-%d").to_string();
-        records.retain(|item| {
-            item.scheduled_date.as_deref() == Some(filter_date.as_str())
-                || item.deadline_date.as_deref() == Some(filter_date.as_str())
-                || (item.is_daily_file
-                    && item.daily_file_date.as_deref() == Some(filter_date.as_str()))
-        });
+        records.retain(|item| item.has_effective_date(filter_date.as_str()));
     }
 
     if opts.overdue {
@@ -178,10 +170,7 @@ pub fn run_with_clock(
     if opts.upcoming {
         let today_str = today_date.format("%Y-%m-%d").to_string();
         items.retain(|item| {
-            let is_today = item.scheduled_date.as_deref() == Some(today_str.as_str())
-                || item.deadline_date.as_deref() == Some(today_str.as_str())
-                || (item.is_daily_file
-                    && item.daily_file_date.as_deref() == Some(today_str.as_str()));
+            let is_today = item.has_effective_date(today_str.as_str());
             !item.is_overdue && !is_today
         });
     }
@@ -228,16 +217,9 @@ pub fn run_with_clock(
                 for item in &items {
                     if item.is_overdue {
                         overdue.push(item.clone());
-                    } else if item.scheduled_date.as_deref() == Some(today_str.as_str())
-                        || item.deadline_date.as_deref() == Some(today_str.as_str())
-                        || (item.is_daily_file
-                            && item.daily_file_date.as_deref() == Some(today_str.as_str()))
-                    {
+                    } else if item.has_effective_date(today_str.as_str()) {
                         today_items.push(item.clone());
-                    } else if item.scheduled_date.is_some()
-                        || item.deadline_date.is_some()
-                        || item.is_daily_file
-                    {
+                    } else if item.effective_date().is_some() {
                         upcoming.push(item.clone());
                     }
                 }

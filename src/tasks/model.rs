@@ -75,10 +75,18 @@ impl TaskItem {
         self.deadline.as_ref().and_then(|date| date.date.as_deref())
     }
 
+    pub fn implicit_daily_file_date(&self) -> Option<&str> {
+        if self.scheduled.is_none() && self.deadline.is_none() {
+            self.daily_file_date.as_deref()
+        } else {
+            None
+        }
+    }
+
     pub fn effective_date(&self) -> Option<&str> {
         self.scheduled_date_str()
             .or_else(|| self.deadline_date_str())
-            .or(self.daily_file_date.as_deref())
+            .or_else(|| self.implicit_daily_file_date())
     }
 
     pub fn datetimes(&self) -> Vec<NaiveDateTime> {
@@ -98,7 +106,7 @@ impl TaskItem {
 
     pub fn dates(&self) -> Vec<NaiveDate> {
         let mut dates: Vec<NaiveDate> = self.datetimes().into_iter().map(|dt| dt.date()).collect();
-        if let Some(daily_file_date) = &self.daily_file_date
+        if let Some(daily_file_date) = self.implicit_daily_file_date()
             && let Ok(date) = NaiveDate::parse_from_str(daily_file_date, "%Y-%m-%d")
         {
             dates.push(date);

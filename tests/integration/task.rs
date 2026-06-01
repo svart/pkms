@@ -298,6 +298,51 @@ fn test_task_agenda_text() {
 }
 
 #[test]
+fn test_task_agenda_text_groups_daily_task_by_explicit_schedule() {
+    let db = TestDb::clean();
+    let today = org_date(0);
+    let scheduled = upcoming_weekday_date(Weekday::Wed);
+    db.write_roam(
+        &format!("{today}.org"),
+        &format!(
+            r#":PROPERTIES:
+:ID:       12121212-1212-4121-8121-121212121212
+:END:
+#+title: Daily Schedule Override
+#+filetags: :daily:
+
+* TODO Scheduled away from daily note
+SCHEDULED: <{scheduled}>
+"#
+        ),
+    );
+
+    let (stdout, stderr, status) = db.run(&["task", "agenda"]);
+    assert!(status.success(), "task agenda failed:\n{stdout}\n{stderr}");
+    assert!(stdout.contains("=== Upcoming ==="), "stdout:\n{stdout}");
+    assert!(!stdout.contains("=== Today ==="), "stdout:\n{stdout}");
+    assert!(stdout.contains(&scheduled), "stdout:\n{stdout}");
+
+    let (stdout, stderr, status) = db.run(&["task", "agenda", "state:TODO"]);
+    assert!(
+        status.success(),
+        "filtered task agenda failed:\n{stdout}\n{stderr}"
+    );
+    assert!(stdout.contains("=== Upcoming ==="), "stdout:\n{stdout}");
+    assert!(!stdout.contains("=== Today ==="), "stdout:\n{stdout}");
+    assert!(stdout.contains(&scheduled), "stdout:\n{stdout}");
+
+    let (v, status) = db.run_json(&["task", "agenda", "date:today"]);
+    assert!(status.success());
+    assert_eq!(v["total"], 0, "json:\n{v:#}");
+
+    let scheduled_filter = format!("date:{scheduled}");
+    let (v, status) = db.run_json(&["task", "agenda", &scheduled_filter]);
+    assert!(status.success());
+    assert_eq!(task_titles(&v), vec!["Scheduled away from daily note"]);
+}
+
+#[test]
 fn test_task_agenda_today_returns_source_neutral_json() {
     let (_dir, root) = setup_db();
     let today = org_date(0);
@@ -831,6 +876,7 @@ fn test_task_agenda_source_neutral_sort_supports_date_sort_fields() {
 fn test_task_agenda_accepts_date_filters() {
     let (_dir, root) = setup_db();
     let today = org_date(0);
+    let upcoming = org_date(2);
     std::fs::write(
         root.join("roam/common/20260525000000-filter-today.org"),
         format!(
@@ -842,6 +888,8 @@ fn test_task_agenda_accepts_date_filters() {
 
 * TODO Filter today task
 SCHEDULED: <{today}>
+* TODO Filter upcoming task
+SCHEDULED: <{upcoming}>
 "#
         ),
     )
@@ -870,7 +918,7 @@ SCHEDULED: <{today}>
     ]);
     assert!(upcoming_status.success());
     let upcoming_titles = task_titles(&upcoming_tasks);
-    assert!(upcoming_titles.contains(&"Parent task".to_string()));
+    assert!(upcoming_titles.contains(&"Filter upcoming task".to_string()));
     assert!(!upcoming_titles.contains(&"Filter today task".to_string()));
 
     let (week_tasks, week_status) = run_json(&[
@@ -883,12 +931,29 @@ SCHEDULED: <{today}>
         "date:week",
     ]);
     assert!(week_status.success());
-    assert!(task_titles(&week_tasks).contains(&"Parent task".to_string()));
+    assert!(task_titles(&week_tasks).contains(&"Filter upcoming task".to_string()));
 }
 
 #[test]
 fn test_task_agenda_accepts_exact_and_bare_date_filters() {
     let (_dir, root) = setup_db();
+    let upcoming = org_date(2);
+    std::fs::write(
+        root.join("roam/common/20260525000000-filter-upcoming.org"),
+        format!(
+            r#":PROPERTIES:
+:ID:       57575757-5757-4757-8757-575757575758
+:END:
+#+title: Filter Upcoming
+#+filetags: :agenda:
+
+* TODO Filter upcoming task
+SCHEDULED: <{upcoming}>
+"#
+        ),
+    )
+    .unwrap();
+
     let (exact_tasks, exact_status) = run_json(&[
         "--db",
         root.to_str().unwrap(),
@@ -926,13 +991,14 @@ fn test_task_agenda_accepts_exact_and_bare_date_filters() {
         "upcoming",
     ]);
     assert!(upcoming_status.success());
-    assert!(task_titles(&upcoming_tasks).contains(&"Parent task".to_string()));
+    assert!(task_titles(&upcoming_tasks).contains(&"Filter upcoming task".to_string()));
 }
 
 #[test]
 fn test_task_agenda_accepts_comma_separated_date_filters() {
     let (_dir, root) = setup_db();
     let today = org_date(0);
+    let upcoming = org_date(2);
     std::fs::write(
         root.join("roam/common/20260525000000-filter-today.org"),
         format!(
@@ -944,6 +1010,8 @@ fn test_task_agenda_accepts_comma_separated_date_filters() {
 
 * TODO Filter today task
 SCHEDULED: <{today}>
+* TODO Filter upcoming task
+SCHEDULED: <{upcoming}>
 "#
         ),
     )
@@ -963,7 +1031,7 @@ SCHEDULED: <{today}>
     assert!(titles.contains(&"Filter today task".to_string()));
     assert!(titles.contains(&"High priority task".to_string()));
     assert!(titles.contains(&"Fix this".to_string()));
-    assert!(!titles.contains(&"Parent task".to_string()));
+    assert!(!titles.contains(&"Filter upcoming task".to_string()));
 }
 
 #[test]

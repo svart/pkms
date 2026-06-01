@@ -33,6 +33,29 @@ pub struct TaskRecord {
     pub heading_tags: Vec<String>,
 }
 
+impl TaskRecord {
+    pub fn implicit_daily_file_date(&self) -> Option<&str> {
+        if self.scheduled.is_none() && self.deadline.is_none() {
+            self.daily_file_date.as_deref()
+        } else {
+            None
+        }
+    }
+
+    pub fn effective_date(&self) -> Option<&str> {
+        self.scheduled_date
+            .as_deref()
+            .or(self.deadline_date.as_deref())
+            .or_else(|| self.implicit_daily_file_date())
+    }
+
+    pub fn has_effective_date(&self, date: &str) -> bool {
+        self.scheduled_date.as_deref() == Some(date)
+            || self.deadline_date.as_deref() == Some(date)
+            || self.implicit_daily_file_date() == Some(date)
+    }
+}
+
 pub fn collect_todo_records(
     corpus: &Corpus,
     valid_states: &[String],
