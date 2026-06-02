@@ -143,9 +143,7 @@ fn dispatch(cli: &Cli, command_ctx: &CommandContext<'_>) -> Result<ExitCode> {
         Command::Query(args) => {
             commands::query::run(cfg, ctx, &args.try_into()?).map(|()| ExitCode::SUCCESS)?
         }
-        Command::Task(args) => {
-            commands::task::run(cfg, ctx, &args.command).map(|()| ExitCode::SUCCESS)?
-        }
+        Command::Task(args) => commands::task::run(cfg, ctx, &args.command)?,
         Command::Path(args) => {
             commands::path::run(command_ctx, &args.try_into()?).map(|()| ExitCode::SUCCESS)?
         }

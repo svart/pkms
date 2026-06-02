@@ -103,10 +103,10 @@ pkms task add source:todoist title:"Call Alice" sch:tod tag:phone prio:B
 pkms task todoist:<remote-id> done
 pkms task p<canonical-id> postpone --to 2026-06-01
 pkms task todoist:<remote-id> postpone --to tomorrow
-pkms task p<canonical-id> schedule --due 2026-05-24
-pkms task todoist:<remote-id> schedule --due none
-pkms task p<canonical-id> deadline --deadline 2026-05-30
-pkms task todoist:<remote-id> deadline --deadline none
+pkms task p<canonical-id> mod sch:2026-05-24
+pkms task todoist:<remote-id> mod sch:none
+pkms task p<canonical-id> mod dl:2026-05-30
+pkms task todoist:<remote-id> mod dl:none
 ```
 
 Use stable `todoist:<remote-id>` IDs for Todoist mutations.
@@ -185,8 +185,9 @@ pkms task todoist:<remote-id> done --dry-run
 
 Use stable `todoist:<remote-id>` ids for Todoist mutations. `task <ID>
 postpone` accepts `--to tomorrow` or `--to YYYY-MM-DD` and works only for
-recurring PKMS or Todoist tasks; non-recurring tasks fail. `task <ID> schedule`
-accepts `--due tomorrow`, `--due YYYY-MM-DD`, or `--due none`. `task <ID>
-deadline` accepts `--deadline tomorrow`, `--deadline YYYY-MM-DD`, or
-`--deadline none`. Schedule and deadline work for PKMS and Todoist tasks.
-Todoist `task <ID> state` supports only `open` and `done`.
+recurring PKMS or Todoist tasks; non-recurring tasks fail. `task <ID> mod`
+accepts add-style modifiers such as `title:`, `tag:`, `project:`, `prio:`,
+`desc:`, `sch:tomorrow`, `sch:none`, `dl:YYYY-MM-DD`, or `dl:none`. Schedule
+and deadline edits work for PKMS and Todoist tasks. If no properties change,
+`mod` prints `Nothing changed` and exits nonzero. Todoist `task <ID> state`
+supports only `open` and `done`.

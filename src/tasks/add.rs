@@ -15,6 +15,21 @@ pub struct TaskAddSpec {
     pub description: Option<String>,
     pub note: Option<String>,
     pub text: Option<String>,
+    pub provided: TaskAddProvided,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct TaskAddProvided {
+    pub source: bool,
+    pub project: bool,
+    pub title: bool,
+    pub due: bool,
+    pub deadline: bool,
+    pub labels: bool,
+    pub priority: bool,
+    pub description: bool,
+    pub note: bool,
+    pub text: bool,
 }
 
 impl TaskAddSpec {
@@ -30,6 +45,7 @@ impl TaskAddSpec {
             description: None,
             note: None,
             text: None,
+            provided: TaskAddProvided::default(),
         };
         let mut text = Vec::new();
 
@@ -42,6 +58,7 @@ impl TaskAddSpec {
 
         if !text.is_empty() {
             set_once(&mut spec.text, "text", text.join(" "))?;
+            spec.provided.text = true;
         }
 
         Ok(spec)
@@ -55,23 +72,42 @@ fn apply_modifier(spec: &mut TaskAddSpec, token: &str) -> Result<bool> {
     let key = key.trim().to_ascii_lowercase();
     let value = value.trim();
     match key.as_str() {
-        "source" | "src" => spec.source = value.to_string(),
-        "title" => set_once(&mut spec.title, "title", value.to_string())?,
-        "tag" | "tags" | "label" | "labels" => spec.labels.extend(split_list(value)),
+        "source" | "src" => {
+            spec.source = value.to_string();
+            spec.provided.source = true;
+        }
+        "title" => {
+            set_once(&mut spec.title, "title", value.to_string())?;
+            spec.provided.title = true;
+        }
+        "tag" | "tags" | "label" | "labels" => {
+            spec.labels.extend(split_list(value));
+            spec.provided.labels = true;
+        }
         "due" | "schedule" | "scheduled" | "sched" | "sch" => {
             set_once(&mut spec.due, "schedule", value.to_string())?;
+            spec.provided.due = true;
         }
         "deadline" | "dead" | "dl" => {
             set_once(&mut spec.deadline, "deadline", value.to_string())?;
+            spec.provided.deadline = true;
         }
-        "project" | "proj" => set_once(&mut spec.project, "project", value.to_string())?,
+        "project" | "proj" => {
+            set_once(&mut spec.project, "project", value.to_string())?;
+            spec.provided.project = true;
+        }
         "priority" | "prio" | "pri" => {
             set_once(&mut spec.priority, "priority", value.to_string())?;
+            spec.provided.priority = true;
         }
         "description" | "desc" | "body" => {
             set_once(&mut spec.description, "description", value.to_string())?;
+            spec.provided.description = true;
         }
-        "note" => set_once(&mut spec.note, "note", value.to_string())?,
+        "note" => {
+            set_once(&mut spec.note, "note", value.to_string())?;
+            spec.provided.note = true;
+        }
         _ => return Ok(false),
     }
     Ok(true)

@@ -15,6 +15,7 @@ use crate::tasks::id::TaskId;
 use crate::tasks::model::TaskSourceKind;
 use crate::tasks::provider::TaskMetadataRow;
 use anyhow::{Result, bail};
+use std::process::ExitCode;
 
 mod agenda;
 mod execution;
@@ -26,29 +27,33 @@ mod render;
 mod todo;
 
 use execution::{AgendaExecution, TaskListExecution};
-use mutations::{
-    run_add, run_deadline, run_done, run_postpone, run_schedule, run_state, unsupported_task_source,
-};
+use mutations::{run_add, run_done, run_postpone, run_state, unsupported_task_source};
 use plan::{
     AgendaRenderKind, ShortcutKind, TaskListMode, plan_agenda_request, plan_task_list_request,
     split_task_list_mode,
 };
 
-pub fn run(config: &ResolvedConfig, ctx: &OutputContext, command: &TaskCommand) -> Result<()> {
+pub fn run(
+    config: &ResolvedConfig,
+    ctx: &OutputContext,
+    command: &TaskCommand,
+) -> Result<ExitCode> {
     match command {
-        TaskCommand::List(args) => run_list(config, ctx, args),
-        TaskCommand::Agenda(args) => run_agenda(config, ctx, args),
-        TaskCommand::Inbox(args) => run_shortcut(config, ctx, args, ShortcutKind::Inbox),
-        TaskCommand::Show(args) => run_show(config, ctx, args),
-        TaskCommand::Open(args) => run_open(config, ctx, args),
-        TaskCommand::State(args) => run_state(config, ctx, args),
-        TaskCommand::Done(args) => run_done(config, ctx, args),
-        TaskCommand::Add(args) => run_add(config, ctx, args),
-        TaskCommand::Postpone(args) => run_postpone(config, ctx, args),
-        TaskCommand::Schedule(args) => run_schedule(config, ctx, args),
-        TaskCommand::Deadline(args) => run_deadline(config, ctx, args),
+        TaskCommand::List(args) => success(run_list(config, ctx, args)),
+        TaskCommand::Agenda(args) => success(run_agenda(config, ctx, args)),
+        TaskCommand::Inbox(args) => success(run_shortcut(config, ctx, args, ShortcutKind::Inbox)),
+        TaskCommand::Show(args) => success(run_show(config, ctx, args)),
+        TaskCommand::Open(args) => success(run_open(config, ctx, args)),
+        TaskCommand::State(args) => success(run_state(config, ctx, args)),
+        TaskCommand::Done(args) => success(run_done(config, ctx, args)),
+        TaskCommand::Add(args) => success(run_add(config, ctx, args)),
+        TaskCommand::Postpone(args) => success(run_postpone(config, ctx, args)),
         TaskCommand::Target(args) => id_command::run(config, ctx, args),
     }
+}
+
+fn success(result: Result<()>) -> Result<ExitCode> {
+    result.map(|()| ExitCode::SUCCESS)
 }
 
 fn run_list(config: &ResolvedConfig, ctx: &OutputContext, args: &TaskListArgs) -> Result<()> {

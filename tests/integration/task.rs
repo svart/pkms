@@ -1504,7 +1504,7 @@ fn test_task_state_rejects_todoist_before_todoist_support() {
 }
 
 #[test]
-fn test_task_schedule_pkms_sets_and_clears_scheduled_date() {
+fn test_task_mod_pkms_sets_and_clears_scheduled_date() {
     let (_dir, root) = setup_db();
     let (v, status) = run_json(&[
         "--db",
@@ -1513,12 +1513,12 @@ fn test_task_schedule_pkms_sets_and_clears_scheduled_date() {
         "json",
         "task",
         "p1",
-        "schedule",
-        "--due",
-        "2026-07-01",
+        "mod",
+        "sch:2026-07-01",
     ]);
     assert!(status.success());
-    assert_eq!(v["action"], "schedule");
+    assert_eq!(v["changed"], true);
+    assert_eq!(v["changes"][0]["property"], "Scheduled");
     assert_eq!(v["item"]["scheduled"]["date"], "2026-07-01");
 
     let (v, status) = run_json(&[
@@ -1528,17 +1528,17 @@ fn test_task_schedule_pkms_sets_and_clears_scheduled_date() {
         "json",
         "task",
         "p1",
-        "schedule",
-        "--due",
-        "none",
+        "mod",
+        "sch:none",
     ]);
     assert!(status.success());
-    assert_eq!(v["action"], "unschedule");
+    assert_eq!(v["changed"], true);
+    assert_eq!(v["changes"][0]["property"], "Scheduled");
     assert_eq!(v["item"]["scheduled"], serde_json::Value::Null);
 }
 
 #[test]
-fn test_task_deadline_pkms_sets_deadline_date() {
+fn test_task_mod_pkms_sets_deadline_date() {
     let (_dir, root) = setup_db();
     let (v, status) = run_json(&[
         "--db",
@@ -1547,13 +1547,158 @@ fn test_task_deadline_pkms_sets_deadline_date() {
         "json",
         "task",
         "p1",
-        "deadline",
-        "--deadline",
-        "2026-08-01",
+        "mod",
+        "dl:2026-08-01",
     ]);
     assert!(status.success());
-    assert_eq!(v["action"], "deadline");
+    assert_eq!(v["changed"], true);
+    assert_eq!(v["changes"][0]["property"], "Deadline");
     assert_eq!(v["item"]["deadline"]["date"], "2026-08-01");
+}
+
+#[test]
+fn test_task_mod_pkms_accepts_add_style_metadata_modifiers() {
+    let (_dir, root) = setup_db();
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "task",
+        "p1",
+        "mod",
+        "title:Updated task",
+        "prio:b",
+        "tag:phone,work",
+        "project:Focus",
+        "desc:Follow up notes",
+    ]);
+    assert!(status.success());
+    assert_eq!(v["changed"], true);
+    let changed = v["changes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|change| change["property"].as_str())
+        .collect::<Vec<_>>();
+    assert!(changed.contains(&"Title"));
+    assert!(changed.contains(&"Priority"));
+    assert!(changed.contains(&"Tags"));
+    assert!(changed.contains(&"Project"));
+    assert!(changed.contains(&"Description"));
+    assert_eq!(v["item"]["title"], "Updated task");
+    assert_eq!(v["item"]["priority"], "B");
+    assert_eq!(v["item"]["project"], "Focus");
+    assert!(
+        v["item"]["tags"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|tag| tag == "phone")
+    );
+    assert!(
+        v["item"]["tags"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|tag| tag == "work")
+    );
+
+    let path = v["item"]["path"].as_str().unwrap();
+    let content = std::fs::read_to_string(path).unwrap();
+    assert!(content.contains("* TODO [#B] Updated task :phone:work:"));
+    assert!(content.contains(":PROJECT: Focus"));
+    assert!(content.contains("Follow up notes"));
+}
+
+#[test]
+fn test_task_mod_pkms_reports_text_property_diffs() {
+    let (_dir, root) = setup_db();
+    let today = org_date(0);
+    let tomorrow = org_date(1);
+    let path = root.join("roam/common/20260602000000-mod-task.org");
+    std::fs::write(
+        &path,
+        format!(
+            r#":PROPERTIES:
+:ID:       31313131-3131-4131-8131-313131313131
+:END:
+#+title: Mod Task
+
+* TODO Mod task
+SCHEDULED: <{today}>
+"#
+        ),
+    )
+    .unwrap();
+    let (list, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "task",
+        "list",
+    ]);
+    assert!(status.success());
+    let id = list["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|item| item["heading_title"].as_str() == Some("Mod task"))
+        .and_then(|item| item["id"].as_u64())
+        .map(|id| format!("p{id}"))
+        .unwrap();
+    let (stdout, stderr, status) = run(&[
+        "--db",
+        root.to_str().unwrap(),
+        "task",
+        &id,
+        "mod",
+        "sch:tomorrow",
+    ]);
+    assert!(status.success(), "task mod failed:\n{stdout}\n{stderr}");
+    assert_eq!(
+        stdout.trim(),
+        format!("Scheduled: Today ({today}) -> Scheduled: Tomorrow ({tomorrow})")
+    );
+}
+
+#[test]
+fn test_task_mod_pkms_no_changes_prints_message_and_exits_nonzero() {
+    let (_dir, root) = setup_db();
+    let (stdout, stderr, status) = run(&[
+        "--db",
+        root.to_str().unwrap(),
+        "task",
+        "p1",
+        "mod",
+        "sch:2026-05-10",
+    ]);
+    assert!(
+        !status.success(),
+        "task mod unexpectedly succeeded:\n{stdout}\n{stderr}"
+    );
+    assert_eq!(stdout.trim(), "Nothing changed");
+}
+
+#[test]
+fn test_task_schedule_and_deadline_id_subcommands_are_rejected() {
+    let (_dir, root) = setup_db();
+    for (subcommand, option) in [("schedule", "--due"), ("deadline", "--deadline")] {
+        let (stdout, stderr, status) = run(&[
+            "--db",
+            root.to_str().unwrap(),
+            "task",
+            "p1",
+            subcommand,
+            option,
+            "2026-06-01",
+        ]);
+        assert!(
+            !status.success(),
+            "task {subcommand} unexpectedly succeeded:\n{stdout}\n{stderr}"
+        );
+    }
 }
 
 #[test]
@@ -3505,9 +3650,15 @@ fn test_task_postpone_todoist_non_recurring_fails() {
 
 #[cfg(feature = "todoist")]
 #[test]
-fn test_task_schedule_todoist_can_clear_due_date() {
+fn test_task_mod_todoist_can_clear_due_date() {
     let (_dir, root) = setup_db();
     let (base_url, handle) = spawn_todoist_mock_expect_bodies(vec![
+        (
+            "GET",
+            "/tasks/abc",
+            serde_json::Value::Null,
+            r#"{"id":"abc","content":"Call Alice","description":"","priority":1,"labels":[],"due":{"date":"2026-05-24","string":"2026-05-24"}}"#,
+        ),
         (
             "POST",
             "/tasks/abc",
@@ -3529,9 +3680,8 @@ fn test_task_schedule_todoist_can_clear_due_date() {
             "json",
             "task",
             "todoist:abc",
-            "schedule",
-            "--due",
-            "none",
+            "mod",
+            "sch:none",
         ],
         &base_url,
     );
@@ -3539,15 +3689,21 @@ fn test_task_schedule_todoist_can_clear_due_date() {
     assert!(output.status.success());
     let v: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
     assert_eq!(v["changed"], true);
-    assert_eq!(v["action"], "unschedule");
+    assert_eq!(v["changes"][0]["property"], "Scheduled");
     assert!(v["item"]["scheduled"].is_null());
 }
 
 #[cfg(feature = "todoist")]
 #[test]
-fn test_task_deadline_todoist_sets_deadline_date() {
+fn test_task_mod_todoist_sets_deadline_date() {
     let (_dir, root) = setup_db();
     let (base_url, handle) = spawn_todoist_mock_expect_bodies(vec![
+        (
+            "GET",
+            "/tasks/abc",
+            serde_json::Value::Null,
+            r#"{"id":"abc","content":"Call Alice","description":"","priority":1,"labels":[]}"#,
+        ),
         (
             "POST",
             "/tasks/abc",
@@ -3569,9 +3725,8 @@ fn test_task_deadline_todoist_sets_deadline_date() {
             "json",
             "task",
             "todoist:abc",
-            "deadline",
-            "--deadline",
-            "2026-06-01",
+            "mod",
+            "dl:2026-06-01",
         ],
         &base_url,
     );
@@ -3579,7 +3734,7 @@ fn test_task_deadline_todoist_sets_deadline_date() {
     assert!(output.status.success());
     let v: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
     assert_eq!(v["changed"], true);
-    assert_eq!(v["action"], "deadline");
+    assert_eq!(v["changes"][0]["property"], "Deadline");
     assert_eq!(v["item"]["deadline"]["date"], "2026-06-01");
 }
 

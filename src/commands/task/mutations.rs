@@ -1,8 +1,6 @@
 #[cfg(feature = "todoist")]
 use crate::cli::OutputFormat;
-use crate::cli::{
-    TaskAddArgs, TaskDeadlineArgs, TaskDoneArgs, TaskPostponeArgs, TaskScheduleArgs, TaskStateArgs,
-};
+use crate::cli::{TaskAddArgs, TaskDoneArgs, TaskModArgs, TaskPostponeArgs, TaskStateArgs};
 use crate::config::ResolvedConfig;
 use crate::output::OutputContext;
 use crate::tasks::add::{
@@ -11,12 +9,13 @@ use crate::tasks::add::{
 use crate::tasks::clock::TaskClock;
 use crate::tasks::id::TaskId;
 use crate::tasks::pkms::{self, PkmsInboxTarget};
-use crate::tasks::pkms_mutation::{self, PlanningKind};
+use crate::tasks::pkms_mutation;
 use anyhow::{Context, Result, bail};
 use chrono::NaiveDate;
 #[cfg(feature = "todoist")]
 use serde::Serialize;
 use std::path::Path;
+use std::process::ExitCode;
 
 use super::render;
 
@@ -85,72 +84,149 @@ pub(in crate::commands::task) fn run_postpone(
     }
 }
 
-pub(in crate::commands::task) fn run_schedule(
+pub(in crate::commands::task) fn run_mod(
     config: &ResolvedConfig,
     ctx: &OutputContext,
-    args: &TaskScheduleArgs,
-) -> Result<()> {
+    args: &TaskModArgs,
+) -> Result<ExitCode> {
+    let spec = TaskAddSpec::parse(&args.modifiers)?;
     let clock = TaskClock::now();
     match args.id.parse::<TaskId>()? {
-        TaskId::Pkms(canonical_id) => set_pkms_task_planning(
-            config,
-            ctx,
-            canonical_id,
-            PlanningKind::Scheduled,
-            &args.due,
-            ("schedule", "unschedule"),
-            clock,
-        ),
-        TaskId::Todoist(id) => {
-            let due = mutation_date_value(&args.due, clock.today)?;
-            mutate_todoist_task(
-                config,
-                ctx,
-                &id,
-                if due.is_null() {
-                    "unschedule"
-                } else {
-                    "schedule"
-                },
-                serde_json::json!({ "due_date": due }),
-            )
+        TaskId::Pkms(canonical_id) => mod_pkms_task(config, ctx, canonical_id, &spec, clock),
+        TaskId::Todoist(id) => mod_todoist_task(config, ctx, &id, &spec, clock),
+        TaskId::External { source, .. } => {
+            unsupported_task_source(&source).map(|()| ExitCode::SUCCESS)
         }
-        TaskId::External { source, .. } => unsupported_task_source(&source),
     }
 }
 
-pub(in crate::commands::task) fn run_deadline(
+fn mod_pkms_task(
     config: &ResolvedConfig,
     ctx: &OutputContext,
-    args: &TaskDeadlineArgs,
-) -> Result<()> {
-    let clock = TaskClock::now();
-    match args.id.parse::<TaskId>()? {
-        TaskId::Pkms(canonical_id) => set_pkms_task_planning(
-            config,
-            ctx,
-            canonical_id,
-            PlanningKind::Deadline,
-            &args.deadline,
-            ("deadline", "clear-deadline"),
-            clock,
-        ),
-        TaskId::Todoist(id) => {
-            let deadline = mutation_date_value(&args.deadline, clock.today)?;
-            mutate_todoist_task(
-                config,
-                ctx,
-                &id,
-                if deadline.is_null() {
-                    "clear-deadline"
-                } else {
-                    "deadline"
-                },
-                serde_json::json!({ "deadline_date": deadline }),
-            )
-        }
-        TaskId::External { source, .. } => unsupported_task_source(&source),
+    canonical_id: usize,
+    spec: &TaskAddSpec,
+    clock: TaskClock,
+) -> Result<ExitCode> {
+    validate_mod_source(spec, "pkms")?;
+    if spec.provided.note {
+        bail!("note is available only for PKMS task creation.");
     }
+
+    let title = mod_title(spec)?;
+    let modifier = pkms_mutation::HeadingMod {
+        title,
+        priority: mod_pkms_priority(spec)?,
+        tags: spec.provided.labels.then(|| spec.labels.clone()),
+        scheduled: mod_date(
+            "schedule",
+            spec.provided.due,
+            spec.due.as_deref(),
+            clock.today,
+        )?,
+        deadline: mod_date(
+            "deadline",
+            spec.provided.deadline,
+            spec.deadline.as_deref(),
+            clock.today,
+        )?,
+        project: mod_optional_text(spec.provided.project, spec.project.as_deref()),
+        description: spec.provided.description.then(|| {
+            spec.description
+                .as_deref()
+                .unwrap_or_default()
+                .trim()
+                .to_string()
+        }),
+    };
+
+    let graph = crate::graph::Graph::load(config)?;
+    let (path, line_number) = graph.resolve_canonical_task_id(config, canonical_id)?;
+    let changes = pkms_mutation::update_heading_properties(&path, line_number, &modifier)?;
+    let item = if changes.is_empty() {
+        None
+    } else {
+        Some(
+            pkms::find_task_item_on(config, Path::new(&path), line_number, clock)?.with_context(
+                || format!("Changed task but could not reload it from {path}:{line_number}"),
+            )?,
+        )
+    };
+    render::print_mod_output(
+        ctx,
+        render::TaskModOutput {
+            changed: !changes.is_empty(),
+            id: TaskId::Pkms(canonical_id).display_id(),
+            changes: changes
+                .into_iter()
+                .map(|change| render::TaskModChange {
+                    property: change.property,
+                    old: change.old,
+                    new: change.new,
+                })
+                .collect(),
+            item,
+        },
+        clock.today,
+    )
+}
+
+fn validate_mod_source(spec: &TaskAddSpec, expected: &str) -> Result<()> {
+    if spec.provided.source && !spec.source.eq_ignore_ascii_case(expected) {
+        bail!("Task source cannot be changed by task mod.");
+    }
+    Ok(())
+}
+
+fn mod_title(spec: &TaskAddSpec) -> Result<Option<String>> {
+    if spec.provided.title && spec.provided.text {
+        bail!("task mod uses title: or positional text, not both.");
+    }
+    Ok(spec
+        .title
+        .as_deref()
+        .or(spec.text.as_deref())
+        .map(str::trim)
+        .filter(|title| !title.is_empty())
+        .map(str::to_string))
+}
+
+fn mod_pkms_priority(spec: &TaskAddSpec) -> Result<Option<Option<char>>> {
+    if !spec.provided.priority {
+        return Ok(None);
+    }
+    Ok(Some(
+        match spec.priority.as_deref().unwrap_or_default().trim() {
+            "" | "none" | "None" | "NONE" => None,
+            value => Some(pkms_priority(value)?),
+        },
+    ))
+}
+
+fn mod_optional_text(provided: bool, value: Option<&str>) -> Option<Option<String>> {
+    provided.then(|| {
+        value
+            .map(str::trim)
+            .filter(|value| !value.is_empty() && !value.eq_ignore_ascii_case("none"))
+            .map(str::to_string)
+    })
+}
+
+fn mod_date(
+    name: &str,
+    provided: bool,
+    value: Option<&str>,
+    today: NaiveDate,
+) -> Result<Option<Option<String>>> {
+    if !provided {
+        return Ok(None);
+    }
+    let Some(value) = value.map(str::trim) else {
+        return Ok(Some(None));
+    };
+    if value.is_empty() || value.eq_ignore_ascii_case("none") {
+        return Ok(Some(None));
+    }
+    Ok(Some(Some(parse_add_date_arg_on(name, value, today)?)))
 }
 
 fn set_pkms_task_state(
@@ -321,34 +397,6 @@ fn add_pkms_task(
     render::print_add_output(ctx, item)
 }
 
-fn set_pkms_task_planning(
-    config: &ResolvedConfig,
-    ctx: &OutputContext,
-    canonical_id: usize,
-    kind: PlanningKind,
-    value: &str,
-    actions: (&'static str, &'static str),
-    clock: TaskClock,
-) -> Result<()> {
-    let date = if value.eq_ignore_ascii_case("none") {
-        None
-    } else {
-        Some(parse_mutation_due_date(value, clock.today)?)
-    };
-    let graph = crate::graph::Graph::load(config)?;
-    let (path, line_number) = graph.resolve_canonical_task_id(config, canonical_id)?;
-    pkms_mutation::update_heading_planning_date(&path, line_number, kind, date.as_deref())?;
-    let item = pkms::find_task_item_on(config, Path::new(&path), line_number, clock)?
-        .with_context(|| {
-            format!("Changed task but could not reload it from {path}:{line_number}")
-        })?;
-    render::print_mutation_output(
-        ctx,
-        if date.is_some() { actions.0 } else { actions.1 },
-        item,
-    )
-}
-
 fn postpone_pkms_recurring_task(
     config: &ResolvedConfig,
     ctx: &OutputContext,
@@ -477,22 +525,191 @@ fn quick_add_todoist_task(
 }
 
 #[cfg(feature = "todoist")]
-fn mutate_todoist_task(
+fn mod_todoist_task(
     config: &ResolvedConfig,
     ctx: &OutputContext,
     id: &str,
-    action: &'static str,
-    request: serde_json::Value,
-) -> Result<()> {
+    spec: &TaskAddSpec,
+    clock: TaskClock,
+) -> Result<ExitCode> {
+    validate_mod_source(spec, "todoist")?;
+    if spec.provided.note {
+        bail!("note is available only for PKMS task creation.");
+    }
+
     let token = crate::tasks::todoist::ensure_enabled(config)?;
     let client =
         crate::tasks::todoist::TodoistClient::with_base_url(config.todoist_api_base_url(), token);
-    client.update_task(id, &request)?;
+    let existing = client.get_task(id)?;
+    let needs_metadata = existing.project_id.is_some() || spec.provided.project;
+    let metadata = if needs_metadata {
+        Some(crate::tasks::todoist::TodoistMetadata::new(
+            client.list_projects()?,
+        ))
+    } else {
+        None
+    };
+    let old_item =
+        crate::tasks::todoist::task_to_item_with_metadata(existing.clone(), metadata.as_ref());
+    let mut request = serde_json::Map::new();
+    let mut changes = Vec::new();
+
+    if let Some(title) = mod_title(spec)? {
+        push_todoist_change(
+            &mut changes,
+            "Title",
+            Some(old_item.title.clone()),
+            Some(title.clone()),
+        );
+        request.insert("content".to_string(), serde_json::Value::String(title));
+    }
+    if spec.provided.description {
+        let new = spec
+            .description
+            .as_deref()
+            .unwrap_or_default()
+            .trim()
+            .to_string();
+        push_todoist_change(
+            &mut changes,
+            "Description",
+            old_item.body.clone(),
+            (!new.is_empty()).then_some(new.clone()),
+        );
+        request.insert("description".to_string(), serde_json::Value::String(new));
+    }
+    if spec.provided.labels {
+        let old = (!old_item.tags.is_empty()).then(|| old_item.tags.join(", "));
+        let new = (!spec.labels.is_empty()).then(|| spec.labels.join(", "));
+        push_todoist_change(&mut changes, "Tags", old, new);
+        request.insert("labels".to_string(), serde_json::json!(spec.labels));
+    }
+    if spec.provided.priority {
+        let priority = match spec.priority.as_deref().unwrap_or_default().trim() {
+            "" | "none" | "None" | "NONE" => 1,
+            value => todoist_create_priority(value)?,
+        };
+        push_todoist_change(
+            &mut changes,
+            "Priority",
+            old_item.priority.clone(),
+            todoist_priority_label(priority),
+        );
+        request.insert("priority".to_string(), serde_json::json!(priority));
+    }
+    if let Some(date) = mod_date(
+        "schedule",
+        spec.provided.due,
+        spec.due.as_deref(),
+        clock.today,
+    )? {
+        if old_item.scheduled_date_str() != date.as_deref() {
+            let new_raw = date.as_deref().map(org_date).transpose()?;
+            push_todoist_change(
+                &mut changes,
+                "Scheduled",
+                old_item.scheduled.as_ref().map(|date| date.raw.clone()),
+                new_raw,
+            );
+        }
+        request.insert(
+            "due_date".to_string(),
+            date.map_or(serde_json::Value::Null, serde_json::Value::String),
+        );
+    }
+    if let Some(date) = mod_date(
+        "deadline",
+        spec.provided.deadline,
+        spec.deadline.as_deref(),
+        clock.today,
+    )? {
+        if old_item.deadline_date_str() != date.as_deref() {
+            let new_raw = date.as_deref().map(org_date).transpose()?;
+            push_todoist_change(
+                &mut changes,
+                "Deadline",
+                old_item.deadline.as_ref().map(|date| date.raw.clone()),
+                new_raw,
+            );
+        }
+        request.insert(
+            "deadline_date".to_string(),
+            date.map_or(serde_json::Value::Null, serde_json::Value::String),
+        );
+    }
+    if let Some(project) = mod_optional_text(spec.provided.project, spec.project.as_deref()) {
+        let (project_id, project_name) = match project {
+            Some(project) => {
+                let metadata = metadata
+                    .as_ref()
+                    .context("Todoist project metadata was not loaded")?;
+                let project_id = metadata.resolve_project_id(&project)?;
+                let project_name = metadata
+                    .project_name(&project_id)
+                    .unwrap_or(&project_id)
+                    .to_string();
+                (serde_json::Value::String(project_id), Some(project_name))
+            }
+            None => (serde_json::Value::Null, None),
+        };
+        push_todoist_change(
+            &mut changes,
+            "Project",
+            old_item.project.clone(),
+            project_name,
+        );
+        request.insert("project_id".to_string(), project_id);
+    }
+
+    changes.retain(|change| change.old != change.new);
+    if changes.is_empty() {
+        return render::print_mod_output(
+            ctx,
+            render::TaskModOutput {
+                changed: false,
+                id: format!("todoist:{id}"),
+                changes,
+                item: None,
+            },
+            clock.today,
+        );
+    }
+
+    client.update_task(id, &serde_json::Value::Object(request))?;
     let task = client.get_task(id)?;
-    let metadata = todoist_metadata_for_task(&client, &task)?;
+    let metadata = todoist_metadata_for_task(&client, &task)?.or(metadata);
     let mut item = crate::tasks::todoist::task_to_item_with_metadata(task, metadata.as_ref());
     crate::tasks::todoist::enrich_items_with_pkms_notes(config, std::slice::from_mut(&mut item))?;
-    render::print_mutation_output(ctx, action, item)
+    render::print_mod_output(
+        ctx,
+        render::TaskModOutput {
+            changed: true,
+            id: format!("todoist:{id}"),
+            changes,
+            item: Some(item),
+        },
+        clock.today,
+    )
+}
+
+#[cfg(feature = "todoist")]
+fn push_todoist_change(
+    changes: &mut Vec<render::TaskModChange>,
+    property: &'static str,
+    old: Option<String>,
+    new: Option<String>,
+) {
+    changes.push(render::TaskModChange { property, old, new });
+}
+
+#[cfg(feature = "todoist")]
+fn todoist_priority_label(priority: u8) -> Option<String> {
+    match priority {
+        4 => Some("A".to_string()),
+        3 => Some("B".to_string()),
+        2 => Some("C".to_string()),
+        _ => None,
+    }
 }
 
 #[cfg(feature = "todoist")]
@@ -527,23 +744,23 @@ fn postpone_todoist_recurring_task(
 }
 
 #[cfg(not(feature = "todoist"))]
+fn mod_todoist_task(
+    _config: &ResolvedConfig,
+    _ctx: &OutputContext,
+    _id: &str,
+    _spec: &TaskAddSpec,
+    _clock: TaskClock,
+) -> Result<ExitCode> {
+    bail!("Todoist support is not available in this build. Rebuild with --features todoist.")
+}
+
+#[cfg(not(feature = "todoist"))]
 fn postpone_todoist_recurring_task(
     _config: &ResolvedConfig,
     _ctx: &OutputContext,
     _id: &str,
     _to: &str,
     _clock: TaskClock,
-) -> Result<()> {
-    bail!("Todoist support is not available in this build. Rebuild with --features todoist.")
-}
-
-#[cfg(not(feature = "todoist"))]
-fn mutate_todoist_task(
-    _config: &ResolvedConfig,
-    _ctx: &OutputContext,
-    _id: &str,
-    _action: &'static str,
-    _request: serde_json::Value,
 ) -> Result<()> {
     bail!("Todoist support is not available in this build. Rebuild with --features todoist.")
 }
@@ -583,16 +800,6 @@ fn validate_date_arg(name: &str, value: Option<&str>, today: NaiveDate) -> Resul
 
 fn parse_mutation_due_date(value: &str, today: NaiveDate) -> Result<String> {
     parse_add_date_arg_on("due", value, today)
-}
-
-fn mutation_date_value(value: &str, today: NaiveDate) -> Result<serde_json::Value> {
-    if value.eq_ignore_ascii_case("none") {
-        Ok(serde_json::Value::Null)
-    } else {
-        Ok(serde_json::Value::String(parse_mutation_due_date(
-            value, today,
-        )?))
-    }
 }
 
 #[cfg(feature = "todoist")]

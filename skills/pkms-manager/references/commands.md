@@ -102,10 +102,10 @@ pkms task add source:todoist title:"Call Alice" sch:tod tag:phone prio:B
 pkms task todoist:<remote-id> done
 pkms task p<canonical-id> postpone --to 2026-06-01
 pkms task todoist:<remote-id> postpone --to tomorrow
-pkms task p<canonical-id> schedule --due 2026-05-24
-pkms task todoist:<remote-id> schedule --due none
-pkms task p<canonical-id> deadline --deadline 2026-05-30
-pkms task todoist:<remote-id> deadline --deadline none
+pkms task p<canonical-id> mod sch:2026-05-24
+pkms task todoist:<remote-id> mod sch:none
+pkms task p<canonical-id> mod dl:2026-05-30
+pkms task todoist:<remote-id> mod dl:none
 ```
 
 ## Statistics

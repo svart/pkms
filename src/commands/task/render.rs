@@ -5,8 +5,9 @@ use crate::tasks::filter::SourceSelection;
 use crate::tasks::model::{TaskItem, TaskSourceKind};
 use crate::tasks::provider::TaskMetadataRow;
 use anyhow::Result;
-use chrono::NaiveDate;
+use chrono::{NaiveDate, NaiveDateTime};
 use serde::Serialize;
+use std::process::ExitCode;
 use tabled::builder::Builder;
 use tabled::settings::Style;
 
@@ -18,6 +19,21 @@ pub(super) struct TaskStateChangeOutput {
     pub old_state: String,
     pub new_state: String,
     pub dry_run: bool,
+}
+
+#[derive(Debug, Serialize)]
+pub(super) struct TaskModChange {
+    pub property: &'static str,
+    pub old: Option<String>,
+    pub new: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub(super) struct TaskModOutput {
+    pub changed: bool,
+    pub id: String,
+    pub changes: Vec<TaskModChange>,
+    pub item: Option<TaskItem>,
 }
 
 #[derive(Clone, Copy)]
@@ -206,6 +222,70 @@ pub(super) fn print_mutation_output(
         OutputFormat::Json => ctx.print_json(&output),
         OutputFormat::Ndjson => ctx.print_ndjson(&[output]),
     }
+}
+
+pub(super) fn print_mod_output(
+    ctx: &OutputContext,
+    output: TaskModOutput,
+    today: NaiveDate,
+) -> Result<ExitCode> {
+    let exit_code = if output.changed {
+        ExitCode::SUCCESS
+    } else {
+        ExitCode::from(1)
+    };
+    match ctx.format {
+        OutputFormat::Text => {
+            if output.changed {
+                for change in &output.changes {
+                    println!(
+                        "{}: {} -> {}: {}",
+                        change.property,
+                        display_mod_value(change.property, change.old.as_deref(), today),
+                        change.property,
+                        display_mod_value(change.property, change.new.as_deref(), today)
+                    );
+                }
+            } else {
+                println!("Nothing changed");
+            }
+            Ok(exit_code)
+        }
+        OutputFormat::Json => {
+            ctx.print_json(&output)?;
+            Ok(exit_code)
+        }
+        OutputFormat::Ndjson => {
+            ctx.print_ndjson(&[output])?;
+            Ok(exit_code)
+        }
+    }
+}
+
+fn display_mod_value(property: &str, value: Option<&str>, today: NaiveDate) -> String {
+    let Some(value) = value.filter(|value| !value.trim().is_empty()) else {
+        return "None".to_string();
+    };
+    if matches!(property, "Scheduled" | "Deadline")
+        && let Some(parsed) = crate::org_date::parse_org_date(value)
+    {
+        let date = parsed.base_date.format("%Y-%m-%d").to_string();
+        let day = if parsed.base_date == today {
+            format!("Today ({date})")
+        } else if parsed.base_date == today + chrono::Duration::days(1) {
+            format!("Tomorrow ({date})")
+        } else {
+            date
+        };
+        if let Some(time) = parsed.time {
+            return format!("{day} {}", time.format("%H:%M"));
+        }
+        return day;
+    }
+    if let Ok(datetime) = NaiveDateTime::parse_from_str(value, "%Y-%m-%d %H:%M") {
+        return datetime.format("%Y-%m-%d %H:%M").to_string();
+    }
+    value.replace('\n', "\\n")
 }
 
 fn print_created_task(item: &TaskItem) {

@@ -1,12 +1,16 @@
 use crate::cli::{
-    TaskDeadlineArgs, TaskDoneArgs, TaskOpenArgs, TaskPostponeArgs, TaskScheduleArgs,
-    TaskStateArgs, TaskTargetArgs,
+    TaskDoneArgs, TaskModArgs, TaskOpenArgs, TaskPostponeArgs, TaskStateArgs, TaskTargetArgs,
 };
 use crate::config::ResolvedConfig;
 use crate::output::OutputContext;
 use anyhow::{Context, Result, bail};
+use std::process::ExitCode;
 
-pub(super) fn run(config: &ResolvedConfig, ctx: &OutputContext, args: &[String]) -> Result<()> {
+pub(super) fn run(
+    config: &ResolvedConfig,
+    ctx: &OutputContext,
+    args: &[String],
+) -> Result<ExitCode> {
     let Some((id, rest)) = args.split_first() else {
         bail!("Expected task ID and subcommand");
     };
@@ -17,34 +21,30 @@ pub(super) fn run(config: &ResolvedConfig, ctx: &OutputContext, args: &[String])
     match command.as_str() {
         "show" => {
             let args = parse_show_args(id, command_args)?;
-            super::run_show(config, ctx, &args)
+            super::run_show(config, ctx, &args).map(|()| ExitCode::SUCCESS)
         }
         "open" => {
             let args = parse_open_args(id, command_args)?;
-            super::run_open(config, ctx, &args)
+            super::run_open(config, ctx, &args).map(|()| ExitCode::SUCCESS)
         }
         "state" => {
             let args = parse_state_args(id, command_args)?;
-            super::mutations::run_state(config, ctx, &args)
+            super::mutations::run_state(config, ctx, &args).map(|()| ExitCode::SUCCESS)
         }
         "done" => {
             let args = parse_done_args(id, command_args)?;
-            super::mutations::run_done(config, ctx, &args)
+            super::mutations::run_done(config, ctx, &args).map(|()| ExitCode::SUCCESS)
         }
         "postpone" => {
             let args = parse_postpone_args(id, command_args)?;
-            super::mutations::run_postpone(config, ctx, &args)
+            super::mutations::run_postpone(config, ctx, &args).map(|()| ExitCode::SUCCESS)
         }
-        "schedule" => {
-            let args = parse_schedule_args(id, command_args)?;
-            super::mutations::run_schedule(config, ctx, &args)
-        }
-        "deadline" => {
-            let args = parse_deadline_args(id, command_args)?;
-            super::mutations::run_deadline(config, ctx, &args)
+        "mod" => {
+            let args = parse_mod_args(id, command_args)?;
+            super::mutations::run_mod(config, ctx, &args)
         }
         other => bail!(
-            "Unknown task subcommand '{other}' after ID. Expected one of: show, open, state, done, postpone, schedule, deadline"
+            "Unknown task subcommand '{other}' after ID. Expected one of: show, open, state, done, postpone, mod"
         ),
     }
 }
@@ -125,19 +125,13 @@ fn parse_postpone_args(id: &str, raw: &[String]) -> Result<TaskPostponeArgs> {
     })
 }
 
-fn parse_schedule_args(id: &str, raw: &[String]) -> Result<TaskScheduleArgs> {
-    let due = parse_single_value_option(raw, "--due", "task schedule")?;
-    Ok(TaskScheduleArgs {
+fn parse_mod_args(id: &str, raw: &[String]) -> Result<TaskModArgs> {
+    if raw.is_empty() {
+        bail!("Expected at least one task modifier after task mod");
+    }
+    Ok(TaskModArgs {
         id: id.to_string(),
-        due,
-    })
-}
-
-fn parse_deadline_args(id: &str, raw: &[String]) -> Result<TaskDeadlineArgs> {
-    let deadline = parse_single_value_option(raw, "--deadline", "task deadline")?;
-    Ok(TaskDeadlineArgs {
-        id: id.to_string(),
-        deadline,
+        modifiers: raw.to_vec(),
     })
 }
 

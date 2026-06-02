@@ -330,7 +330,7 @@ pub struct TaskTableArgs {
 
 #[derive(Debug, Args)]
 #[command(
-    after_help = "ID-first actions:\n  pkms task <ID> show\n  pkms task <ID> open [--editor <COMMAND>] [--line <LINE>]\n  pkms task <ID> state <STATE> [--dry-run]\n  pkms task <ID> done [--dry-run]\n  pkms task <ID> postpone --to <DATE>\n  pkms task <ID> schedule --due <DATE>\n  pkms task <ID> deadline --deadline <DATE>"
+    after_help = "ID-first actions:\n  pkms task <ID> show\n  pkms task <ID> open [--editor <COMMAND>] [--line <LINE>]\n  pkms task <ID> state <STATE> [--dry-run]\n  pkms task <ID> done [--dry-run]\n  pkms task <ID> postpone --to <DATE>\n  pkms task <ID> mod <MODIFIER>..."
 )]
 pub struct TaskArgs {
     #[command(subcommand)]
@@ -357,10 +357,6 @@ pub enum TaskCommand {
     Add(TaskAddArgs),
     #[command(about = "Postpone a task", hide = true)]
     Postpone(TaskPostponeArgs),
-    #[command(about = "Schedule or unschedule a task", hide = true)]
-    Schedule(TaskScheduleArgs),
-    #[command(about = "Set or clear a task deadline", hide = true)]
-    Deadline(TaskDeadlineArgs),
     #[command(external_subcommand)]
     Target(Vec<String>),
 }
@@ -494,6 +490,14 @@ pub struct TaskAddArgs {
 }
 
 #[derive(Debug, Args)]
+pub struct TaskModArgs {
+    #[arg(help = "Task ID: 12, p12, pkms:12, or todoist:<remote-id>")]
+    pub id: String,
+    #[arg(help = "Task modifiers such as title:, tag:, sch:, dead:, prio:, project:, desc:")]
+    pub modifiers: Vec<String>,
+}
+
+#[derive(Debug, Args)]
 pub struct TaskPostponeArgs {
     #[arg(help = "Task ID: 12, p12, pkms:12, or todoist:<remote-id>")]
     pub id: String,
@@ -503,30 +507,6 @@ pub struct TaskPostponeArgs {
         help = "New due date: today, tomorrow, weekday, or YYYY-MM-DD"
     )]
     pub to: String,
-}
-
-#[derive(Debug, Args)]
-pub struct TaskScheduleArgs {
-    #[arg(help = "Task ID: 12, p12, pkms:12, or todoist:<remote-id>")]
-    pub id: String,
-    #[arg(
-        long,
-        value_name = "DATE",
-        help = "New due date: today, tomorrow, weekday, YYYY-MM-DD, or none"
-    )]
-    pub due: String,
-}
-
-#[derive(Debug, Args)]
-pub struct TaskDeadlineArgs {
-    #[arg(help = "Task ID: 12, p12, pkms:12, or todoist:<remote-id>")]
-    pub id: String,
-    #[arg(
-        long,
-        value_name = "DATE",
-        help = "New deadline date: today, tomorrow, weekday, YYYY-MM-DD, or none"
-    )]
-    pub deadline: String,
 }
 
 #[derive(Debug, Args)]

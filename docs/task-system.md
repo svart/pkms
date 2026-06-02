@@ -29,8 +29,8 @@ pkms task p<ID> show
 pkms task p<ID> open
 pkms task p<ID> state WAITING
 pkms task p<ID> done
-pkms task p<ID> schedule --due 2026-05-24
-pkms task p<ID> deadline --deadline 2026-05-30
+pkms task p<ID> mod sch:2026-05-24
+pkms task p<ID> mod dl:2026-05-30
 pkms task p<ID> postpone --to tomorrow
 ```
 
@@ -47,8 +47,8 @@ pkms task list tags source:all
 pkms task add source:todoist title:"Call Alice" due:2026-05-24 prio:B
 pkms task todoist:<remote-id> show
 pkms task todoist:<remote-id> done
-pkms task todoist:<remote-id> schedule --due none
-pkms task todoist:<remote-id> deadline --deadline none
+pkms task todoist:<remote-id> mod sch:none
+pkms task todoist:<remote-id> mod dl:none
 ```
 
 Removed or obsolete surfaces:
@@ -161,8 +161,7 @@ pkms task <ID> open [--editor <COMMAND>] [--line <LINE>]
 pkms task <ID> state <STATE> [--dry-run]
 pkms task <ID> done [--dry-run]
 pkms task <ID> postpone --to <DATE>
-pkms task <ID> schedule --due <DATE|none>
-pkms task <ID> deadline --deadline <DATE|none>
+pkms task <ID> mod <MODIFIER>...
 ```
 
 Hidden subcommands such as `pkms task show <ID>` may exist internally for clap
@@ -302,12 +301,16 @@ Local mutation rules:
   spelling.
 - `task <ID> done` uses the first configured closed state, defaulting to
   `DONE`.
-- `task <ID> schedule --due DATE|none` sets or clears `SCHEDULED`.
-- `task <ID> deadline --deadline DATE|none` sets or clears `DEADLINE`.
+- `task <ID> mod` changes add-style task properties such as `title:`,
+  `tag:`, `sch:`, `dl:`, `project:`, `prio:`, and `desc:`.
+- `task <ID> mod sch:DATE|none` sets or clears `SCHEDULED`.
+- `task <ID> mod dl:DATE|none` sets or clears `DEADLINE`.
+- If `task <ID> mod` would not change anything, it prints `Nothing changed`
+  and exits nonzero.
 - `task <ID> postpone --to DATE` is only for recurring planned tasks and must
   preserve repeater/warning syntax.
-- Preserve heading title, priority, tags, body, surrounding file content, and
-  unrelated planning metadata.
+- Preserve unmodified heading title, priority, tags, body, surrounding file
+  content, and unrelated planning metadata.
 - Do not add close timestamps unless the project adopts a clear org convention.
 
 ## Todoist Integration
