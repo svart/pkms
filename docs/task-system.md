@@ -25,7 +25,7 @@ pkms task list projects
 pkms task list tags
 pkms task add "Capture local task"
 pkms task add title:"Call Alice" sch:mon dead:to tag:phone prio:B
-pkms task add title:"Waiting on Alice" status:WAITING
+pkms task add title:"Waiting on Alice" state:WAITING
 pkms task add dep:2 title:"Follow up on parent task"
 pkms task p<ID> show
 pkms task p<ID> open
@@ -285,7 +285,7 @@ PKMS add modifiers:
 |----------|---------|---------|
 | `source:pkms` | `src:` | Select local PKMS creation. |
 | `title:<text>` | | Structured task title. |
-| `status:<state>` | | Set the org TODO keyword from configured agenda states. |
+| `state:<state>` | | Set the org TODO keyword from configured agenda states. |
 | `tag:<value>` | `tags:`, `label:`, `labels:` | Add tags; repeat or comma-separate. |
 | `schedule:<date>` | `sch:`, `sched:`, `due:` | Add `SCHEDULED`. |
 | `deadline:<date>` | `dead:`, `dl:` | Add `DEADLINE`. |
@@ -309,7 +309,7 @@ Local mutation rules:
 - `task <ID> done` uses the first configured closed state, defaulting to
   `DONE`.
 - `task <ID> mod` changes add-style task properties such as `title:`,
-  `status:`, `tag:`, `sch:`, `dl:`, `project:`, `prio:`, `desc:`, and `dep:`.
+  `state:`, `tag:`, `sch:`, `dl:`, `project:`, `prio:`, `desc:`, and `dep:`.
 - Unlike `task add`, `task <ID> mod` does not accept positional title text;
   use `title:<text>` to rename a task.
 - `task <ID> mod` fails on any unrecognized modifier.

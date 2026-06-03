@@ -139,7 +139,7 @@ final child heading in the referenced PKMS task's subtree:
 pkms task add "Capture local task"
 pkms task add title:"Call Alice" due:2026-05-24 deadline:2026-05-30 tag:phone priority:B
 pkms task add title:"Call Alice" sch:mon dead:to tag:phone prio:B
-pkms task add title:"Waiting on Alice" status:WAITING
+pkms task add title:"Waiting on Alice" state:WAITING
 pkms task add note:"Project Alpha" title:"Follow up" schedule:tomorrow
 pkms task add dep:2 title:"Follow up on parent task"
 ```
@@ -153,7 +153,7 @@ pkms task add source:todoist title:"Call Alice" due:2026-05-24 deadline:2026-05-
 pkms task add source:todoist title:"Call Alice" sch:tod dead:tom project:inbox tag:phone,migration prio:B desc:"Discuss migration plan"
 ```
 
-Add modifiers: `source:`/`src:`, `title:`, PKMS-only `status:`,
+Add modifiers: `source:`/`src:`, `title:`, PKMS-only `state:`,
 `tag:`/`tags:`/`label:`/`labels:`, `schedule:`/`sch:`/`sched:`/`due:`,
 `deadline:`/`dead:`/`dl:`, `project:`/`proj:`, `prio:`/`priority:`/`pri:`,
 `desc:`/`description:`/`body:`, and PKMS-only `note:` and `dep:`/`depend:`.
@@ -164,7 +164,7 @@ of `today`, `tomorrow`, or weekday names, plus `YYYY-MM-DD` or
 Priority must be `A`, `B`, or `C`. Repeat or comma-separate tag modifiers for
 multiple labels. `project:` accepts either a Todoist project id or an exact
 project name. If a project name is duplicated case-insensitively, use the
-project id. Todoist task creation rejects `status:`, `note:`, and
+project id. Todoist task creation rejects `state:`, `note:`, and
 `dep:`/`depend:`.
 
 Todoist descriptions containing `pkms:id:<uuid>` PKMS note markers are detected
@@ -193,15 +193,15 @@ Use stable `todoist:<remote-id>` ids for Todoist mutations. `task <ID>
 postpone` accepts `--to tomorrow` or `--to YYYY-MM-DD` and works only for
 recurring PKMS or Todoist tasks; non-recurring tasks fail. `task <ID> mod`
 accepts add-style modifiers such as `title:`, `tag:`, `project:`, `prio:`,
-`desc:`, `sch:tomorrow`, `dl:YYYY-MM-DD`, or PKMS-only `status:WAITING` and
+`desc:`, `sch:tomorrow`, `dl:YYYY-MM-DD`, or PKMS-only `state:WAITING` and
 `dep:<task-id>`.
 Empty values clear metadata: `tag:`, `sch:`, `dl:`, `prio:`, `project:`, and
 `desc:`. For PKMS, `dep:` removes the current parent task dependency. Schedule
 and deadline edits work for PKMS and Todoist tasks. For PKMS,
-`status:` rewrites the org TODO keyword and `dep:`/`depend:` moves the whole
+`state:` rewrites the org TODO keyword and `dep:`/`depend:` moves the whole
 task subtree to the end of the referenced task's subtree when a task ID is
 provided. `task mod` is strict: task titles change only through `title:<text>`,
 and unrecognized modifiers fail instead of becoming title text. If no
 properties change, `mod` prints `Nothing changed` and exits nonzero. Todoist
-`task mod` rejects `status:`. Todoist `task <ID> state` supports only `open`
+`task mod` rejects `state:`. Todoist `task <ID> state` supports only `open`
 and `done`.

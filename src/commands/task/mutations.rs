@@ -115,7 +115,7 @@ fn mod_pkms_task(
 
     let title = mod_title(spec)?;
     let modifier = pkms_mutation::HeadingMod {
-        state: mod_status(config, spec)?,
+        state: mod_state(config, spec)?,
         title,
         priority: mod_pkms_priority(spec)?,
         tags: spec.labels.clone(),
@@ -288,10 +288,10 @@ fn mod_pkms_priority(spec: &TaskModifierSpec) -> Result<Option<Option<char>>> {
     }))
 }
 
-fn mod_status(config: &ResolvedConfig, spec: &TaskModifierSpec) -> Result<Option<String>> {
-    spec.status
+fn mod_state(config: &ResolvedConfig, spec: &TaskModifierSpec) -> Result<Option<String>> {
+    spec.state
         .as_deref()
-        .map(|status| canonical_state(config, status))
+        .map(|state| canonical_state(config, state))
         .transpose()
 }
 
@@ -471,8 +471,8 @@ fn format_pkms_task_entry(
     heading_level: usize,
 ) -> Result<String> {
     let title = pkms_add_title(spec)?;
-    let state = match spec.status.as_deref() {
-        Some(status) => canonical_state(config, status)?,
+    let state = match spec.state.as_deref() {
+        Some(state) => canonical_state(config, state)?,
         None => config
             .open_todo_states()
             .first()
@@ -556,8 +556,8 @@ fn add_todoist_task(
     spec: &TaskModifierSpec,
     clock: TaskClock,
 ) -> Result<()> {
-    if spec.status.is_some() {
-        bail!("status is available only for PKMS task creation.");
+    if spec.state.is_some() {
+        bail!("state is available only for PKMS task creation.");
     }
     if spec.dependency.is_some() {
         bail!("dep is available only for PKMS task creation.");
@@ -676,8 +676,8 @@ fn mod_todoist_task(
     clock: TaskClock,
 ) -> Result<ExitCode> {
     validate_mod_source(spec, "todoist")?;
-    if spec.status.is_some() {
-        bail!("status is available only for PKMS task modification.");
+    if spec.state.is_some() {
+        bail!("state is available only for PKMS task modification.");
     }
     if spec.note.is_some() {
         bail!("note is available only for PKMS task creation.");

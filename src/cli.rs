@@ -330,7 +330,7 @@ pub struct TaskTableArgs {
 
 #[derive(Debug, Args)]
 #[command(
-    after_help = "ID-first actions:\n  pkms task <ID> show\n  pkms task <ID> open [--editor <COMMAND>] [--line <LINE>]\n  pkms task <ID> state <STATE> [--dry-run]\n  pkms task <ID> done [--dry-run]\n  pkms task <ID> postpone --to <DATE>\n  pkms task <ID> mod <MODIFIER>...\n  pkms task <ID> mod dep:<PARENT-ID>\n\nTask modifiers apply to `task add` and `task <ID> mod`.\n  title:<text>              Task title; non-modifier words are task text for add only\n  status:<state>            PKMS TODO state from configured agenda states\n  tag:<label>, tags:<a,b>   Labels/tags; repeat or comma-separate\n  schedule:<date>, sch:<date>, due:<date>\n  deadline:<date>, dead:<date>, dl:<date>\n  project:<name-or-id>, prio:A|B|C, desc:<text>, source:pkms|todoist\n  note:<uuid-title-or-path> PKMS add only; choose the note to append into\n  dep:<task-id>, depend:<task-id> PKMS add/mod; add as child or move under parent"
+    after_help = "ID-first actions:\n  pkms task <ID> show\n  pkms task <ID> open [--editor <COMMAND>] [--line <LINE>]\n  pkms task <ID> state <STATE> [--dry-run]\n  pkms task <ID> done [--dry-run]\n  pkms task <ID> postpone --to <DATE>\n  pkms task <ID> mod <MODIFIER>...\n  pkms task <ID> mod dep:<PARENT-ID>\n\nTask modifiers apply to `task add` and `task <ID> mod`.\n  title:<text>              Task title; non-modifier words are task text for add only\n  state:<state>             PKMS TODO state from configured agenda states\n  tag:<label>, tags:<a,b>   Labels/tags; repeat or comma-separate\n  schedule:<date>, sch:<date>, due:<date>\n  deadline:<date>, dead:<date>, dl:<date>\n  project:<name-or-id>, prio:A|B|C, desc:<text>, source:pkms|todoist\n  note:<uuid-title-or-path> PKMS add only; choose the note to append into\n  dep:<task-id>, depend:<task-id> PKMS add/mod; add as child or move under parent"
 )]
 pub struct TaskArgs {
     #[command(subcommand)]
@@ -480,11 +480,11 @@ pub struct TaskDoneArgs {
 
 #[derive(Debug, Args)]
 #[command(
-    after_help = "Add modifiers:\n  title:<text>              Task title; non-modifier words are task text\n  status:<state>            PKMS TODO state from configured agenda states\n  tag:<label>, tags:<a,b>   Labels/tags; repeat or comma-separate\n  schedule:<date>, sch:<date>, due:<date>\n  deadline:<date>, dead:<date>, dl:<date>\n  project:<name-or-id>, prio:A|B|C, desc:<text>, source:pkms|todoist\n  note:<uuid-title-or-path> PKMS only; choose the note to append into\n  dep:<task-id>, depend:<task-id> PKMS only; add as child of a task\n\nDate shortcuts for schedule/deadline: unambiguous prefixes of today, tomorrow, or weekdays; YYYY-MM-DD; or YYYY-MM-DD HH:MM.\n\nExamples:\n  pkms task add title:\"This is title\" sch:mon dead:to prio:a tag:phone\n  pkms task add dep:2 title:\"Follow up\"\n  pkms task add source:todoist title:\"Call Alice\" project:Inbox tag:phone prio:b\n  pkms task add note:\"Project Alpha\" title:\"Follow up\""
+    after_help = "Add modifiers:\n  title:<text>              Task title; non-modifier words are task text\n  state:<state>             PKMS TODO state from configured agenda states\n  tag:<label>, tags:<a,b>   Labels/tags; repeat or comma-separate\n  schedule:<date>, sch:<date>, due:<date>\n  deadline:<date>, dead:<date>, dl:<date>\n  project:<name-or-id>, prio:A|B|C, desc:<text>, source:pkms|todoist\n  note:<uuid-title-or-path> PKMS only; choose the note to append into\n  dep:<task-id>, depend:<task-id> PKMS only; add as child of a task\n\nDate shortcuts for schedule/deadline: unambiguous prefixes of today, tomorrow, or weekdays; YYYY-MM-DD; or YYYY-MM-DD HH:MM.\n\nExamples:\n  pkms task add title:\"This is title\" sch:mon dead:to prio:a tag:phone\n  pkms task add dep:2 title:\"Follow up\"\n  pkms task add source:todoist title:\"Call Alice\" project:Inbox tag:phone prio:b\n  pkms task add note:\"Project Alpha\" title:\"Follow up\""
 )]
 pub struct TaskAddArgs {
     #[arg(
-        help = "Task text and add modifiers such as title:, status:, tag:, sch:, dead:, prio:, project:, note:, dep:"
+        help = "Task text and add modifiers such as title:, state:, tag:, sch:, dead:, prio:, project:, note:, dep:"
     )]
     pub text: Vec<String>,
 }
@@ -494,7 +494,7 @@ pub struct TaskModArgs {
     #[arg(help = "Task ID: 12, p12, pkms:12, or todoist:<remote-id>")]
     pub id: String,
     #[arg(
-        help = "Task modifiers such as title:, status:, tag:, sch:, dead:, prio:, project:, desc:, dep:"
+        help = "Task modifiers such as title:, state:, tag:, sch:, dead:, prio:, project:, desc:, dep:"
     )]
     pub modifiers: Vec<String>,
 }

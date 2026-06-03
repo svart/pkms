@@ -52,7 +52,7 @@ fn test_task_help_lists_subcommands() {
     assert!(stdout.contains("mod dep:<PARENT-ID>"));
     assert!(stdout.contains("Task modifiers apply to `task add` and `task <ID> mod`."));
     assert!(stdout.contains("title:<text>"));
-    assert!(stdout.contains("status:<state>"));
+    assert!(stdout.contains("state:<state>"));
     assert!(stdout.contains("sch:<date>"));
     assert!(stdout.contains("dead:<date>"));
     assert!(stdout.contains("note:<uuid-title-or-path>"));
@@ -130,7 +130,7 @@ fn test_task_add_help_shows_modifiers() {
         "task add --help failed:\n{stdout}\n{stderr}"
     );
     assert!(stdout.contains("Add modifiers:"));
-    assert!(stdout.contains("status:<state>"));
+    assert!(stdout.contains("state:<state>"));
     assert!(stdout.contains("sch:<date>"));
     assert!(stdout.contains("dead:<date>"));
     assert!(stdout.contains("note:<uuid-title-or-path> PKMS only"));
@@ -1514,7 +1514,7 @@ fn test_task_state_rejects_todoist_before_todoist_support() {
 }
 
 #[test]
-fn test_task_mod_pkms_accepts_status_modifier() {
+fn test_task_mod_pkms_accepts_state_modifier() {
     let (_dir, root) = setup_db();
     let (v, status) = run_json(&[
         "--db",
@@ -1524,7 +1524,7 @@ fn test_task_mod_pkms_accepts_status_modifier() {
         "task",
         "p1",
         "mod",
-        "status:waiting",
+        "state:waiting",
     ]);
     assert!(status.success());
     assert_eq!(v["changed"], true);
@@ -2825,7 +2825,7 @@ fn test_task_add_defaults_to_pkms_inbox() {
 }
 
 #[test]
-fn test_task_add_pkms_accepts_status_modifier() {
+fn test_task_add_pkms_accepts_state_modifier() {
     let (_dir, root) = setup_db();
     let inbox_path = root.join("roam/personal/20260525000001-capture-inbox.org");
     std::fs::write(
@@ -2847,7 +2847,7 @@ fn test_task_add_pkms_accepts_status_modifier() {
             "task",
             "add",
             "title:Waiting capture",
-            "status:waiting",
+            "state:waiting",
         ],
         &config,
     );
