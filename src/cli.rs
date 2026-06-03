@@ -330,7 +330,7 @@ pub struct TaskTableArgs {
 
 #[derive(Debug, Args)]
 #[command(
-    after_help = "ID-first actions:\n  pkms task <ID> show\n  pkms task <ID> open [--editor <COMMAND>] [--line <LINE>]\n  pkms task <ID> state <STATE> [--dry-run]\n  pkms task <ID> done [--dry-run]\n  pkms task <ID> postpone --to <DATE>\n  pkms task <ID> mod <MODIFIER>...\n  pkms task <ID> mod dep:<PARENT-ID>"
+    after_help = "ID-first actions:\n  pkms task <ID> show\n  pkms task <ID> open [--editor <COMMAND>] [--line <LINE>]\n  pkms task <ID> state <STATE> [--dry-run]\n  pkms task <ID> done [--dry-run]\n  pkms task <ID> postpone --to <DATE>\n  pkms task <ID> mod <MODIFIER>...\n  pkms task <ID> mod dep:<PARENT-ID>\n\nTask modifiers apply to `task add` and `task <ID> mod`.\n  title:<text>              Task title; non-modifier words are task text for add only\n  status:<state>            PKMS TODO state from configured agenda states\n  tag:<label>, tags:<a,b>   Labels/tags; repeat or comma-separate\n  schedule:<date>, sch:<date>, due:<date>\n  deadline:<date>, dead:<date>, dl:<date>\n  project:<name-or-id>, prio:A|B|C, desc:<text>, source:pkms|todoist\n  note:<uuid-title-or-path> PKMS add only; choose the note to append into\n  dep:<task-id>, depend:<task-id> PKMS add/mod; add as child or move under parent"
 )]
 pub struct TaskArgs {
     #[command(subcommand)]

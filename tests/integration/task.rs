@@ -50,6 +50,13 @@ fn test_task_help_lists_subcommands() {
     assert!(stdout.contains("done"));
     assert!(stdout.contains("add"));
     assert!(stdout.contains("mod dep:<PARENT-ID>"));
+    assert!(stdout.contains("Task modifiers apply to `task add` and `task <ID> mod`."));
+    assert!(stdout.contains("title:<text>"));
+    assert!(stdout.contains("status:<state>"));
+    assert!(stdout.contains("sch:<date>"));
+    assert!(stdout.contains("dead:<date>"));
+    assert!(stdout.contains("note:<uuid-title-or-path>"));
+    assert!(stdout.contains("dep:<task-id>"));
     assert!(!stdout.contains("report"));
     assert!(!stdout.contains("plan"));
     let commands = task_help_commands(&stdout);
