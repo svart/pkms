@@ -310,6 +310,9 @@ Local mutation rules:
   `DONE`.
 - `task <ID> mod` changes add-style task properties such as `title:`,
   `status:`, `tag:`, `sch:`, `dl:`, `project:`, `prio:`, `desc:`, and `dep:`.
+- Unlike `task add`, `task <ID> mod` does not accept positional title text;
+  use `title:<text>` to rename a task.
+- `task <ID> mod` fails on any unrecognized modifier.
 - `task <ID> mod sch:DATE` sets `SCHEDULED`; `task <ID> mod sch:` clears it.
 - `task <ID> mod dl:DATE` sets `DEADLINE`; `task <ID> mod dl:` clears it.
 - `task <ID> mod dep:<task-id>` moves the whole PKMS task subtree to the end of

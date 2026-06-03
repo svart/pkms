@@ -3,7 +3,7 @@ use chrono::{Datelike, NaiveDate, NaiveDateTime, Weekday};
 
 use crate::tasks::clock::TaskClock;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct TaskModifierSpec {
     pub source: Option<String>,
     pub project: Option<String>,
@@ -21,20 +21,7 @@ pub struct TaskModifierSpec {
 
 impl TaskModifierSpec {
     pub fn parse(tokens: &[String]) -> Result<Self> {
-        let mut spec = TaskModifierSpec {
-            source: None,
-            project: None,
-            title: None,
-            due: None,
-            deadline: None,
-            labels: None,
-            priority: None,
-            status: None,
-            description: None,
-            note: None,
-            dependency: None,
-            text: None,
-        };
+        let mut spec = TaskModifierSpec::default();
         let mut text = Vec::new();
 
         for token in tokens {
@@ -46,6 +33,22 @@ impl TaskModifierSpec {
 
         if !text.is_empty() {
             set_once(&mut spec.text, "text", text.join(" "))?;
+        }
+
+        Ok(spec)
+    }
+
+    pub fn parse_mod(tokens: &[String]) -> Result<Self> {
+        let mut spec = TaskModifierSpec::default();
+
+        for token in tokens {
+            if apply_modifier(&mut spec, token)? {
+                continue;
+            }
+            bail!(
+                "Unknown task modifier '{}'. Use title:<text> to change a task title.",
+                token
+            );
         }
 
         Ok(spec)
@@ -323,6 +326,23 @@ mod tests {
         assert_eq!(spec.source_or_default(), "pkms");
         assert_eq!(spec.text.as_deref(), Some("Call Alice"));
         assert_eq!(spec.labels, Some(vec!["phone".to_string()]));
+    }
+
+    #[test]
+    fn rejects_plain_words_for_task_mod() {
+        let err = TaskModifierSpec::parse_mod(&tokens(&["Call", "Alice"])).unwrap_err();
+        let message = err.to_string();
+        assert!(message.contains("Unknown task modifier 'Call'"));
+        assert!(message.contains("title:<text>"));
+    }
+
+    #[test]
+    fn rejects_unknown_key_for_task_mod() {
+        let err = TaskModifierSpec::parse_mod(&tokens(&["unknown:value"])).unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("Unknown task modifier 'unknown:value'")
+        );
     }
 
     #[test]

@@ -367,7 +367,9 @@ and `deadline_date`. Empty values clear metadata: `tag:`, `sch:`, `dl:`,
 `prio:`, `project:`, and `desc:`. For PKMS, `dep:<task-id>`/`depend:<task-id>`
 moves the task's whole subtree, including body text and child headings, to the
 end of the referenced task's subtree; `dep:` removes the current parent task
-dependency. Todoist `task mod` rejects `status:` and `dep:`/`depend:`.
+dependency. `task mod` is strict: task titles change only through `title:<text>`,
+and unrecognized modifiers fail instead of becoming title text. Todoist
+`task mod` rejects `status:` and `dep:`/`depend:`.
 When changes are made, text output prints one diff line per changed property,
 such as `Scheduled: Today (2026-06-02) -> Scheduled: Tomorrow (2026-06-03)`.
 If no properties change, it prints `Nothing changed` and exits

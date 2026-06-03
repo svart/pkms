@@ -200,6 +200,8 @@ Empty values clear metadata: `tag:`, `sch:`, `dl:`, `prio:`, `project:`, and
 and deadline edits work for PKMS and Todoist tasks. For PKMS,
 `status:` rewrites the org TODO keyword and `dep:`/`depend:` moves the whole
 task subtree to the end of the referenced task's subtree when a task ID is
-provided. If no properties change, `mod` prints `Nothing changed` and exits
-nonzero. Todoist `task mod` rejects `status:`. Todoist `task <ID> state`
-supports only `open` and `done`.
+provided. `task mod` is strict: task titles change only through `title:<text>`,
+and unrecognized modifiers fail instead of becoming title text. If no
+properties change, `mod` prints `Nothing changed` and exits nonzero. Todoist
+`task mod` rejects `status:`. Todoist `task <ID> state` supports only `open`
+and `done`.

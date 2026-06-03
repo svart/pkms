@@ -1868,6 +1868,50 @@ fn test_task_mod_pkms_no_changes_prints_message_and_exits_nonzero() {
 }
 
 #[test]
+fn test_task_mod_rejects_implicit_title_text() {
+    let (_dir, root) = setup_db();
+    let (stdout, _stderr, status) = run(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "task",
+        "p1",
+        "mod",
+        "Implicit",
+        "title",
+    ]);
+    assert!(!status.success());
+    let v: serde_json::Value = serde_json::from_str(stdout.trim()).unwrap();
+    let error = v["error"].as_str().unwrap();
+    assert!(error.contains("Unknown task modifier 'Implicit'"));
+    assert!(error.contains("title:<text>"));
+}
+
+#[test]
+fn test_task_mod_rejects_unknown_modifier() {
+    let (_dir, root) = setup_db();
+    let (stdout, _stderr, status) = run(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "task",
+        "p1",
+        "mod",
+        "unknown:value",
+    ]);
+    assert!(!status.success());
+    let v: serde_json::Value = serde_json::from_str(stdout.trim()).unwrap();
+    assert!(
+        v["error"]
+            .as_str()
+            .unwrap()
+            .contains("Unknown task modifier 'unknown:value'")
+    );
+}
+
+#[test]
 fn test_task_schedule_and_deadline_id_subcommands_are_rejected() {
     let (_dir, root) = setup_db();
     for (subcommand, option) in [("schedule", "--due"), ("deadline", "--deadline")] {

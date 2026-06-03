@@ -90,7 +90,7 @@ pub(in crate::commands::task) fn run_mod(
     ctx: &OutputContext,
     args: &TaskModArgs,
 ) -> Result<ExitCode> {
-    let spec = TaskModifierSpec::parse(&args.modifiers)?;
+    let spec = TaskModifierSpec::parse_mod(&args.modifiers)?;
     let clock = TaskClock::now();
     match args.id.parse::<TaskId>()? {
         TaskId::Pkms(canonical_id) => mod_pkms_task(config, ctx, canonical_id, &spec, clock),
@@ -270,13 +270,9 @@ fn validate_mod_source(spec: &TaskModifierSpec, expected: &str) -> Result<()> {
 }
 
 fn mod_title(spec: &TaskModifierSpec) -> Result<Option<String>> {
-    if spec.title.is_some() && spec.text.is_some() {
-        bail!("task mod uses title: or positional text, not both.");
-    }
     Ok(spec
         .title
         .as_deref()
-        .or(spec.text.as_deref())
         .map(str::trim)
         .filter(|title| !title.is_empty())
         .map(str::to_string))
