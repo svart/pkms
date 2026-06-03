@@ -3,11 +3,12 @@ use crate::cli::OutputFormat;
 use crate::cli::{TaskAddArgs, TaskDoneArgs, TaskModArgs, TaskPostponeArgs, TaskStateArgs};
 use crate::config::ResolvedConfig;
 use crate::output::OutputContext;
-use crate::tasks::add::{
-    TaskAddSpec, org_date, parse_add_date_arg_on, pkms_priority, validate_pkms_date_arg_on,
-};
 use crate::tasks::clock::TaskClock;
 use crate::tasks::id::TaskId;
+use crate::tasks::modifiers::{
+    TaskModifierSpec, is_clear_value, org_date, parse_task_date_arg_on, pkms_priority,
+    validate_pkms_task_date_arg_on,
+};
 use crate::tasks::pkms::{self, PkmsInboxTarget};
 use crate::tasks::pkms_mutation;
 use anyhow::{Context, Result, bail};
@@ -54,17 +55,17 @@ pub(in crate::commands::task) fn run_add(
     ctx: &OutputContext,
     args: &TaskAddArgs,
 ) -> Result<()> {
-    let spec = TaskAddSpec::parse(&args.text)?;
+    let spec = TaskModifierSpec::parse(&args.text)?;
     let clock = TaskClock::now();
-    if spec.source.eq_ignore_ascii_case("pkms") {
+    if spec.source_or_default().eq_ignore_ascii_case("pkms") {
         return add_pkms_task(config, ctx, &spec, clock);
     }
-    if spec.source.eq_ignore_ascii_case("todoist") {
+    if spec.source_or_default().eq_ignore_ascii_case("todoist") {
         return add_todoist_task(config, ctx, &spec, clock);
     }
     bail!(
         "Unknown task source '{}'. Use pkms or todoist.",
-        spec.source
+        spec.source_or_default()
     )
 }
 
@@ -89,7 +90,7 @@ pub(in crate::commands::task) fn run_mod(
     ctx: &OutputContext,
     args: &TaskModArgs,
 ) -> Result<ExitCode> {
-    let spec = TaskAddSpec::parse(&args.modifiers)?;
+    let spec = TaskModifierSpec::parse(&args.modifiers)?;
     let clock = TaskClock::now();
     match args.id.parse::<TaskId>()? {
         TaskId::Pkms(canonical_id) => mod_pkms_task(config, ctx, canonical_id, &spec, clock),
@@ -104,11 +105,11 @@ fn mod_pkms_task(
     config: &ResolvedConfig,
     ctx: &OutputContext,
     canonical_id: usize,
-    spec: &TaskAddSpec,
+    spec: &TaskModifierSpec,
     clock: TaskClock,
 ) -> Result<ExitCode> {
     validate_mod_source(spec, "pkms")?;
-    if spec.provided.note {
+    if spec.note.is_some() {
         bail!("note is available only for PKMS task creation.");
     }
 
@@ -116,27 +117,14 @@ fn mod_pkms_task(
     let modifier = pkms_mutation::HeadingMod {
         title,
         priority: mod_pkms_priority(spec)?,
-        tags: spec.provided.labels.then(|| spec.labels.clone()),
-        scheduled: mod_date(
-            "schedule",
-            spec.provided.due,
-            spec.due.as_deref(),
-            clock.today,
-        )?,
-        deadline: mod_date(
-            "deadline",
-            spec.provided.deadline,
-            spec.deadline.as_deref(),
-            clock.today,
-        )?,
-        project: mod_optional_text(spec.provided.project, spec.project.as_deref()),
-        description: spec.provided.description.then(|| {
-            spec.description
-                .as_deref()
-                .unwrap_or_default()
-                .trim()
-                .to_string()
-        }),
+        tags: spec.labels.clone(),
+        scheduled: mod_date("schedule", spec.due.as_deref(), clock.today)?,
+        deadline: mod_date("deadline", spec.deadline.as_deref(), clock.today)?,
+        project: mod_optional_text(spec.project.as_deref()),
+        description: spec
+            .description
+            .as_deref()
+            .map(|description| description.trim().to_string()),
     };
 
     let graph = crate::graph::Graph::load(config)?;
@@ -224,11 +212,10 @@ enum DependencyMod {
     Clear,
 }
 
-fn mod_dependency(spec: &TaskAddSpec) -> Result<Option<DependencyMod>> {
-    if !spec.provided.dependency {
+fn mod_dependency(spec: &TaskModifierSpec) -> Result<Option<DependencyMod>> {
+    let Some(raw) = spec.dependency.as_deref() else {
         return Ok(None);
-    }
-    let raw = spec.dependency.as_deref().unwrap_or_default();
+    };
     if raw.trim().is_empty() {
         return Ok(Some(DependencyMod::Clear));
     }
@@ -272,15 +259,17 @@ fn current_dependency_parent(
         .map(|(id, _, line)| (id, line))
 }
 
-fn validate_mod_source(spec: &TaskAddSpec, expected: &str) -> Result<()> {
-    if spec.provided.source && !spec.source.eq_ignore_ascii_case(expected) {
+fn validate_mod_source(spec: &TaskModifierSpec, expected: &str) -> Result<()> {
+    if let Some(source) = spec.source.as_deref()
+        && !source.eq_ignore_ascii_case(expected)
+    {
         bail!("Task source cannot be changed by task mod.");
     }
     Ok(())
 }
 
-fn mod_title(spec: &TaskAddSpec) -> Result<Option<String>> {
-    if spec.provided.title && spec.provided.text {
+fn mod_title(spec: &TaskModifierSpec) -> Result<Option<String>> {
+    if spec.title.is_some() && spec.text.is_some() {
         bail!("task mod uses title: or positional text, not both.");
     }
     Ok(spec
@@ -292,43 +281,31 @@ fn mod_title(spec: &TaskAddSpec) -> Result<Option<String>> {
         .map(str::to_string))
 }
 
-fn mod_pkms_priority(spec: &TaskAddSpec) -> Result<Option<Option<char>>> {
-    if !spec.provided.priority {
+fn mod_pkms_priority(spec: &TaskModifierSpec) -> Result<Option<Option<char>>> {
+    let Some(priority) = spec.priority.as_deref() else {
         return Ok(None);
-    }
-    Ok(Some(
-        match spec.priority.as_deref().unwrap_or_default().trim() {
-            "" | "none" | "None" | "NONE" => None,
-            value => Some(pkms_priority(value)?),
-        },
-    ))
+    };
+    Ok(Some(match priority.trim() {
+        value if is_clear_value(value) => None,
+        value => Some(pkms_priority(value)?),
+    }))
 }
 
-fn mod_optional_text(provided: bool, value: Option<&str>) -> Option<Option<String>> {
-    provided.then(|| {
-        value
-            .map(str::trim)
-            .filter(|value| !value.is_empty() && !value.eq_ignore_ascii_case("none"))
-            .map(str::to_string)
+fn mod_optional_text(value: Option<&str>) -> Option<Option<String>> {
+    value.map(|value| {
+        let value = value.trim();
+        (!is_clear_value(value)).then(|| value.to_string())
     })
 }
 
-fn mod_date(
-    name: &str,
-    provided: bool,
-    value: Option<&str>,
-    today: NaiveDate,
-) -> Result<Option<Option<String>>> {
-    if !provided {
-        return Ok(None);
-    }
+fn mod_date(name: &str, value: Option<&str>, today: NaiveDate) -> Result<Option<Option<String>>> {
     let Some(value) = value.map(str::trim) else {
-        return Ok(Some(None));
+        return Ok(None);
     };
-    if value.is_empty() || value.eq_ignore_ascii_case("none") {
+    if is_clear_value(value) {
         return Ok(Some(None));
     }
-    Ok(Some(Some(parse_add_date_arg_on(name, value, today)?)))
+    Ok(Some(Some(parse_task_date_arg_on(name, value, today)?)))
 }
 
 fn set_pkms_task_state(
@@ -427,7 +404,7 @@ fn canonical_state(config: &ResolvedConfig, requested_state: &str) -> Result<Str
 fn add_pkms_task(
     config: &ResolvedConfig,
     ctx: &OutputContext,
-    spec: &TaskAddSpec,
+    spec: &TaskModifierSpec,
     clock: TaskClock,
 ) -> Result<()> {
     if spec.dependency.is_some() && spec.note.is_some() {
@@ -450,7 +427,7 @@ fn add_pkms_task(
 
 fn add_pkms_inbox_task(
     config: &ResolvedConfig,
-    spec: &TaskAddSpec,
+    spec: &TaskModifierSpec,
     clock: TaskClock,
 ) -> Result<(PathBuf, usize)> {
     let inbox_target = match spec.note.as_deref() {
@@ -467,7 +444,7 @@ fn add_pkms_inbox_task(
 
 fn add_pkms_dependency_task(
     config: &ResolvedConfig,
-    spec: &TaskAddSpec,
+    spec: &TaskModifierSpec,
     clock: TaskClock,
     parent_id: &str,
 ) -> Result<(PathBuf, usize)> {
@@ -485,7 +462,7 @@ fn add_pkms_dependency_task(
 
 fn format_pkms_task_entry(
     config: &ResolvedConfig,
-    spec: &TaskAddSpec,
+    spec: &TaskModifierSpec,
     clock: TaskClock,
     heading_level: usize,
 ) -> Result<String> {
@@ -502,16 +479,18 @@ fn format_pkms_task_entry(
         .transpose()?
         .map(|priority| format!(" [#{priority}]"))
         .unwrap_or_default();
-    let tags = if spec.labels.is_empty() {
+    let labels = spec.labels();
+    let tags = if labels.is_empty() {
         String::new()
     } else {
-        format!(" :{}:", spec.labels.join(":"))
+        format!(" :{}:", labels.join(":"))
     };
 
     let level = "*".repeat(heading_level);
     let mut entry = format!("{level} {state}{priority} {title}{tags}\n");
-    let due = validate_pkms_date_arg_on("due", spec.due.as_deref(), clock.today)?;
-    let deadline = validate_pkms_date_arg_on("deadline", spec.deadline.as_deref(), clock.today)?;
+    let due = validate_pkms_task_date_arg_on("due", spec.due.as_deref(), clock.today)?;
+    let deadline =
+        validate_pkms_task_date_arg_on("deadline", spec.deadline.as_deref(), clock.today)?;
     if due.is_some() || deadline.is_some() {
         let mut planning = Vec::new();
         if let Some(due) = due {
@@ -536,7 +515,7 @@ fn format_pkms_task_entry(
     Ok(entry)
 }
 
-fn pkms_add_title(spec: &TaskAddSpec) -> Result<&str> {
+fn pkms_add_title(spec: &TaskModifierSpec) -> Result<&str> {
     spec.title
         .as_deref()
         .or(spec.text.as_deref())
@@ -567,7 +546,7 @@ fn postpone_pkms_recurring_task(
 fn add_todoist_task(
     config: &ResolvedConfig,
     ctx: &OutputContext,
-    spec: &TaskAddSpec,
+    spec: &TaskModifierSpec,
     clock: TaskClock,
 ) -> Result<()> {
     if spec.dependency.is_some() {
@@ -586,7 +565,7 @@ fn add_todoist_task(
 fn add_todoist_task(
     _config: &ResolvedConfig,
     _ctx: &OutputContext,
-    spec: &TaskAddSpec,
+    spec: &TaskModifierSpec,
     _clock: TaskClock,
 ) -> Result<()> {
     if spec.dependency.is_some() {
@@ -596,11 +575,11 @@ fn add_todoist_task(
 }
 
 #[cfg(feature = "todoist")]
-fn is_structured_add(spec: &TaskAddSpec) -> bool {
+fn is_structured_add(spec: &TaskModifierSpec) -> bool {
     spec.title.is_some()
         || spec.due.is_some()
         || spec.deadline.is_some()
-        || !spec.labels.is_empty()
+        || !spec.labels().is_empty()
         || spec.priority.is_some()
         || spec.description.is_some()
 }
@@ -609,7 +588,7 @@ fn is_structured_add(spec: &TaskAddSpec) -> bool {
 fn create_structured_todoist_task(
     config: &ResolvedConfig,
     ctx: &OutputContext,
-    spec: &TaskAddSpec,
+    spec: &TaskModifierSpec,
     clock: TaskClock,
 ) -> Result<()> {
     if spec.title.is_some() && spec.text.is_some() {
@@ -642,7 +621,7 @@ fn create_structured_todoist_task(
         content: title.to_string(),
         description,
         project_id,
-        labels: spec.labels.clone(),
+        labels: spec.labels().to_vec(),
         priority,
         due_date,
         deadline_date,
@@ -658,7 +637,7 @@ fn create_structured_todoist_task(
 fn quick_add_todoist_task(
     config: &ResolvedConfig,
     ctx: &OutputContext,
-    spec: &TaskAddSpec,
+    spec: &TaskModifierSpec,
 ) -> Result<()> {
     let text = spec
         .text
@@ -683,14 +662,14 @@ fn mod_todoist_task(
     config: &ResolvedConfig,
     ctx: &OutputContext,
     id: &str,
-    spec: &TaskAddSpec,
+    spec: &TaskModifierSpec,
     clock: TaskClock,
 ) -> Result<ExitCode> {
     validate_mod_source(spec, "todoist")?;
-    if spec.provided.note {
+    if spec.note.is_some() {
         bail!("note is available only for PKMS task creation.");
     }
-    if spec.provided.dependency {
+    if spec.dependency.is_some() {
         bail!("dep is available only for PKMS task creation.");
     }
 
@@ -698,7 +677,7 @@ fn mod_todoist_task(
     let client =
         crate::tasks::todoist::TodoistClient::with_base_url(config.todoist_api_base_url(), token);
     let existing = client.get_task(id)?;
-    let needs_metadata = existing.project_id.is_some() || spec.provided.project;
+    let needs_metadata = existing.project_id.is_some() || spec.project.is_some();
     let metadata = if needs_metadata {
         Some(crate::tasks::todoist::TodoistMetadata::new(
             client.list_projects()?,
@@ -720,13 +699,8 @@ fn mod_todoist_task(
         );
         request.insert("content".to_string(), serde_json::Value::String(title));
     }
-    if spec.provided.description {
-        let new = spec
-            .description
-            .as_deref()
-            .unwrap_or_default()
-            .trim()
-            .to_string();
+    if let Some(description) = spec.description.as_deref() {
+        let new = description.trim().to_string();
         push_todoist_change(
             &mut changes,
             "Description",
@@ -735,15 +709,15 @@ fn mod_todoist_task(
         );
         request.insert("description".to_string(), serde_json::Value::String(new));
     }
-    if spec.provided.labels {
+    if let Some(labels) = &spec.labels {
         let old = (!old_item.tags.is_empty()).then(|| old_item.tags.join(", "));
-        let new = (!spec.labels.is_empty()).then(|| spec.labels.join(", "));
+        let new = (!labels.is_empty()).then(|| labels.join(", "));
         push_todoist_change(&mut changes, "Tags", old, new);
-        request.insert("labels".to_string(), serde_json::json!(spec.labels));
+        request.insert("labels".to_string(), serde_json::json!(labels));
     }
-    if spec.provided.priority {
-        let priority = match spec.priority.as_deref().unwrap_or_default().trim() {
-            "" | "none" | "None" | "NONE" => 1,
+    if let Some(priority) = spec.priority.as_deref() {
+        let priority = match priority.trim() {
+            value if is_clear_value(value) => 1,
             value => todoist_create_priority(value)?,
         };
         push_todoist_change(
@@ -754,12 +728,7 @@ fn mod_todoist_task(
         );
         request.insert("priority".to_string(), serde_json::json!(priority));
     }
-    if let Some(date) = mod_date(
-        "schedule",
-        spec.provided.due,
-        spec.due.as_deref(),
-        clock.today,
-    )? {
+    if let Some(date) = mod_date("schedule", spec.due.as_deref(), clock.today)? {
         if old_item.scheduled_date_str() != date.as_deref() {
             let new_raw = date.as_deref().map(org_date).transpose()?;
             push_todoist_change(
@@ -774,12 +743,7 @@ fn mod_todoist_task(
             date.map_or(serde_json::Value::Null, serde_json::Value::String),
         );
     }
-    if let Some(date) = mod_date(
-        "deadline",
-        spec.provided.deadline,
-        spec.deadline.as_deref(),
-        clock.today,
-    )? {
+    if let Some(date) = mod_date("deadline", spec.deadline.as_deref(), clock.today)? {
         if old_item.deadline_date_str() != date.as_deref() {
             let new_raw = date.as_deref().map(org_date).transpose()?;
             push_todoist_change(
@@ -794,7 +758,7 @@ fn mod_todoist_task(
             date.map_or(serde_json::Value::Null, serde_json::Value::String),
         );
     }
-    if let Some(project) = mod_optional_text(spec.provided.project, spec.project.as_deref()) {
+    if let Some(project) = mod_optional_text(spec.project.as_deref()) {
         let (project_id, project_name) = match project {
             Some(project) => {
                 let metadata = metadata
@@ -905,7 +869,7 @@ fn mod_todoist_task(
     _config: &ResolvedConfig,
     _ctx: &OutputContext,
     _id: &str,
-    _spec: &TaskAddSpec,
+    _spec: &TaskModifierSpec,
     _clock: TaskClock,
 ) -> Result<ExitCode> {
     bail!("Todoist support is not available in this build. Rebuild with --features todoist.")
@@ -951,12 +915,12 @@ fn todoist_created_task_id(response: &serde_json::Value) -> Result<String> {
 #[cfg(feature = "todoist")]
 fn validate_date_arg(name: &str, value: Option<&str>, today: NaiveDate) -> Result<Option<String>> {
     value
-        .map(|value| parse_add_date_arg_on(name, value, today))
+        .map(|value| parse_task_date_arg_on(name, value, today))
         .transpose()
 }
 
 fn parse_mutation_due_date(value: &str, today: NaiveDate) -> Result<String> {
-    parse_add_date_arg_on("due", value, today)
+    parse_task_date_arg_on("due", value, today)
 }
 
 #[cfg(feature = "todoist")]

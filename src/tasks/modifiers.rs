@@ -4,51 +4,34 @@ use chrono::{Datelike, NaiveDate, NaiveDateTime, Weekday};
 use crate::tasks::clock::TaskClock;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TaskAddSpec {
-    pub source: String,
+pub struct TaskModifierSpec {
+    pub source: Option<String>,
     pub project: Option<String>,
     pub title: Option<String>,
     pub due: Option<String>,
     pub deadline: Option<String>,
-    pub labels: Vec<String>,
+    pub labels: Option<Vec<String>>,
     pub priority: Option<String>,
     pub description: Option<String>,
     pub note: Option<String>,
     pub dependency: Option<String>,
     pub text: Option<String>,
-    pub provided: TaskAddProvided,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct TaskAddProvided {
-    pub source: bool,
-    pub project: bool,
-    pub title: bool,
-    pub due: bool,
-    pub deadline: bool,
-    pub labels: bool,
-    pub priority: bool,
-    pub description: bool,
-    pub note: bool,
-    pub dependency: bool,
-    pub text: bool,
-}
-
-impl TaskAddSpec {
+impl TaskModifierSpec {
     pub fn parse(tokens: &[String]) -> Result<Self> {
-        let mut spec = TaskAddSpec {
-            source: "pkms".to_string(),
+        let mut spec = TaskModifierSpec {
+            source: None,
             project: None,
             title: None,
             due: None,
             deadline: None,
-            labels: Vec::new(),
+            labels: None,
             priority: None,
             description: None,
             note: None,
             dependency: None,
             text: None,
-            provided: TaskAddProvided::default(),
         };
         let mut text = Vec::new();
 
@@ -61,14 +44,24 @@ impl TaskAddSpec {
 
         if !text.is_empty() {
             set_once(&mut spec.text, "text", text.join(" "))?;
-            spec.provided.text = true;
         }
 
         Ok(spec)
     }
+
+    pub fn source_or_default(&self) -> &str {
+        self.source.as_deref().unwrap_or("pkms")
+    }
+
+    pub fn labels(&self) -> &[String] {
+        match self.labels.as_deref() {
+            Some(labels) => labels,
+            None => &[],
+        }
+    }
 }
 
-fn apply_modifier(spec: &mut TaskAddSpec, token: &str) -> Result<bool> {
+fn apply_modifier(spec: &mut TaskModifierSpec, token: &str) -> Result<bool> {
     let Some((key, value)) = token.split_once(':') else {
         return Ok(false);
     };
@@ -76,44 +69,36 @@ fn apply_modifier(spec: &mut TaskAddSpec, token: &str) -> Result<bool> {
     let value = value.trim();
     match key.as_str() {
         "source" | "src" => {
-            spec.source = value.to_string();
-            spec.provided.source = true;
+            spec.source = Some(value.to_string());
         }
         "title" => {
             set_once(&mut spec.title, "title", value.to_string())?;
-            spec.provided.title = true;
         }
         "tag" | "tags" | "label" | "labels" => {
-            spec.labels.extend(split_list(value));
-            spec.provided.labels = true;
+            spec.labels
+                .get_or_insert_with(Vec::new)
+                .extend(split_list(value));
         }
         "due" | "schedule" | "scheduled" | "sched" | "sch" => {
             set_once(&mut spec.due, "schedule", value.to_string())?;
-            spec.provided.due = true;
         }
         "deadline" | "dead" | "dl" => {
             set_once(&mut spec.deadline, "deadline", value.to_string())?;
-            spec.provided.deadline = true;
         }
         "project" | "proj" => {
             set_once(&mut spec.project, "project", value.to_string())?;
-            spec.provided.project = true;
         }
         "priority" | "prio" | "pri" => {
             set_once(&mut spec.priority, "priority", value.to_string())?;
-            spec.provided.priority = true;
         }
         "description" | "desc" | "body" => {
             set_once(&mut spec.description, "description", value.to_string())?;
-            spec.provided.description = true;
         }
         "note" => {
             set_once(&mut spec.note, "note", value.to_string())?;
-            spec.provided.note = true;
         }
         "dep" | "depend" => {
             set_once(&mut spec.dependency, "dep", value.to_string())?;
-            spec.provided.dependency = true;
         }
         _ => return Ok(false),
     }
@@ -130,10 +115,15 @@ fn split_list(value: &str) -> impl Iterator<Item = String> + '_ {
 
 fn set_once<T>(target: &mut Option<T>, name: &str, value: T) -> Result<()> {
     if target.is_some() {
-        bail!("task add {name} was provided more than once");
+        bail!("task modifier {name} was provided more than once");
     }
     *target = Some(value);
     Ok(())
+}
+
+pub fn is_clear_value(value: &str) -> bool {
+    let value = value.trim();
+    value.is_empty() || value.eq_ignore_ascii_case("none")
 }
 
 pub fn pkms_priority(value: &str) -> Result<char> {
@@ -143,11 +133,11 @@ pub fn pkms_priority(value: &str) -> Result<char> {
     }
 }
 
-pub fn parse_add_date_arg(name: &str, value: &str) -> Result<String> {
-    parse_add_date_arg_on(name, value, TaskClock::now().today)
+pub fn parse_task_date_arg(name: &str, value: &str) -> Result<String> {
+    parse_task_date_arg_on(name, value, TaskClock::now().today)
 }
 
-pub fn parse_add_date_arg_on(name: &str, value: &str, today: NaiveDate) -> Result<String> {
+pub fn parse_task_date_arg_on(name: &str, value: &str, today: NaiveDate) -> Result<String> {
     if let Some(date) = parse_word_date(name, value, today)? {
         return Ok(date.format("%Y-%m-%d").to_string());
     }
@@ -261,17 +251,17 @@ fn upcoming_weekday(today: NaiveDate, weekday: Weekday) -> NaiveDate {
     today + chrono::Duration::days(days_until)
 }
 
-pub fn validate_pkms_date_arg(name: &str, value: Option<&str>) -> Result<Option<String>> {
-    validate_pkms_date_arg_on(name, value, TaskClock::now().today)
+pub fn validate_pkms_task_date_arg(name: &str, value: Option<&str>) -> Result<Option<String>> {
+    validate_pkms_task_date_arg_on(name, value, TaskClock::now().today)
 }
 
-pub fn validate_pkms_date_arg_on(
+pub fn validate_pkms_task_date_arg_on(
     name: &str,
     value: Option<&str>,
     today: NaiveDate,
 ) -> Result<Option<String>> {
     value
-        .map(|value| parse_add_date_arg_on(name, value, today))
+        .map(|value| parse_task_date_arg_on(name, value, today))
         .transpose()
 }
 
@@ -293,7 +283,7 @@ mod tests {
 
     #[test]
     fn parses_structured_task_add_tokens() {
-        let spec = TaskAddSpec::parse(&tokens(&[
+        let spec = TaskModifierSpec::parse(&tokens(&[
             "source:todoist",
             "title:Call Alice",
             "tag:phone,urgent",
@@ -306,9 +296,12 @@ mod tests {
         ]))
         .unwrap();
 
-        assert_eq!(spec.source, "todoist");
+        assert_eq!(spec.source.as_deref(), Some("todoist"));
         assert_eq!(spec.title.as_deref(), Some("Call Alice"));
-        assert_eq!(spec.labels, vec!["phone", "urgent"]);
+        assert_eq!(
+            spec.labels,
+            Some(vec!["phone".to_string(), "urgent".to_string()])
+        );
         assert_eq!(spec.due.as_deref(), Some("2026-05-27"));
         assert_eq!(spec.deadline.as_deref(), Some("2026-05-28"));
         assert_eq!(spec.priority.as_deref(), Some("A"));
@@ -319,18 +312,18 @@ mod tests {
 
     #[test]
     fn keeps_plain_words_as_task_text() {
-        let spec = TaskAddSpec::parse(&tokens(&["Call", "Alice", "tag:phone"])).unwrap();
-        assert_eq!(spec.source, "pkms");
+        let spec = TaskModifierSpec::parse(&tokens(&["Call", "Alice", "tag:phone"])).unwrap();
+        assert_eq!(spec.source_or_default(), "pkms");
         assert_eq!(spec.text.as_deref(), Some("Call Alice"));
-        assert_eq!(spec.labels, vec!["phone"]);
+        assert_eq!(spec.labels, Some(vec!["phone".to_string()]));
     }
 
     #[test]
     fn rejects_duplicate_single_value_options() {
-        let err = TaskAddSpec::parse(&tokens(&["title:One", "title:Two"])).unwrap_err();
+        let err = TaskModifierSpec::parse(&tokens(&["title:One", "title:Two"])).unwrap_err();
         assert!(
             err.to_string()
-                .contains("title was provided more than once")
+                .contains("task modifier title was provided more than once")
         );
     }
 
@@ -346,11 +339,11 @@ mod tests {
     #[test]
     fn parses_explicit_add_dates() {
         assert_eq!(
-            parse_add_date_arg("due", "2026-05-27").unwrap(),
+            parse_task_date_arg("due", "2026-05-27").unwrap(),
             "2026-05-27"
         );
         assert_eq!(
-            parse_add_date_arg("due", "2026-05-27 09:30").unwrap(),
+            parse_task_date_arg("due", "2026-05-27 09:30").unwrap(),
             "2026-05-27 09:30"
         );
     }
@@ -359,11 +352,11 @@ mod tests {
     fn parses_relative_add_dates_against_explicit_today() {
         let today = NaiveDate::from_ymd_opt(2026, 5, 27).unwrap();
         assert_eq!(
-            parse_add_date_arg_on("due", "today", today).unwrap(),
+            parse_task_date_arg_on("due", "today", today).unwrap(),
             "2026-05-27"
         );
         assert_eq!(
-            parse_add_date_arg_on("due", "tom", today).unwrap(),
+            parse_task_date_arg_on("due", "tom", today).unwrap(),
             "2026-05-28"
         );
     }
@@ -372,15 +365,15 @@ mod tests {
     fn parses_weekday_add_dates_as_upcoming_days() {
         let friday = NaiveDate::from_ymd_opt(2026, 5, 29).unwrap();
         assert_eq!(
-            parse_add_date_arg_on("due", "mon", friday).unwrap(),
+            parse_task_date_arg_on("due", "mon", friday).unwrap(),
             "2026-06-01"
         );
         assert_eq!(
-            parse_add_date_arg_on("due", "monday", friday).unwrap(),
+            parse_task_date_arg_on("due", "monday", friday).unwrap(),
             "2026-06-01"
         );
         assert_eq!(
-            parse_add_date_arg_on("due", "fri", friday).unwrap(),
+            parse_task_date_arg_on("due", "fri", friday).unwrap(),
             "2026-06-05"
         );
     }
@@ -389,19 +382,19 @@ mod tests {
     fn parses_unambiguous_word_prefix_dates_case_insensitively() {
         let today = NaiveDate::from_ymd_opt(2026, 5, 29).unwrap();
         assert_eq!(
-            parse_add_date_arg_on("due", "Tod", today).unwrap(),
+            parse_task_date_arg_on("due", "Tod", today).unwrap(),
             "2026-05-29"
         );
         assert_eq!(
-            parse_add_date_arg_on("due", "toda", today).unwrap(),
+            parse_task_date_arg_on("due", "toda", today).unwrap(),
             "2026-05-29"
         );
         assert_eq!(
-            parse_add_date_arg_on("due", "to", today).unwrap(),
+            parse_task_date_arg_on("due", "to", today).unwrap(),
             "2026-05-29"
         );
         assert_eq!(
-            parse_add_date_arg_on("due", "thu", today).unwrap(),
+            parse_task_date_arg_on("due", "thu", today).unwrap(),
             "2026-06-04"
         );
     }
@@ -409,7 +402,7 @@ mod tests {
     #[test]
     fn rejects_ambiguous_word_prefix_dates() {
         let today = NaiveDate::from_ymd_opt(2026, 5, 29).unwrap();
-        let err = parse_add_date_arg_on("due", "t", today).unwrap_err();
+        let err = parse_task_date_arg_on("due", "t", today).unwrap_err();
         let message = err.to_string();
         assert!(message.contains("Ambiguous due date 't'"));
         assert!(message.contains("today"));
