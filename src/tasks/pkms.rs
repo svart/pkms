@@ -188,8 +188,12 @@ fn ensure_daily_note_exists(path: &Path, today: chrono::NaiveDate) -> Result<()>
     }
     if !path.exists() {
         let title = today.format("%Y-%m-%d").to_string();
-        std::fs::write(path, format!("#+title: {title}\n#+filetags: :daily:\n\n"))
-            .with_context(|| format!("Failed to create daily note: {}", path.display()))?;
+        let uuid = uuid::Uuid::new_v4();
+        std::fs::write(
+            path,
+            format!(":PROPERTIES:\n:ID:       {uuid}\n:END:\n#+title: {title}\n\n"),
+        )
+        .with_context(|| format!("Failed to create daily note: {}", path.display()))?;
     }
     Ok(())
 }

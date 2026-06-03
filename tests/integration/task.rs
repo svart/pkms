@@ -3021,7 +3021,19 @@ fn test_task_add_daily_inbox_uses_configured_daily_notes_dir() {
     assert!(daily_path.exists());
     assert!(!new_notes_daily_path.exists());
     let content = std::fs::read_to_string(&daily_path).unwrap();
-    assert!(content.contains("#+filetags: :daily:"));
+    assert!(content.contains(":PROPERTIES:\n:ID:"));
+    assert!(content.contains(":END:\n#+title:"));
+    let id = content
+        .lines()
+        .find_map(|line| line.strip_prefix(":ID:").map(str::trim))
+        .expect("generated daily note should have an :ID:");
+    uuid::Uuid::parse_str(id).expect("generated daily note should use a valid UUID");
+    assert!(
+        !content
+            .lines()
+            .any(|line| line.trim_start().starts_with("#+filetags:") && line.contains(":daily:")),
+        "generated daily note should not get an automatic daily filetag:\n{content}"
+    );
     assert!(content.contains("** TODO Daily configured dir capture"));
 }
 
