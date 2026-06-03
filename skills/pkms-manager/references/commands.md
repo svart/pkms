@@ -104,10 +104,10 @@ pkms task todoist:<remote-id> done
 pkms task p<canonical-id> postpone --to 2026-06-01
 pkms task todoist:<remote-id> postpone --to tomorrow
 pkms task p<canonical-id> mod sch:2026-05-24
-pkms task todoist:<remote-id> mod sch:none
+pkms task todoist:<remote-id> mod sch:
 pkms task p<canonical-id> mod dl:2026-05-30
 pkms task p<canonical-id> mod dep:<parent-id>
-pkms task todoist:<remote-id> mod dl:none
+pkms task todoist:<remote-id> mod dl:
 ```
 
 ## Statistics

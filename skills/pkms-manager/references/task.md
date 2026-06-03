@@ -105,10 +105,10 @@ pkms task todoist:<remote-id> done
 pkms task p<canonical-id> postpone --to 2026-06-01
 pkms task todoist:<remote-id> postpone --to tomorrow
 pkms task p<canonical-id> mod sch:2026-05-24
-pkms task todoist:<remote-id> mod sch:none
+pkms task todoist:<remote-id> mod sch:
 pkms task p<canonical-id> mod dl:2026-05-30
 pkms task p<canonical-id> mod dep:<parent-id>
-pkms task todoist:<remote-id> mod dl:none
+pkms task todoist:<remote-id> mod dl:
 ```
 
 Use stable `todoist:<remote-id>` IDs for Todoist mutations.
@@ -191,9 +191,11 @@ Use stable `todoist:<remote-id>` ids for Todoist mutations. `task <ID>
 postpone` accepts `--to tomorrow` or `--to YYYY-MM-DD` and works only for
 recurring PKMS or Todoist tasks; non-recurring tasks fail. `task <ID> mod`
 accepts add-style modifiers such as `title:`, `tag:`, `project:`, `prio:`,
-`desc:`, `sch:tomorrow`, `sch:none`, `dl:YYYY-MM-DD`, `dl:none`, or PKMS-only
-`dep:<task-id>`. Schedule and deadline edits work for PKMS and Todoist tasks.
-For PKMS, `dep:`/`depend:` moves the whole task subtree to the end of the
-referenced task's subtree. If no properties change, `mod` prints `Nothing
-changed` and exits nonzero. Todoist `task <ID> state` supports only `open` and
-`done`.
+`desc:`, `sch:tomorrow`, `dl:YYYY-MM-DD`, or PKMS-only `dep:<task-id>`.
+Empty values clear metadata: `tag:`, `sch:`, `dl:`, `prio:`, `project:`, and
+`desc:`. For PKMS, `dep:` removes the current parent task dependency. Schedule
+and deadline edits work for PKMS and Todoist tasks. For PKMS,
+`dep:`/`depend:` moves the whole task subtree to the end of the referenced
+task's subtree when a task ID is provided. If no properties change, `mod` prints
+`Nothing changed` and exits nonzero. Todoist `task <ID> state` supports only
+`open` and `done`.

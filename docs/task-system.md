@@ -49,8 +49,8 @@ pkms task list tags source:all
 pkms task add source:todoist title:"Call Alice" due:2026-05-24 prio:B
 pkms task todoist:<remote-id> show
 pkms task todoist:<remote-id> done
-pkms task todoist:<remote-id> mod sch:none
-pkms task todoist:<remote-id> mod dl:none
+pkms task todoist:<remote-id> mod sch:
+pkms task todoist:<remote-id> mod dl:
 ```
 
 Removed or obsolete surfaces:
@@ -308,10 +308,12 @@ Local mutation rules:
   `DONE`.
 - `task <ID> mod` changes add-style task properties such as `title:`,
   `tag:`, `sch:`, `dl:`, `project:`, `prio:`, `desc:`, and `dep:`.
-- `task <ID> mod sch:DATE|none` sets or clears `SCHEDULED`.
-- `task <ID> mod dl:DATE|none` sets or clears `DEADLINE`.
+- `task <ID> mod sch:DATE` sets `SCHEDULED`; `task <ID> mod sch:` clears it.
+- `task <ID> mod dl:DATE` sets `DEADLINE`; `task <ID> mod dl:` clears it.
 - `task <ID> mod dep:<task-id>` moves the whole PKMS task subtree to the end of
   the referenced task's subtree.
+- `task <ID> mod dep:` removes the current PKMS task dependency by moving the
+  whole subtree out to the end of the parent task's subtree.
 - If `task <ID> mod` would not change anything, it prints `Nothing changed`
   and exits nonzero.
 - `task <ID> postpone --to DATE` is only for recurring planned tasks and must

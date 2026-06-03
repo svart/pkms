@@ -233,6 +233,15 @@ pub fn move_subtree_to_dependency(
     .map(|line| (target_path.to_path_buf(), line))
 }
 
+pub fn remove_subtree_dependency(
+    path: &Path,
+    source_line_number: usize,
+    parent_line_number: usize,
+) -> Result<(PathBuf, usize)> {
+    pkms_edit::remove_org_subtree_dependency(path, source_line_number, parent_line_number)
+        .map(|line| (path.to_path_buf(), line))
+}
+
 pub fn find_task_item(
     config: &ResolvedConfig,
     path: &Path,

@@ -1531,7 +1531,7 @@ fn test_task_mod_pkms_sets_and_clears_scheduled_date() {
         "task",
         "p1",
         "mod",
-        "sch:none",
+        "sch:",
     ]);
     assert!(status.success());
     assert_eq!(v["changed"], true);
@@ -1614,6 +1614,60 @@ fn test_task_mod_pkms_accepts_add_style_metadata_modifiers() {
 }
 
 #[test]
+fn test_task_mod_pkms_empty_values_clear_metadata() {
+    let db = TestDb::new().note_with_content(
+        "clear-modifiers.org",
+        r#":PROPERTIES:
+:ID:       43434343-4343-4343-8343-434343434343
+:END:
+#+title: Clear Modifiers
+
+* TODO [#A] Clearable task :home:work:
+SCHEDULED: <2026-05-24 Sun> DEADLINE: <2026-05-25 Mon>
+:PROPERTIES:
+:PROJECT: Focus
+:END:
+
+Body text.
+* TODO Sibling
+"#,
+    );
+    let path = db.root().join("roam/clear-modifiers.org");
+
+    let (v, status) = db.run_json(&[
+        "task", "p1", "mod", "tag:", "sch:", "dl:", "prio:", "project:", "desc:",
+    ]);
+
+    assert!(status.success());
+    let changed = v["changes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|change| change["property"].as_str())
+        .collect::<Vec<_>>();
+    assert!(changed.contains(&"Tags"));
+    assert!(changed.contains(&"Scheduled"));
+    assert!(changed.contains(&"Deadline"));
+    assert!(changed.contains(&"Priority"));
+    assert!(changed.contains(&"Project"));
+    assert!(changed.contains(&"Description"));
+    assert!(v["item"]["tags"].as_array().unwrap().is_empty());
+    assert!(v["item"]["scheduled"].is_null());
+    assert!(v["item"]["deadline"].is_null());
+    assert!(v["item"]["priority"].is_null());
+    assert!(v["item"]["project"].is_null());
+
+    let content = std::fs::read_to_string(&path).unwrap();
+    assert!(content.contains("* TODO Clearable task"));
+    assert!(!content.contains("[#A]"));
+    assert!(!content.contains(":home:work:"));
+    assert!(!content.contains("SCHEDULED:"));
+    assert!(!content.contains("DEADLINE:"));
+    assert!(!content.contains(":PROJECT:"));
+    assert!(!content.contains("Body text."));
+}
+
+#[test]
 fn test_task_mod_pkms_dependency_moves_task_subtree() {
     let db = TestDb::new().note_with_content(
         "move-dependency.org",
@@ -1662,6 +1716,55 @@ Source body.
 **** TODO Source child
 Child body.
 ***** TODO Source grandchild
+** TODO Later sibling
+"#
+    );
+}
+
+#[test]
+fn test_task_mod_pkms_empty_dependency_removes_parent_dependency() {
+    let db = TestDb::new().note_with_content(
+        "clear-dependency.org",
+        r#":PROPERTIES:
+:ID:       44444444-4444-4444-8444-444444444445
+:END:
+#+title: Clear Dependency
+
+* Project
+** TODO Parent task
+Parent body.
+*** TODO Child task
+Child body.
+**** TODO Grandchild task
+** TODO Later sibling
+"#,
+    );
+    let path = db.root().join("roam/clear-dependency.org");
+
+    let (v, status) = db.run_json(&["task", "p2", "mod", "dep:"]);
+
+    assert!(status.success());
+    assert_eq!(v["changed"], true);
+    assert_eq!(v["changes"][0]["property"], "Dependency");
+    assert_eq!(v["changes"][0]["old"], "p1");
+    assert!(v["changes"][0]["new"].is_null());
+    assert_eq!(v["item"]["title"], "Child task");
+    assert_eq!(v["item"]["heading_level"], 2);
+
+    let content = std::fs::read_to_string(&path).unwrap();
+    assert_eq!(
+        content,
+        r#":PROPERTIES:
+:ID:       44444444-4444-4444-8444-444444444445
+:END:
+#+title: Clear Dependency
+
+* Project
+** TODO Parent task
+Parent body.
+** TODO Child task
+Child body.
+*** TODO Grandchild task
 ** TODO Later sibling
 "#
     );
@@ -3782,7 +3885,7 @@ fn test_task_mod_todoist_can_clear_due_date() {
             "task",
             "todoist:abc",
             "mod",
-            "sch:none",
+            "sch:",
         ],
         &base_url,
     );

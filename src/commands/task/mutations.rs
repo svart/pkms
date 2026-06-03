@@ -145,23 +145,40 @@ fn mod_pkms_task(
     let mut line_number = line_number;
     let mut changes = Vec::new();
 
-    if let Some(target_id) = mod_dependency(spec)? {
-        if target_id == canonical_id {
-            bail!("Cannot make a task depend on itself.");
+    if let Some(dependency) = mod_dependency(spec)? {
+        match dependency {
+            DependencyMod::Set(target_id) => {
+                if target_id == canonical_id {
+                    bail!("Cannot make a task depend on itself.");
+                }
+                let (target_path, target_line_number) =
+                    graph.resolve_canonical_task_id(config, target_id)?;
+                (path, line_number) = pkms::move_subtree_to_dependency(
+                    &path,
+                    line_number,
+                    Path::new(&target_path),
+                    target_line_number,
+                )?;
+                changes.push(render::TaskModChange {
+                    property: "Dependency",
+                    old: None,
+                    new: Some(TaskId::Pkms(target_id).display_id()),
+                });
+            }
+            DependencyMod::Clear => {
+                if let Some((parent_id, parent_line_number)) =
+                    current_dependency_parent(&graph, config, &path, line_number)
+                {
+                    (path, line_number) =
+                        pkms::remove_subtree_dependency(&path, line_number, parent_line_number)?;
+                    changes.push(render::TaskModChange {
+                        property: "Dependency",
+                        old: Some(TaskId::Pkms(parent_id).display_id()),
+                        new: None,
+                    });
+                }
+            }
         }
-        let (target_path, target_line_number) =
-            graph.resolve_canonical_task_id(config, target_id)?;
-        (path, line_number) = pkms::move_subtree_to_dependency(
-            &path,
-            line_number,
-            Path::new(&target_path),
-            target_line_number,
-        )?;
-        changes.push(render::TaskModChange {
-            property: "Dependency",
-            old: None,
-            new: Some(TaskId::Pkms(target_id).display_id()),
-        });
     }
 
     changes.extend(
@@ -202,16 +219,57 @@ fn mod_pkms_task(
     )
 }
 
-fn mod_dependency(spec: &TaskAddSpec) -> Result<Option<usize>> {
+enum DependencyMod {
+    Set(usize),
+    Clear,
+}
+
+fn mod_dependency(spec: &TaskAddSpec) -> Result<Option<DependencyMod>> {
     if !spec.provided.dependency {
         return Ok(None);
     }
     let raw = spec.dependency.as_deref().unwrap_or_default();
+    if raw.trim().is_empty() {
+        return Ok(Some(DependencyMod::Clear));
+    }
     let task_id = raw.parse::<TaskId>()?;
     let TaskId::Pkms(canonical_id) = task_id else {
         bail!("dep is available only for PKMS task IDs.");
     };
-    Ok(Some(canonical_id))
+    Ok(Some(DependencyMod::Set(canonical_id)))
+}
+
+fn current_dependency_parent(
+    graph: &crate::graph::Graph,
+    config: &ResolvedConfig,
+    path: &Path,
+    line_number: usize,
+) -> Option<(usize, usize)> {
+    let result = graph.results.iter().find(|result| result.path == path)?;
+    let source = result
+        .parsed
+        .headings
+        .iter()
+        .find(|heading| heading.line_number == line_number)?;
+    let todo_states = config.todo_states();
+    let mut child_level = source.level;
+    let parent = result.parsed.headings.iter().rev().find(|heading| {
+        if heading.line_number >= line_number || heading.level >= child_level {
+            return false;
+        }
+        child_level = heading.level;
+        heading.todo_state.as_ref().is_some_and(|state| {
+            todo_states
+                .iter()
+                .any(|todo_state| todo_state.eq_ignore_ascii_case(state))
+        })
+    })?;
+    let path = path.display().to_string();
+    graph
+        .all_task_entries(config)
+        .into_iter()
+        .find(|(_, task_path, task_line)| task_path == &path && *task_line == parent.line_number)
+        .map(|(id, _, line)| (id, line))
 }
 
 fn validate_mod_source(spec: &TaskAddSpec, expected: &str) -> Result<()> {

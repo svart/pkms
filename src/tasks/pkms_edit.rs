@@ -56,6 +56,22 @@ pub fn move_org_subtree(
     )
 }
 
+pub fn remove_org_subtree_dependency(
+    path: &Path,
+    source_line_number: usize,
+    parent_line_number: usize,
+) -> Result<usize> {
+    let mut content = std::fs::read_to_string(path)
+        .with_context(|| format!("Failed to read task note: {}", path.display()))?;
+    normalize_trailing_newline(&mut content);
+    let mut lines: Vec<String> = content.split_inclusive('\n').map(str::to_string).collect();
+    let new_line =
+        remove_org_subtree_dependency_in_lines(&mut lines, source_line_number, parent_line_number)?;
+    std::fs::write(path, lines.concat())
+        .with_context(|| format!("Failed to write task note: {}", path.display()))?;
+    Ok(new_line)
+}
+
 pub fn inbox_section_range(path: &Path) -> Result<Option<(usize, usize)>> {
     let content = std::fs::read_to_string(path)
         .with_context(|| format!("Failed to read daily note: {}", path.display()))?;
@@ -209,6 +225,37 @@ fn move_org_subtree_in_lines(
         target_idx
     };
     let insert_idx = subtree_end_index(lines, adjusted_target_idx, target_level);
+    lines.splice(insert_idx..insert_idx, subtree);
+    Ok(insert_idx + 1)
+}
+
+fn remove_org_subtree_dependency_in_lines(
+    lines: &mut Vec<String>,
+    source_line_number: usize,
+    parent_line_number: usize,
+) -> Result<usize> {
+    let source_idx = line_index(source_line_number, "source task")?;
+    let parent_idx = line_index(parent_line_number, "parent task")?;
+    if parent_idx >= source_idx {
+        anyhow::bail!("Dependency parent must appear before the task subtree.");
+    }
+
+    let source_level = heading_level_in_lines(lines, source_idx, source_line_number)?;
+    let parent_level = heading_level_in_lines(lines, parent_idx, parent_line_number)?;
+    if source_level <= parent_level {
+        anyhow::bail!("Task is not nested under the dependency parent.");
+    }
+    let parent_end = subtree_end_index(lines, parent_idx, parent_level);
+    if source_idx >= parent_end {
+        anyhow::bail!("Task is not nested under the dependency parent.");
+    }
+
+    let source_end = subtree_end_index(lines, source_idx, source_level);
+    let mut subtree = lines[source_idx..source_end].to_vec();
+    relevel_subtree_lines(&mut subtree, parent_level, source_level)?;
+    lines.drain(source_idx..source_end);
+
+    let insert_idx = subtree_end_index(lines, parent_idx, parent_level);
     lines.splice(insert_idx..insert_idx, subtree);
     Ok(insert_idx + 1)
 }
@@ -412,6 +459,22 @@ mod tests {
         assert!(
             err.to_string()
                 .contains("Cannot move a task under one of its descendants")
+        );
+    }
+
+    #[test]
+    fn removes_subtree_dependency_by_moving_after_parent_subtree() {
+        let mut lines = "#+title: Tasks\n\n* Project\n** TODO Parent\nParent body\n*** TODO Source\nSource body\n**** TODO Child\n** TODO Sibling\n"
+            .split_inclusive('\n')
+            .map(str::to_string)
+            .collect::<Vec<_>>();
+
+        let line = remove_org_subtree_dependency_in_lines(&mut lines, 6, 4).unwrap();
+
+        assert_eq!(line, 6);
+        assert_eq!(
+            lines.concat(),
+            "#+title: Tasks\n\n* Project\n** TODO Parent\nParent body\n** TODO Source\nSource body\n*** TODO Child\n** TODO Sibling\n"
         );
     }
 }
