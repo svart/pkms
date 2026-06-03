@@ -224,6 +224,7 @@ pkms task todoist:<remote-id> show
 pkms task add "Capture local task"
 pkms task add title:"Call Alice" due:2026-05-24 deadline:2026-05-30 tag:phone priority:B
 pkms task add note:"Project Alpha" title:"Follow up"
+pkms task add dep:2 title:"Follow up on parent task"
 pkms task add source:todoist "Buy milk tomorrow"
 pkms task add source:todoist project:Inbox "Buy milk tomorrow"
 pkms task add source:todoist title:"Call Alice" due:2026-05-24 tag:phone priority:B
@@ -284,13 +285,15 @@ source:todoist` continues to use Todoist's `#Inbox` filter.
 
 PKMS task creation appends a TODO heading to that inbox note by default. It
 accepts positional text or add modifiers. `note:` is PKMS-only and chooses the
-note to append into:
+note to append into. `dep:`/`depend:` is PKMS-only and adds the new task as a
+child heading at the end of the referenced task's subtree:
 
 ```bash
 pkms task add "Capture local task"
 pkms task add title:"Call Alice" due:2026-05-24 deadline:2026-05-30 tag:phone priority:B
 pkms task add title:"Call Alice" sch:tod dead:tom tag:phone prio:B
 pkms task add note:"Project Alpha" title:"Follow up" schedule:tomorrow
+pkms task add dep:2 title:"Follow up on parent task"
 ```
 
 Todoist task creation supports two modes. Positional text uses Todoist Quick Add
@@ -321,6 +324,7 @@ Add modifiers mirror task filters where practical:
 | `prio:<A-B-C>` | `priority:`, `pri:` | Set source-neutral priority. |
 | `desc:<text>` | `description:`, `body:` | Set description/body text. |
 | `note:<target>` | | PKMS only; append to this note instead of the configured inbox. |
+| `dep:<task-id>` | `depend:` | PKMS only; append as a child of the referenced PKMS task. |
 
 `schedule:`/`deadline:` values accept unambiguous case-insensitive prefixes of
 `today`, `tomorrow`, or weekday names, plus `YYYY-MM-DD` or
@@ -331,6 +335,7 @@ Label modifiers can be repeated or comma-separated. `project:` accepts either a
 Todoist project id or an exact project name. If a name matches multiple projects
 case-insensitively, `pkms` fails before creating the task and asks for the
 project id. Todoist task creation rejects `note:`.
+Todoist task creation also rejects `dep:`/`depend:`.
 
 Listing or showing Todoist tasks detects `pkms:id:<uuid>` PKMS note markers in
 Todoist descriptions and populates `note_uuid` and `note_title` when the note

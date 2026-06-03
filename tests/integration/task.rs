@@ -125,6 +125,7 @@ fn test_task_add_help_shows_modifiers() {
     assert!(stdout.contains("sch:<date>"));
     assert!(stdout.contains("dead:<date>"));
     assert!(stdout.contains("note:<uuid-title-or-path> PKMS only"));
+    assert!(stdout.contains("dep:<task-id>"));
     assert!(!stdout.contains("--title"));
     assert!(!stdout.contains("--source"));
 }
@@ -2674,6 +2675,51 @@ fn test_task_add_pkms_accepts_modifiers_and_note_target() {
     assert!(content.contains("SCHEDULED: <"));
     assert!(content.contains("DEADLINE: <"));
     assert!(content.contains("Body text"));
+}
+
+#[test]
+fn test_task_add_pkms_dependency_appends_child_to_parent_subtree() {
+    let db = TestDb::new().note_with_content(
+        "dependencies.org",
+        r#":PROPERTIES:
+:ID:       41414141-4141-4141-8141-414141414141
+:END:
+#+title: Dependencies
+
+* Project
+** TODO Existing blocker
+** TODO Parent task
+Parent body.
+*** TODO Existing child
+Child body.
+*** Notes
+Notes inside the parent subtree.
+* TODO Later sibling
+"#,
+    );
+    let path = db.root().join("roam/dependencies.org");
+
+    let (stdout, stderr, status) = db.run(&[
+        "--output-format",
+        "json",
+        "task",
+        "add",
+        "Dependent task",
+        "dep:2",
+    ]);
+
+    assert!(status.success(), "task add failed:\n{stdout}\n{stderr}");
+    let v: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    assert_eq!(v["item"]["source"], "pkms");
+    assert_eq!(v["item"]["title"], "Dependent task");
+    assert_eq!(v["item"]["heading_level"], 3);
+
+    let content = std::fs::read_to_string(&path).unwrap();
+    let notes = content.find("Notes inside the parent subtree.").unwrap();
+    let dependent = content.find("*** TODO Dependent task").unwrap();
+    let sibling = content.find("* TODO Later sibling").unwrap();
+    assert!(notes < dependent);
+    assert!(dependent < sibling);
 }
 
 #[test]

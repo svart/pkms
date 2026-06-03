@@ -205,6 +205,19 @@ pub fn append_inbox_entry(target: &PkmsInboxTarget, entry: &str) -> Result<(Path
     }
 }
 
+pub fn heading_level_at(path: &Path, line_number: usize) -> Result<usize> {
+    pkms_edit::heading_level_at(path, line_number)
+}
+
+pub fn append_child_entry(
+    path: &Path,
+    parent_line_number: usize,
+    entry: &str,
+) -> Result<(PathBuf, usize)> {
+    pkms_edit::append_child_org_entry(path, parent_line_number, entry)
+        .map(|line| (path.to_path_buf(), line))
+}
+
 pub fn find_task_item(
     config: &ResolvedConfig,
     path: &Path,

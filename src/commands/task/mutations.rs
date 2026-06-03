@@ -14,7 +14,7 @@ use anyhow::{Context, Result, bail};
 use chrono::NaiveDate;
 #[cfg(feature = "todoist")]
 use serde::Serialize;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use super::render;
@@ -110,6 +110,9 @@ fn mod_pkms_task(
     validate_mod_source(spec, "pkms")?;
     if spec.provided.note {
         bail!("note is available only for PKMS task creation.");
+    }
+    if spec.provided.dependency {
+        bail!("dep is available only for PKMS task creation.");
     }
 
     let title = mod_title(spec)?;
@@ -328,18 +331,66 @@ fn add_pkms_task(
     spec: &TaskAddSpec,
     clock: TaskClock,
 ) -> Result<()> {
+    if spec.dependency.is_some() && spec.note.is_some() {
+        bail!("note and dep cannot be used together for PKMS task creation.");
+    }
+
+    let (path, line_number) = if let Some(parent_id) = spec.dependency.as_deref() {
+        add_pkms_dependency_task(config, spec, clock, parent_id)?
+    } else {
+        add_pkms_inbox_task(config, spec, clock)?
+    };
+    let item = pkms::find_task_item_on(config, &path, line_number, clock)?.with_context(|| {
+        format!(
+            "Created task but could not reload it from {}",
+            path.display()
+        )
+    })?;
+    render::print_add_output(ctx, item)
+}
+
+fn add_pkms_inbox_task(
+    config: &ResolvedConfig,
+    spec: &TaskAddSpec,
+    clock: TaskClock,
+) -> Result<(PathBuf, usize)> {
     let inbox_target = match spec.note.as_deref() {
         Some(note) => pkms::resolve_note_task_target(config, note)?,
         None => pkms::resolve_inbox_target_on(config, true, clock.today)?,
     };
-    let title = spec
-        .title
-        .as_deref()
-        .or(spec.text.as_deref())
-        .map(str::trim)
-        .filter(|title| !title.is_empty())
-        .ok_or_else(|| anyhow::anyhow!("PKMS task creation requires task text or title:"))?;
+    let heading_level = match inbox_target {
+        PkmsInboxTarget::Note(_) => 1,
+        PkmsInboxTarget::Daily { .. } => 2,
+    };
+    let entry = format_pkms_task_entry(config, spec, clock, heading_level)?;
+    pkms::append_inbox_entry(&inbox_target, &entry)
+}
 
+fn add_pkms_dependency_task(
+    config: &ResolvedConfig,
+    spec: &TaskAddSpec,
+    clock: TaskClock,
+    parent_id: &str,
+) -> Result<(PathBuf, usize)> {
+    let task_id = parent_id.parse::<TaskId>()?;
+    let TaskId::Pkms(canonical_id) = task_id else {
+        bail!("dep is available only for PKMS task IDs.");
+    };
+    let graph = crate::graph::Graph::load(config)?;
+    let (path, line_number) = graph.resolve_canonical_task_id(config, canonical_id)?;
+    let path = PathBuf::from(path);
+    let parent_level = pkms::heading_level_at(&path, line_number)?;
+    let entry = format_pkms_task_entry(config, spec, clock, parent_level + 1)?;
+    pkms::append_child_entry(&path, line_number, &entry)
+}
+
+fn format_pkms_task_entry(
+    config: &ResolvedConfig,
+    spec: &TaskAddSpec,
+    clock: TaskClock,
+    heading_level: usize,
+) -> Result<String> {
+    let title = pkms_add_title(spec)?;
     let state = config
         .open_todo_states()
         .first()
@@ -358,10 +409,7 @@ fn add_pkms_task(
         format!(" :{}:", spec.labels.join(":"))
     };
 
-    let level = match inbox_target {
-        PkmsInboxTarget::Note(_) => "*",
-        PkmsInboxTarget::Daily { .. } => "**",
-    };
+    let level = "*".repeat(heading_level);
     let mut entry = format!("{level} {state}{priority} {title}{tags}\n");
     let due = validate_pkms_date_arg_on("due", spec.due.as_deref(), clock.today)?;
     let deadline = validate_pkms_date_arg_on("deadline", spec.deadline.as_deref(), clock.today)?;
@@ -386,15 +434,16 @@ fn add_pkms_task(
         entry.push('\n');
     }
 
-    let (inbox_path, line_number) = pkms::append_inbox_entry(&inbox_target, &entry)?;
-    let item =
-        pkms::find_task_item_on(config, &inbox_path, line_number, clock)?.with_context(|| {
-            format!(
-                "Created task but could not reload it from {}",
-                inbox_path.display()
-            )
-        })?;
-    render::print_add_output(ctx, item)
+    Ok(entry)
+}
+
+fn pkms_add_title(spec: &TaskAddSpec) -> Result<&str> {
+    spec.title
+        .as_deref()
+        .or(spec.text.as_deref())
+        .map(str::trim)
+        .filter(|title| !title.is_empty())
+        .ok_or_else(|| anyhow::anyhow!("PKMS task creation requires task text or title:"))
 }
 
 fn postpone_pkms_recurring_task(
@@ -422,6 +471,9 @@ fn add_todoist_task(
     spec: &TaskAddSpec,
     clock: TaskClock,
 ) -> Result<()> {
+    if spec.dependency.is_some() {
+        bail!("dep is available only for PKMS task creation.");
+    }
     if spec.note.is_some() {
         bail!("note is available only for PKMS task creation.");
     }
@@ -435,9 +487,12 @@ fn add_todoist_task(
 fn add_todoist_task(
     _config: &ResolvedConfig,
     _ctx: &OutputContext,
-    _spec: &TaskAddSpec,
+    spec: &TaskAddSpec,
     _clock: TaskClock,
 ) -> Result<()> {
+    if spec.dependency.is_some() {
+        bail!("dep is available only for PKMS task creation.");
+    }
     bail!("Todoist support is not available in this build. Rebuild with --features todoist.")
 }
 
@@ -535,6 +590,9 @@ fn mod_todoist_task(
     validate_mod_source(spec, "todoist")?;
     if spec.provided.note {
         bail!("note is available only for PKMS task creation.");
+    }
+    if spec.provided.dependency {
+        bail!("dep is available only for PKMS task creation.");
     }
 
     let token = crate::tasks::todoist::ensure_enabled(config)?;

@@ -97,6 +97,7 @@ pkms task list source:todoist 'todoist.filter:today | overdue'
 pkms task todoist:<remote-id> show
 pkms task add "Capture local task"
 pkms task add note:"Project Alpha" title:"Follow up"
+pkms task add dep:2 title:"Follow up on parent task"
 pkms task add source:todoist "Buy milk tomorrow"
 pkms task add source:todoist title:"Call Alice" due:2026-05-24 tag:phone priority:B
 pkms task add source:todoist title:"Call Alice" sch:tod tag:phone prio:B
@@ -130,13 +131,15 @@ is `daily`, PKMS inbox tasks live in today's daily note under the top-level
 
 Default `task add` appends a TODO heading to the configured PKMS inbox note.
 Use positional text or add modifiers. `note:` is PKMS-only and chooses the note
-to append into:
+to append into. `dep:`/`depend:` is PKMS-only and appends the new task as the
+final child heading in the referenced PKMS task's subtree:
 
 ```bash
 pkms task add "Capture local task"
 pkms task add title:"Call Alice" due:2026-05-24 deadline:2026-05-30 tag:phone priority:B
 pkms task add title:"Call Alice" sch:mon dead:to tag:phone prio:B
 pkms task add note:"Project Alpha" title:"Follow up" schedule:tomorrow
+pkms task add dep:2 title:"Follow up on parent task"
 ```
 
 Use positional text with `task add source:todoist` for Todoist Quick Add
@@ -151,7 +154,7 @@ pkms task add source:todoist title:"Call Alice" sch:tod dead:tom project:inbox t
 Add modifiers: `source:`/`src:`, `title:`, `tag:`/`tags:`/`label:`/`labels:`,
 `schedule:`/`sch:`/`sched:`/`due:`, `deadline:`/`dead:`/`dl:`,
 `project:`/`proj:`, `prio:`/`priority:`/`pri:`, `desc:`/`description:`/`body:`,
-and PKMS-only `note:`.
+and PKMS-only `note:` and `dep:`/`depend:`.
 
 Structured due and deadline values accept unambiguous case-insensitive prefixes
 of `today`, `tomorrow`, or weekday names, plus `YYYY-MM-DD` or
@@ -159,7 +162,7 @@ of `today`, `tomorrow`, or weekday names, plus `YYYY-MM-DD` or
 Priority must be `A`, `B`, or `C`. Repeat or comma-separate tag modifiers for
 multiple labels. `project:` accepts either a Todoist project id or an exact
 project name. If a project name is duplicated case-insensitively, use the
-project id. Todoist task creation rejects `note:`.
+project id. Todoist task creation rejects `note:` and `dep:`/`depend:`.
 
 Todoist descriptions containing `pkms:id:<uuid>` PKMS note markers are detected
 by `task list source:todoist` and `task todoist:<remote-id> show`.

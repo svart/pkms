@@ -14,6 +14,7 @@ pub struct TaskAddSpec {
     pub priority: Option<String>,
     pub description: Option<String>,
     pub note: Option<String>,
+    pub dependency: Option<String>,
     pub text: Option<String>,
     pub provided: TaskAddProvided,
 }
@@ -29,6 +30,7 @@ pub struct TaskAddProvided {
     pub priority: bool,
     pub description: bool,
     pub note: bool,
+    pub dependency: bool,
     pub text: bool,
 }
 
@@ -44,6 +46,7 @@ impl TaskAddSpec {
             priority: None,
             description: None,
             note: None,
+            dependency: None,
             text: None,
             provided: TaskAddProvided::default(),
         };
@@ -107,6 +110,10 @@ fn apply_modifier(spec: &mut TaskAddSpec, token: &str) -> Result<bool> {
         "note" => {
             set_once(&mut spec.note, "note", value.to_string())?;
             spec.provided.note = true;
+        }
+        "dep" | "depend" => {
+            set_once(&mut spec.dependency, "dep", value.to_string())?;
+            spec.provided.dependency = true;
         }
         _ => return Ok(false),
     }
@@ -295,6 +302,7 @@ mod tests {
             "prio:A",
             "project:Inbox",
             "desc:Follow up",
+            "depend:2",
         ]))
         .unwrap();
 
@@ -306,6 +314,7 @@ mod tests {
         assert_eq!(spec.priority.as_deref(), Some("A"));
         assert_eq!(spec.project.as_deref(), Some("Inbox"));
         assert_eq!(spec.description.as_deref(), Some("Follow up"));
+        assert_eq!(spec.dependency.as_deref(), Some("2"));
     }
 
     #[test]

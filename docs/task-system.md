@@ -25,6 +25,7 @@ pkms task list projects
 pkms task list tags
 pkms task add "Capture local task"
 pkms task add title:"Call Alice" sch:mon dead:to tag:phone prio:B
+pkms task add dep:2 title:"Follow up on parent task"
 pkms task p<ID> show
 pkms task p<ID> open
 pkms task p<ID> state WAITING
@@ -273,6 +274,8 @@ or `daily`. `daily` uses today's daily note and places tasks under a top-level
 under `daily_notes_dir`, or `new_notes_dir` when `daily_notes_dir` is unset.
 `note:<target>` on `task add` is PKMS-only and overrides the configured inbox
 destination.
+`dep:<task-id>`/`depend:<task-id>` on `task add` is PKMS-only and appends the
+new task as the final child heading in the referenced task's subtree.
 
 PKMS add modifiers:
 
@@ -286,6 +289,7 @@ PKMS add modifiers:
 | `prio:<A-B-C>` | `priority:`, `pri:` | Add source-neutral priority. |
 | `desc:<text>` | `description:`, `body:` | Add body text. |
 | `note:<target>` | | Choose destination note. |
+| `dep:<task-id>` | `depend:` | Add as a child of an existing PKMS task. |
 
 Dates accept unambiguous case-insensitive prefixes of `today`, `tomorrow`, or
 weekday names, plus `YYYY-MM-DD` or `YYYY-MM-DD HH:MM`. Weekday names resolve
