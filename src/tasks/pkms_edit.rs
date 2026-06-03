@@ -39,6 +39,23 @@ pub fn append_child_org_entry(
     Ok(line_number)
 }
 
+pub fn move_org_subtree(
+    source_path: &Path,
+    source_line_number: usize,
+    target_path: &Path,
+    target_line_number: usize,
+) -> Result<usize> {
+    if same_existing_path(source_path, target_path) {
+        return move_org_subtree_in_file(source_path, source_line_number, target_line_number);
+    }
+    move_org_subtree_between_files(
+        source_path,
+        source_line_number,
+        target_path,
+        target_line_number,
+    )
+}
+
 pub fn inbox_section_range(path: &Path) -> Result<Option<(usize, usize)>> {
     let content = std::fs::read_to_string(path)
         .with_context(|| format!("Failed to read daily note: {}", path.display()))?;
@@ -107,18 +124,161 @@ fn append_child_org_entry_to_content(
     Ok(insert_idx + 1)
 }
 
+fn move_org_subtree_in_file(
+    path: &Path,
+    source_line_number: usize,
+    target_line_number: usize,
+) -> Result<usize> {
+    let mut content = std::fs::read_to_string(path)
+        .with_context(|| format!("Failed to read task note: {}", path.display()))?;
+    normalize_trailing_newline(&mut content);
+    let mut lines: Vec<String> = content.split_inclusive('\n').map(str::to_string).collect();
+    let new_line = move_org_subtree_in_lines(&mut lines, source_line_number, target_line_number)?;
+    std::fs::write(path, lines.concat())
+        .with_context(|| format!("Failed to write task note: {}", path.display()))?;
+    Ok(new_line)
+}
+
+fn move_org_subtree_between_files(
+    source_path: &Path,
+    source_line_number: usize,
+    target_path: &Path,
+    target_line_number: usize,
+) -> Result<usize> {
+    let mut source_content = std::fs::read_to_string(source_path)
+        .with_context(|| format!("Failed to read task note: {}", source_path.display()))?;
+    let mut target_content = std::fs::read_to_string(target_path)
+        .with_context(|| format!("Failed to read task note: {}", target_path.display()))?;
+    normalize_trailing_newline(&mut source_content);
+    normalize_trailing_newline(&mut target_content);
+
+    let mut source_lines: Vec<String> = source_content
+        .split_inclusive('\n')
+        .map(str::to_string)
+        .collect();
+    let mut target_lines: Vec<String> = target_content
+        .split_inclusive('\n')
+        .map(str::to_string)
+        .collect();
+
+    let source_idx = line_index(source_line_number, "source task")?;
+    let source_level = heading_level_in_lines(&source_lines, source_idx, source_line_number)?;
+    let source_end = subtree_end_index(&source_lines, source_idx, source_level);
+    let mut subtree = source_lines[source_idx..source_end].to_vec();
+    source_lines.drain(source_idx..source_end);
+
+    let target_idx = line_index(target_line_number, "target task")?;
+    let target_level = heading_level_in_lines(&target_lines, target_idx, target_line_number)?;
+    relevel_subtree_lines(&mut subtree, target_level + 1, source_level)?;
+    let insert_idx = subtree_end_index(&target_lines, target_idx, target_level);
+    target_lines.splice(insert_idx..insert_idx, subtree);
+
+    std::fs::write(target_path, target_lines.concat())
+        .with_context(|| format!("Failed to write task note: {}", target_path.display()))?;
+    std::fs::write(source_path, source_lines.concat())
+        .with_context(|| format!("Failed to write task note: {}", source_path.display()))?;
+    Ok(insert_idx + 1)
+}
+
+fn move_org_subtree_in_lines(
+    lines: &mut Vec<String>,
+    source_line_number: usize,
+    target_line_number: usize,
+) -> Result<usize> {
+    let source_idx = line_index(source_line_number, "source task")?;
+    let target_idx = line_index(target_line_number, "target task")?;
+    if source_idx == target_idx {
+        anyhow::bail!("Cannot move a task under itself.");
+    }
+
+    let source_level = heading_level_in_lines(lines, source_idx, source_line_number)?;
+    let target_level = heading_level_in_lines(lines, target_idx, target_line_number)?;
+    let source_end = subtree_end_index(lines, source_idx, source_level);
+    if (source_idx..source_end).contains(&target_idx) {
+        anyhow::bail!("Cannot move a task under one of its descendants.");
+    }
+
+    let mut subtree = lines[source_idx..source_end].to_vec();
+    relevel_subtree_lines(&mut subtree, target_level + 1, source_level)?;
+    let removed_len = source_end - source_idx;
+    lines.drain(source_idx..source_end);
+
+    let adjusted_target_idx = if source_idx < target_idx {
+        target_idx - removed_len
+    } else {
+        target_idx
+    };
+    let insert_idx = subtree_end_index(lines, adjusted_target_idx, target_level);
+    lines.splice(insert_idx..insert_idx, subtree);
+    Ok(insert_idx + 1)
+}
+
+fn relevel_subtree_lines(
+    lines: &mut [String],
+    new_root_level: usize,
+    old_root_level: usize,
+) -> Result<()> {
+    let delta = new_root_level as isize - old_root_level as isize;
+    for line in lines {
+        let (body, newline) = crate::org_edit::split_line_ending(line);
+        let Some(captures) = HEADING_RE.captures(body) else {
+            continue;
+        };
+        let Some(stars) = captures.get(1) else {
+            continue;
+        };
+        let new_level = stars.as_str().len() as isize + delta;
+        if new_level < 1 {
+            anyhow::bail!("Cannot move subtree because it would create an invalid heading level.");
+        }
+        let mut updated = body.to_string();
+        updated.replace_range(stars.range(), &"*".repeat(new_level as usize));
+        *line = format!("{updated}{newline}");
+    }
+    Ok(())
+}
+
+fn subtree_end_index(lines: &[String], heading_idx: usize, heading_level: usize) -> usize {
+    for (idx, line) in lines.iter().enumerate().skip(heading_idx + 1) {
+        let body = line.trim_end();
+        let Some(captures) = HEADING_RE.captures(body) else {
+            continue;
+        };
+        let level = captures.get(1).map_or("", |m| m.as_str()).len();
+        if level <= heading_level {
+            return idx;
+        }
+    }
+    lines.len()
+}
+
 fn heading_level_in_content(content: &str, line_number: usize) -> Result<usize> {
-    let line_idx = line_number
-        .checked_sub(1)
-        .ok_or_else(|| anyhow::anyhow!("Invalid task line number: {line_number}"))?;
-    let line = content
-        .lines()
-        .nth(line_idx)
+    let line_idx = line_index(line_number, "task")?;
+    let lines = content.lines().map(str::to_string).collect::<Vec<_>>();
+    heading_level_in_lines(&lines, line_idx, line_number)
+}
+
+fn heading_level_in_lines(lines: &[String], line_idx: usize, line_number: usize) -> Result<usize> {
+    let line = lines
+        .get(line_idx)
         .ok_or_else(|| anyhow::anyhow!("Task line {line_number} no longer exists"))?;
     let captures = HEADING_RE
         .captures(line)
         .ok_or_else(|| anyhow::anyhow!("Task line {line_number} is no longer an org heading"))?;
     Ok(captures.get(1).map_or("", |m| m.as_str()).len())
+}
+
+fn line_index(line_number: usize, name: &str) -> Result<usize> {
+    line_number
+        .checked_sub(1)
+        .ok_or_else(|| anyhow::anyhow!("Invalid {name} line number: {line_number}"))
+}
+
+fn same_existing_path(left: &Path, right: &Path) -> bool {
+    match (std::fs::canonicalize(left), std::fs::canonicalize(right)) {
+        (Ok(left), Ok(right)) => left == right,
+        _ => left == right,
+    }
 }
 
 fn normalize_trailing_newline(content: &mut String) {
@@ -205,6 +365,53 @@ mod tests {
         assert_eq!(
             content,
             "#+title: Tasks\n\n** TODO Parent\nBody\n*** TODO New child\n"
+        );
+    }
+
+    #[test]
+    fn moves_subtree_to_end_of_target_subtree_and_relevels() {
+        let mut lines = "#+title: Tasks\n\n* Project\n** TODO Target\n*** TODO Existing\n** TODO Source\nSource body\n*** TODO Child\n* TODO Sibling\n"
+            .split_inclusive('\n')
+            .map(str::to_string)
+            .collect::<Vec<_>>();
+
+        let line = move_org_subtree_in_lines(&mut lines, 6, 4).unwrap();
+
+        assert_eq!(line, 6);
+        assert_eq!(
+            lines.concat(),
+            "#+title: Tasks\n\n* Project\n** TODO Target\n*** TODO Existing\n*** TODO Source\nSource body\n**** TODO Child\n* TODO Sibling\n"
+        );
+    }
+
+    #[test]
+    fn moves_subtree_before_later_target_and_adjusts_target_index() {
+        let mut lines = "#+title: Tasks\n\n* Project\n** TODO Source\n*** TODO Child\n** TODO Middle\n** TODO Target\n*** TODO Existing\n* TODO Sibling\n"
+            .split_inclusive('\n')
+            .map(str::to_string)
+            .collect::<Vec<_>>();
+
+        let line = move_org_subtree_in_lines(&mut lines, 4, 7).unwrap();
+
+        assert_eq!(line, 7);
+        assert_eq!(
+            lines.concat(),
+            "#+title: Tasks\n\n* Project\n** TODO Middle\n** TODO Target\n*** TODO Existing\n*** TODO Source\n**** TODO Child\n* TODO Sibling\n"
+        );
+    }
+
+    #[test]
+    fn rejects_moving_subtree_under_own_descendant() {
+        let mut lines = "#+title: Tasks\n\n** TODO Source\n*** TODO Child\n"
+            .split_inclusive('\n')
+            .map(str::to_string)
+            .collect::<Vec<_>>();
+
+        let err = move_org_subtree_in_lines(&mut lines, 3, 4).unwrap_err();
+
+        assert!(
+            err.to_string()
+                .contains("Cannot move a task under one of its descendants")
         );
     }
 }

@@ -330,7 +330,7 @@ pub struct TaskTableArgs {
 
 #[derive(Debug, Args)]
 #[command(
-    after_help = "ID-first actions:\n  pkms task <ID> show\n  pkms task <ID> open [--editor <COMMAND>] [--line <LINE>]\n  pkms task <ID> state <STATE> [--dry-run]\n  pkms task <ID> done [--dry-run]\n  pkms task <ID> postpone --to <DATE>\n  pkms task <ID> mod <MODIFIER>..."
+    after_help = "ID-first actions:\n  pkms task <ID> show\n  pkms task <ID> open [--editor <COMMAND>] [--line <LINE>]\n  pkms task <ID> state <STATE> [--dry-run]\n  pkms task <ID> done [--dry-run]\n  pkms task <ID> postpone --to <DATE>\n  pkms task <ID> mod <MODIFIER>...\n  pkms task <ID> mod dep:<PARENT-ID>"
 )]
 pub struct TaskArgs {
     #[command(subcommand)]
@@ -493,7 +493,7 @@ pub struct TaskAddArgs {
 pub struct TaskModArgs {
     #[arg(help = "Task ID: 12, p12, pkms:12, or todoist:<remote-id>")]
     pub id: String,
-    #[arg(help = "Task modifiers such as title:, tag:, sch:, dead:, prio:, project:, desc:")]
+    #[arg(help = "Task modifiers such as title:, tag:, sch:, dead:, prio:, project:, desc:, dep:")]
     pub modifiers: Vec<String>,
 }
 

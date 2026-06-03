@@ -49,6 +49,7 @@ fn test_task_help_lists_subcommands() {
     assert!(stdout.contains("state"));
     assert!(stdout.contains("done"));
     assert!(stdout.contains("add"));
+    assert!(stdout.contains("mod dep:<PARENT-ID>"));
     assert!(!stdout.contains("report"));
     assert!(!stdout.contains("plan"));
     let commands = task_help_commands(&stdout);
@@ -1610,6 +1611,60 @@ fn test_task_mod_pkms_accepts_add_style_metadata_modifiers() {
     assert!(content.contains("* TODO [#B] Updated task :phone:work:"));
     assert!(content.contains(":PROJECT: Focus"));
     assert!(content.contains("Follow up notes"));
+}
+
+#[test]
+fn test_task_mod_pkms_dependency_moves_task_subtree() {
+    let db = TestDb::new().note_with_content(
+        "move-dependency.org",
+        r#":PROPERTIES:
+:ID:       42424242-4242-4242-8242-424242424242
+:END:
+#+title: Move Dependency
+
+* Project
+** TODO Target parent
+Target body.
+*** TODO Existing target child
+** TODO Move source
+Source body.
+*** TODO Source child
+Child body.
+**** TODO Source grandchild
+** TODO Later sibling
+"#,
+    );
+    let path = db.root().join("roam/move-dependency.org");
+
+    let (v, status) = db.run_json(&["task", "p3", "mod", "dep:1"]);
+
+    assert!(status.success());
+    assert_eq!(v["changed"], true);
+    assert_eq!(v["changes"][0]["property"], "Dependency");
+    assert_eq!(v["changes"][0]["new"], "p1");
+    assert_eq!(v["item"]["title"], "Move source");
+    assert_eq!(v["item"]["heading_level"], 3);
+
+    let content = std::fs::read_to_string(&path).unwrap();
+    assert_eq!(
+        content,
+        r#":PROPERTIES:
+:ID:       42424242-4242-4242-8242-424242424242
+:END:
+#+title: Move Dependency
+
+* Project
+** TODO Target parent
+Target body.
+*** TODO Existing target child
+*** TODO Move source
+Source body.
+**** TODO Source child
+Child body.
+***** TODO Source grandchild
+** TODO Later sibling
+"#
+    );
 }
 
 #[test]

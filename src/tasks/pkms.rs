@@ -218,6 +218,21 @@ pub fn append_child_entry(
         .map(|line| (path.to_path_buf(), line))
 }
 
+pub fn move_subtree_to_dependency(
+    source_path: &Path,
+    source_line_number: usize,
+    target_path: &Path,
+    target_line_number: usize,
+) -> Result<(PathBuf, usize)> {
+    pkms_edit::move_org_subtree(
+        source_path,
+        source_line_number,
+        target_path,
+        target_line_number,
+    )
+    .map(|line| (target_path.to_path_buf(), line))
+}
+
 pub fn find_task_item(
     config: &ResolvedConfig,
     path: &Path,

@@ -111,9 +111,6 @@ fn mod_pkms_task(
     if spec.provided.note {
         bail!("note is available only for PKMS task creation.");
     }
-    if spec.provided.dependency {
-        bail!("dep is available only for PKMS task creation.");
-    }
 
     let title = mod_title(spec)?;
     let modifier = pkms_mutation::HeadingMod {
@@ -144,14 +141,53 @@ fn mod_pkms_task(
 
     let graph = crate::graph::Graph::load(config)?;
     let (path, line_number) = graph.resolve_canonical_task_id(config, canonical_id)?;
-    let changes = pkms_mutation::update_heading_properties(&path, line_number, &modifier)?;
+    let mut path = PathBuf::from(path);
+    let mut line_number = line_number;
+    let mut changes = Vec::new();
+
+    if let Some(target_id) = mod_dependency(spec)? {
+        if target_id == canonical_id {
+            bail!("Cannot make a task depend on itself.");
+        }
+        let (target_path, target_line_number) =
+            graph.resolve_canonical_task_id(config, target_id)?;
+        (path, line_number) = pkms::move_subtree_to_dependency(
+            &path,
+            line_number,
+            Path::new(&target_path),
+            target_line_number,
+        )?;
+        changes.push(render::TaskModChange {
+            property: "Dependency",
+            old: None,
+            new: Some(TaskId::Pkms(target_id).display_id()),
+        });
+    }
+
+    changes.extend(
+        pkms_mutation::update_heading_properties(
+            &path.display().to_string(),
+            line_number,
+            &modifier,
+        )?
+        .into_iter()
+        .map(|change| render::TaskModChange {
+            property: change.property,
+            old: change.old,
+            new: change.new,
+        }),
+    );
+
     let item = if changes.is_empty() {
         None
     } else {
         Some(
-            pkms::find_task_item_on(config, Path::new(&path), line_number, clock)?.with_context(
-                || format!("Changed task but could not reload it from {path}:{line_number}"),
-            )?,
+            pkms::find_task_item_on(config, &path, line_number, clock)?.with_context(|| {
+                format!(
+                    "Changed task but could not reload it from {}:{line_number}",
+                    path.display()
+                )
+            })?,
         )
     };
     render::print_mod_output(
@@ -159,18 +195,23 @@ fn mod_pkms_task(
         render::TaskModOutput {
             changed: !changes.is_empty(),
             id: TaskId::Pkms(canonical_id).display_id(),
-            changes: changes
-                .into_iter()
-                .map(|change| render::TaskModChange {
-                    property: change.property,
-                    old: change.old,
-                    new: change.new,
-                })
-                .collect(),
+            changes,
             item,
         },
         clock.today,
     )
+}
+
+fn mod_dependency(spec: &TaskAddSpec) -> Result<Option<usize>> {
+    if !spec.provided.dependency {
+        return Ok(None);
+    }
+    let raw = spec.dependency.as_deref().unwrap_or_default();
+    let task_id = raw.parse::<TaskId>()?;
+    let TaskId::Pkms(canonical_id) = task_id else {
+        bail!("dep is available only for PKMS task IDs.");
+    };
+    Ok(Some(canonical_id))
 }
 
 fn validate_mod_source(spec: &TaskAddSpec, expected: &str) -> Result<()> {

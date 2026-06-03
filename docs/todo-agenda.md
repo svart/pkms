@@ -237,6 +237,7 @@ pkms task p<id> mod sch:2026-05-24
 pkms task todoist:<remote-id> mod sch:2026-05-24
 pkms task todoist:<remote-id> mod sch:none
 pkms task p<id> mod dl:2026-05-30
+pkms task p<id> mod dep:<parent-id>
 pkms task todoist:<remote-id> mod dl:none
 ```
 
@@ -358,9 +359,12 @@ includes the stable id and key planning fields.
 ID-first `task <ID> mod` changes add-style task properties for PKMS and Todoist
 tasks. For PKMS, `sch:` and `dl:` edit the heading planning line. For Todoist,
 they update `due_date` and `deadline_date`. Use `sch:none` or `dl:none` to clear
-a date. When changes are made, text output prints one diff line per changed
-property, such as `Scheduled: Today (2026-06-02) -> Scheduled: Tomorrow
-(2026-06-03)`. If no properties change, it prints `Nothing changed` and exits
+a date. For PKMS, `dep:<task-id>`/`depend:<task-id>` moves the task's whole
+subtree, including body text and child headings, to the end of the referenced
+task's subtree. Todoist `task mod` rejects `dep:`/`depend:`.
+When changes are made, text output prints one diff line per changed property,
+such as `Scheduled: Today (2026-06-02) -> Scheduled: Tomorrow (2026-06-03)`.
+If no properties change, it prints `Nothing changed` and exits
 nonzero. ID-first `task <ID> postpone` works only for recurring tasks. For PKMS,
 the task must have a recurring `SCHEDULED` or `DEADLINE` timestamp and the
 repeater/warning syntax is preserved. For Todoist, the Todoist due date must be

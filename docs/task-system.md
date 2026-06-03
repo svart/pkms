@@ -32,6 +32,7 @@ pkms task p<ID> state WAITING
 pkms task p<ID> done
 pkms task p<ID> mod sch:2026-05-24
 pkms task p<ID> mod dl:2026-05-30
+pkms task p<ID> mod dep:<parent-id>
 pkms task p<ID> postpone --to tomorrow
 ```
 
@@ -306,9 +307,11 @@ Local mutation rules:
 - `task <ID> done` uses the first configured closed state, defaulting to
   `DONE`.
 - `task <ID> mod` changes add-style task properties such as `title:`,
-  `tag:`, `sch:`, `dl:`, `project:`, `prio:`, and `desc:`.
+  `tag:`, `sch:`, `dl:`, `project:`, `prio:`, `desc:`, and `dep:`.
 - `task <ID> mod sch:DATE|none` sets or clears `SCHEDULED`.
 - `task <ID> mod dl:DATE|none` sets or clears `DEADLINE`.
+- `task <ID> mod dep:<task-id>` moves the whole PKMS task subtree to the end of
+  the referenced task's subtree.
 - If `task <ID> mod` would not change anything, it prints `Nothing changed`
   and exits nonzero.
 - `task <ID> postpone --to DATE` is only for recurring planned tasks and must
