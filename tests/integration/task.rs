@@ -123,6 +123,7 @@ fn test_task_add_help_shows_modifiers() {
         "task add --help failed:\n{stdout}\n{stderr}"
     );
     assert!(stdout.contains("Add modifiers:"));
+    assert!(stdout.contains("status:<state>"));
     assert!(stdout.contains("sch:<date>"));
     assert!(stdout.contains("dead:<date>"));
     assert!(stdout.contains("note:<uuid-title-or-path> PKMS only"));
@@ -1506,6 +1507,32 @@ fn test_task_state_rejects_todoist_before_todoist_support() {
 }
 
 #[test]
+fn test_task_mod_pkms_accepts_status_modifier() {
+    let (_dir, root) = setup_db();
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "task",
+        "p1",
+        "mod",
+        "status:waiting",
+    ]);
+    assert!(status.success());
+    assert_eq!(v["changed"], true);
+    assert_eq!(v["changes"][0]["property"], "Status");
+    assert_eq!(v["changes"][0]["old"], "TODO");
+    assert_eq!(v["changes"][0]["new"], "WAITING");
+    assert_eq!(v["item"]["state"], "WAITING");
+    assert_eq!(v["item"]["status"], "open");
+    let path = v["item"]["path"].as_str().unwrap();
+    let content = std::fs::read_to_string(path).unwrap();
+    assert!(content.contains("* WAITING [#A] High priority task"));
+    assert!(!content.contains("* TODO [#A] High priority task"));
+}
+
+#[test]
 fn test_task_mod_pkms_sets_and_clears_scheduled_date() {
     let (_dir, root) = setup_db();
     let (v, status) = run_json(&[
@@ -2744,6 +2771,44 @@ fn test_task_add_defaults_to_pkms_inbox() {
     assert!(content.contains("* TODO [#A] Capture new task :inbox:"));
     assert!(content.contains("SCHEDULED: <2026-06-01"));
     assert!(content.contains("DEADLINE: <2026-06-03"));
+}
+
+#[test]
+fn test_task_add_pkms_accepts_status_modifier() {
+    let (_dir, root) = setup_db();
+    let inbox_path = root.join("roam/personal/20260525000001-capture-inbox.org");
+    std::fs::write(
+        &inbox_path,
+        r#":PROPERTIES:
+:ID:       26262626-2626-4626-8626-262626262626
+:END:
+#+title: Capture Inbox
+"#,
+    )
+    .unwrap();
+    let config = format!("{TEST_CONFIG}\n[tasks]\ninbox = \"Capture Inbox\"\n");
+    let (stdout, stderr, status) = run_with_config(
+        &[
+            "--db",
+            root.to_str().unwrap(),
+            "--output-format",
+            "json",
+            "task",
+            "add",
+            "title:Waiting capture",
+            "status:waiting",
+        ],
+        &config,
+    );
+    assert!(status.success(), "task add failed:\n{stdout}\n{stderr}");
+    let v: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    assert_eq!(v["item"]["source"], "pkms");
+    assert_eq!(v["item"]["title"], "Waiting capture");
+    assert_eq!(v["item"]["state"], "WAITING");
+    assert_eq!(v["item"]["status"], "open");
+    let content = std::fs::read_to_string(&inbox_path).unwrap();
+    assert!(content.contains("* WAITING Waiting capture"));
+    assert!(!content.contains("* TODO Waiting capture"));
 }
 
 #[test]

@@ -115,6 +115,7 @@ fn mod_pkms_task(
 
     let title = mod_title(spec)?;
     let modifier = pkms_mutation::HeadingMod {
+        state: mod_status(config, spec)?,
         title,
         priority: mod_pkms_priority(spec)?,
         tags: spec.labels.clone(),
@@ -289,6 +290,13 @@ fn mod_pkms_priority(spec: &TaskModifierSpec) -> Result<Option<Option<char>>> {
         value if is_clear_value(value) => None,
         value => Some(pkms_priority(value)?),
     }))
+}
+
+fn mod_status(config: &ResolvedConfig, spec: &TaskModifierSpec) -> Result<Option<String>> {
+    spec.status
+        .as_deref()
+        .map(|status| canonical_state(config, status))
+        .transpose()
 }
 
 fn mod_optional_text(value: Option<&str>) -> Option<Option<String>> {
@@ -467,11 +475,14 @@ fn format_pkms_task_entry(
     heading_level: usize,
 ) -> Result<String> {
     let title = pkms_add_title(spec)?;
-    let state = config
-        .open_todo_states()
-        .first()
-        .cloned()
-        .unwrap_or_else(|| "TODO".to_string());
+    let state = match spec.status.as_deref() {
+        Some(status) => canonical_state(config, status)?,
+        None => config
+            .open_todo_states()
+            .first()
+            .cloned()
+            .unwrap_or_else(|| "TODO".to_string()),
+    };
     let priority = spec
         .priority
         .as_deref()
@@ -549,6 +560,9 @@ fn add_todoist_task(
     spec: &TaskModifierSpec,
     clock: TaskClock,
 ) -> Result<()> {
+    if spec.status.is_some() {
+        bail!("status is available only for PKMS task creation.");
+    }
     if spec.dependency.is_some() {
         bail!("dep is available only for PKMS task creation.");
     }
@@ -666,6 +680,9 @@ fn mod_todoist_task(
     clock: TaskClock,
 ) -> Result<ExitCode> {
     validate_mod_source(spec, "todoist")?;
+    if spec.status.is_some() {
+        bail!("status is available only for PKMS task modification.");
+    }
     if spec.note.is_some() {
         bail!("note is available only for PKMS task creation.");
     }

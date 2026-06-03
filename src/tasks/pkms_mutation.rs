@@ -20,6 +20,7 @@ pub struct TaskStateChange {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HeadingMod {
+    pub state: Option<String>,
     pub title: Option<String>,
     pub priority: Option<Option<char>>,
     pub tags: Option<Vec<String>>,
@@ -113,10 +114,19 @@ pub fn update_heading_properties(
         .to_string();
     let old_tags = heading_tags(captures.get(5).map(|m| m.as_str()));
 
+    let old_state = state;
+    let new_state = modifier.state.as_ref().or(old_state.as_ref());
     let new_title = modifier.title.as_ref().unwrap_or(&old_title);
     let new_priority = modifier.priority.unwrap_or(old_priority);
     let new_tags = modifier.tags.as_ref().unwrap_or(&old_tags);
 
+    if modifier.state.is_some() && old_state.as_ref() != new_state {
+        changes.push(TaskPropertyChange {
+            property: "Status",
+            old: old_state.clone(),
+            new: new_state.cloned(),
+        });
+    }
     if modifier.title.is_some() && old_title != *new_title {
         changes.push(TaskPropertyChange {
             property: "Title",
@@ -140,11 +150,17 @@ pub fn update_heading_properties(
     }
     if changes
         .iter()
-        .any(|change| matches!(change.property, "Title" | "Priority" | "Tags"))
+        .any(|change| matches!(change.property, "Status" | "Title" | "Priority" | "Tags"))
     {
         lines[heading_idx] = format!(
             "{}{}",
-            format_heading(level, state.as_deref(), new_priority, new_title, new_tags),
+            format_heading(
+                level,
+                new_state.map(String::as_str),
+                new_priority,
+                new_title,
+                new_tags
+            ),
             heading_newline
         );
     }

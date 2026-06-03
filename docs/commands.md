@@ -164,6 +164,7 @@ pkms task list tags source:todoist
 pkms task todoist:<remote-id> show
 pkms task add "Capture local task"
 pkms task add title:"Call Alice" sch:mon dead:to tag:phone prio:B
+pkms task add title:"Waiting on Alice" status:WAITING
 pkms task add note:"Project Alpha" title:"Follow up"
 pkms task add dep:2 title:"Follow up on parent task"
 pkms task add source:todoist "Buy milk tomorrow"
@@ -173,6 +174,7 @@ pkms task todoist:<remote-id> done
 pkms task p<id> postpone --to 2026-06-01
 pkms task todoist:<remote-id> postpone --to tomorrow
 pkms task p<id> mod sch:2026-05-24
+pkms task p<id> mod status:WAITING
 pkms task todoist:<remote-id> mod sch:
 pkms task p<id> mod dl:2026-05-30
 pkms task p<id> mod dep:<parent-id>

@@ -12,6 +12,7 @@ pub struct TaskModifierSpec {
     pub deadline: Option<String>,
     pub labels: Option<Vec<String>>,
     pub priority: Option<String>,
+    pub status: Option<String>,
     pub description: Option<String>,
     pub note: Option<String>,
     pub dependency: Option<String>,
@@ -28,6 +29,7 @@ impl TaskModifierSpec {
             deadline: None,
             labels: None,
             priority: None,
+            status: None,
             description: None,
             note: None,
             dependency: None,
@@ -90,6 +92,9 @@ fn apply_modifier(spec: &mut TaskModifierSpec, token: &str) -> Result<bool> {
         }
         "priority" | "prio" | "pri" => {
             set_once(&mut spec.priority, "priority", value.to_string())?;
+        }
+        "status" => {
+            set_once(&mut spec.status, "status", value.to_string())?;
         }
         "description" | "desc" | "body" => {
             set_once(&mut spec.description, "description", value.to_string())?;
@@ -292,6 +297,7 @@ mod tests {
             "prio:A",
             "project:Inbox",
             "desc:Follow up",
+            "status:waiting",
             "depend:2",
         ]))
         .unwrap();
@@ -307,6 +313,7 @@ mod tests {
         assert_eq!(spec.priority.as_deref(), Some("A"));
         assert_eq!(spec.project.as_deref(), Some("Inbox"));
         assert_eq!(spec.description.as_deref(), Some("Follow up"));
+        assert_eq!(spec.status.as_deref(), Some("waiting"));
         assert_eq!(spec.dependency.as_deref(), Some("2"));
     }
 
