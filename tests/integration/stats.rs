@@ -101,6 +101,43 @@ fn test_stats_tags_json() {
 }
 
 #[test]
+fn test_stats_tags_counts_file_once_when_heading_ids_exist() {
+    let (_dir, root) = setup_clean_db();
+    db_write(
+        &root,
+        "tagged-heading.org",
+        r#":PROPERTIES:
+:ID:       aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa
+:END:
+#+title: Tagged Heading
+#+filetags: :single:
+
+* Heading
+:PROPERTIES:
+:ID:       bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb
+:END:
+"#,
+    );
+
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "stats",
+        "--tags",
+    ]);
+    assert!(status.success(), "stats --tags failed: {v}");
+    let single = v["tags"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|entry| entry["tag"] == "single")
+        .unwrap();
+    assert_eq!(single["count"], 1);
+}
+
+#[test]
 fn test_stats_todos_human() {
     let (_dir, root) = setup_db();
     let (stdout, _stderr, status) = run(&["--db", root.to_str().unwrap(), "stats", "--todos"]);
@@ -126,4 +163,35 @@ fn test_stats_todos_json() {
     assert!(v.get("total_todo_headings").is_some());
     assert!(v.get("files_with_todos").is_some());
     assert!(v.get("by_state").is_some());
+}
+
+#[test]
+fn test_stats_todos_counts_file_once_when_heading_ids_exist() {
+    let (_dir, root) = setup_clean_db();
+    db_write(
+        &root,
+        "todo-heading-id.org",
+        r#":PROPERTIES:
+:ID:       aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa
+:END:
+#+title: TODO Heading ID
+
+* TODO One task
+:PROPERTIES:
+:ID:       bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb
+:END:
+"#,
+    );
+
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "stats",
+        "--todos",
+    ]);
+    assert!(status.success(), "stats --todos failed: {v}");
+    assert_eq!(v["total_todo_headings"], 1);
+    assert_eq!(v["files_with_todos"], 1);
 }

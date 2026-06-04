@@ -228,14 +228,19 @@ fn collect_check_data<'a>(
 
     let mut filetags_issues = Vec::new();
     if display_opts.show_filetags {
-        for node in graph.nodes.values() {
-            if let Some(result) = graph.results.iter().find(|r| r.path == node.path)
-                && let Some(ref content) = result.raw_content
-            {
+        for result in &graph.results {
+            if let Some(ref content) = result.raw_content {
+                let node = graph
+                    .path_to_uuid
+                    .get(&result.path)
+                    .and_then(|uuid| graph.nodes.get(uuid));
                 for (raw, reason) in validate_filetags_format(content) {
                     filetags_issues.push(FiletagsIssue {
-                        path: node.path.display().to_string(),
-                        title: node.title.clone(),
+                        path: result.path.display().to_string(),
+                        title: node
+                            .map(|node| node.title.clone())
+                            .or_else(|| result.parsed.title.clone())
+                            .unwrap_or_default(),
                         issue: format!("tag '{raw}' — {reason}"),
                     });
                 }
@@ -245,13 +250,11 @@ fn collect_check_data<'a>(
 
     let mut agenda_issues = Vec::new();
     if display_opts.show_agenda {
-        for node in graph.nodes.values() {
-            if node.filetags.iter().any(|t| t == "agenda") {
+        for result in &graph.results {
+            if result.parsed.filetags.iter().any(|t| t == "agenda") {
                 continue;
             }
-            if let Some(result) = graph.results.iter().find(|r| r.path == node.path)
-                && let Some(ref content) = result.raw_content
-            {
+            if let Some(ref content) = result.raw_content {
                 let parsed = parse_note(content);
                 let planned_count = parsed
                     .headings
@@ -261,10 +264,17 @@ fn collect_check_data<'a>(
                     })
                     .count();
                 if planned_count > 0 {
+                    let node = graph
+                        .path_to_uuid
+                        .get(&result.path)
+                        .and_then(|uuid| graph.nodes.get(uuid));
                     agenda_issues.push(AgendaIssue {
-                        path: node.path.display().to_string(),
-                        title: node.title.clone(),
-                        uuid: node.uuid.clone(),
+                        path: result.path.display().to_string(),
+                        title: node
+                            .map(|node| node.title.clone())
+                            .or_else(|| result.parsed.title.clone())
+                            .unwrap_or_default(),
+                        uuid: node.map(|node| node.uuid.clone()).unwrap_or_default(),
                         todo_count: planned_count,
                         issue: format!(
                             "{planned_count} planned TODO heading(s) found but :agenda: tag missing"

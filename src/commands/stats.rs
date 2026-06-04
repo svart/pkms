@@ -6,7 +6,7 @@ use crate::parser::Link;
 use crate::util::format_size;
 use anyhow::Result;
 use serde::Serialize;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 #[derive(Serialize)]
 pub struct StatsOutput {
@@ -208,12 +208,24 @@ fn build_hubs_output(graph: &Graph, limit: usize) -> HubsOutput {
 }
 
 fn build_tags_output(graph: &Graph) -> TagsOutput {
-    let tags = graph.all_tags();
-    let tags: Vec<TagEntry> = tags
-        .iter()
+    let mut tag_counts: HashMap<String, usize> = HashMap::new();
+    for result in &graph.results {
+        let mut seen_tags = HashSet::new();
+        for tag in &result.parsed.filetags {
+            if seen_tags.insert(tag.as_str()) {
+                *tag_counts.entry(tag.clone()).or_default() += 1;
+            }
+        }
+    }
+
+    let mut tags: Vec<(String, usize)> = tag_counts.into_iter().collect();
+    tags.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
+
+    let tags = tags
+        .into_iter()
         .map(|(tag, count)| TagEntry {
-            tag: tag.clone(),
-            count: *count,
+            tag,
+            count,
             notes: vec![],
         })
         .collect();
@@ -223,20 +235,17 @@ fn build_tags_output(graph: &Graph) -> TagsOutput {
 
 fn build_todo_stats(graph: &Graph) -> TodoStats {
     let mut by_state: BTreeMap<String, usize> = BTreeMap::new();
-    let mut files_with_todos = 0;
 
-    for node in graph.nodes.values() {
-        if node.has_todos {
-            files_with_todos += 1;
-        }
-    }
+    let files_with_todos = graph
+        .results
+        .iter()
+        .filter(|result| result.parsed.has_todo_headings())
+        .count();
 
-    for node in graph.nodes.values() {
-        if let Some(result) = graph.results.iter().find(|result| result.path == node.path) {
-            for heading in &result.parsed.headings {
-                if let Some(ref state) = heading.todo_state {
-                    *by_state.entry(state.to_uppercase()).or_default() += 1;
-                }
+    for result in &graph.results {
+        for heading in &result.parsed.headings {
+            if let Some(ref state) = heading.todo_state {
+                *by_state.entry(state.to_uppercase()).or_default() += 1;
             }
         }
     }

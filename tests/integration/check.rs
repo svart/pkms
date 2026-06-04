@@ -44,6 +44,68 @@ fn test_check_json() {
 }
 
 #[test]
+fn test_check_filetags_reports_file_once_when_heading_ids_exist() {
+    let (_dir, root) = setup_clean_db();
+    db_write(
+        &root,
+        "bad-filetags-heading.org",
+        r#":PROPERTIES:
+:ID:       aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa
+:END:
+#+title: Bad Filetags Heading
+#+filetags: bad
+
+* Heading
+:PROPERTIES:
+:ID:       bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb
+:END:
+"#,
+    );
+
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "check",
+        "--filetags",
+    ]);
+    assert!(!status.success(), "check should report bad filetags: {v}");
+    assert_eq!(v["filetags_issues"].as_array().unwrap().len(), 1);
+}
+
+#[test]
+fn test_check_agenda_reports_file_once_when_heading_ids_exist() {
+    let (_dir, root) = setup_clean_db();
+    db_write(
+        &root,
+        "agenda-heading-id.org",
+        r#":PROPERTIES:
+:ID:       aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa
+:END:
+#+title: Agenda Heading ID
+
+* TODO Planned task
+SCHEDULED: <2026-06-04 Thu>
+:PROPERTIES:
+:ID:       bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb
+:END:
+"#,
+    );
+
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "check",
+        "--agenda",
+    ]);
+    assert!(!status.success(), "check should report missing agenda tag: {v}");
+    assert_eq!(v["agenda_issues"].as_array().unwrap().len(), 1);
+}
+
+#[test]
 fn test_check_file_links_human() {
     let (_dir, root) = setup_db();
     let (stdout, _stderr, status) = run(&["--db", root.to_str().unwrap(), "check", "--file-links"]);

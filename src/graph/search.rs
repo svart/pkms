@@ -137,9 +137,14 @@ impl Graph {
 
     pub fn all_tags(&self) -> Vec<(String, usize)> {
         let mut tag_counts: HashMap<String, usize> = HashMap::new();
-        for node in self.nodes.values() {
-            for tag in &node.filetags {
-                *tag_counts.entry(tag.clone()).or_default() += 1;
+        for uuid in self.path_to_uuid.values() {
+            if let Some(node) = self.nodes.get(uuid) {
+                let mut seen_tags = HashSet::new();
+                for tag in &node.filetags {
+                    if seen_tags.insert(tag.as_str()) {
+                        *tag_counts.entry(tag.clone()).or_default() += 1;
+                    }
+                }
             }
         }
         let mut tags: Vec<(String, usize)> = tag_counts.into_iter().collect();
