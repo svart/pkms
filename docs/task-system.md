@@ -298,6 +298,9 @@ Dates accept unambiguous case-insensitive prefixes of `today`, `tomorrow`, or
 weekday names, plus `YYYY-MM-DD` or `YYYY-MM-DD HH:MM`. Weekday names resolve
 to the next upcoming matching weekday, so `sch:fri` on a Friday means next
 Friday. Ambiguous prefixes fail with an error.
+Modifier keys accept documented aliases and unambiguous prefixes; for example
+`proj:` and `pro:` resolve to `project:`, while `pr:` is ambiguous between
+`project:` and `priority:`.
 
 Local mutation rules:
 

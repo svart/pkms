@@ -1606,7 +1606,7 @@ fn test_task_mod_pkms_accepts_add_style_metadata_modifiers() {
         "title:Updated task",
         "prio:b",
         "tag:phone,work",
-        "project:Focus",
+        "proj:Focus",
         "desc:Follow up notes",
     ]);
     assert!(status.success());

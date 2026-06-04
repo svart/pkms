@@ -161,6 +161,8 @@ Add modifiers: `source:`/`src:`, `title:`, PKMS-only `state:`,
 Structured due and deadline values accept unambiguous case-insensitive prefixes
 of `today`, `tomorrow`, or weekday names, plus `YYYY-MM-DD` or
 `YYYY-MM-DD HH:MM`. Weekday names resolve to the next upcoming matching weekday.
+Modifier keys accept documented aliases and unambiguous prefixes; `proj:` and
+`pro:` resolve to `project:`, while `pr:` fails as ambiguous.
 Priority must be `A`, `B`, or `C`. Repeat or comma-separate tag modifiers for
 multiple labels. `project:` accepts either a Todoist project id or an exact
 project name. If a project name is duplicated case-insensitively, use the

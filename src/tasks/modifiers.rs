@@ -72,48 +72,144 @@ fn apply_modifier(spec: &mut TaskModifierSpec, token: &str) -> Result<bool> {
     };
     let key = key.trim().to_ascii_lowercase();
     let value = value.trim();
-    match key.as_str() {
-        "source" | "src" => {
+    if key == "status" {
+        bail!("task modifier status: was renamed to state:");
+    }
+
+    match resolve_modifier_key(&key)? {
+        Some(ModifierKey::Source) => {
             spec.source = Some(value.to_string());
         }
-        "title" => {
+        Some(ModifierKey::Title) => {
             set_once(&mut spec.title, "title", value.to_string())?;
         }
-        "tag" | "tags" | "label" | "labels" => {
+        Some(ModifierKey::Labels) => {
             spec.labels
                 .get_or_insert_with(Vec::new)
                 .extend(split_list(value));
         }
-        "due" | "schedule" | "scheduled" | "sched" | "sch" => {
+        Some(ModifierKey::Due) => {
             set_once(&mut spec.due, "schedule", value.to_string())?;
         }
-        "deadline" | "dead" | "dl" => {
+        Some(ModifierKey::Deadline) => {
             set_once(&mut spec.deadline, "deadline", value.to_string())?;
         }
-        "project" | "proj" => {
+        Some(ModifierKey::Project) => {
             set_once(&mut spec.project, "project", value.to_string())?;
         }
-        "priority" | "prio" | "pri" => {
+        Some(ModifierKey::Priority) => {
             set_once(&mut spec.priority, "priority", value.to_string())?;
         }
-        "state" => {
+        Some(ModifierKey::State) => {
             set_once(&mut spec.state, "state", value.to_string())?;
         }
-        "status" => {
-            bail!("task modifier status: was renamed to state:");
-        }
-        "description" | "desc" | "body" => {
+        Some(ModifierKey::Description) => {
             set_once(&mut spec.description, "description", value.to_string())?;
         }
-        "note" => {
+        Some(ModifierKey::Note) => {
             set_once(&mut spec.note, "note", value.to_string())?;
         }
-        "dep" | "depend" => {
+        Some(ModifierKey::Dependency) => {
             set_once(&mut spec.dependency, "dep", value.to_string())?;
         }
-        _ => return Ok(false),
+        None => return Ok(false),
     }
     Ok(true)
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ModifierKey {
+    Source,
+    Title,
+    Labels,
+    Due,
+    Deadline,
+    Project,
+    Priority,
+    State,
+    Description,
+    Note,
+    Dependency,
+}
+
+impl ModifierKey {
+    fn name(self) -> &'static str {
+        match self {
+            ModifierKey::Source => "source",
+            ModifierKey::Title => "title",
+            ModifierKey::Labels => "tag",
+            ModifierKey::Due => "schedule",
+            ModifierKey::Deadline => "deadline",
+            ModifierKey::Project => "project",
+            ModifierKey::Priority => "priority",
+            ModifierKey::State => "state",
+            ModifierKey::Description => "description",
+            ModifierKey::Note => "note",
+            ModifierKey::Dependency => "dep",
+        }
+    }
+}
+
+const MODIFIER_KEYS: &[(&str, ModifierKey)] = &[
+    ("source", ModifierKey::Source),
+    ("src", ModifierKey::Source),
+    ("title", ModifierKey::Title),
+    ("tag", ModifierKey::Labels),
+    ("tags", ModifierKey::Labels),
+    ("label", ModifierKey::Labels),
+    ("labels", ModifierKey::Labels),
+    ("due", ModifierKey::Due),
+    ("schedule", ModifierKey::Due),
+    ("scheduled", ModifierKey::Due),
+    ("sched", ModifierKey::Due),
+    ("sch", ModifierKey::Due),
+    ("deadline", ModifierKey::Deadline),
+    ("dead", ModifierKey::Deadline),
+    ("dl", ModifierKey::Deadline),
+    ("project", ModifierKey::Project),
+    ("proj", ModifierKey::Project),
+    ("priority", ModifierKey::Priority),
+    ("prio", ModifierKey::Priority),
+    ("pri", ModifierKey::Priority),
+    ("state", ModifierKey::State),
+    ("description", ModifierKey::Description),
+    ("desc", ModifierKey::Description),
+    ("body", ModifierKey::Description),
+    ("note", ModifierKey::Note),
+    ("dep", ModifierKey::Dependency),
+    ("depend", ModifierKey::Dependency),
+];
+
+fn resolve_modifier_key(key: &str) -> Result<Option<ModifierKey>> {
+    if key.is_empty() {
+        return Ok(None);
+    }
+
+    for (candidate, modifier) in MODIFIER_KEYS {
+        if *candidate == key {
+            return Ok(Some(*modifier));
+        }
+    }
+
+    let mut matches = Vec::new();
+    for (candidate, modifier) in MODIFIER_KEYS {
+        if candidate.starts_with(key) && !matches.contains(modifier) {
+            matches.push(*modifier);
+        }
+    }
+
+    match matches.as_slice() {
+        [] => Ok(None),
+        [modifier] => Ok(Some(*modifier)),
+        _ => {
+            let names = matches
+                .iter()
+                .map(|modifier| modifier.name())
+                .collect::<Vec<_>>()
+                .join(", ");
+            bail!("Ambiguous task modifier '{key}'. Could match: {names}. Use a longer modifier.")
+        }
+    }
 }
 
 fn split_list(value: &str) -> impl Iterator<Item = String> + '_ {
@@ -321,6 +417,44 @@ mod tests {
         assert_eq!(spec.description.as_deref(), Some("Follow up"));
         assert_eq!(spec.state.as_deref(), Some("waiting"));
         assert_eq!(spec.dependency.as_deref(), Some("2"));
+    }
+
+    #[test]
+    fn parses_unambiguous_modifier_key_prefixes() {
+        let spec = TaskModifierSpec::parse(&tokens(&[
+            "sou:todoist",
+            "tit:Call Alice",
+            "ta:phone,urgent",
+            "sche:2026-05-27",
+            "deadl:2026-05-28",
+            "pro:Inbox",
+            "prior:A",
+            "descr:Follow up",
+            "not:Project Note",
+        ]))
+        .unwrap();
+
+        assert_eq!(spec.source.as_deref(), Some("todoist"));
+        assert_eq!(spec.title.as_deref(), Some("Call Alice"));
+        assert_eq!(
+            spec.labels,
+            Some(vec!["phone".to_string(), "urgent".to_string()])
+        );
+        assert_eq!(spec.due.as_deref(), Some("2026-05-27"));
+        assert_eq!(spec.deadline.as_deref(), Some("2026-05-28"));
+        assert_eq!(spec.project.as_deref(), Some("Inbox"));
+        assert_eq!(spec.priority.as_deref(), Some("A"));
+        assert_eq!(spec.description.as_deref(), Some("Follow up"));
+        assert_eq!(spec.note.as_deref(), Some("Project Note"));
+    }
+
+    #[test]
+    fn rejects_ambiguous_modifier_key_prefixes() {
+        let err = TaskModifierSpec::parse_mod(&tokens(&["pr:Inbox"])).unwrap_err();
+        let message = err.to_string();
+        assert!(message.contains("Ambiguous task modifier 'pr'"));
+        assert!(message.contains("project"));
+        assert!(message.contains("priority"));
     }
 
     #[test]
