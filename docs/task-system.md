@@ -242,6 +242,9 @@ pkms task list --columns +Project
 pkms task agenda --columns -Project
 ```
 
+The `Date` column displays task dates as `YYYY-MM-DD Day`. Daily-note tasks
+without `SCHEDULED` or `DEADLINE` markers use the daily note date.
+
 Default columns can be configured globally or per source and view:
 
 ```toml

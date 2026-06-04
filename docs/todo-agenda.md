@@ -105,6 +105,9 @@ Unknown columns, duplicate columns, mixed replacement/adjustment syntax, adding
 an already enabled column, and removing a disabled column are reported as
 errors.
 
+The `Date` column displays task dates as `YYYY-MM-DD Day`. Daily-note tasks
+without `SCHEDULED` or `DEADLINE` markers use the daily note date.
+
 Use `--line-sep` for row separator lines in text output.
 
 ## Show and Open

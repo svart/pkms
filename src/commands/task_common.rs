@@ -1,7 +1,7 @@
 use crate::org_date::parse_org_date;
 use crate::output::{ALL_COLUMNS, Column, adaptive_column_widths};
 use crate::tasks::clock::TaskClock;
-use chrono::Timelike;
+use chrono::{NaiveDate, Timelike};
 use std::collections::HashSet;
 use tabled::builder::Builder;
 use tabled::settings::object::{Columns, Object, Rows};
@@ -183,7 +183,7 @@ pub trait RowItem {
         }
 
         if rows.is_empty() {
-            let date = self.daily_file_date().map(|d| d.to_string());
+            let date = self.daily_file_date().map(format_display_date);
             rows.push([
                 id,
                 date.unwrap_or_default(),
@@ -364,4 +364,10 @@ pub fn format_display_datetime(raw: &str) -> String {
         }
         None => raw.to_string(),
     }
+}
+
+fn format_display_date(raw: &str) -> String {
+    NaiveDate::parse_from_str(raw, "%Y-%m-%d")
+        .map(|date| date.format("%Y-%m-%d %a").to_string())
+        .unwrap_or_else(|_| raw.to_string())
 }

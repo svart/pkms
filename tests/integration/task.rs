@@ -353,6 +353,27 @@ SCHEDULED: <{scheduled}>
 }
 
 #[test]
+fn test_task_list_daily_note_date_includes_weekday_without_planning_markers() {
+    let db = TestDb::new().note_with_content(
+        "2024-06-15.org",
+        r#":PROPERTIES:
+:ID:       15151515-1515-4515-8515-151515151515
+:END:
+#+title: Daily Tasks
+#+filetags: :daily:
+
+* TODO Daily fallback date
+"#,
+    );
+
+    let (stdout, stderr, status) = db.run(&["task", "list", "--columns=id,date,type,heading"]);
+
+    assert!(status.success(), "task list failed:\n{stdout}\n{stderr}");
+    assert!(stdout.contains("2024-06-15 Sat"), "stdout:\n{stdout}");
+    assert!(stdout.contains("Daily fallback date"), "stdout:\n{stdout}");
+}
+
+#[test]
 fn test_task_agenda_today_returns_source_neutral_json() {
     let (_dir, root) = setup_db();
     let today = org_date(0);
