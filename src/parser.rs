@@ -252,10 +252,7 @@ impl ParseContext {
                 }
             }
             PropertyKey::RoamAliases => {
-                self.aliases = value
-                    .split_whitespace()
-                    .map(unquote_property_word)
-                    .collect();
+                self.aliases = parse_property_words(value);
             }
             PropertyKey::RoamRefs => {
                 self.roam_refs = value
@@ -430,13 +427,7 @@ pub fn parse_note_summary(content: &str) -> ParsedNoteSummary {
     let aliases = ALIASES_RE
         .captures_iter(content)
         .last()
-        .map(|c| {
-            c.get(1)
-                .map_or("", |m| m.as_str())
-                .split_whitespace()
-                .map(unquote_property_word)
-                .collect()
-        })
+        .map(|c| parse_property_words(c.get(1).map_or("", |m| m.as_str())))
         .unwrap_or_default();
 
     let categories = CATEGORY_RE
@@ -489,6 +480,15 @@ fn parse_property(line: &str) -> Option<(PropertyKey, &str)> {
 
 fn unquote_property_word(value: &str) -> String {
     value.trim_matches('"').to_string()
+}
+
+fn parse_property_words(value: &str) -> Vec<String> {
+    shlex::split(value).unwrap_or_else(|| {
+        value
+            .split_whitespace()
+            .map(unquote_property_word)
+            .collect()
+    })
 }
 
 /// Validate that all `#+filetags:` lines in content have the correct format.
@@ -594,6 +594,21 @@ Some content here."#;
         assert_eq!(note.roam_refs, vec!["https://example.com"]);
         assert_eq!(note.outgoing.len(), 4);
         assert!(matches!(note.outgoing[0], Link::Internal(_)));
+    }
+
+    #[test]
+    fn test_parse_quoted_aliases_with_spaces() {
+        let content = r#":PROPERTIES:
+:ID:       a1b2c3d4-e5f6-7890-abcd-ef1234567890
+:ROAM_ALIASES: "Alias One" "Alias Two"
+:END:
+#+title: test note
+"#;
+        let note = parse_note(content);
+        assert_eq!(note.aliases, vec!["Alias One", "Alias Two"]);
+
+        let summary = parse_note_summary(content);
+        assert_eq!(summary.aliases, vec!["Alias One", "Alias Two"]);
     }
 
     #[test]

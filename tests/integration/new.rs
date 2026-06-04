@@ -59,6 +59,50 @@ fn test_new_with_tags() {
 }
 
 #[test]
+fn test_new_with_multi_word_aliases() {
+    let (_dir, root) = setup_db();
+    let db = root.to_str().unwrap();
+    let (v, status) = run_json(&[
+        "--db",
+        db,
+        "--output-format",
+        "json",
+        "new",
+        "Aliased New",
+        "--create",
+        "--aliases",
+        "Alias One,Alias Two",
+    ]);
+    assert!(status.success(), "new failed: {v}");
+
+    let path = v["path"].as_str().unwrap();
+    let content = fs::read_to_string(path).unwrap();
+    assert_eq!(content.matches(":PROPERTIES:").count(), 1);
+    assert!(content.contains(r#":ROAM_ALIASES: "Alias One" "Alias Two""#));
+
+    let (resolved, status) = run_json(&[
+        "--db",
+        db,
+        "--output-format",
+        "json",
+        "resolve",
+        "--title",
+        "Alias One",
+    ]);
+    assert!(status.success(), "resolve failed: {resolved}");
+    let titles: Vec<&str> = resolved["results"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|entry| entry["title"].as_str())
+        .collect();
+    assert!(
+        titles.contains(&"Aliased New"),
+        "expected new note to resolve by multi-word alias, got: {resolved}"
+    );
+}
+
+#[test]
 fn test_new_with_heading() {
     let (_dir, root) = setup_db();
     let db = root.to_str().unwrap();

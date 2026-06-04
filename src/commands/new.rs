@@ -111,10 +111,15 @@ pub fn run(config: &ResolvedConfig, ctx: &OutputContext, opts: &NewOptions) -> R
     };
 
     if opts.create && heading_output.is_none() {
-        let mut content = format!(
-            ":PROPERTIES:\n:ID:       {uuid}\n:END:\n#+title: {}\n",
-            opts.title
-        );
+        let mut content = format!(":PROPERTIES:\n:ID:       {uuid}\n");
+
+        if let Some(ref aliases) = opts.aliases
+            && !aliases.is_empty()
+        {
+            let _ = writeln!(content, ":ROAM_ALIASES: {}", format_roam_aliases(aliases));
+        }
+
+        let _ = writeln!(content, ":END:\n#+title: {}", opts.title);
 
         if let Some(ref tags) = opts.tags
             && !tags.is_empty()
@@ -124,14 +129,6 @@ pub fn run(config: &ResolvedConfig, ctx: &OutputContext, opts: &NewOptions) -> R
                 acc
             });
             let _ = writeln!(content, "#+filetags: {ft}");
-        }
-
-        if let Some(ref aliases) = opts.aliases
-            && !aliases.is_empty()
-        {
-            content.push_str(":PROPERTIES:\n");
-            let _ = writeln!(content, ":ROAM_ALIASES: {}", aliases.join(" "));
-            content.push_str(":END:\n");
         }
 
         (filename, path) = create_note_file_exclusive(&new_notes_dir, &timestamp, &slug, &content)?;
@@ -176,6 +173,17 @@ fn unique_note_filename(timestamp: &str, slug: &str, attempt: usize) -> String {
     } else {
         format!("{timestamp}-{slug}-{attempt}.org")
     }
+}
+
+fn format_roam_aliases(aliases: &[String]) -> String {
+    aliases
+        .iter()
+        .map(|alias| {
+            let escaped = alias.replace('\\', "\\\\").replace('"', "\\\"");
+            format!("\"{escaped}\"")
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 fn create_note_file_exclusive(
@@ -309,5 +317,19 @@ mod tests {
         assert_eq!(path.file_name().unwrap(), "20260604120000-collision-1.org");
         assert_eq!(std::fs::read_to_string(existing).unwrap(), "original");
         assert_eq!(std::fs::read_to_string(path).unwrap(), "replacement");
+    }
+
+    #[test]
+    fn format_roam_aliases_quotes_multi_word_aliases() {
+        let aliases = vec![
+            "Alias One".to_string(),
+            "Alias \"Two\"".to_string(),
+            "Alias\\Three".to_string(),
+        ];
+
+        assert_eq!(
+            format_roam_aliases(&aliases),
+            r#""Alias One" "Alias \"Two\"" "Alias\\Three""#
+        );
     }
 }
