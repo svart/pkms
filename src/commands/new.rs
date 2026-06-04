@@ -329,13 +329,9 @@ mod tests {
         let existing = dir.path().join("20260604120000-collision.org");
         std::fs::write(&existing, "original").unwrap();
 
-        let (filename, path) = create_note_file_exclusive(
-            dir.path(),
-            "20260604120000",
-            "collision",
-            "replacement",
-        )
-        .unwrap();
+        let (filename, path) =
+            create_note_file_exclusive(dir.path(), "20260604120000", "collision", "replacement")
+                .unwrap();
 
         assert_eq!(filename, "20260604120000-collision-1.org");
         assert_eq!(path.file_name().unwrap(), "20260604120000-collision-1.org");

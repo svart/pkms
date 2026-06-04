@@ -181,7 +181,10 @@ Some content
 fn test_new_with_heading_matches_todo_heading_title() {
     let (_dir, root) = setup_db();
     let db = root.to_str().unwrap();
-    let note_path = root.join("roam").join("common").join("todo-heading-test.org");
+    let note_path = root
+        .join("roam")
+        .join("common")
+        .join("todo-heading-test.org");
     fs::write(
         &note_path,
         r#":PROPERTIES:

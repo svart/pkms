@@ -122,10 +122,7 @@ impl Graph {
                 let Some(lines) = content_match_lines(&content, &query) else {
                     continue;
                 };
-                results.push(ContentSearchResult {
-                    node,
-                    lines,
-                });
+                results.push(ContentSearchResult { node, lines });
             }
             return results;
         }
@@ -147,10 +144,7 @@ impl Graph {
             let Some(lines) = content_match_lines(&content, &query) else {
                 continue;
             };
-            results.push(ContentSearchResult {
-                node,
-                lines,
-            });
+            results.push(ContentSearchResult { node, lines });
         }
 
         results

@@ -123,14 +123,13 @@ pub fn run(config: &ResolvedConfig, ctx: &OutputContext, opts: &FixOptions) -> R
             )
         })?;
 
-    let (files_affected, total_replacements) =
-        find_and_replace_links(
-            db_root,
-            &ignore_patterns,
-            &opts.broken_uuid,
-            &replacement_uuid,
-            opts.apply,
-        )?;
+    let (files_affected, total_replacements) = find_and_replace_links(
+        db_root,
+        &ignore_patterns,
+        &opts.broken_uuid,
+        &replacement_uuid,
+        opts.apply,
+    )?;
 
     let output = FixOutput {
         broken_uuid: opts.broken_uuid.clone(),

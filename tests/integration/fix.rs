@@ -166,5 +166,8 @@ fn test_fix_apply_honors_ignore_patterns() {
     let source = fs::read_to_string(root.join("roam/source.org")).unwrap();
     assert!(source.contains(replacement));
     let ignored = fs::read_to_string(root.join("roam/ignored/backup.org")).unwrap();
-    assert!(ignored.contains(broken), "ignored file should not be changed");
+    assert!(
+        ignored.contains(broken),
+        "ignored file should not be changed"
+    );
 }

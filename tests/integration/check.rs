@@ -101,7 +101,10 @@ SCHEDULED: <2026-06-04 Thu>
         "check",
         "--agenda",
     ]);
-    assert!(!status.success(), "check should report missing agenda tag: {v}");
+    assert!(
+        !status.success(),
+        "check should report missing agenda tag: {v}"
+    );
     assert_eq!(v["agenda_issues"].as_array().unwrap().len(), 1);
 }
 
