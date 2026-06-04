@@ -369,7 +369,7 @@ pub enum TaskCommand {
 
 #[derive(Debug, Args)]
 #[command(
-    after_help = "Filters:\n  source:pkms|todoist|all, src:pkms|todoist|all\n  state:TODO, tags:tag,!other, type:SCHED,DEADL, prio:A[,B,C], project:Name\n  date:today|week|overdue|upcoming|YYYY-MM-DD[,value...], after:YYYY-MM-DD, before:YYYY-MM-DD\n  todoist.filter:<query> (requires source:todoist or source:all)\n\nExamples:\n  pkms task list source:todoist tag:phone prio:A\n  pkms task list prio:A,B,C\n  pkms task list source:all date:today,overdue project:Inbox"
+    after_help = "Filters:\n  source:pkms|todoist|all, src:pkms|todoist|all\n  state:TODO|opened|closed, tags:tag,!other, type:SCHED,DEADL, prio:A[,B,C], project:Name\n  date:today|week|overdue|upcoming|YYYY-MM-DD[,value...], after:YYYY-MM-DD, before:YYYY-MM-DD\n  todoist.filter:<query> (requires source:todoist or source:all)\n\nExamples:\n  pkms task list source:todoist tag:phone prio:A\n  pkms task list state:opened,!waiting prio:A,B,C\n  pkms task list source:all date:today,overdue project:Inbox"
 )]
 pub struct TaskListArgs {
     #[arg(value_name = "MODE_OR_FILTER")]
@@ -391,7 +391,7 @@ pub struct TaskListArgs {
 
 #[derive(Debug, Args)]
 #[command(
-    after_help = "Filters:\n  source:pkms|todoist|all, src:pkms|todoist|all\n  state:TODO, tags:tag,!other, type:SCHED,DEADL, prio:A[,B,C], project:Name\n  date:today|week|overdue|upcoming|YYYY-MM-DD[,value...], after:YYYY-MM-DD, before:YYYY-MM-DD\n  todoist.filter:<query> (requires source:todoist or source:all)\n\nExamples:\n  pkms task agenda source:todoist\n  pkms task agenda source:all date:today,overdue tag:waiting\n  pkms task agenda prio:A,B,C\n  pkms task agenda today source:todoist"
+    after_help = "Filters:\n  source:pkms|todoist|all, src:pkms|todoist|all\n  state:TODO|opened|closed, tags:tag,!other, type:SCHED,DEADL, prio:A[,B,C], project:Name\n  date:today|week|overdue|upcoming|YYYY-MM-DD[,value...], after:YYYY-MM-DD, before:YYYY-MM-DD\n  todoist.filter:<query> (requires source:todoist or source:all)\n\nExamples:\n  pkms task agenda source:todoist\n  pkms task agenda source:all date:today,overdue tag:waiting\n  pkms task agenda state:opened,!waiting prio:A,B,C\n  pkms task agenda today source:todoist"
 )]
 pub struct TaskAgendaArgs {
     #[command(subcommand)]
@@ -420,7 +420,7 @@ pub enum TaskAgendaCommand {
 
 #[derive(Debug, Args)]
 #[command(
-    after_help = "Filters:\n  source:pkms|todoist|all, src:pkms|todoist|all\n  state:TODO, tags:tag,!other, type:SCHED,DEADL, prio:A, project:Name\n  todoist.filter:<query> (requires source:todoist or source:all)\n\nExamples:\n  pkms task agenda today source:todoist\n  pkms task inbox source:all project:Inbox"
+    after_help = "Filters:\n  source:pkms|todoist|all, src:pkms|todoist|all\n  state:TODO|opened|closed, tags:tag,!other, type:SCHED,DEADL, prio:A, project:Name\n  todoist.filter:<query> (requires source:todoist or source:all)\n\nExamples:\n  pkms task agenda today source:todoist\n  pkms task inbox source:all state:!closed project:Inbox"
 )]
 pub struct TaskShortcutArgs {
     #[arg(value_name = "FILTER")]
@@ -433,7 +433,7 @@ pub struct TaskShortcutArgs {
 
 #[derive(Debug, Args)]
 #[command(
-    after_help = "Filters:\n  source:pkms|todoist|all, src:pkms|todoist|all\n  state:TODO, tags:tag,!other, type:SCHED,DEADL, prio:A, project:Name\n  todoist.filter:<query> (requires source:todoist or source:all)\n\nExamples:\n  pkms task agenda upcoming --days 14 source:all tag:phone\n  pkms task agenda upcoming source:todoist prio:B"
+    after_help = "Filters:\n  source:pkms|todoist|all, src:pkms|todoist|all\n  state:TODO|opened|closed, tags:tag,!other, type:SCHED,DEADL, prio:A, project:Name\n  todoist.filter:<query> (requires source:todoist or source:all)\n\nExamples:\n  pkms task agenda upcoming --days 14 source:all tag:phone\n  pkms task agenda upcoming source:todoist state:opened prio:B"
 )]
 pub struct TaskUpcomingArgs {
     #[arg(value_name = "FILTER")]

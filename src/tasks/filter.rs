@@ -141,8 +141,12 @@ impl TaskFilterCriteria {
     }
 
     pub fn matches_item(&self, item: &TaskItem, context: &TaskFilterContext<'_>) -> bool {
-        matches_text_filter(item.state.as_deref(), self.state.as_deref())
-            && matches_tags_filter(self.tags.as_deref(), &item.tags)
+        matches_state_filter(
+            item.state.as_deref(),
+            self.state.as_deref(),
+            context.open_todo_states,
+            context.closed_todo_states,
+        ) && matches_tags_filter(self.tags.as_deref(), &item.tags)
             && matches_type_filter(self.kind.as_deref(), item)
             && matches_priority_filter(self.prio.as_deref(), item)
             && self
@@ -164,6 +168,8 @@ impl TaskFilterCriteria {
 pub struct TaskFilterContext<'a> {
     pub today: NaiveDate,
     pub scope: Option<&'a ResolvedScope>,
+    pub open_todo_states: &'a [String],
+    pub closed_todo_states: &'a [String],
 }
 
 impl TaskDateFilter {
@@ -244,8 +250,42 @@ pub fn matches_type_filters(
     })
 }
 
-fn matches_text_filter(value: Option<&str>, filters: Option<&str>) -> bool {
-    matches_text_filters(value, &parse_text_filters(filters))
+fn matches_state_filter(
+    value: Option<&str>,
+    filters: Option<&str>,
+    open_todo_states: &[String],
+    closed_todo_states: &[String],
+) -> bool {
+    parse_text_filters(filters)
+        .iter()
+        .all(|filter| match filter {
+            TextFilter::Include(target) => {
+                state_matches_target(value, target, open_todo_states, closed_todo_states)
+            }
+            TextFilter::Exclude(target) => {
+                !state_matches_target(value, target, open_todo_states, closed_todo_states)
+            }
+        })
+}
+
+fn state_matches_target(
+    value: Option<&str>,
+    target: &str,
+    open_todo_states: &[String],
+    closed_todo_states: &[String],
+) -> bool {
+    let Some(value) = value else {
+        return false;
+    };
+    match target.to_ascii_lowercase().as_str() {
+        "opened" => state_in_configured_set(value, open_todo_states),
+        "closed" => state_in_configured_set(value, closed_todo_states),
+        _ => value.eq_ignore_ascii_case(target),
+    }
+}
+
+fn state_in_configured_set(value: &str, states: &[String]) -> bool {
+    states.iter().any(|state| state.eq_ignore_ascii_case(value))
 }
 
 fn matches_tags_filter(filters: Option<&str>, tags: &[String]) -> bool {
@@ -457,6 +497,49 @@ mod tests {
     fn parses_comma_separated_priority_filters() {
         let filters = parse_task_filters(&["prio:a,b,c".to_string()]).unwrap();
         assert_eq!(filters.criteria.prio.as_deref(), Some("A,B,C"));
+    }
+
+    #[test]
+    fn matches_state_meta_filters_against_configured_states() {
+        let open_states = vec!["TODO".to_string(), "WAITING".to_string()];
+        let closed_states = vec!["DONE".to_string(), "CANCELED".to_string()];
+
+        assert!(matches_state_filter(
+            Some("TODO"),
+            Some("opened"),
+            &open_states,
+            &closed_states
+        ));
+        assert!(matches_state_filter(
+            Some("DONE"),
+            Some("closed"),
+            &open_states,
+            &closed_states
+        ));
+        assert!(matches_state_filter(
+            Some("TODO"),
+            Some("!closed"),
+            &open_states,
+            &closed_states
+        ));
+        assert!(matches_state_filter(
+            Some("TODO"),
+            Some("opened,!waiting"),
+            &open_states,
+            &closed_states
+        ));
+        assert!(!matches_state_filter(
+            Some("WAITING"),
+            Some("opened,!waiting"),
+            &open_states,
+            &closed_states
+        ));
+        assert!(!matches_state_filter(
+            Some("DONE"),
+            Some("opened"),
+            &open_states,
+            &closed_states
+        ));
     }
 
     #[test]

@@ -197,7 +197,8 @@ filters.
 
 Supported task criteria include:
 
-- `state:TODO`, including comma-separated values and `!` exclusions.
+- `state:TODO`, `state:opened`, or `state:closed`, including
+  comma-separated values and `!` exclusions.
 - `tags:work,!blocked` or `tag:work`.
 - `type:SCHED,DEADL` or `kind:SCHED`.
 - `prio:A`, `priority:A,B,C`, and `prio:none`.

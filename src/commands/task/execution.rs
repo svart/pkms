@@ -103,9 +103,13 @@ fn apply_task_filter_criteria_on(
             &criteria.scope,
         ))
     };
+    let open_todo_states = config.open_todo_states();
+    let closed_todo_states = config.closed_todo_states();
     let context = TaskFilterContext {
         today,
         scope: scope.as_ref(),
+        open_todo_states: &open_todo_states,
+        closed_todo_states: &closed_todo_states,
     };
     items.retain(|item| criteria.matches_item(item, &context));
     tracing::debug!(

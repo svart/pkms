@@ -704,6 +704,63 @@ fn test_task_list_accepts_state_tags_type_and_prio_filters() {
 }
 
 #[test]
+fn test_task_list_state_meta_filters_use_configured_states() {
+    let db = TestDb::new().note_with_content(
+        "state-meta.org",
+        r#":PROPERTIES:
+:ID:       56565656-5656-4656-8656-565656565656
+:END:
+#+title: State Meta Filters
+
+* NEXT Next task
+* BLOCKED Blocked task
+* DONE Done task
+* DROPPED Dropped task
+"#,
+    );
+    let config = r#"[agenda]
+open_todo_states = ["NEXT", "BLOCKED"]
+closed_todo_states = ["DONE", "DROPPED"]
+"#;
+
+    let (stdout, stderr, status) = run_with_config(
+        &[
+            "--db",
+            db.root().to_str().unwrap(),
+            "--output-format",
+            "json",
+            "task",
+            "list",
+            "state:opened,!blocked",
+        ],
+        config,
+    );
+    assert!(status.success(), "task list failed:\n{stdout}\n{stderr}");
+    let v: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    assert_eq!(task_titles(&v), vec!["Next task"]);
+
+    let (stdout, stderr, status) = run_with_config(
+        &[
+            "--db",
+            db.root().to_str().unwrap(),
+            "--output-format",
+            "json",
+            "task",
+            "list",
+            "state:!closed",
+        ],
+        config,
+    );
+    assert!(status.success(), "task list failed:\n{stdout}\n{stderr}");
+    let v: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    let titles = task_titles(&v);
+    assert!(titles.contains(&"Next task".to_string()));
+    assert!(titles.contains(&"Blocked task".to_string()));
+    assert!(!titles.contains(&"Done task".to_string()));
+    assert!(!titles.contains(&"Dropped task".to_string()));
+}
+
+#[test]
 fn test_task_list_accepts_comma_separated_prio_filter() {
     let (_dir, root) = setup_db();
     std::fs::write(

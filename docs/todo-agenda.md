@@ -170,8 +170,8 @@ and `task list tags`, accept only source filters.
 | Source | `source:pkms`, `source:todoist`, `source:all` | Select local PKMS tasks, Todoist tasks, or both. Defaults to `source:pkms`. |
 | Source alias | `src:pkms`, `src:todoist`, `src:all` | Short form of `source:`. |
 | Todoist raw filter | `todoist.filter:<query>` | Uses Todoist's server-side filter endpoint. Requires `source:todoist` or `source:all`. |
-| State | `state:TODO` | Matches TODO state case-insensitively. |
-| State exclusion | `state:!DONE` | Excludes matching states. Comma-separated state filters use AND logic. |
+| State | `state:TODO`, `state:opened`, `state:closed` | Matches a TODO state case-insensitively. `opened` and `closed` expand to configured open and closed task states. |
+| State exclusion | `state:!DONE`, `state:!closed` | Excludes matching states. Comma-separated state filters use AND logic. |
 | Tags | `tags:tag1,tag2` | Matches combined note filetags and heading tags for PKMS, and labels for Todoist. Tags are exact. |
 | Tag alias | `tag:tag1,tag2` | Short form of `tags:`. |
 | Tag exclusion | `tags:!tag1,tag2` | Excludes `tag1` and requires `tag2`. Comma-separated tag filters use AND logic. |
@@ -195,6 +195,7 @@ Examples:
 
 ```bash
 pkms task list state:TODO tags:work,!blocked prio:A
+pkms task list state:opened,!waiting
 pkms task agenda week type:SCHED project:Alpha
 pkms task agenda source:all date:overdue tags:!waiting
 pkms task agenda source:all date:today,overdue

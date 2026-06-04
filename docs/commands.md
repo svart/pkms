@@ -146,6 +146,7 @@ pkms task agenda upcoming --days 7
 pkms task list --group state
 pkms task list --from-stdin
 pkms task list state:TODO tags:work,!blocked
+pkms task list state:opened,!waiting
 pkms task list prio:A,B,C
 pkms task list --columns +Project
 pkms task agenda --columns -Project
