@@ -131,6 +131,7 @@ fn dispatch(cli: &Cli, command_ctx: &CommandContext<'_>) -> Result<ExitCode> {
                     targets,
                     show_links: args.links,
                     show_headings: args.headings,
+                    heading: args.heading.clone(),
                     no_content: args.no_content,
                     encoding: args
                         .encoding

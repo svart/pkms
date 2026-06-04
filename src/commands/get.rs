@@ -5,7 +5,7 @@ use crate::output::OutputContext;
 use crate::parser;
 use crate::tokens;
 use crate::util;
-use anyhow::Result;
+use anyhow::{Context, Result};
 use serde::Serialize;
 use std::collections::HashMap;
 use std::fmt::Write;
@@ -98,6 +98,7 @@ pub struct GetOptions {
     pub targets: Vec<String>,
     pub show_links: bool,
     pub show_headings: bool,
+    pub heading: Option<String>,
     pub no_content: bool,
     pub encoding: tokens::Encoding,
 }
@@ -120,11 +121,35 @@ fn get_neighbor_map(graph: &Graph, uuid: &str) -> HashMap<u32, NeighborOutput> {
     map
 }
 
+fn heading_block_from_content(content: &str, heading_title: &str) -> Option<String> {
+    let parsed = parser::parse_note(content);
+    let heading = parsed.headings.iter().find(|h| h.title == heading_title)?;
+    let start = heading.line_number.saturating_sub(1);
+    let end = parsed
+        .headings
+        .iter()
+        .find(|h| h.line_number > heading.line_number && h.level <= heading.level)
+        .map_or_else(
+            || content.lines().count(),
+            |h| h.line_number.saturating_sub(1),
+        );
+
+    Some(
+        content
+            .lines()
+            .skip(start)
+            .take(end - start)
+            .collect::<Vec<_>>()
+            .join("\n"),
+    )
+}
+
 fn process_one_get(
     graph: &Graph,
     target: &str,
     show_links: bool,
     show_headings: bool,
+    heading: Option<&str>,
     no_content: bool,
     encoding: tokens::Encoding,
 ) -> Result<GetOutput> {
@@ -135,13 +160,42 @@ fn process_one_get(
         HashMap::new()
     };
 
-    let full_content = std::fs::read_to_string(&node.path).ok();
-    let node_content = if show_headings && !no_content {
+    let full_content = match std::fs::read_to_string(&node.path) {
+        Ok(content) => Some(content),
+        Err(err) if heading.is_some() => {
+            return Err(err).with_context(|| {
+                format!(
+                    "Failed to read note content: {}",
+                    util::path_string(&node.path)
+                )
+            });
+        }
+        Err(_) => None,
+    };
+    let heading_content = heading
+        .map(|title| {
+            let content = full_content
+                .as_deref()
+                .expect("heading content requires note content");
+            heading_block_from_content(content, title)
+                .ok_or_else(|| anyhow::anyhow!("Heading not found: {title}"))
+        })
+        .transpose()?;
+
+    let node_content = if no_content {
+        None
+    } else if let Some(content) = &heading_content {
+        Some(content.clone())
+    } else if show_headings {
         full_content.clone()
     } else {
         None
     };
-    let text_content = (!no_content).then(|| full_content.clone()).flatten();
+    let text_content = if no_content {
+        None
+    } else {
+        heading_content.clone().or_else(|| full_content.clone())
+    };
 
     let headings = if show_headings {
         full_content.as_deref().map(headings_from_content)
@@ -151,8 +205,9 @@ fn process_one_get(
 
     let node_json = NodeJson::from_node(&node, node_content.as_deref(), headings);
 
-    let estimated_tokens = full_content
+    let estimated_tokens = heading_content
         .as_deref()
+        .or(full_content.as_deref())
         .map(|c| tokens::count_tokens(c, encoding));
 
     Ok(GetOutput {
@@ -173,6 +228,7 @@ pub fn execute(config: &ResolvedConfig, opts: &GetOptions) -> Result<Vec<GetOutp
                 target,
                 opts.show_links,
                 opts.show_headings,
+                opts.heading.as_deref(),
                 opts.no_content,
                 opts.encoding,
             )

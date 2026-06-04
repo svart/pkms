@@ -130,3 +130,122 @@ fn test_get_headings_text_with_uuids() {
     assert!(stdout.contains("f1f1f1f1-f1f1-4f1f-8f1f-f1f1f1f1f1f1"));
     assert!(stdout.contains("Visible Heading"));
 }
+
+#[test]
+fn test_get_heading_filters_text_content_to_heading_block() {
+    let (_dir, root) = setup_db();
+    let db = root.to_str().unwrap();
+
+    let note_dir = root.join("roam").join("personal");
+    let note_path = note_dir.join("get-heading-filter-text.org");
+    fs::write(
+        &note_path,
+        r#":PROPERTIES:
+:ID:       77777777-7777-4777-8777-777777777777
+:END:
+#+title: Get Heading Filter Text
+
+Preamble should not be returned.
+* Alpha
+Alpha body.
+* Beta
+Beta body.
+** Beta child
+Child body.
+* Gamma
+Gamma body.
+"#,
+    )
+    .unwrap();
+
+    let (stdout, _stderr, status) = run(&[
+        "--db",
+        db,
+        "get",
+        "Get Heading Filter Text",
+        "--heading",
+        "Beta",
+    ]);
+    assert!(status.success());
+    assert!(stdout.contains("Note: Get Heading Filter Text"));
+    assert!(stdout.contains("--- Content ---\n* Beta\nBeta body.\n** Beta child\nChild body.\n"));
+    assert!(!stdout.contains("Preamble should not be returned."));
+    assert!(!stdout.contains("Alpha body."));
+    assert!(!stdout.contains("Gamma body."));
+}
+
+#[test]
+fn test_get_heading_filters_json_content_to_heading_block() {
+    let (_dir, root) = setup_db();
+    let db = root.to_str().unwrap();
+
+    let note_dir = root.join("roam").join("personal");
+    let note_path = note_dir.join("get-heading-filter-json.org");
+    fs::write(
+        &note_path,
+        r#":PROPERTIES:
+:ID:       12121212-1212-4212-8212-121212121212
+:END:
+#+title: Get Heading Filter Json
+
+* Alpha
+Alpha body.
+* Beta
+Beta body.
+** Beta child
+Child body.
+* Gamma
+Gamma body.
+"#,
+    )
+    .unwrap();
+
+    let (v, status) = run_json(&[
+        "--db",
+        db,
+        "--output-format",
+        "json",
+        "get",
+        "Get Heading Filter Json",
+        "--heading",
+        "Beta",
+    ]);
+    assert!(status.success());
+    assert_eq!(v["node"]["title"], "Get Heading Filter Json");
+    assert_eq!(
+        v["node"]["content"],
+        "* Beta\nBeta body.\n** Beta child\nChild body."
+    );
+}
+
+#[test]
+fn test_get_heading_returns_error_when_heading_missing() {
+    let (_dir, root) = setup_db();
+    let db = root.to_str().unwrap();
+
+    let note_dir = root.join("roam").join("personal");
+    let note_path = note_dir.join("get-heading-filter-missing.org");
+    fs::write(
+        &note_path,
+        r#":PROPERTIES:
+:ID:       99999999-9999-4999-8999-999999999999
+:END:
+#+title: Get Heading Filter Missing
+
+* Present
+Body.
+"#,
+    )
+    .unwrap();
+
+    let (_stdout, stderr, status) = run(&[
+        "--db",
+        db,
+        "get",
+        "Get Heading Filter Missing",
+        "--heading",
+        "Absent",
+    ]);
+    assert!(!status.success());
+    assert!(stderr.contains("Heading not found: Absent"));
+}

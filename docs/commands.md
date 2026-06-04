@@ -55,6 +55,7 @@ pkms query "search terms" --embed
 ```bash
 pkms get <target>
 pkms get <target> --links
+pkms get <target> --heading "Section title"
 pkms get <target> --headings --no-content
 pkms path <from> <to>
 pkms context <target> --depth 2

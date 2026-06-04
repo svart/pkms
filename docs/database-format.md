@@ -58,6 +58,12 @@ Inspect heading IDs with:
 pkms get <target> --headings --no-content
 ```
 
+Retrieve one heading block from a note with:
+
+```bash
+pkms get <target> --heading "HTTP/2"
+```
+
 ## Filetags
 
 Use canonical filetags:

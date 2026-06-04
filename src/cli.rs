@@ -242,6 +242,12 @@ pub struct GetArgs {
     pub links: bool,
     #[arg(long, help = "Show heading structure")]
     pub headings: bool,
+    #[arg(
+        long,
+        value_name = "HEADING_TITLE",
+        help = "Show only this heading block in note content"
+    )]
+    pub heading: Option<String>,
     #[arg(long, help = "Suppress note content output")]
     pub no_content: bool,
     #[arg(long, help = "Read UUIDs from NDJSON stdin")]
