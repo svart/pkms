@@ -14,6 +14,11 @@ pub struct SearchFields {
     pub category: bool,
 }
 
+pub struct ContentSearchResult<'a> {
+    pub node: &'a super::Node,
+    pub lines: Vec<String>,
+}
+
 impl Default for SearchFields {
     fn default() -> Self {
         Self {
@@ -102,34 +107,50 @@ impl Graph {
         results
     }
 
-    pub fn search_content(&self, terms: &str) -> Vec<(String, String, Vec<String>)> {
+    pub fn search_content(&self, terms: &str) -> Vec<ContentSearchResult<'_>> {
         let query = terms.to_lowercase();
         let mut results = Vec::new();
-        let mut seen_paths = HashSet::new();
 
-        for node in self.nodes.values() {
-            if !seen_paths.insert(node.path.clone()) {
-                continue;
+        if self.results.is_empty() {
+            for uuid in self.path_to_uuid.values() {
+                let Some(node) = self.nodes.get(uuid) else {
+                    continue;
+                };
+                let Some(content) = std::fs::read_to_string(&node.path).ok() else {
+                    continue;
+                };
+                let Some(lines) = content_match_lines(&content, &query) else {
+                    continue;
+                };
+                results.push(ContentSearchResult {
+                    node,
+                    lines,
+                });
             }
-            let content = self
-                .results
-                .iter()
-                .find(|r| r.path == node.path)
-                .and_then(|r| r.raw_content.clone())
-                .or_else(|| std::fs::read_to_string(&node.path).ok());
+            return results;
+        }
+
+        for scan_result in &self.results {
+            let Some(uuid) = self.path_to_uuid.get(&scan_result.path) else {
+                continue;
+            };
+            let Some(node) = self.nodes.get(uuid) else {
+                continue;
+            };
+            let content = scan_result
+                .raw_content
+                .clone()
+                .or_else(|| std::fs::read_to_string(&scan_result.path).ok());
             let Some(content) = content else {
                 continue;
             };
-            if !content.to_lowercase().contains(&query) {
+            let Some(lines) = content_match_lines(&content, &query) else {
                 continue;
-            }
-            let mut context_lines = Vec::new();
-            for (i, line) in content.lines().enumerate() {
-                if line.to_lowercase().contains(&query) {
-                    context_lines.push(format!("{}: {}", i + 1, line.trim()));
-                }
-            }
-            results.push((node.uuid.clone(), node.title.clone(), context_lines));
+            };
+            results.push(ContentSearchResult {
+                node,
+                lines,
+            });
         }
 
         results
@@ -151,4 +172,18 @@ impl Graph {
         tags.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
         tags
     }
+}
+
+fn content_match_lines(content: &str, query: &str) -> Option<Vec<String>> {
+    if !content.to_lowercase().contains(query) {
+        return None;
+    }
+
+    let mut lines = Vec::new();
+    for (i, line) in content.lines().enumerate() {
+        if line.to_lowercase().contains(query) {
+            lines.push(format!("{}: {}", i + 1, line.trim()));
+        }
+    }
+    Some(lines)
 }

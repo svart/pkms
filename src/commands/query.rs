@@ -146,8 +146,9 @@ fn search_by_text(
 
     if search_content {
         let content_results = graph.search_content(terms);
-        for (uuid, title, lines) in content_results {
-            let ctx_lines: Vec<ContextLine> = lines
+        for result in content_results {
+            let ctx_lines: Vec<ContextLine> = result
+                .lines
                 .iter()
                 .map(|l| {
                     let (line_str, text) = l.split_once(": ").unwrap_or(("0", l));
@@ -157,14 +158,14 @@ fn search_by_text(
                     }
                 })
                 .collect();
-            if let Some(existing) = combined.iter_mut().find(|r| r.uuid == uuid) {
+            if let Some(existing) = combined.iter_mut().find(|r| r.uuid == result.node.uuid) {
                 existing.content_matches = ctx_lines;
             } else {
                 combined.push(QueryResultEntry {
-                    uuid,
-                    title,
-                    path: String::new(),
-                    filetags: vec![],
+                    uuid: result.node.uuid.clone(),
+                    title: result.node.title.clone(),
+                    path: result.node.path.display().to_string(),
+                    filetags: result.node.filetags.clone(),
                     score: 1.0,
                     matches: vec!["content".to_string()],
                     content_matches: ctx_lines,

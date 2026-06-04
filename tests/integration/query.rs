@@ -112,6 +112,51 @@ fn test_query_content_only() {
 }
 
 #[test]
+fn test_query_content_uses_primary_note_identity_with_heading_ids() {
+    let (_dir, root) = setup_clean_db();
+    db_write(
+        &root,
+        "content-heading.org",
+        r#":PROPERTIES:
+:ID:       aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa
+:END:
+#+title: Primary Content Note
+#+filetags: :contenttag:
+
+This body has unique-primary-content-needle.
+
+* Heading Node
+:PROPERTIES:
+:ID:       bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb
+:END:
+"#,
+    );
+
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "query",
+        "unique-primary-content-needle",
+        "--content",
+    ]);
+    assert!(status.success(), "query --content failed: {v}");
+    assert_eq!(v["total_results"], 1);
+    let result = &v["results"][0];
+    assert_eq!(result["uuid"], "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa");
+    assert_eq!(result["title"], "Primary Content Note");
+    assert_eq!(
+        result["path"],
+        root.join("roam")
+            .join("content-heading.org")
+            .display()
+            .to_string()
+    );
+    assert_eq!(result["filetags"], serde_json::json!(["contenttag"]));
+}
+
+#[test]
 fn test_query_title_only() {
     let (_dir, root) = setup_db();
     let (v, status) = run_json(&[

@@ -827,8 +827,8 @@ This is the content with a unique-searchable-keyword here.
     let graph = Graph::build(results);
     let content_results = graph.search_content("unique-searchable-keyword");
     assert_eq!(content_results.len(), 1);
-    assert_eq!(content_results[0].1, "Content Test");
-    assert!(!content_results[0].2.is_empty());
+    assert_eq!(content_results[0].node.title, "Content Test");
+    assert!(!content_results[0].lines.is_empty());
 }
 
 #[test]
