@@ -5,10 +5,12 @@ use crate::output::OutputContext;
 use crate::parser::{Link, strip_org_links};
 use anyhow::Result;
 use serde::Serialize;
+use std::collections::HashMap;
 use std::fmt::Write;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct RelatedTaskHeading {
+    pub id: usize,
     pub title: String,
     pub todo_state: Option<String>,
     pub priority: Option<char>,
@@ -76,7 +78,14 @@ fn find_heading_end(content: &str, heading_line: usize) -> usize {
     lines.len()
 }
 
-fn find_parents(headings: &[crate::parser::Heading], target_idx: usize) -> Vec<RelatedTaskHeading> {
+type TaskIdMap = HashMap<(String, usize), usize>;
+
+fn find_parents(
+    headings: &[crate::parser::Heading],
+    target_idx: usize,
+    path: &std::path::Path,
+    task_ids: &TaskIdMap,
+) -> Vec<RelatedTaskHeading> {
     let target_level = headings[target_idx].level;
     let mut parents = Vec::new();
     let mut seen_levels: Vec<usize> = Vec::new();
@@ -88,8 +97,8 @@ fn find_parents(headings: &[crate::parser::Heading], target_idx: usize) -> Vec<R
             continue;
         }
         seen_levels.push(h.level);
-        if h.todo_state.is_some() {
-            parents.push(related_task_heading(h));
+        if let Some(id) = canonical_task_id(task_ids, path, h.line_number) {
+            parents.push(related_task_heading(id, h));
         }
     }
     parents.reverse();
@@ -100,6 +109,8 @@ fn find_children(
     headings: &[crate::parser::Heading],
     target_idx: usize,
     end_line: usize,
+    path: &std::path::Path,
+    task_ids: &TaskIdMap,
 ) -> Vec<RelatedTaskHeading> {
     let target_level = headings[target_idx].level;
     let mut children = Vec::new();
@@ -107,15 +118,28 @@ fn find_children(
         if h.line_number >= end_line {
             break;
         }
-        if h.level > target_level {
-            children.push(related_task_heading(h));
+        if h.level > target_level
+            && let Some(id) = canonical_task_id(task_ids, path, h.line_number)
+        {
+            children.push(related_task_heading(id, h));
         }
     }
     children
 }
 
-fn related_task_heading(heading: &crate::parser::Heading) -> RelatedTaskHeading {
+fn canonical_task_id(
+    task_ids: &TaskIdMap,
+    path: &std::path::Path,
+    line_number: usize,
+) -> Option<usize> {
+    task_ids
+        .get(&(path.display().to_string(), line_number))
+        .copied()
+}
+
+fn related_task_heading(id: usize, heading: &crate::parser::Heading) -> RelatedTaskHeading {
     RelatedTaskHeading {
+        id,
         title: heading.title.clone(),
         todo_state: heading.todo_state.clone(),
         priority: heading.priority,
@@ -144,32 +168,35 @@ fn extract_outgoing(links: &[Link]) -> Vec<OutgoingLink> {
         .collect()
 }
 
-fn show_heading_by_line(
-    content: &str,
-    headings: &[crate::parser::Heading],
-    filetags: &[String],
-    note_title: &str,
-    note_uuid: &str,
-    path: &std::path::Path,
-    line_number: usize,
-) -> Result<ShowOutput> {
-    let heading_idx = headings
+struct HeadingShowContext<'a> {
+    content: &'a str,
+    headings: &'a [crate::parser::Heading],
+    filetags: &'a [String],
+    note_title: &'a str,
+    note_uuid: &'a str,
+    path: &'a std::path::Path,
+    task_ids: &'a TaskIdMap,
+}
+
+fn show_heading_by_line(ctx: HeadingShowContext<'_>, line_number: usize) -> Result<ShowOutput> {
+    let heading_idx = ctx
+        .headings
         .iter()
         .position(|h| h.line_number == line_number)
         .ok_or_else(|| {
             anyhow::anyhow!(
                 "No heading found at line {} in '{}'",
                 line_number,
-                note_title
+                ctx.note_title
             )
         })?;
-    let heading = &headings[heading_idx];
+    let heading = &ctx.headings[heading_idx];
 
-    let end_line = find_heading_end(content, heading.line_number);
-    let parents = find_parents(headings, heading_idx);
-    let children = find_children(headings, heading_idx, end_line);
+    let end_line = find_heading_end(ctx.content, heading.line_number);
+    let parents = find_parents(ctx.headings, heading_idx, ctx.path, ctx.task_ids);
+    let children = find_children(ctx.headings, heading_idx, end_line, ctx.path, ctx.task_ids);
 
-    let content_lines: Vec<&str> = content.lines().collect();
+    let content_lines: Vec<&str> = ctx.content.lines().collect();
     let block_content = if heading.line_number <= content_lines.len() {
         let start = heading.line_number - 1;
         let end = end_line - 1;
@@ -185,7 +212,7 @@ fn show_heading_by_line(
     let all_tags: Vec<String> = {
         let mut seen = std::collections::HashSet::new();
         let mut result = Vec::new();
-        for tag in filetags.iter().chain(heading.tags.iter()) {
+        for tag in ctx.filetags.iter().chain(heading.tags.iter()) {
             if seen.insert(tag.clone()) {
                 result.push(tag.clone());
             }
@@ -202,12 +229,12 @@ fn show_heading_by_line(
         todo_state: heading.todo_state.clone(),
         priority: heading.priority,
         tags: all_tags,
-        filetags: filetags.to_vec(),
+        filetags: ctx.filetags.to_vec(),
         scheduled: heading.scheduled.clone(),
         deadline: heading.deadline.clone(),
-        path: path.display().to_string(),
-        note_title: note_title.to_string(),
-        note_uuid: note_uuid.to_string(),
+        path: ctx.path.display().to_string(),
+        note_title: ctx.note_title.to_string(),
+        note_uuid: ctx.note_uuid.to_string(),
         heading_uuid: heading.uuid.clone(),
         parents,
         children,
@@ -220,6 +247,7 @@ fn process_one_show(
     graph: &Graph,
     config: &ResolvedConfig,
     target: &HeadingTarget,
+    task_ids: &TaskIdMap,
 ) -> Result<ShowOutput> {
     let (path, line_number) = if let Some(cid) = target.canonical_id {
         graph.resolve_canonical_task_id(config, cid)?
@@ -244,12 +272,15 @@ fn process_one_show(
             match first_todo {
                 Some(h) => {
                     return show_heading_by_line(
-                        &content,
-                        headings,
-                        &node.filetags,
-                        &note_title,
-                        &node.uuid,
-                        &node.path,
+                        HeadingShowContext {
+                            content: &content,
+                            headings,
+                            filetags: &node.filetags,
+                            note_title: &note_title,
+                            note_uuid: &node.uuid,
+                            path: &node.path,
+                            task_ids,
+                        },
                         h.line_number,
                     );
                 }
@@ -292,12 +323,15 @@ fn process_one_show(
                 match first_todo {
                     Some(h) => {
                         return show_heading_by_line(
-                            &content,
-                            headings,
-                            &result.parsed.filetags,
-                            &note_title,
-                            "",
-                            &result.path,
+                            HeadingShowContext {
+                                content: &content,
+                                headings,
+                                filetags: &result.parsed.filetags,
+                                note_title: &note_title,
+                                note_uuid: "",
+                                path: &result.path,
+                                task_ids,
+                            },
                             h.line_number,
                         );
                     }
@@ -336,12 +370,15 @@ fn process_one_show(
     let note_uuid = parsed.uuids.first().cloned().unwrap_or_default();
 
     show_heading_by_line(
-        &content,
-        &parsed.headings,
-        &parsed.filetags,
-        &note_title,
-        &note_uuid,
-        path_ref,
+        HeadingShowContext {
+            content: &content,
+            headings: &parsed.headings,
+            filetags: &parsed.filetags,
+            note_title: &note_title,
+            note_uuid: &note_uuid,
+            path: path_ref,
+            task_ids,
+        },
         line_number,
     )
 }
@@ -356,10 +393,15 @@ fn resolve_outgoing_titles(output: &mut ShowOutput, graph: &Graph) {
 
 pub fn execute(config: &ResolvedConfig, opts: &ShowOptions) -> Result<Vec<ShowOutput>> {
     let graph = Graph::load(config)?;
+    let task_ids: TaskIdMap = graph
+        .all_task_entries(config)
+        .into_iter()
+        .map(|(id, path, line_number)| ((path, line_number), id))
+        .collect();
     opts.targets
         .iter()
         .map(|target| {
-            let mut output = process_one_show(&graph, config, target)?;
+            let mut output = process_one_show(&graph, config, target, &task_ids)?;
             resolve_outgoing_titles(&mut output, &graph);
             Ok(output)
         })
@@ -429,22 +471,22 @@ fn render_one_text(output: &ShowOutput) -> String {
             let prio_display = p.priority.map(|c| format!(" [#{}]", c)).unwrap_or_default();
             let _ = writeln!(
                 text,
-                "  {} {}{} (line {}, level {})",
-                state_display, p.title, prio_display, p.line_number, p.level
+                "  p{} {} {}{} (line {}, level {})",
+                p.id, state_display, p.title, prio_display, p.line_number, p.level
             );
         }
     }
 
     if !output.children.is_empty() {
         text.push('\n');
-        text.push_str("Subtasks (blocks):\n");
+        text.push_str("Child chain (blocks):\n");
         for c in &output.children {
             let state_display = c.todo_state.as_deref().unwrap_or("");
             let prio_display = c.priority.map(|c| format!(" [#{}]", c)).unwrap_or_default();
             let _ = writeln!(
                 text,
-                "  {} {}{} (line {}, level {})",
-                state_display, c.title, prio_display, c.line_number, c.level
+                "  p{} {} {}{} (line {}, level {})",
+                c.id, state_display, c.title, prio_display, c.line_number, c.level
             );
         }
     }
@@ -497,6 +539,7 @@ mod tests {
             note_uuid: "11111111-1111-4111-8111-111111111111".to_string(),
             heading_uuid: Some("22222222-2222-4222-8222-222222222222".to_string()),
             parents: vec![RelatedTaskHeading {
+                id: 1,
                 title: "Parent".to_string(),
                 todo_state: Some("TODO".to_string()),
                 priority: None,
@@ -504,6 +547,7 @@ mod tests {
                 level: 1,
             }],
             children: vec![RelatedTaskHeading {
+                id: 3,
                 title: "Child".to_string(),
                 todo_state: Some("NEXT".to_string()),
                 priority: Some('B'),
@@ -528,7 +572,9 @@ mod tests {
         assert!(text.contains("  Lines:    10 – 14"));
         assert!(text.contains("  Priority: [#A]"));
         assert!(text.contains("Parent chain (depends on):"));
-        assert!(text.contains("Subtasks (blocks):"));
+        assert!(text.contains("p1 TODO Parent (line 5, level 1)"));
+        assert!(text.contains("Child chain (blocks):"));
+        assert!(text.contains("p3 NEXT Child [#B] (line 12, level 3)"));
         assert!(text.contains("id:33333333-3333-4333-8333-333333333333 → Linked Note"));
         assert!(text.contains("--- Content ---\n* TODO Task heading\nBody\n--- End Content ---"));
     }

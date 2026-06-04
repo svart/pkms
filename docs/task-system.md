@@ -176,6 +176,10 @@ positions. In single-source text views, IDs may be shown as bare source IDs; in
 `source:all` views, PKMS display IDs are prefixed with `p` and Todoist display
 IDs with `t`. Scripts should rely on source identity fields in JSON/NDJSON.
 
+`task <ID> show` includes parent and child task chains for nested PKMS tasks.
+Each chain entry carries the same canonical task ID used by `task list`,
+`task agenda`, `task p<ID> show`, and `task p<ID> open`.
+
 ## Filters And Views
 
 Task item commands accept positional filters after the subcommand. Source

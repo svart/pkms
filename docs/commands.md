@@ -184,7 +184,7 @@ pkms task todoist:<remote-id> mod dl:
 ```
 
 See [TODO and Agenda](todo-agenda.md) for task IDs, filtering, table columns,
-editor behavior, and task state changes.
+editor behavior, task state changes, and show output parent/child chains.
 
 `pkms task inbox` and default `pkms task add` use the PKMS inbox note configured
 as `[tasks].inbox`. The value can be a note title, UUID, absolute path, or path

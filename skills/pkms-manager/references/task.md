@@ -115,6 +115,10 @@ Use stable `todoist:<remote-id>` IDs for Todoist mutations.
 Never print the Todoist token. It is read from `TODOIST_API_TOKEN` by default,
 or from `[todoist].token` in config when the environment variable is unset.
 
+`task <ID> show` includes parent and child task chains for nested PKMS tasks.
+Each chain entry includes the canonical task ID used by `task list`,
+`task agenda`, `task p<ID> show`, and `task p<ID> open`.
+
 For Todoist-backed agenda views, bare `task agenda source:todoist` uses the
 Todoist `!no date` filter to show only scheduled tasks. `today` uses `today`,
 `overdue` uses `overdue`, `week` uses `next 7 days`, and `upcoming --days N` uses

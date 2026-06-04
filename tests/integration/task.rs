@@ -1428,6 +1428,44 @@ fn test_task_show_accepts_pkms_id_forms() {
 }
 
 #[test]
+fn test_task_show_includes_parent_and_child_chain_ids() {
+    let db = TestDb::new().note_with_content(
+        "show-chain.org",
+        r#":PROPERTIES:
+:ID:       67676767-6767-4767-8767-676767676767
+:END:
+#+title: Show Chain
+
+* TODO Parent task
+** TODO Target task
+*** TODO Child task
+**** TODO Grandchild task
+** TODO Sibling task
+"#,
+    );
+
+    let (v, status) = db.run_json(&["task", "p2", "show"]);
+
+    assert!(status.success());
+    assert_eq!(v["heading_title"], "Target task");
+    assert_eq!(v["parents"][0]["id"], 1);
+    assert_eq!(v["parents"][0]["title"], "Parent task");
+    assert_eq!(v["children"][0]["id"], 3);
+    assert_eq!(v["children"][0]["title"], "Child task");
+    assert_eq!(v["children"][1]["id"], 4);
+    assert_eq!(v["children"][1]["title"], "Grandchild task");
+
+    let (stdout, stderr, status) = db.run(&["task", "p2", "show"]);
+
+    assert!(status.success(), "task show failed:\n{stdout}\n{stderr}");
+    assert!(stdout.contains("Parent chain (depends on):"));
+    assert!(stdout.contains("p1 TODO Parent task"));
+    assert!(stdout.contains("Child chain (blocks):"));
+    assert!(stdout.contains("p3 TODO Child task"));
+    assert!(stdout.contains("p4 TODO Grandchild task"));
+}
+
+#[test]
 fn test_task_open_accepts_pkms_id_form() {
     let (_dir, root) = setup_db();
     let (stdout, stderr, status) = run(&[

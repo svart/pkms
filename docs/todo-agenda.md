@@ -116,6 +116,9 @@ pkms task p5 show
 pkms task pkms:5 show
 ```
 
+Nested PKMS task output includes parent and child task chains with canonical
+`p<ID>` IDs for each related task.
+
 Open a task at its source heading:
 
 ```bash
