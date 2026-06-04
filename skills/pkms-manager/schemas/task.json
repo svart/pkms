@@ -7,6 +7,14 @@
     "total": { "type": "integer" },
     "items": {
       "type": "array",
+      "items": { "$ref": "task-item.json" }
+    },
+    "created": { "type": "boolean" },
+    "changed": { "type": "boolean" },
+    "action": { "type": "string" },
+    "item": { "$ref": "task-item.json" },
+    "changes": {
+      "type": "array",
       "items": { "type": "object", "additionalProperties": true }
     },
     "id": { "type": "string" },
@@ -21,9 +29,11 @@
       "total": 1,
       "items": [
         {
+          "id": { "source": "todoist", "id": "6XGgm6PHrGgMpCFX" },
           "source": "todoist",
           "source_id": "6XGgm6PHrGgMpCFX",
           "display_id": "todoist:6XGgm6PHrGgMpCFX",
+          "status": "open",
           "title": "Buy milk"
         }
       ]

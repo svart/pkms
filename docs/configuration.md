@@ -77,6 +77,28 @@ default `pkms task add`. The value can be a note title, UUID, absolute path, or
 path relative to `db_root`. Set it to `daily` to use today's daily note under a
 top-level `* Inbox` heading.
 
+## Todoist Integration
+
+Todoist commands require a binary built with `--features todoist` and a token.
+The token is read from `TODOIST_API_TOKEN` by default, or from the environment
+variable named by `[todoist].token_env`. If that environment variable is unset
+or empty, `[todoist].token` is used.
+
+```toml
+[todoist]
+token_env = "TODOIST_API_TOKEN"
+token = "..." # optional; prefer an environment variable
+default_filter = "today | overdue"
+```
+
+`default_filter` is used for Todoist task list requests when no
+`todoist.filter:<query>` filter is provided. `enabled` is accepted in the config
+file for compatibility with generated configs, but current Todoist commands are
+gated by the feature build and token availability.
+
+Keep config files containing `[todoist].token` private. `pkms info` does not
+print token values.
+
 ## Agenda States
 
 `open_todo_states` define headings treated as active tasks by `task list`.

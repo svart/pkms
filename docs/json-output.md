@@ -1,6 +1,6 @@
 # JSON and NDJSON Output
 
-Every command supports structured output:
+Every command accepts structured output flags:
 
 ```bash
 pkms --output-format json check
@@ -11,6 +11,11 @@ pkms --output-format ndjson resolve --title "graph"
 
 Use JSON when one command result should be consumed as a whole. Use NDJSON when
 passing a stream of note or task records to another command.
+
+NDJSON is stream-oriented only for commands that produce multiple records, such
+as the producers listed in [Pipelining](pipelining.md). Commands that are not
+stream producers may print a single JSON object in structured mode even when the
+selected format is `ndjson`; prefer `json` for those commands.
 
 ## Example JSON
 

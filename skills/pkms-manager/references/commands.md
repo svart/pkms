@@ -24,7 +24,7 @@ pkms validate <target>
 pkms resolve --title <term>
 pkms resolve --uuid <uuid-fragment>
 pkms resolve --tags "tag1,tag2"
-pkms resolve --todos
+pkms resolve --title <term> --todos
 pkms query "terms"
 pkms query "terms" --title
 pkms query "terms" --tags

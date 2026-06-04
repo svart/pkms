@@ -4,22 +4,81 @@
   "type": "object",
   "additionalProperties": true,
   "properties": {
-    "id": { "type": "integer" },
-    "uuid": { "type": "string" },
+    "id": {
+      "oneOf": [
+        { "type": "integer" },
+        {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "source": { "type": "string" },
+            "id": { "type": ["string", "integer"] }
+          },
+          "required": ["source", "id"]
+        }
+      ]
+    },
+    "display_id": { "type": "string" },
+    "source": { "type": "string", "enum": ["pkms", "todoist"] },
+    "source_id": { "type": "string" },
     "title": { "type": "string" },
-    "path": { "type": "string" },
+    "body": { "type": ["string", "null"] },
+    "status": { "type": "string", "enum": ["open", "done", "unknown"] },
+    "state": { "type": ["string", "null"] },
+    "uuid": { "type": "string" },
+    "path": { "type": ["string", "null"] },
     "filetags": { "type": "array", "items": { "type": "string" } },
+    "tags": { "type": "array", "items": { "type": "string" } },
     "heading_title": { "type": "string" },
-    "heading_level": { "type": "integer" },
-    "line_number": { "type": "integer" },
+    "heading_level": { "type": ["integer", "null"] },
+    "line_number": { "type": ["integer", "null"] },
     "todo_state": { "type": ["string", "null"] },
     "priority": { "type": ["string", "null"] },
-    "scheduled": { "type": ["string", "null"] },
+    "scheduled": {
+      "oneOf": [
+        { "type": "string" },
+        { "type": "null" },
+        {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "raw": { "type": "string" },
+            "date": { "type": ["string", "null"] }
+          },
+          "required": ["raw"]
+        }
+      ]
+    },
     "scheduled_date": { "type": ["string", "null"] },
-    "deadline": { "type": ["string", "null"] },
+    "deadline": {
+      "oneOf": [
+        { "type": "string" },
+        { "type": "null" },
+        {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "raw": { "type": "string" },
+            "date": { "type": ["string", "null"] }
+          },
+          "required": ["raw"]
+        }
+      ]
+    },
     "deadline_date": { "type": ["string", "null"] },
+    "project": { "type": ["string", "null"] },
+    "project_id": { "type": ["string", "null"] },
+    "note_title": { "type": ["string", "null"] },
+    "note_uuid": { "type": ["string", "null"] },
+    "has_agenda_tag": { "type": ["boolean", "null"] },
+    "is_daily_file": { "type": "boolean" },
+    "daily_file_date": { "type": ["string", "null"] },
     "is_overdue": { "type": "boolean" },
-    "heading_tags": { "type": "array", "items": { "type": "string" } }
+    "heading_tags": { "type": "array", "items": { "type": "string" } },
+    "url": { "type": ["string", "null"] }
   },
-  "required": ["id", "uuid", "title", "path", "heading_title", "line_number"]
+  "anyOf": [
+    { "required": ["id", "uuid", "title", "path", "heading_title", "line_number"] },
+    { "required": ["id", "display_id", "source", "source_id", "title", "status"] }
+  ]
 }

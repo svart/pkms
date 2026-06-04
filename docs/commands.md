@@ -36,7 +36,7 @@ pkms validate <target>
 pkms resolve --uuid <uuid>
 pkms resolve --title <title>
 pkms resolve --tags "tag1,tag2"
-pkms resolve --todos
+pkms resolve --title <title> --todos
 pkms query "search terms"
 pkms query "search terms" --title
 pkms query "search terms" --tags

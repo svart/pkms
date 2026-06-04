@@ -91,7 +91,7 @@ Capture to Todoist from the terminal when phone capture is the intended
 cross-device workflow:
 
 ```bash
-pkms task add --source todoist "Buy milk tomorrow"
+pkms task add source:todoist "Buy milk tomorrow"
 pkms task todoist:<remote-id> done --dry-run
 pkms task todoist:<remote-id> done
 ```

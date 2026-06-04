@@ -14,10 +14,22 @@ Build with embedding-based semantic search support:
 cargo install --path . --features embed
 ```
 
+Build with Todoist task provider support:
+
+```bash
+cargo install --path . --features todoist
+```
+
 Build with the local web viewer:
 
 ```bash
 cargo install --path . --features web
+```
+
+Features can be combined when needed:
+
+```bash
+cargo install --path . --features todoist,web
 ```
 
 Run directly from the checkout:
@@ -43,6 +55,10 @@ nix profile install github:svart/pkms
 nix profile install github:svart/pkms#embed
 nix profile install github:svart/pkms#web
 ```
+
+The flake currently exposes `default`, `embed`, and `web` packages. For a
+Todoist-enabled install, use Cargo from a checkout, or enter `nix develop` and
+run Cargo with `--features todoist`.
 
 Run or build without installing:
 
@@ -73,6 +89,13 @@ nix profile remove <index>
 The `embed` feature enables `--embed` for `query` and `suggest`. Default builds
 do not expose those flags. Embedding mode uses `fastembed` and downloads the
 model on first use to the local cache.
+
+## Todoist Feature
+
+The `todoist` feature enables Todoist-backed task reads and writes through the
+`task` namespace. Default builds reject `source:todoist` and `source:all`
+commands that need Todoist data. Configure a token with `TODOIST_API_TOKEN` or
+`[todoist].token`; see [Configuration](configuration.md).
 
 ## Web Feature
 
