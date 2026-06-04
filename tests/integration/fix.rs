@@ -100,3 +100,71 @@ fn test_fix_apply_json_output() {
     assert!(status.success());
     assert_eq!(v["applied"], true, "fix should be applied, got: {v}");
 }
+
+#[test]
+fn test_fix_apply_honors_ignore_patterns() {
+    let (_dir, root) = setup_clean_db();
+    let broken = "ffffffff-ffff-4fff-ffff-ffffffffffff";
+    let replacement = "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa";
+
+    db_write(
+        &root,
+        "target.org",
+        &format!(
+            r#":PROPERTIES:
+:ID:       {replacement}
+:END:
+#+title: Target
+"#
+        ),
+    );
+    db_write(
+        &root,
+        "source.org",
+        &format!(
+            r#":PROPERTIES:
+:ID:       bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb
+:END:
+#+title: Source
+
+[[id:{broken}][Broken]]
+"#
+        ),
+    );
+    db_write(
+        &root,
+        "ignored/backup.org",
+        &format!(
+            r#":PROPERTIES:
+:ID:       cccccccc-cccc-4ccc-cccc-cccccccccccc
+:END:
+#+title: Ignored Backup
+
+[[id:{broken}][Broken]]
+"#
+        ),
+    );
+
+    let (stdout, _stderr, status) = run_with_config(
+        &[
+            "--db",
+            root.to_str().unwrap(),
+            "--output-format",
+            "json",
+            "fix",
+            broken,
+            replacement,
+            "--apply",
+        ],
+        r#"ignore_patterns = ["ignored"]
+"#,
+    );
+    let v: serde_json::Value = serde_json::from_str(stdout.trim()).unwrap();
+    assert!(status.success(), "fix failed: {v}");
+    assert_eq!(v["total_replacements"], 1);
+
+    let source = fs::read_to_string(root.join("roam/source.org")).unwrap();
+    assert!(source.contains(replacement));
+    let ignored = fs::read_to_string(root.join("roam/ignored/backup.org")).unwrap();
+    assert!(ignored.contains(broken), "ignored file should not be changed");
+}

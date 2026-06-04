@@ -1,5 +1,6 @@
 use crate::cli::FixArgs;
 use crate::config::ResolvedConfig;
+use crate::discovery;
 use crate::graph::Graph;
 use crate::output::OutputContext;
 use anyhow::Result;
@@ -49,6 +50,7 @@ fn print_fix_output(ctx: &OutputContext, output: &FixOutput) -> Result<()> {
 
 fn find_and_replace_links(
     db_root: &std::path::Path,
+    ignore_patterns: &[String],
     broken_str: &str,
     replacement_uuid: &str,
     apply: bool,
@@ -59,18 +61,8 @@ fn find_and_replace_links(
     let escaped = regex::escape(broken_str);
     let re = Regex::new(&format!(r"(id:){escaped}")).unwrap();
 
-    for entry in walkdir::WalkDir::new(db_root)
-        .follow_links(false)
-        .into_iter()
-        .filter_entry(|e| !e.file_name().to_string_lossy().starts_with('.'))
-    {
-        let Ok(entry) = entry else { continue };
-        if !entry.file_type().is_file() || entry.path().extension().is_none_or(|e| e != "org") {
-            continue;
-        }
-
-        let path = entry.path();
-        let Ok(content) = std::fs::read_to_string(path) else {
+    for path in discovery::walk_org_files(db_root, ignore_patterns)? {
+        let Ok(content) = std::fs::read_to_string(&path) else {
             continue;
         };
 
@@ -83,7 +75,7 @@ fn find_and_replace_links(
                 let new_content = re.replace_all(&content, |caps: &regex::Captures| {
                     format!("{}{}", &caps[1], replacement_uuid)
                 });
-                std::fs::write(path, new_content.as_ref())?;
+                std::fs::write(&path, new_content.as_ref())?;
             }
         }
     }
@@ -118,6 +110,7 @@ impl TryFrom<&FixArgs> for FixOptions {
 pub fn run(config: &ResolvedConfig, ctx: &OutputContext, opts: &FixOptions) -> Result<()> {
     let graph = Graph::load(config)?;
     let db_root = config.resolved_db_root();
+    let ignore_patterns = config.resolve_ignore_patterns();
 
     let (replacement_uuid, replacement_title) = graph
         .nodes
@@ -131,7 +124,13 @@ pub fn run(config: &ResolvedConfig, ctx: &OutputContext, opts: &FixOptions) -> R
         })?;
 
     let (files_affected, total_replacements) =
-        find_and_replace_links(db_root, &opts.broken_uuid, &replacement_uuid, opts.apply)?;
+        find_and_replace_links(
+            db_root,
+            &ignore_patterns,
+            &opts.broken_uuid,
+            &replacement_uuid,
+            opts.apply,
+        )?;
 
     let output = FixOutput {
         broken_uuid: opts.broken_uuid.clone(),
