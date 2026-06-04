@@ -203,8 +203,8 @@ fn test_pipe_resolve_to_task_list() {
     );
     for v in assert_ndjson_output(&["resolve", "task", "list"], &stdout) {
         assert!(
-            v.get("uuid").is_some(),
-            "expected task list output with uuid, got: {}",
+            v["source"].as_str() == Some("pkms") && v.get("note_uuid").is_some(),
+            "expected source-neutral task list output, got: {}",
             v
         );
     }

@@ -179,6 +179,29 @@ fn test_task_list_json() {
 }
 
 #[test]
+fn test_task_list_default_json_uses_source_neutral_items() {
+    let db = TestDb::new()
+        .note(
+            "tasks.org",
+            "Task Note",
+            "11111111-1111-4111-8111-111111111111",
+        )
+        .task("tasks.org", "TODO", "Default JSON task");
+
+    let (v, status) = db.run_json(&["task", "list"]);
+
+    assert!(status.success());
+    assert_eq!(v["total"], 1);
+    assert_eq!(v["items"][0]["source"], "pkms");
+    assert_eq!(v["items"][0]["source_id"], "1");
+    assert_eq!(v["items"][0]["display_id"], "p1");
+    assert_eq!(v["items"][0]["title"], "Default JSON task");
+    assert_eq!(v["items"][0]["note_title"], "Task Note");
+    assert_eq!(v["items"][0]["state"], "TODO");
+    assert!(v["items"][0].get("todo_state").is_none());
+}
+
+#[test]
 fn test_task_list_text() {
     let (_dir, root) = setup_db();
     let (stdout, stderr, status) = run(&["--db", root.to_str().unwrap(), "task", "list"]);
@@ -223,6 +246,10 @@ fn test_task_list_group_state_json() {
     let groups = task["groups"].as_object().unwrap();
     assert!(groups.contains_key("TODO"));
     assert!(groups.contains_key("DONE"));
+    let first_todo = groups["TODO"].as_array().unwrap().first().unwrap();
+    assert_eq!(first_todo["source"], "pkms");
+    assert!(first_todo.get("display_id").is_some());
+    assert!(first_todo.get("todo_state").is_none());
 }
 
 #[test]
@@ -255,11 +282,14 @@ fn test_task_list_from_stdin_scopes_to_resolved_note() {
     let task: serde_json::Value = serde_json::from_str(task_stdout.trim()).unwrap();
     let items = task["items"].as_array().unwrap();
     assert_eq!(items.len(), 3);
-    assert!(
-        items
-            .iter()
-            .all(|item| item["title"].as_str() == Some("Agenda Item"))
-    );
+    assert!(items.iter().all(|item| {
+        item["source"].as_str() == Some("pkms")
+            && item["note_title"].as_str() == Some("Agenda Item")
+            && item["title"]
+                .as_str()
+                .is_some_and(|title| title != "Agenda Item")
+            && item.get("todo_state").is_none()
+    }));
 }
 
 #[test]
@@ -297,6 +327,33 @@ fn test_task_agenda_json() {
     assert!(status.success());
     assert!(v.get("total").is_some());
     assert!(v["items"].as_array().is_some_and(|items| !items.is_empty()));
+}
+
+#[test]
+fn test_task_agenda_default_json_uses_source_neutral_items() {
+    let db = TestDb::new().note_with_content(
+        "planned.org",
+        r#":PROPERTIES:
+:ID:       22222222-2222-4222-8222-222222222222
+:END:
+#+title: Planned Note
+
+* TODO Default agenda task
+SCHEDULED: <2026-05-29 Fri>
+"#,
+    );
+
+    let (v, status) = db.run_json(&["task", "agenda"]);
+
+    assert!(status.success());
+    assert_eq!(v["total"], 1);
+    assert_eq!(v["items"][0]["source"], "pkms");
+    assert_eq!(v["items"][0]["source_id"], "1");
+    assert_eq!(v["items"][0]["display_id"], "p1");
+    assert_eq!(v["items"][0]["title"], "Default agenda task");
+    assert_eq!(v["items"][0]["note_title"], "Planned Note");
+    assert_eq!(v["items"][0]["scheduled"]["date"], "2026-05-29");
+    assert!(v["items"][0].get("scheduled_date").is_none());
 }
 
 #[test]
@@ -1258,8 +1315,12 @@ fn test_task_list_ndjson() {
     assert!(status.success(), "task list failed:\n{stdout}\n{stderr}");
     let first = stdout.lines().next().expect("expected at least one task");
     let v: serde_json::Value = serde_json::from_str(first).unwrap();
-    assert!(v.get("uuid").is_some());
-    assert!(v.get("todo_state").is_some());
+    assert_eq!(v["source"], "pkms");
+    assert!(v.get("display_id").is_some());
+    assert!(v.get("source_id").is_some());
+    assert!(v.get("note_uuid").is_some());
+    assert!(v.get("state").is_some());
+    assert!(v.get("todo_state").is_none());
 }
 
 #[test]
@@ -1281,7 +1342,7 @@ fn test_task_list_source_pkms_uses_source_neutral_json() {
 }
 
 #[test]
-fn test_task_agenda_focused_pkms_json_keeps_planned_item_shape() {
+fn test_task_agenda_focused_pkms_json_uses_source_neutral_item_shape() {
     let db = TestDb::new().note_with_content(
         "planned.org",
         r#":PROPERTIES:
@@ -1298,9 +1359,11 @@ SCHEDULED: <2026-05-29 Fri>
 
     assert!(status.success());
     assert_eq!(v["total"], 1);
-    assert_eq!(v["items"][0]["title"], "Focused Agenda");
-    assert_eq!(v["items"][0]["heading_title"], "Focused planned task");
-    assert_eq!(v["items"][0]["scheduled_date"], "2026-05-29");
+    assert_eq!(v["items"][0]["source"], "pkms");
+    assert_eq!(v["items"][0]["title"], "Focused planned task");
+    assert_eq!(v["items"][0]["note_title"], "Focused Agenda");
+    assert_eq!(v["items"][0]["scheduled"]["date"], "2026-05-29");
+    assert!(v["items"][0].get("heading_title").is_none());
 }
 
 #[test]
@@ -1350,15 +1413,16 @@ fn test_task_list_filtered_view_preserves_canonical_pkms_ids() {
     let all_items = all["items"].as_array().unwrap();
     let included_id = all_items
         .iter()
-        .find(|item| item["heading_title"] == "Later included task")
-        .and_then(|item| item["id"].as_u64())
+        .find(|item| item["title"] == "Later included task")
+        .and_then(|item| item["source_id"].as_str())
+        .map(str::to_string)
         .unwrap();
 
     let (filtered, filtered_status) = db.run_json(&["task", "list", "tag:included"]);
 
     assert!(filtered_status.success());
     assert_eq!(filtered["total"], 1);
-    assert_eq!(filtered["items"][0]["source_id"], included_id.to_string());
+    assert_eq!(filtered["items"][0]["source_id"], included_id);
     assert_eq!(filtered["items"][0]["title"], "Later included task");
 }
 
@@ -1953,9 +2017,9 @@ SCHEDULED: <{today}>
         .as_array()
         .unwrap()
         .iter()
-        .find(|item| item["heading_title"].as_str() == Some("Mod task"))
-        .and_then(|item| item["id"].as_u64())
-        .map(|id| format!("p{id}"))
+        .find(|item| item["title"].as_str() == Some("Mod task"))
+        .and_then(|item| item["display_id"].as_str())
+        .map(str::to_string)
         .unwrap();
     let (stdout, stderr, status) = run(&[
         "--db",
@@ -2083,10 +2147,10 @@ SCHEDULED: <2026-05-24 Sun 09:30 +1w -1d>
         .as_array()
         .unwrap()
         .iter()
-        .find(|item| item["heading_title"] == "Recurring call")
-        .and_then(|item| item["id"].as_u64())
-        .unwrap()
-        .to_string();
+        .find(|item| item["title"] == "Recurring call")
+        .and_then(|item| item["display_id"].as_str())
+        .map(str::to_string)
+        .unwrap();
     let (v, status) = run_json(&[
         "--db",
         root.to_str().unwrap(),

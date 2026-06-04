@@ -161,9 +161,11 @@ Text task views render IDs for the selected source set. In source-neutral views
 with only one source selected, `Id` is the bare source id. With `source:all`,
 PKMS ids are prefixed with `p` and Todoist ids are prefixed with `t`.
 
-Source-neutral JSON and NDJSON include fields such as `source`, `source_id`,
-`display_id`, `status`, `state`, `note_title`, `note_uuid`, `path`, and
-`line_number`. PKMS task items also include metadata such as
+All `task list` and `task agenda` JSON and NDJSON item records use the
+source-neutral `TaskItem` shape, including the default `source:pkms` views.
+These records include fields such as `source`, `source_id`, `display_id`,
+`status`, `state`, `note_title`, `note_uuid`, `path`, and `line_number`.
+PKMS task items also include metadata such as
 `has_agenda_tag`, `is_daily_file`, `daily_file_date`, and `heading_level`.
 
 Item-producing task commands accept positional string filters after the

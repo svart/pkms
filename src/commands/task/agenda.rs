@@ -5,72 +5,12 @@ use crate::config::ResolvedConfig;
 use crate::output::{Column, OutputContext};
 use crate::tasks::clock::TaskClock;
 use crate::tasks::filter::parse_text_filters;
+use crate::tasks::model::TaskItem;
+use crate::tasks::pkms::record_to_task_item;
 use crate::workspace::Workspace;
 use anyhow::Result;
 use chrono::NaiveDate;
 use serde::Serialize;
-
-impl RowItem for AgendaItem {
-    fn id(&self) -> usize {
-        self.id
-    }
-    fn todo_state(&self) -> Option<&str> {
-        self.todo_state.as_deref()
-    }
-    fn priority(&self) -> Option<char> {
-        self.priority
-    }
-    fn title(&self) -> &str {
-        &self.title
-    }
-    fn heading_title(&self) -> &str {
-        &self.heading_title
-    }
-    fn filetags(&self) -> &[String] {
-        &self.filetags
-    }
-    fn heading_tags(&self) -> &[String] {
-        &self.heading_tags
-    }
-    fn scheduled(&self) -> Option<&str> {
-        self.scheduled.as_deref()
-    }
-    fn deadline(&self) -> Option<&str> {
-        self.deadline.as_deref()
-    }
-    fn daily_file_date(&self) -> Option<&str> {
-        self.daily_file_date.as_deref()
-    }
-    fn scheduled_date_str(&self) -> Option<&str> {
-        self.scheduled_date.as_deref()
-    }
-    fn deadline_date_str(&self) -> Option<&str> {
-        self.deadline_date.as_deref()
-    }
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct AgendaItem {
-    pub id: usize,
-    pub uuid: String,
-    pub title: String,
-    pub path: String,
-    pub filetags: Vec<String>,
-    pub has_agenda_tag: bool,
-    pub is_daily_file: bool,
-    pub daily_file_date: Option<String>,
-    pub heading_title: String,
-    pub heading_level: usize,
-    pub line_number: usize,
-    pub todo_state: Option<String>,
-    pub priority: Option<char>,
-    pub scheduled: Option<String>,
-    pub scheduled_date: Option<String>,
-    pub deadline: Option<String>,
-    pub deadline_date: Option<String>,
-    pub is_overdue: bool,
-    pub heading_tags: Vec<String>,
-}
 
 pub struct AgendaOptions {
     pub state: Option<String>,
@@ -86,32 +26,6 @@ pub struct AgendaOptions {
     pub week: bool,
     pub line_sep: bool,
     pub columns: Vec<Column>,
-}
-
-impl From<TaskRecord> for AgendaItem {
-    fn from(record: TaskRecord) -> Self {
-        AgendaItem {
-            id: record.id,
-            uuid: record.uuid,
-            title: record.title,
-            path: record.path,
-            filetags: record.filetags,
-            has_agenda_tag: record.has_agenda_tag,
-            is_daily_file: record.is_daily_file,
-            daily_file_date: record.daily_file_date,
-            heading_title: record.heading_title,
-            heading_level: record.heading_level,
-            line_number: record.line_number,
-            todo_state: record.todo_state,
-            priority: record.priority,
-            scheduled: record.scheduled,
-            scheduled_date: record.scheduled_date,
-            deadline: record.deadline,
-            deadline_date: record.deadline_date,
-            is_overdue: record.is_overdue,
-            heading_tags: record.heading_tags,
-        }
-    }
 }
 
 pub fn run_with_clock(
@@ -165,7 +79,7 @@ pub fn run_with_clock(
     }
 
     assign_canonical_ids(config, graph, &mut records);
-    let mut items: Vec<AgendaItem> = records.into_iter().map(AgendaItem::from).collect();
+    let mut items = records;
 
     if opts.upcoming {
         let today_str = today_date.format("%Y-%m-%d").to_string();
@@ -228,7 +142,7 @@ pub fn run_with_clock(
                 today_items.sort_by(|a, b| a.effective_date().cmp(&b.effective_date()));
                 upcoming.sort_by(|a, b| a.effective_date().cmp(&b.effective_date()));
 
-                let sections: [(&str, &[AgendaItem]); 3] = [
+                let sections: [(&str, &[TaskRecord]); 3] = [
                     ("=== Overdue ===", &overdue),
                     ("=== Today ===", &today_items),
                     ("=== Upcoming ===", &upcoming),
@@ -241,11 +155,21 @@ pub fn run_with_clock(
             #[derive(Serialize)]
             struct AgendaOutput {
                 total: usize,
-                items: Vec<AgendaItem>,
+                items: Vec<TaskItem>,
             }
-            ctx.print_json(&AgendaOutput { total, items })?;
+            ctx.print_json(&AgendaOutput {
+                total,
+                items: items
+                    .into_iter()
+                    .map(|record| record_to_task_item(config, record))
+                    .collect(),
+            })?;
         }
         OutputFormat::Ndjson => {
+            let items = items
+                .into_iter()
+                .map(|record| record_to_task_item(config, record))
+                .collect::<Vec<_>>();
             ctx.print_ndjson(&items)?;
         }
     }

@@ -1,4 +1,4 @@
-use crate::commands::task_common::{extract_date, is_overdue_on};
+use crate::commands::task_common::{RowItem, extract_date, is_overdue_on};
 use crate::config::ResolvedConfig;
 use crate::corpus::Corpus;
 use crate::graph::Graph;
@@ -53,6 +53,56 @@ impl TaskRecord {
         self.scheduled_date.as_deref() == Some(date)
             || self.deadline_date.as_deref() == Some(date)
             || self.implicit_daily_file_date() == Some(date)
+    }
+}
+
+impl RowItem for TaskRecord {
+    fn id(&self) -> usize {
+        self.id
+    }
+
+    fn todo_state(&self) -> Option<&str> {
+        self.todo_state.as_deref()
+    }
+
+    fn priority(&self) -> Option<char> {
+        self.priority
+    }
+
+    fn title(&self) -> &str {
+        &self.title
+    }
+
+    fn heading_title(&self) -> &str {
+        &self.heading_title
+    }
+
+    fn filetags(&self) -> &[String] {
+        &self.filetags
+    }
+
+    fn heading_tags(&self) -> &[String] {
+        &self.heading_tags
+    }
+
+    fn scheduled(&self) -> Option<&str> {
+        self.scheduled.as_deref()
+    }
+
+    fn deadline(&self) -> Option<&str> {
+        self.deadline.as_deref()
+    }
+
+    fn daily_file_date(&self) -> Option<&str> {
+        self.daily_file_date.as_deref()
+    }
+
+    fn scheduled_date_str(&self) -> Option<&str> {
+        self.scheduled_date.as_deref()
+    }
+
+    fn deadline_date_str(&self) -> Option<&str> {
+        self.deadline_date.as_deref()
     }
 }
 

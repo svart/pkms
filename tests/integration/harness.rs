@@ -43,6 +43,6 @@ fn test_db_builder_creates_note_and_task_fixtures() {
     let (value, status) = db.run_json(&["task", "list"]);
 
     assert!(status.success());
-    assert_eq!(value["items"][0]["title"], "Task Fixtures");
-    assert_eq!(value["items"][0]["heading_title"], "Exercise builder");
+    assert_eq!(value["items"][0]["note_title"], "Task Fixtures");
+    assert_eq!(value["items"][0]["title"], "Exercise builder");
 }
