@@ -6,6 +6,8 @@ use crate::parser::ID_PROPERTY_RE;
 use anyhow::{Context, Result};
 use serde::Serialize;
 use std::fmt::Write;
+use std::io::Write as IoWrite;
+use std::path::Path;
 use std::path::PathBuf;
 
 #[derive(Serialize)]
@@ -73,8 +75,8 @@ pub fn run(config: &ResolvedConfig, ctx: &OutputContext, opts: &NewOptions) -> R
     let slug = title_to_slug(&opts.title);
     let now = chrono::Local::now();
     let timestamp = now.format("%Y%m%d%H%M%S").to_string();
-    let filename = format!("{timestamp}-{slug}.org");
-    let path = new_notes_dir.join(&filename);
+    let mut filename = unique_note_filename(&timestamp, &slug, 0);
+    let mut path = new_notes_dir.join(&filename);
 
     if opts.create {
         std::fs::create_dir_all(&new_notes_dir)?;
@@ -132,7 +134,7 @@ pub fn run(config: &ResolvedConfig, ctx: &OutputContext, opts: &NewOptions) -> R
             content.push_str(":END:\n");
         }
 
-        std::fs::write(&path, &content)?;
+        (filename, path) = create_note_file_exclusive(&new_notes_dir, &timestamp, &slug, &content)?;
         created = true;
     } else if opts.create && heading_output.is_some() {
         created = true;
@@ -166,6 +168,42 @@ pub fn run(config: &ResolvedConfig, ctx: &OutputContext, opts: &NewOptions) -> R
     }
 
     Ok(())
+}
+
+fn unique_note_filename(timestamp: &str, slug: &str, attempt: usize) -> String {
+    if attempt == 0 {
+        format!("{timestamp}-{slug}.org")
+    } else {
+        format!("{timestamp}-{slug}-{attempt}.org")
+    }
+}
+
+fn create_note_file_exclusive(
+    new_notes_dir: &Path,
+    timestamp: &str,
+    slug: &str,
+    content: &str,
+) -> Result<(String, PathBuf)> {
+    for attempt in 0.. {
+        let filename = unique_note_filename(timestamp, slug, attempt);
+        let path = new_notes_dir.join(&filename);
+        match std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&path)
+        {
+            Ok(mut file) => {
+                file.write_all(content.as_bytes())?;
+                return Ok((filename, path));
+            }
+            Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(err) => {
+                return Err(err).with_context(|| format!("Failed to create {}", path.display()));
+            }
+        }
+    }
+
+    unreachable!("unbounded filename retry loop should return or error")
 }
 
 fn insert_heading_uuid(content: &str, heading_title: &str, path: &PathBuf) -> Result<String> {
@@ -251,5 +289,25 @@ mod tests {
         assert_eq!(title_to_slug("hello-world"), "hello_world");
         assert_eq!(title_to_slug("-"), "_");
         assert_eq!(title_to_slug("a@b"), "a-b");
+    }
+
+    #[test]
+    fn create_note_file_exclusive_uses_suffix_when_candidate_exists() {
+        let dir = tempfile::tempdir().unwrap();
+        let existing = dir.path().join("20260604120000-collision.org");
+        std::fs::write(&existing, "original").unwrap();
+
+        let (filename, path) = create_note_file_exclusive(
+            dir.path(),
+            "20260604120000",
+            "collision",
+            "replacement",
+        )
+        .unwrap();
+
+        assert_eq!(filename, "20260604120000-collision-1.org");
+        assert_eq!(path.file_name().unwrap(), "20260604120000-collision-1.org");
+        assert_eq!(std::fs::read_to_string(existing).unwrap(), "original");
+        assert_eq!(std::fs::read_to_string(path).unwrap(), "replacement");
     }
 }
