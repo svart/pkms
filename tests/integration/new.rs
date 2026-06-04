@@ -170,6 +170,88 @@ Some content
     ]);
     assert!(status.success());
     assert!(v.get("heading").is_some());
+    assert_eq!(v["uuid"], "22222222-2222-4222-8222-222222222222");
+    assert_eq!(v["filename"], "json-heading-test.org");
+    assert_eq!(v["path"], note_path.to_string_lossy().to_string());
     assert_eq!(v["heading"]["title"], "JSON Section");
     assert!(v["heading"]["uuid"].is_string());
+}
+
+#[test]
+fn test_new_with_heading_matches_todo_heading_title() {
+    let (_dir, root) = setup_db();
+    let db = root.to_str().unwrap();
+    let note_path = root.join("roam").join("common").join("todo-heading-test.org");
+    fs::write(
+        &note_path,
+        r#":PROPERTIES:
+:ID:       33333333-3333-4333-8333-333333333333
+:END:
+#+title: TODO Heading Test
+
+* TODO My Heading :work:
+Some content
+"#,
+    )
+    .unwrap();
+
+    let (v, status) = run_json(&[
+        "--db",
+        db,
+        "--output-format",
+        "json",
+        "new",
+        "TODO Heading Test",
+        "--create",
+        "--heading",
+        "My Heading",
+    ]);
+    assert!(status.success(), "heading creation failed: {v}");
+    assert_eq!(v["heading"]["title"], "My Heading");
+
+    let content = fs::read_to_string(&note_path).unwrap();
+    assert_eq!(content.matches(":ID:").count(), 2);
+}
+
+#[test]
+fn test_new_with_heading_adds_id_to_existing_properties_drawer() {
+    let (_dir, root) = setup_db();
+    let db = root.to_str().unwrap();
+    let note_path = root
+        .join("roam")
+        .join("common")
+        .join("heading-existing-properties.org");
+    fs::write(
+        &note_path,
+        r#":PROPERTIES:
+:ID:       44444444-4444-4444-8444-444444444444
+:END:
+#+title: Heading Properties Test
+
+* Existing Properties
+:PROPERTIES:
+:PROJECT: Alpha
+:END:
+Some content
+"#,
+    )
+    .unwrap();
+
+    let (v, status) = run_json(&[
+        "--db",
+        db,
+        "--output-format",
+        "json",
+        "new",
+        "Heading Properties Test",
+        "--create",
+        "--heading",
+        "Existing Properties",
+    ]);
+    assert!(status.success(), "heading creation failed: {v}");
+
+    let content = fs::read_to_string(&note_path).unwrap();
+    assert_eq!(content.matches("* Existing Properties").count(), 1);
+    assert_eq!(content.matches(":PROPERTIES:").count(), 2);
+    assert!(content.contains(":PROJECT: Alpha\n:ID:"));
 }

@@ -2,7 +2,7 @@ use crate::cli::NewArgs;
 use crate::config::ResolvedConfig;
 use crate::input;
 use crate::output::OutputContext;
-use crate::parser::ID_PROPERTY_RE;
+use crate::parser::{HEADING_RE, ID_PROPERTY_RE};
 use anyhow::{Context, Result};
 use serde::Serialize;
 use std::fmt::Write;
@@ -71,7 +71,7 @@ pub fn run(config: &ResolvedConfig, ctx: &OutputContext, opts: &NewOptions) -> R
     let ignore = config.resolve_ignore_patterns();
     let new_notes_dir = config.resolve_new_notes_dir();
 
-    let uuid = uuid::Uuid::new_v4().to_string();
+    let mut uuid = uuid::Uuid::new_v4().to_string();
     let slug = title_to_slug(&opts.title);
     let now = chrono::Local::now();
     let timestamp = now.format("%Y%m%d%H%M%S").to_string();
@@ -93,7 +93,19 @@ pub fn run(config: &ResolvedConfig, ctx: &OutputContext, opts: &NewOptions) -> R
         if let Some(note_path) = existing {
             let content = std::fs::read_to_string(&note_path)
                 .with_context(|| format!("Failed to read {}", note_path.display()))?;
+            uuid = primary_uuid_from_content(&content).ok_or_else(|| {
+                anyhow::anyhow!(
+                    "Note \"{}\" has no primary :ID: property in {}",
+                    opts.title,
+                    note_path.display()
+                )
+            })?;
             let heading_uuid = insert_heading_uuid(&content, heading_title, &note_path)?;
+            filename = note_path
+                .file_name()
+                .map(|name| name.to_string_lossy().to_string())
+                .unwrap_or_default();
+            path = note_path;
             Some(HeadingId {
                 title: heading_title.to_string(),
                 uuid: heading_uuid,
@@ -214,22 +226,25 @@ fn create_note_file_exclusive(
     unreachable!("unbounded filename retry loop should return or error")
 }
 
-fn insert_heading_uuid(content: &str, heading_title: &str, path: &PathBuf) -> Result<String> {
-    let heading_re = regex::Regex::new(r"^(\*+)\s+(.*?)(?:\s+:\w+(?::\w+)*:)?\s*$").unwrap();
+fn primary_uuid_from_content(content: &str) -> Option<String> {
+    ID_PROPERTY_RE
+        .captures(content)
+        .and_then(|cap| cap.get(1).map(|m| m.as_str().to_string()))
+}
 
+fn insert_heading_uuid(content: &str, heading_title: &str, path: &PathBuf) -> Result<String> {
     let lines: Vec<&str> = content.lines().collect();
     let mut heading_indices = Vec::new();
 
     let stripped_title = heading_title.trim();
     for (i, line) in lines.iter().enumerate() {
-        if let Some(cap) = heading_re.captures(line) {
-            let heading_text = cap.get(2).map_or("", |m| m.as_str()).trim();
-            // Match heading text without leading TODO keywords
-            let text = heading_text
-                .split_whitespace()
-                .last()
-                .unwrap_or(heading_text);
-            if heading_text == stripped_title || text == stripped_title {
+        if let Some(cap) = HEADING_RE.captures(line) {
+            let heading_text = cap.get(4).map_or("", |m| m.as_str()).trim();
+            let full_heading_text = cap
+                .get(2)
+                .map(|state| format!("{} {heading_text}", state.as_str()))
+                .unwrap_or_else(|| heading_text.to_string());
+            if heading_text == stripped_title || full_heading_text == stripped_title {
                 heading_indices.push(i);
             }
         }
@@ -251,26 +266,35 @@ fn insert_heading_uuid(content: &str, heading_title: &str, path: &PathBuf) -> Re
 
     let idx = heading_indices[0];
 
-    // Check if heading already has a PROPERTIES drawer with :ID:
     if idx + 1 < lines.len() && lines[idx + 1].trim() == ":PROPERTIES:" {
-        let props_section: Vec<&str> = lines[idx + 1..]
+        let end_idx = lines[idx + 2..]
             .iter()
-            .take_while(|l| l.trim() != ":END:" || **l == lines[idx + 1])
-            .copied()
-            .collect();
-        let props_text = props_section.join("\n");
+            .position(|line| line.trim() == ":END:")
+            .map(|offset| idx + 2 + offset)
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "Heading \"{heading_title}\" has a PROPERTIES drawer without :END: in {}",
+                    path.display()
+                )
+            })?;
+        let props_text = lines[idx + 1..=end_idx].join("\n");
         if let Some(cap) = ID_PROPERTY_RE.captures(&props_text) {
             return Ok(cap[1].to_string());
         }
+
+        let heading_uuid = uuid::Uuid::new_v4().to_string();
+        let mut new_lines: Vec<String> = lines.iter().map(|l| l.to_string()).collect();
+        new_lines.insert(end_idx, format!(":ID:       {heading_uuid}"));
+        std::fs::write(path, new_lines.join("\n"))?;
+        return Ok(heading_uuid);
     }
 
     let heading_uuid = uuid::Uuid::new_v4().to_string();
 
     let mut new_lines: Vec<String> = lines.iter().map(|l| l.to_string()).collect();
-    new_lines.insert(idx + 1, String::new());
-    new_lines.insert(idx + 2, ":PROPERTIES:".to_string());
-    new_lines.insert(idx + 3, format!(":ID:       {heading_uuid}"));
-    new_lines.insert(idx + 4, ":END:".to_string());
+    new_lines.insert(idx + 1, ":PROPERTIES:".to_string());
+    new_lines.insert(idx + 2, format!(":ID:       {heading_uuid}"));
+    new_lines.insert(idx + 3, ":END:".to_string());
 
     std::fs::write(path, new_lines.join("\n"))?;
 
