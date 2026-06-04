@@ -29,6 +29,31 @@ fn test_validate_json() {
 }
 
 #[test]
+fn test_validate_accepts_uppercase_title_keyword() {
+    let (_dir, root) = setup_clean_db();
+    db_write(
+        &root,
+        "uppercase-title.org",
+        r#":PROPERTIES:
+:ID:       aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa
+:END:
+#+TITLE: Uppercase Title
+"#,
+    );
+
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "validate",
+        "Uppercase Title",
+    ]);
+    assert!(status.success(), "validate failed: {v}");
+    assert_eq!(v["healthy"], true, "uppercase #+TITLE should be valid: {v}");
+}
+
+#[test]
 fn test_validate_broken_note() {
     let (_dir, root) = setup_db();
     let (v, status) = run_json(&[

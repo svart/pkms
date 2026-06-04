@@ -2,7 +2,7 @@ use crate::cli::OutputFormat;
 use crate::config::ResolvedConfig;
 use crate::graph::{Graph, file_link_target_exists, resolve_file_link_path};
 use crate::output::OutputContext;
-use crate::parser::{ID_PROPERTY_RE, Link, UUID_FORMAT_RE, validate_filetags_format};
+use crate::parser::{ID_PROPERTY_RE, Link, TITLE_RE, UUID_FORMAT_RE, validate_filetags_format};
 use anyhow::Result;
 use serde::Serialize;
 use std::collections::HashMap;
@@ -87,7 +87,7 @@ fn check_uuid_format(node: &crate::graph::Node, issues: &mut Vec<String>) {
 }
 
 fn check_title_presence(content: &str, issues: &mut Vec<String>) {
-    if !content.contains("#+title:") {
+    if !TITLE_RE.is_match(content) {
         issues.push("Missing #+title: property".to_string());
     }
 }
