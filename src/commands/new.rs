@@ -179,7 +179,7 @@ pub fn run(config: &ResolvedConfig, ctx: &OutputContext, opts: &NewOptions) -> R
     Ok(())
 }
 
-fn unique_note_filename(timestamp: &str, slug: &str, attempt: usize) -> String {
+pub(crate) fn unique_note_filename(timestamp: &str, slug: &str, attempt: usize) -> String {
     if attempt == 0 {
         format!("{timestamp}-{slug}.org")
     } else {
@@ -198,7 +198,7 @@ fn format_roam_aliases(aliases: &[String]) -> String {
         .join(" ")
 }
 
-fn create_note_file_exclusive(
+pub(crate) fn create_note_file_exclusive(
     new_notes_dir: &Path,
     timestamp: &str,
     slug: &str,

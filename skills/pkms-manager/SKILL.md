@@ -124,6 +124,14 @@ For heading anchors, add the heading first, then run:
 pkms new "Existing Note" --create --heading "Heading Title"
 ```
 
+To split an existing heading subtree into its own note, dry-run first and then
+apply:
+
+```bash
+pkms extract <heading-full-uuid>
+pkms extract <heading-full-uuid> "New Note Title" --apply
+```
+
 Validate changed notes afterward.
 
 ## Editing Safety

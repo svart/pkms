@@ -56,6 +56,8 @@ pub enum Command {
     Suggest(SuggestArgs),
     #[command(about = "Generate a filename and UUID for a new note")]
     New(NewArgs),
+    #[command(about = "Extract a heading subtree into a new note")]
+    Extract(ExtractArgs),
     #[command(about = "Retrieve a note with its neighbors at specified depth")]
     Get(GetArgs),
     #[command(
@@ -232,6 +234,19 @@ pub struct NewArgs {
     pub aliases: Option<String>,
     #[arg(long, help = "Heading title to generate :ID: for")]
     pub heading: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct ExtractArgs {
+    #[arg(help = "UUID of the heading to extract")]
+    pub heading_uuid: String,
+    #[arg(help = "Title for the new note; defaults to the heading title")]
+    pub new_name: Option<String>,
+    #[arg(
+        long,
+        help = "Actually create the new note and rewrite the source note"
+    )]
+    pub apply: bool,
 }
 
 #[derive(Debug, Args)]

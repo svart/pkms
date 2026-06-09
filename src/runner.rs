@@ -45,6 +45,7 @@ fn command_name(command: &Command) -> &'static str {
         Command::Fix(_) => "fix",
         Command::Suggest(_) => "suggest",
         Command::New(_) => "new",
+        Command::Extract(_) => "extract",
         Command::Get(_) => "get",
         Command::Query(_) => "query",
         Command::Info => "info",
@@ -122,6 +123,9 @@ fn dispatch(cli: &Cli, command_ctx: &CommandContext<'_>) -> Result<ExitCode> {
         }
         Command::New(args) => commands::new::run(cfg, ctx, &commands::new::NewOptions::from(args))
             .map(|()| ExitCode::SUCCESS)?,
+        Command::Extract(args) => {
+            commands::extract::run(cfg, ctx, &args.try_into()?).map(|()| ExitCode::SUCCESS)?
+        }
         Command::Get(args) => {
             let targets = input::resolve_targets(&args.target, args.from_stdin)?;
             commands::get::run(

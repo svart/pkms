@@ -3,6 +3,7 @@ mod check;
 mod config;
 mod context;
 mod error;
+mod extract;
 mod fix;
 mod get;
 mod harness;

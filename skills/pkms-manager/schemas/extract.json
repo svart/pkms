@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "title": "ExtractOutput",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "uuid": { "type": "string" },
+    "title": { "type": "string" },
+    "source_path": { "type": "string" },
+    "new_path": { "type": "string" },
+    "replacement": { "type": "string" },
+    "created": { "type": "boolean" },
+    "applied": { "type": "boolean" }
+  },
+  "required": ["uuid", "title", "source_path", "new_path", "replacement", "created", "applied"]
+}

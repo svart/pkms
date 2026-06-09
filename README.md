@@ -62,6 +62,7 @@ pkms task agenda today
 pkms task p5 show
 pkms task p5 open
 pkms new "My Note" --create --tags "topic,project"
+pkms extract <heading-uuid> "New Note Title" --apply
 ```
 
 Commands support text output by default and structured output with
