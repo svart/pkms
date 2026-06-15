@@ -1,5 +1,5 @@
 use crate::org_date::parse_org_date;
-use crate::output::{ALL_COLUMNS, Column, adaptive_column_widths};
+use crate::output::{ALL_COLUMNS, Column, adaptive_column_widths, terminal_markup};
 use crate::tasks::clock::TaskClock;
 use chrono::{NaiveDate, Timelike};
 use std::collections::HashSet;
@@ -326,7 +326,11 @@ pub fn print_table_with_empty_message<T: RowItem>(
     for &sec_row in &section_rows {
         table.with(Modify::new((sec_row, 0)).with(Span::column(n_cols as isize)));
     }
-    println!("{}", table);
+    let rendered = table.to_string();
+    println!(
+        "{}",
+        terminal_markup::format_if_terminal_supported(&rendered)
+    );
     println!();
     println!("{footer}");
 }

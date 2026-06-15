@@ -160,6 +160,10 @@ Id,Date,State,Type,Prio,Tags,Project,Note,Heading
 Text task views render IDs for the selected source set. In source-neutral views
 with only one source selected, `Id` is the bare source id. With `source:all`,
 PKMS ids are prefixed with `p` and Todoist ids are prefixed with `t`.
+On ANSI-capable terminals, task text renders inline `=code=`, `~orange code~`,
+and mention tokens such as `@alice`; captured or piped text output keeps the
+stored strings unchanged unless ANSI output is forced. JSON/NDJSON output is
+unchanged.
 
 All `task list` and `task agenda` JSON and NDJSON item records use the
 source-neutral `TaskItem` shape, including the default `source:pkms` views.

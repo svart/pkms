@@ -211,6 +211,60 @@ fn test_task_list_text() {
 }
 
 #[test]
+fn test_task_list_formats_inline_markup_when_terminal_formatting_is_forced() {
+    let db = TestDb::new()
+        .note(
+            "tasks.org",
+            "Task Note",
+            "11111111-1111-4111-8111-111111111111",
+        )
+        .task(
+            "tasks.org",
+            "TODO",
+            "Use =literal @skip <tag>= and ~orange @skip~ for @alice email@example.com @",
+        );
+
+    let (plain_stdout, plain_stderr, plain_status) =
+        db.run(&["task", "list", "--columns=id,heading"]);
+    assert!(
+        plain_status.success(),
+        "plain task list failed:\n{plain_stdout}\n{plain_stderr}"
+    );
+    assert!(plain_stdout.contains("=literal @skip <tag>="));
+    assert!(plain_stdout.contains("~orange @skip~"));
+    assert!(!plain_stdout.contains("\x1b["));
+
+    let config_home = setup_test_config_home();
+    let mut command = std::process::Command::new(pkms_binary());
+    configure_test_command(&mut command, config_home.path());
+    let output = command
+        .args([
+            "--db",
+            db.root().to_str().unwrap(),
+            "task",
+            "list",
+            "--columns=id,heading",
+        ])
+        .env("CLICOLOR_FORCE", "1")
+        .env("COLUMNS", "120")
+        .output()
+        .unwrap();
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        output.status.success(),
+        "forced task list failed:\n{stdout}\n{stderr}"
+    );
+    assert!(stdout.contains("\x1b[2mliteral @skip <tag>\x1b[0m"));
+    assert!(stdout.contains("\x1b[38;5;166morange @skip\x1b[0m"));
+    assert!(stdout.contains("\x1b[38;5;39m@alice\x1b[0m"));
+    assert!(stdout.contains("email@example.com @"));
+    assert!(!stdout.contains("=literal @skip <tag>="));
+    assert!(!stdout.contains("~orange @skip~"));
+}
+
+#[test]
 fn test_task_list_limit_json() {
     let (_dir, root) = setup_db();
     let (v, status) = run_json(&[
@@ -1510,6 +1564,41 @@ fn test_task_show_accepts_pkms_id_forms() {
         assert!(status.success(), "task show {id} failed");
         assert!(v.get("heading_title").is_some());
     }
+}
+
+#[test]
+fn test_task_show_formats_inline_markup_when_terminal_formatting_is_forced() {
+    let db = TestDb::new().note_with_content(
+        "show-format.org",
+        r#":PROPERTIES:
+:ID:       67676767-6767-4767-8767-676767676767
+:END:
+#+title: Show Format
+
+* TODO Review =literal= with ~orange~ for @alice
+"#,
+    );
+
+    let config_home = setup_test_config_home();
+    let mut command = std::process::Command::new(pkms_binary());
+    configure_test_command(&mut command, config_home.path());
+    let output = command
+        .args(["--db", db.root().to_str().unwrap(), "task", "p1", "show"])
+        .env("CLICOLOR_FORCE", "1")
+        .output()
+        .unwrap();
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        output.status.success(),
+        "forced task show failed:\n{stdout}\n{stderr}"
+    );
+    assert!(stdout.contains("\x1b[2mliteral\x1b[0m"));
+    assert!(stdout.contains("\x1b[38;5;166morange\x1b[0m"));
+    assert!(stdout.contains("\x1b[38;5;39m@alice\x1b[0m"));
+    assert!(!stdout.contains("=literal="));
+    assert!(!stdout.contains("~orange~"));
 }
 
 #[test]

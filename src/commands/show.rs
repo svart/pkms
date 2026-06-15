@@ -1,7 +1,7 @@
 use crate::cli::OutputFormat;
 use crate::config::ResolvedConfig;
 use crate::graph::Graph;
-use crate::output::OutputContext;
+use crate::output::{OutputContext, terminal_markup};
 use crate::parser::{Link, strip_org_links};
 use anyhow::Result;
 use serde::Serialize;
@@ -411,7 +411,8 @@ pub fn execute(config: &ResolvedConfig, opts: &ShowOptions) -> Result<Vec<ShowOu
 pub fn render(ctx: &OutputContext, outputs: &[ShowOutput]) -> Result<()> {
     match ctx.format {
         OutputFormat::Text => {
-            print!("{}", render_text(outputs));
+            let text = render_text(outputs);
+            print!("{}", terminal_markup::format_if_terminal_supported(&text));
         }
         OutputFormat::Json => {
             ctx.print_json_adaptive(outputs)?;

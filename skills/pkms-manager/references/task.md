@@ -29,6 +29,10 @@ Explicit Todoist and mixed-source task views use the same table shape plus a
 JSON/NDJSON item records use the source-neutral `TaskItem` shape, including the
 default `source:pkms` views. Text `Date` cells use `YYYY-MM-DD Day`;
 daily-note tasks without planning markers use the daily note date.
+On ANSI-capable terminals, text task output renders inline `=code=`,
+`~orange code~`, and mention tokens such as `@alice`; captured or piped text
+output keeps the stored strings unchanged unless ANSI output is forced.
+JSON/NDJSON output is unchanged.
 
 Item-producing task commands accept positional string filters after the
 subcommand. Metadata commands, `task list projects` and `task list tags`, accept

@@ -1,6 +1,6 @@
 use crate::cli::OutputFormat;
 use crate::commands::task_common::{RowItem, print_table_with_empty_message};
-use crate::output::{ALL_COLUMNS, Column, OutputContext};
+use crate::output::{ALL_COLUMNS, Column, OutputContext, terminal_markup};
 use crate::tasks::filter::SourceSelection;
 use crate::tasks::model::{TaskItem, TaskSourceKind};
 use crate::tasks::provider::TaskMetadataRow;
@@ -210,10 +210,11 @@ pub(super) fn print_mutation_output(
     };
     match ctx.format {
         OutputFormat::Text => {
+            let title = terminal_markup::format_if_terminal_supported(&output.item.title);
             println!(
                 "Changed {} task: {} (action {}; id {})",
                 source_name(&output.item),
-                output.item.title,
+                title,
                 action,
                 output.item.display_id
             );
@@ -238,12 +239,14 @@ pub(super) fn print_mod_output(
         OutputFormat::Text => {
             if output.changed {
                 for change in &output.changes {
+                    let old = display_mod_value(change.property, change.old.as_deref(), today);
+                    let new = display_mod_value(change.property, change.new.as_deref(), today);
                     println!(
                         "{}: {} -> {}: {}",
                         change.property,
-                        display_mod_value(change.property, change.old.as_deref(), today),
+                        format_mod_value(change.property, &old),
                         change.property,
-                        display_mod_value(change.property, change.new.as_deref(), today)
+                        format_mod_value(change.property, &new)
                     );
                 }
             } else {
@@ -288,6 +291,14 @@ fn display_mod_value(property: &str, value: Option<&str>, today: NaiveDate) -> S
     value.replace('\n', "\\n")
 }
 
+fn format_mod_value(property: &str, value: &str) -> String {
+    if property == "Title" {
+        terminal_markup::format_if_terminal_supported(value)
+    } else {
+        value.to_string()
+    }
+}
+
 fn print_created_task(item: &TaskItem) {
     let mut details = vec![format!("id {}", item.display_id)];
     if let Some(date) = item.effective_date() {
@@ -302,10 +313,11 @@ fn print_created_task(item: &TaskItem) {
     if !item.tags.is_empty() {
         details.push(format!("labels {}", item.tags.join(", ")));
     }
+    let title = terminal_markup::format_if_terminal_supported(&item.title);
     println!(
         "Created {} task: {} ({})",
         source_display_name(item),
-        item.title,
+        title,
         details.join("; ")
     );
 }
