@@ -90,13 +90,6 @@ cargo test --features todoist --test integration <test-name>
 cargo build --features todoist
 ```
 
-Embedding changes:
-
-```bash
-cargo build --features embed
-cargo build --features embed,todoist
-```
-
 Web viewer or rendered HTML changes:
 
 ```bash
@@ -110,7 +103,7 @@ When feature interactions are relevant, prefer an explicit combined-feature
 build:
 
 ```bash
-cargo build --features embed,web
+cargo build --features todoist,web
 cargo build --all-features
 ```
 
@@ -124,11 +117,8 @@ cargo fmt --all -- --check
 cargo clippy --locked --all-targets -- -D warnings
 cargo clippy --locked --all-targets --all-features -- -D warnings
 cargo build --locked
-cargo build --locked --features embed
 cargo build --locked --features todoist
-cargo build --locked --features embed,todoist
 cargo build --locked --features web
-cargo build --locked --features embed,web
 cargo build --locked --all-features
 cargo test --locked
 cargo test --locked --features todoist
@@ -139,11 +129,6 @@ cargo run --locked --features todoist -- --help
 cargo run --locked --features web -- --help
 cargo build --locked --release
 ```
-
-CI intentionally does not run tests with the `embed` feature enabled. The
-feature is covered by build and clippy checks; runtime tests would execute
-ONNX Runtime binaries through `fastembed`, which are not compatible with the
-current Gitea runner CPU.
 
 The Gitea workflow in `.gitea/workflows/rust.yml` is expected to match this
 gate. If the documented gate changes, update CI in the same change.

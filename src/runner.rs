@@ -104,10 +104,6 @@ fn dispatch(cli: &Cli, command_ctx: &CommandContext<'_>) -> Result<ExitCode> {
             commands::fix::run(cfg, ctx, &args.try_into()?).map(|()| ExitCode::SUCCESS)?
         }
         Command::Suggest(args) => {
-            #[cfg(not(feature = "embed"))]
-            let embed = &false;
-            #[cfg(feature = "embed")]
-            let embed = &args.embed;
             let targets = input::resolve_targets(&args.target, args.from_stdin)?;
             commands::suggest::run(
                 cfg,
@@ -116,7 +112,6 @@ fn dispatch(cli: &Cli, command_ctx: &CommandContext<'_>) -> Result<ExitCode> {
                     targets,
                     limit: args.limit,
                     exclude_orphans: args.exclude_orphans,
-                    use_embed: *embed,
                 },
             )
             .map(|()| ExitCode::SUCCESS)?

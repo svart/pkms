@@ -14,10 +14,4 @@ pkms query "terms" --todos
 Use `resolve` first for exact title/alias lookup. Use `query` when the term may
 appear in note content or when you need broader discovery.
 
-When built with the `embed` feature:
-
-```bash
-pkms query "terms" --embed
-```
-
 `query --output-format ndjson` is a pipeline producer.

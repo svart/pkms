@@ -86,8 +86,6 @@ pkms query "rust" --output-format ndjson | pkms get --links --from-stdin
 - Headings with `:ID:` properties are first-class graph nodes.
 - TODO headings get deterministic global IDs shared by `task list`,
   `task agenda`, and task ID actions such as `task p<ID> show`.
-- `query` and `suggest` support embedding mode only when built with
-  `--features embed`.
 - `serve` is available only when built with `--features web`.
 
 ## Documentation

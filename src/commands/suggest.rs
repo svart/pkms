@@ -1,7 +1,5 @@
 use crate::cli::OutputFormat;
 use crate::config::ResolvedConfig;
-#[cfg(feature = "embed")]
-use crate::embed;
 use crate::graph::{Graph, Node};
 use crate::output::OutputContext;
 use crate::parser::{HEADING_RE, Link};
@@ -563,7 +561,6 @@ pub struct SuggestOptions {
     pub targets: Vec<String>,
     pub limit: Option<usize>,
     pub exclude_orphans: bool,
-    pub use_embed: bool,
 }
 
 pub fn run(config: &ResolvedConfig, ctx: &OutputContext, opts: &SuggestOptions) -> Result<()> {
@@ -573,17 +570,6 @@ pub fn run(config: &ResolvedConfig, ctx: &OutputContext, opts: &SuggestOptions) 
 
 pub fn execute(config: &ResolvedConfig, opts: &SuggestOptions) -> Result<Vec<SuggestOutput>> {
     let graph = Graph::load(config)?;
-
-    if opts.use_embed {
-        #[cfg(feature = "embed")]
-        {
-            return suggest_by_embedding_output(&graph, &opts.targets, opts.limit);
-        }
-        #[cfg(not(feature = "embed"))]
-        {
-            anyhow::bail!("--embed requires building with the 'embed' feature enabled");
-        }
-    }
 
     opts.targets
         .iter()
@@ -684,82 +670,6 @@ fn ndjson_suggestions(output: &SuggestOutput) -> Vec<Suggestion> {
             suggestion
         })
         .collect()
-}
-
-#[cfg(feature = "embed")]
-fn suggest_by_embedding_output(
-    graph: &Graph,
-    targets: &[String],
-    limit: Option<usize>,
-) -> Result<Vec<SuggestOutput>> {
-    let mut texts = Vec::new();
-    let mut node_list: Vec<&Node> = graph.nodes.values().collect();
-    node_list.sort_by(|a, b| a.uuid.cmp(&b.uuid));
-
-    for node in &node_list {
-        texts.push(if node.title.is_empty() {
-            node.path.display().to_string()
-        } else {
-            node.title.clone()
-        });
-    }
-
-    if texts.is_empty() {
-        return Ok(Vec::new());
-    }
-
-    let embeddings = embed::compute_embeddings(&texts)?;
-
-    let outputs: Vec<SuggestOutput> = targets
-        .iter()
-        .filter_map(|t| {
-            let target_node = graph.resolve_target(t).ok()?;
-            let target_idx = node_list.iter().position(|n| n.uuid == target_node.uuid)?;
-            let target_emb = &embeddings[target_idx];
-
-            let mut scored: Vec<(usize, f64)> = node_list
-                .iter()
-                .enumerate()
-                .map(|(i, _)| (i, embed::cosine_similarity(target_emb, &embeddings[i])))
-                .collect();
-            scored.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
-
-            let suggestions: Vec<Suggestion> = scored
-                .iter()
-                .filter(|(i, _)| *i != target_idx)
-                .take(limit.unwrap_or(usize::MAX))
-                .map(|(i, score)| {
-                    let n = node_list[*i];
-                    let mut m = HashMap::new();
-                    m.insert("semantic".to_string(), *score);
-                    Suggestion {
-                        uuid: n.uuid.clone(),
-                        title: n.title.clone(),
-                        path: n.path.display().to_string(),
-                        score: *score,
-                        reasons: vec!["semantic similarity".to_string()],
-                        filetags: n.filetags.clone(),
-                        scores: m,
-                        target_uuid: Some(target_node.uuid.clone()),
-                        heading_context: None,
-                    }
-                })
-                .collect();
-
-            Some(SuggestOutput {
-                target: target_node.title.clone(),
-                target_uuid: target_node.uuid.clone(),
-                total: suggestions.len(),
-                showed: limit.map(|l| suggestions.len().min(l)),
-                suggestions,
-                target_heading_context: None,
-                ndjson_target_uuid: Some(target_node.uuid.clone()),
-                score_precision: 3,
-            })
-        })
-        .collect();
-
-    Ok(outputs)
 }
 
 #[cfg(test)]

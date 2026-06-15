@@ -1,7 +1,5 @@
 use crate::cli::{OutputFormat, QueryArgs};
 use crate::config::ResolvedConfig;
-#[cfg(feature = "embed")]
-use crate::embed;
 use crate::graph::Graph;
 use crate::graph::search::SearchFields;
 use crate::output::OutputContext;
@@ -42,18 +40,12 @@ pub struct QueryOptions {
     pub title: bool,
     pub content: bool,
     pub todos: bool,
-    pub embed: bool,
 }
 
 impl TryFrom<&QueryArgs> for QueryOptions {
     type Error = anyhow::Error;
 
     fn try_from(args: &QueryArgs) -> Result<Self> {
-        #[cfg(not(feature = "embed"))]
-        let embed = false;
-        #[cfg(feature = "embed")]
-        let embed = args.embed;
-
         Ok(QueryOptions {
             terms: args
                 .terms
@@ -64,7 +56,6 @@ impl TryFrom<&QueryArgs> for QueryOptions {
             title: args.title,
             content: args.content,
             todos: args.todos,
-            embed,
         })
     }
 }
@@ -77,18 +68,7 @@ pub fn run(config: &ResolvedConfig, ctx: &OutputContext, opts: &QueryOptions) ->
 pub fn execute(config: &ResolvedConfig, opts: &QueryOptions) -> Result<QueryOutput> {
     let graph = Graph::load(config)?;
 
-    let mut combined = if opts.embed {
-        #[cfg(feature = "embed")]
-        {
-            search_by_embedding(&graph, &opts.terms)?
-        }
-        #[cfg(not(feature = "embed"))]
-        {
-            anyhow::bail!("--embed requires building with the 'embed' feature enabled")
-        }
-    } else {
-        search_by_text(&graph, &opts.terms, opts.tags, opts.title, opts.content)?
-    };
+    let mut combined = search_by_text(&graph, &opts.terms, opts.tags, opts.title, opts.content)?;
 
     if opts.todos {
         combined.retain(|r| graph.nodes.get(&r.uuid).is_some_and(|n| n.has_todos));
@@ -181,52 +161,6 @@ fn search_by_text(
     });
 
     Ok(combined)
-}
-
-#[cfg(feature = "embed")]
-fn search_by_embedding(graph: &Graph, query: &str) -> Result<Vec<QueryResultEntry>> {
-    let mut texts = Vec::new();
-    let mut entries = Vec::new();
-
-    for node in graph.nodes.values() {
-        let text = if node.title.is_empty() {
-            node.path.display().to_string()
-        } else {
-            node.title.to_string()
-        };
-        texts.push(text);
-        entries.push(QueryResultEntry {
-            uuid: node.uuid.clone(),
-            title: node.title.clone(),
-            path: node.path.display().to_string(),
-            filetags: node.filetags.clone(),
-            score: 0.0,
-            matches: vec!["semantic".to_string()],
-            content_matches: vec![],
-        });
-    }
-
-    if texts.is_empty() {
-        return Ok(entries);
-    }
-
-    let mut all_texts = texts.clone();
-    all_texts.push(query.to_string());
-
-    let embeddings = embed::compute_embeddings(&all_texts)?;
-    let query_emb = embeddings.last().unwrap();
-
-    for (i, entry) in entries.iter_mut().enumerate() {
-        entry.score = embed::cosine_similarity(&embeddings[i], query_emb);
-    }
-
-    entries.sort_by(|a, b| {
-        b.score
-            .partial_cmp(&a.score)
-            .unwrap_or(std::cmp::Ordering::Equal)
-    });
-
-    Ok(entries)
 }
 
 pub fn render(ctx: &OutputContext, output: &QueryOutput) -> Result<()> {

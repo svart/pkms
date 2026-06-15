@@ -3558,11 +3558,12 @@ fn test_task_inbox_todoist_uses_inbox_filter() {
 #[cfg(feature = "todoist")]
 #[test]
 fn test_task_agenda_all_today_combines_pkms_and_filtered_todoist() {
-    let (_dir, root) = setup_db();
+    let (_dir, root) = setup_clean_db();
     let today = org_date(0);
-    std::fs::write(
-        root.join("roam/common/20260523000000-today-task.org"),
-        format!(
+    db_write(
+        &root,
+        "common/20260523000000-today-task.org",
+        &format!(
             r#":PROPERTIES:
 :ID:       abababab-abab-4aba-abab-abababababab
 :END:
@@ -3573,13 +3574,15 @@ fn test_task_agenda_all_today_combines_pkms_and_filtered_todoist() {
 SCHEDULED: <{today}>
 "#
         ),
-    )
-    .unwrap();
-    let (base_url, handle) = spawn_todoist_mock(vec![(
-        "GET",
-        "/tasks/filter?query=today&limit=200",
-        r#"{"results":[{"id":"remote-today","content":"Remote today task","priority":1,"labels":[],"due":{"date":"2026-05-23","string":"today"}}],"next_cursor":null}"#,
-    )]);
+    );
+    let body = Box::leak(
+        format!(
+            r#"{{"results":[{{"id":"remote-today","content":"Remote today task","priority":1,"labels":[],"due":{{"date":"{today}","string":"today"}}}}],"next_cursor":null}}"#
+        )
+        .into_boxed_str(),
+    );
+    let (base_url, handle) =
+        spawn_todoist_mock(vec![("GET", "/tasks/filter?query=today&limit=200", body)]);
     let output = run_with_todoist_env(
         &[
             "--db",

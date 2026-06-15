@@ -1,11 +1,10 @@
 [package]
 name = "pkms"
-version = "1.6.2"
+version = "1.7.0"
 edition = "2024"
 
 [features]
 default = []
-embed = ["dep:fastembed"]
 todoist = ["dep:ureq", "ureq/platform-verifier"]
 web = ["dep:katex", "dep:syntect"]
 
@@ -23,7 +22,6 @@ chrono = { version = "0.4", features = ["serde"] }
 dirs = "6"
 rayon = "1"
 tiktoken-rs = "0.11"
-fastembed = { version = "5.13.4", optional = true }
 tabled = "0.20"
 terminal_size = "0.4"
 handlebars = "6"

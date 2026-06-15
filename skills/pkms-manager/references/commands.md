@@ -32,9 +32,6 @@ pkms query "terms" --content
 pkms query "terms" --todos
 ```
 
-`--embed` for `query` and `suggest` exists only in builds made with the
-`embed` feature.
-
 ## Inspect and Navigate
 
 ```bash

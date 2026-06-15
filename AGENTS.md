@@ -115,7 +115,6 @@ Feature flags:
 
 | Feature | Default | Description |
 |---------|---------|-------------|
-| `embed` | off | Enables embedding-based `query` and `suggest` behavior through `fastembed`. |
 | `todoist` | off | Enables Todoist task reads and writes through `ureq`. |
 | `web` | off | Enables the local `serve` web viewer and static rendering through `katex` and `syntect`. |
 

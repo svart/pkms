@@ -44,12 +44,6 @@ pkms query "search terms" --content
 pkms query "search terms" --todos
 ```
 
-When built with `--features embed`:
-
-```bash
-pkms query "search terms" --embed
-```
-
 ## Navigation
 
 ```bash
@@ -135,12 +129,6 @@ title.
 pkms suggest <uuid>
 pkms suggest <uuid> --limit 5
 pkms suggest <uuid> --exclude-orphans
-```
-
-When built with `--features embed`:
-
-```bash
-pkms suggest <uuid> --embed
 ```
 
 ## Tasks

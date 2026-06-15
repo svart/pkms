@@ -217,9 +217,6 @@ pub struct SuggestArgs {
     pub exclude_orphans: bool,
     #[arg(long, help = "Read UUIDs from NDJSON stdin")]
     pub from_stdin: bool,
-    #[cfg(feature = "embed")]
-    #[arg(long, help = "Use embedding-based similarity")]
-    pub embed: bool,
 }
 
 #[derive(Debug, Args)]
@@ -289,9 +286,6 @@ pub struct QueryArgs {
     pub content: bool,
     #[arg(long, help = "Restrict to files with TODO headings")]
     pub todos: bool,
-    #[cfg(feature = "embed")]
-    #[arg(long, help = "Use embedding-based similarity")]
-    pub embed: bool,
 }
 
 #[cfg(feature = "web")]
