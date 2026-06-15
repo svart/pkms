@@ -170,11 +170,15 @@ pkms task <ID> mod <MODIFIER>...
 Hidden subcommands such as `pkms task show <ID>` may exist internally for clap
 dispatch, but docs and examples should prefer ID-first usage.
 
-PKMS canonical IDs are deterministic while files do not change. Filtered views
-may show non-contiguous IDs because excluded tasks still occupy global ID
-positions. In single-source text views, IDs may be shown as bare source IDs; in
-`source:all` views, PKMS display IDs are prefixed with `p` and Todoist display
-IDs with `t`. Scripts should rely on source identity fields in JSON/NDJSON.
+PKMS canonical IDs are deterministic while files do not change. The global
+ordering is open tasks before closed tasks, then priority, earliest `DEADLINE`,
+earliest `SCHEDULED`, path, and line number; missing or unparseable dates sort
+after real dates at that tier. Clock-relative concepts such as today, overdue,
+and upcoming do not affect canonical IDs. Filtered views may show
+non-contiguous IDs because excluded tasks still occupy global ID positions. In
+single-source text views, IDs may be shown as bare source IDs; in `source:all`
+views, PKMS display IDs are prefixed with `p` and Todoist display IDs with `t`.
+Scripts should rely on source identity fields in JSON/NDJSON.
 
 `task <ID> show` includes parent and child task chains for nested PKMS tasks.
 Each chain entry carries the same canonical task ID used by `task list`,

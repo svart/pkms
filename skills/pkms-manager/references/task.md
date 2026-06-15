@@ -21,6 +21,11 @@ Provider-backed tasks use stable `<source>:<remote-id>` IDs, such as
 `todoist:<remote-id>`. Unknown provider IDs fail unless that provider is
 configured in the current build.
 
+PKMS canonical IDs are assigned globally with open tasks before closed tasks,
+then priority, earliest `DEADLINE`, earliest `SCHEDULED`, path, and line number.
+Missing dates sort after parsed dates at that tier. Tags, today, overdue, and
+upcoming do not affect canonical ID assignment.
+
 Explicit Todoist and mixed-source task views use the same table shape plus a
 `Project` column:
 `Id,Date,State,Type,Prio,Tags,Project,Note,Heading`. With only one source, the

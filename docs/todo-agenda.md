@@ -12,10 +12,14 @@ IDs are assigned globally using a deterministic sort:
 
 1. Open task states first.
 2. Closed task states after open tasks.
-3. Within each group, by priority, path, and line number.
+3. Within each group, by priority, earliest `DEADLINE`, earliest `SCHEDULED`,
+   path, and line number. Tasks without a parsed date sort after tasks with a
+   date at that tier.
 
 IDs remain stable while the underlying files do not change. Filtered views may
 show non-contiguous IDs because excluded items still keep their global IDs.
+Relative date concepts such as today, overdue, and upcoming do not affect
+canonical ID assignment.
 
 The `task` namespace accepts these PKMS task ID forms:
 
