@@ -4,7 +4,7 @@ use crate::graph::{
     DuplicateInfo, Graph, GraphStats, OverlinkEntry, SelfLinkEntry, file_link_target_exists,
 };
 use crate::output::OutputContext;
-use crate::parser::{Link, parse_note, validate_filetags_format};
+use crate::parser::{Link, validate_filetags_format};
 use crate::util;
 use anyhow::Result;
 use serde::Serialize;
@@ -29,8 +29,6 @@ pub struct CheckOutput {
     pub failed_files: Option<Vec<FailedFileEntry>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub filetags_issues: Option<Vec<FiletagsIssue>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub agenda_issues: Option<Vec<AgendaIssue>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub self_links: Option<Vec<SelfLinkEntry>>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -84,22 +82,12 @@ pub struct FiletagsIssue {
     pub issue: String,
 }
 
-#[derive(Clone, Serialize)]
-pub struct AgendaIssue {
-    pub path: String,
-    pub title: String,
-    pub uuid: String,
-    pub todo_count: usize,
-    pub issue: String,
-}
-
 pub struct CheckOptions {
     pub stats: bool,
     pub file_links: bool,
     pub attachment_links: bool,
     pub id_links: bool,
     pub filetags: bool,
-    pub agenda: bool,
     pub self_links: bool,
     pub overlinks: bool,
     pub cross_links: Option<Vec<String>>,
@@ -118,7 +106,6 @@ impl From<&CheckArgs> for CheckOptions {
             attachment_links: args.attachment_links,
             id_links: args.id_links,
             filetags: args.filetags,
-            agenda: args.agenda,
             self_links: args.self_links,
             overlinks: args.overlinks,
             cross_links: args.cross_links.clone(),
@@ -165,7 +152,6 @@ impl CheckDisplayOptions {
             || opts.file_links
             || opts.attachment_links
             || opts.filetags
-            || opts.agenda
             || opts.self_links
             || opts.overlinks
             || cross_links_specified;
@@ -176,7 +162,6 @@ impl CheckDisplayOptions {
             show_file: opts.file_links || !any_explicit,
             show_attach: opts.attachment_links || !any_explicit,
             show_filetags: opts.filetags || !any_explicit,
-            show_agenda: opts.agenda || !any_explicit,
             show_self_links: opts.self_links || !any_explicit,
             show_overlinks: opts.overlinks || !any_explicit,
         }
@@ -248,43 +233,6 @@ fn collect_check_data<'a>(
         }
     }
 
-    let mut agenda_issues = Vec::new();
-    if display_opts.show_agenda {
-        for result in &graph.results {
-            if result.parsed.filetags.iter().any(|t| t == "agenda") {
-                continue;
-            }
-            if let Some(ref content) = result.raw_content {
-                let parsed = parse_note(content);
-                let planned_count = parsed
-                    .headings
-                    .iter()
-                    .filter(|h| {
-                        h.todo_state.is_some() && (h.scheduled.is_some() || h.deadline.is_some())
-                    })
-                    .count();
-                if planned_count > 0 {
-                    let node = graph
-                        .path_to_uuid
-                        .get(&result.path)
-                        .and_then(|uuid| graph.nodes.get(uuid));
-                    agenda_issues.push(AgendaIssue {
-                        path: result.path.display().to_string(),
-                        title: node
-                            .map(|node| node.title.clone())
-                            .or_else(|| result.parsed.title.clone())
-                            .unwrap_or_default(),
-                        uuid: node.map(|node| node.uuid.clone()).unwrap_or_default(),
-                        todo_count: planned_count,
-                        issue: format!(
-                            "{planned_count} planned TODO heading(s) found but :agenda: tag missing"
-                        ),
-                    });
-                }
-            }
-        }
-    }
-
     let self_link_entries = if display_opts.show_self_links {
         graph.detect_self_links(db_root)
     } else {
@@ -328,7 +276,6 @@ fn collect_check_data<'a>(
         broken_file,
         broken_attachment,
         filetags_issues,
-        agenda_issues,
         self_link_entries,
         overlink_entries,
         cross_link_result,
@@ -341,7 +288,6 @@ struct CheckDisplayOptions {
     show_file: bool,
     show_attach: bool,
     show_filetags: bool,
-    show_agenda: bool,
     show_self_links: bool,
     show_overlinks: bool,
 }
@@ -352,14 +298,13 @@ struct CheckData<'a> {
     broken_file: Vec<BrokenFileLinkEntry>,
     broken_attachment: Vec<BrokenAttachmentLinkEntry>,
     filetags_issues: Vec<FiletagsIssue>,
-    agenda_issues: Vec<AgendaIssue>,
     self_link_entries: Vec<SelfLinkEntry>,
     overlink_entries: Vec<OverlinkEntry>,
     cross_link_result: Option<CrossLinkResult>,
 }
 
 impl CheckData<'_> {
-    fn is_healthy(&self, opts: &CheckDisplayOptions) -> bool {
+    fn is_healthy(&self) -> bool {
         let stats = self.graph.stats();
         stats.broken_link_count == 0
             && stats.parse_error_count == 0
@@ -367,7 +312,6 @@ impl CheckData<'_> {
             && self.broken_file.is_empty()
             && self.broken_attachment.is_empty()
             && self.filetags_issues.is_empty()
-            && (!opts.show_agenda || self.agenda_issues.is_empty())
             && self.self_link_entries.is_empty()
             && self.overlink_entries.is_empty()
     }
@@ -408,7 +352,7 @@ fn build_check_output(data: &CheckData, opts: &CheckDisplayOptions) -> CheckOutp
         vec![]
     };
 
-    let healthy = data.is_healthy(opts);
+    let healthy = data.is_healthy();
 
     CheckOutput {
         db_root: data.db_root.display().to_string(),
@@ -439,11 +383,6 @@ fn build_check_output(data: &CheckData, opts: &CheckDisplayOptions) -> CheckOutp
         } else {
             None
         },
-        agenda_issues: if opts.show_agenda {
-            Some(data.agenda_issues.to_vec())
-        } else {
-            None
-        },
         self_links: if opts.show_self_links {
             Some(data.self_link_entries.to_vec())
         } else {
@@ -469,7 +408,6 @@ pub fn render_text(output: &CheckOutput) -> String {
         || output.duplicates.is_some()
         || output.broken_links.is_some()
         || output.failed_files.is_some()
-        || output.agenda_issues.is_some()
         || output.self_links.is_some()
         || output.overlinks.is_some()
         || output.cross_links.is_some();
@@ -601,29 +539,6 @@ pub fn render_text(output: &CheckOutput) -> String {
         }
     }
 
-    if let Some(agenda_issues) = &output.agenda_issues
-        && !agenda_issues.is_empty()
-    {
-        text.push('\n');
-        let _ = writeln!(
-            text,
-            "Missing :agenda: tag (files with TODOs but no agenda tag) ({}):",
-            agenda_issues.len()
-        );
-        for entry in agenda_issues {
-            let short_uuid = if entry.uuid.len() >= 8 {
-                &entry.uuid[..8]
-            } else {
-                &entry.uuid
-            };
-            let _ = writeln!(
-                text,
-                "  {} ({})  \u{2014} {} TODOs",
-                entry.title, short_uuid, entry.todo_count
-            );
-        }
-    }
-
     if let Some(self_links) = &output.self_links
         && !self_links.is_empty()
     {
@@ -726,7 +641,6 @@ mod tests {
             broken_attachment_links: None,
             failed_files: None,
             filetags_issues: None,
-            agenda_issues: None,
             self_links: None,
             overlinks: None,
             cross_links: None,

@@ -75,15 +75,15 @@ fn test_check_filetags_reports_file_once_when_heading_ids_exist() {
 }
 
 #[test]
-fn test_check_agenda_reports_file_once_when_heading_ids_exist() {
+fn test_check_ignores_missing_agenda_filetag() {
     let (_dir, root) = setup_clean_db();
     db_write(
         &root,
-        "agenda-heading-id.org",
+        "planned-task.org",
         r#":PROPERTIES:
 :ID:       aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa
 :END:
-#+title: Agenda Heading ID
+#+title: Planned Task
 
 * TODO Planned task
 SCHEDULED: <2026-06-04 Thu>
@@ -99,13 +99,15 @@ SCHEDULED: <2026-06-04 Thu>
         "--output-format",
         "json",
         "check",
-        "--agenda",
     ]);
     assert!(
-        !status.success(),
-        "check should report missing agenda tag: {v}"
+        status.success(),
+        "check should ignore missing agenda filetags: {v}"
     );
-    assert_eq!(v["agenda_issues"].as_array().unwrap().len(), 1);
+    assert!(
+        v.get("agenda_issues").is_none(),
+        "agenda_issues should not be emitted"
+    );
 }
 
 #[test]
@@ -244,58 +246,16 @@ fn test_check_id_links_json() {
 }
 
 #[test]
-fn test_check_agenda() {
+fn test_check_rejects_agenda_flag() {
     let (_dir, root) = setup_db();
-    let (stdout, _stderr, status) = run(&["--db", root.to_str().unwrap(), "check", "--agenda"]);
-    assert!(
-        !status.success(),
-        "check --agenda should find issues: {stdout}"
-    );
-    assert!(
-        stdout.contains("Missing :agenda: tag") || stdout.contains("agenda"),
-        "stdout: {stdout}"
-    );
-}
-
-#[test]
-fn test_check_agenda_json() {
-    let (_dir, root) = setup_db();
-    let (v, status) = run_json(&[
-        "--db",
-        root.to_str().unwrap(),
-        "--output-format",
-        "json",
-        "check",
-        "--agenda",
-    ]);
+    let (stdout, stderr, status) = run(&["--db", root.to_str().unwrap(), "check", "--agenda"]);
     assert!(!status.success());
+    assert!(stdout.is_empty(), "unexpected stdout: {stdout}");
     assert!(
-        v.get("agenda_issues").is_some(),
-        "expected agenda_issues field"
+        stderr.contains("unexpected argument '--agenda'")
+            || stderr.contains("unrecognized option '--agenda'"),
+        "stderr: {stderr}"
     );
-    let issues = v["agenda_issues"].as_array().unwrap();
-    assert!(
-        !issues.is_empty(),
-        "expected at least 1 agenda issue, got {}",
-        issues.len()
-    );
-    assert!(issues[0]["uuid"].is_string());
-    assert!(issues[0]["todo_count"].as_u64().unwrap_or(0) >= 1);
-}
-
-#[test]
-fn test_check_agenda_healthy_false() {
-    let (_dir, root) = setup_db();
-    let (v, status) = run_json(&[
-        "--db",
-        root.to_str().unwrap(),
-        "--output-format",
-        "json",
-        "check",
-        "--agenda",
-    ]);
-    assert!(!status.success());
-    assert_eq!(v["healthy"], false);
 }
 
 #[test]

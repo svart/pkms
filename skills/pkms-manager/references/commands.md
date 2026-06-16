@@ -11,7 +11,6 @@ pkms check --id-links
 pkms check --file-links
 pkms check --attachment-links
 pkms check --filetags
-pkms check --agenda
 pkms check --self-links
 pkms check --overlinks
 pkms check --cross-links <note-a> <note-b>

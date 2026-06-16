@@ -115,7 +115,7 @@ fn test_validate_bad_filetags() {
 }
 
 #[test]
-fn test_validate_agenda_issue() {
+fn test_validate_ignores_missing_agenda_filetag() {
     let (_dir, root) = setup_db();
     let (v, status) = run_json(&[
         "--db",
@@ -131,11 +131,11 @@ fn test_validate_agenda_issue() {
         .iter()
         .any(|i| i.as_str().is_some_and(|s| s.contains("agenda")));
     assert!(
-        has_agenda_issue,
-        "validate should report missing :agenda: filetag, issues: {:?}",
+        !has_agenda_issue,
+        "validate should not report missing :agenda: filetag, issues: {:?}",
         issues
     );
-    assert_eq!(v["healthy"], false);
+    assert_eq!(v["healthy"], true);
 }
 
 #[test]

@@ -224,7 +224,7 @@ fn test_all_commands_json() {
                 "--output-format".into(),
                 "json".into(),
                 "check".into(),
-                "--agenda".into(),
+                "--filetags".into(),
             ],
             false,
         ),

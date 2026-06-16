@@ -98,17 +98,6 @@ fn check_filetags_formatting(content: &str, issues: &mut Vec<String>) {
     }
 }
 
-fn check_agenda_tag(content: &str, filetags: &[String], issues: &mut Vec<String>) {
-    let parsed = crate::parser::parse_note(content);
-    let has_planned_todos = parsed
-        .headings
-        .iter()
-        .any(|h| h.todo_state.is_some() && (h.scheduled.is_some() || h.deadline.is_some()));
-    if has_planned_todos && !filetags.iter().any(|t| t == "agenda") {
-        issues.push("Issue: File has planned TODO headings (SCHEDULED/DEADLINE) but missing :agenda: filetag".to_string());
-    }
-}
-
 fn check_duplicate_uuids(
     content: &str,
     graph: &Graph,
@@ -268,7 +257,6 @@ fn validate_node(
     check_uuid_format(node, &mut issues);
     check_title_presence(&content, &mut issues);
     check_filetags_formatting(&content, &mut issues);
-    check_agenda_tag(&content, &node.filetags, &mut issues);
     check_duplicate_uuids(&content, graph, node, &mut issues);
 
     let (broken_internal, broken_files) = check_broken_links(node, graph, db_root);

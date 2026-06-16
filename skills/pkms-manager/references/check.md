@@ -12,7 +12,6 @@ pkms check --id-links
 pkms check --file-links
 pkms check --attachment-links
 pkms check --filetags
-pkms check --agenda
 pkms check --self-links
 pkms check --overlinks
 pkms check --cross-links <note-a> <note-b>
@@ -29,5 +28,4 @@ flags are given, output is limited to those sections.
 - Use `--id-links` before fixing broken UUIDs.
 - Use `--self-links` after broad UUID replacement.
 - Use `--filetags` after changing note headers.
-- Use `--agenda` after adding planned TODO headings.
 - Use JSON for automation: `pkms --output-format json check --id-links`.

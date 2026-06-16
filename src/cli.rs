@@ -89,8 +89,6 @@ pub struct CheckArgs {
     pub id_links: bool,
     #[arg(long, help = "Check filetags format correctness")]
     pub filetags: bool,
-    #[arg(long, help = "Check for TODO headings missing :agenda: filetag")]
-    pub agenda: bool,
     #[arg(
         long,
         help = "Check for self-referencing links (id: or file: pointing to self)"

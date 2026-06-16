@@ -12,7 +12,6 @@
     "broken_attachment_links": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
     "failed_files": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
     "filetags_issues": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
-    "agenda_issues": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
     "self_links": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
     "overlinks": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
     "cross_links": { "type": "array", "items": { "type": "object", "additionalProperties": true } },

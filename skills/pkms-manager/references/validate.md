@@ -9,8 +9,8 @@ pkms --output-format json validate <target>
 ```
 
 `<target>` can be a UUID, file path, or note title. Validation checks metadata,
-links, heading UUIDs, file links, backlinks, and task/agenda issues relevant to
-the note.
+links, heading UUIDs, file links, backlinks, and task issues relevant to the
+note.
 
 Use `validate` immediately after editing a note, then run focused `check`
 commands for batch-level risks.
