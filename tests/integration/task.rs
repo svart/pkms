@@ -364,7 +364,10 @@ fn test_task_list_pkms_text_uses_bare_source_ids() {
         .find(|line| line.contains("High priority task"))
         .expect("expected a task row");
     let id = row.split_whitespace().next().unwrap();
-    assert_eq!(id, "1");
+    assert!(
+        id.parse::<usize>().is_ok(),
+        "expected bare numeric id: {id}"
+    );
 }
 
 #[test]
@@ -1326,6 +1329,26 @@ fn task_titles(v: &serde_json::Value) -> Vec<String> {
         .collect()
 }
 
+fn pkms_task_id_for_title(root: &std::path::Path, title: &str) -> String {
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "task",
+        "list",
+    ]);
+    assert!(status.success());
+    let source_id = v["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|item| item["title"] == title)
+        .and_then(|item| item["source_id"].as_str())
+        .unwrap_or_else(|| panic!("missing task title {title}: {v}"));
+    format!("p{source_id}")
+}
+
 fn add_pkms_project_metadata_note(root: &std::path::Path) {
     std::fs::write(
         root.join("roam/common/20260524000000-task_metadata.org"),
@@ -1478,6 +1501,84 @@ fn test_task_list_filtered_view_preserves_canonical_pkms_ids() {
     assert_eq!(filtered["total"], 1);
     assert_eq!(filtered["items"][0]["source_id"], included_id);
     assert_eq!(filtered["items"][0]["title"], "Later included task");
+}
+
+#[test]
+fn test_task_list_canonical_ids_follow_timestamped_file_order() {
+    let db = TestDb::new()
+        .note_with_content(
+            "common/20260524090000-zeta.org",
+            r#":PROPERTIES:
+:ID:       11111111-1111-4111-8111-111111111111
+:END:
+#+title: Zeta
+
+* TODO Zeta first
+* TODO Zeta second
+"#,
+        )
+        .note_with_content(
+            "common/20260524100000-latest.org",
+            r#":PROPERTIES:
+:ID:       22222222-2222-4222-8222-222222222222
+:END:
+#+title: Latest
+
+* TODO Latest
+"#,
+        )
+        .note_with_content(
+            "common/20260524090000-alpha.org",
+            r#":PROPERTIES:
+:ID:       33333333-3333-4333-8333-333333333333
+:END:
+#+title: Alpha
+
+* TODO Alpha
+DEADLINE: <2024-01-01 Mon>
+"#,
+        )
+        .note_with_content(
+            "daily/2026-05-24.org",
+            r#":PROPERTIES:
+:ID:       44444444-4444-4444-8444-444444444444
+:END:
+#+title: 2026-05-24
+
+* TODO Daily
+"#,
+        )
+        .note_with_content(
+            "archive.org",
+            r#":PROPERTIES:
+:ID:       55555555-5555-4555-8555-555555555555
+:END:
+#+title: Archive
+
+* TODO Archive
+"#,
+        );
+
+    let (v, status) = db.run_json(&["task", "list"]);
+    assert!(status.success());
+
+    let source_id_for = |title: &str| {
+        v["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|item| item["title"] == title)
+            .and_then(|item| item["source_id"].as_str())
+            .map(str::to_string)
+            .unwrap_or_else(|| panic!("missing task title {title}: {v}"))
+    };
+
+    assert_eq!(source_id_for("Latest"), "1");
+    assert_eq!(source_id_for("Alpha"), "2");
+    assert_eq!(source_id_for("Zeta first"), "3");
+    assert_eq!(source_id_for("Zeta second"), "4");
+    assert_eq!(source_id_for("Daily"), "5");
+    assert_eq!(source_id_for("Archive"), "6");
 }
 
 #[test]
@@ -1785,13 +1886,14 @@ fn test_task_state_rejects_todoist_before_todoist_support() {
 #[test]
 fn test_task_mod_pkms_accepts_state_modifier() {
     let (_dir, root) = setup_db();
+    let task_id = pkms_task_id_for_title(&root, "High priority task");
     let (v, status) = run_json(&[
         "--db",
         root.to_str().unwrap(),
         "--output-format",
         "json",
         "task",
-        "p1",
+        &task_id,
         "mod",
         "state:waiting",
     ]);
@@ -2128,11 +2230,12 @@ SCHEDULED: <{today}>
 #[test]
 fn test_task_mod_pkms_no_changes_prints_message_and_exits_nonzero() {
     let (_dir, root) = setup_db();
+    let task_id = pkms_task_id_for_title(&root, "High priority task");
     let (stdout, stderr, status) = run(&[
         "--db",
         root.to_str().unwrap(),
         "task",
-        "p1",
+        &task_id,
         "mod",
         "sch:2026-05-10",
     ]);

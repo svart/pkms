@@ -22,9 +22,12 @@ Provider-backed tasks use stable `<source>:<remote-id>` IDs, such as
 configured in the current build.
 
 PKMS canonical IDs are assigned globally with open tasks before closed tasks,
-then priority, earliest `DEADLINE`, earliest `SCHEDULED`, path, and line number.
-Missing dates sort after parsed dates at that tier. Tags, today, overdue, and
-upcoming do not affect canonical ID assignment.
+then timestamped files (`YYYYMMDDHHMMSS-rest.org`) newest to oldest. Daily
+files (`YYYY-MM-DD.org`) use `YYYY-MM-DD 00:00:00` as their timestamp. Equal
+timestamps sort by the rest of the filename alphanumerically; files without a
+recognized timestamp sort last by path alphanumerically; tasks within a file
+sort top to bottom. Priority, schedule, deadline, tags, project, today,
+overdue, and upcoming do not affect canonical ID assignment.
 
 Explicit Todoist and mixed-source task views use the same table shape plus a
 `Project` column:

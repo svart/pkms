@@ -260,11 +260,16 @@ Update schemas under `skills/pkms-manager/schemas/` when JSON output changes.
 
 TODO headings receive deterministic global IDs shared by `task list`,
 `task agenda`, and ID-first task actions such as `task p<ID> show` and
-`task p<ID> open`. IDs are based on task status grouping and stable ordering
-within the parsed database: priority, parsed deadline date, parsed scheduled
-date, path, and line number. Do not use clock-relative concepts such as today,
-overdue, or upcoming in canonical ID assignment. Filtered views can show
-non-contiguous IDs because excluded tasks still occupy their global positions.
+`task p<ID> open`. IDs are based on task status grouping and stable
+file/heading ordering within the parsed database: open tasks before closed
+tasks; timestamped files (`YYYYMMDDHHMMSS-rest.org`) newest to oldest; equal
+timestamps by the rest-of-name; daily files (`YYYY-MM-DD.org`) participate as
+`YYYY-MM-DD 00:00:00`; non-conforming files last by path; then heading line
+number. Do not use mutable task properties such as priority, deadline,
+scheduled date, tags, or project, and do not use clock-relative concepts such
+as today, overdue, or upcoming in canonical ID assignment. Filtered views can
+show non-contiguous IDs because excluded tasks still occupy their global
+positions.
 
 Use the shared task-index helpers rather than implementing a parallel task ID
 scheme.

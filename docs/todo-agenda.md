@@ -12,12 +12,19 @@ IDs are assigned globally using a deterministic sort:
 
 1. Open task states first.
 2. Closed task states after open tasks.
-3. Within each group, by priority, earliest `DEADLINE`, earliest `SCHEDULED`,
-   path, and line number. Tasks without a parsed date sort after tasks with a
-   date at that tier.
+3. Within each group, timestamped files (`YYYYMMDDHHMMSS-rest.org`) sort
+   newest to oldest.
+4. Daily files (`YYYY-MM-DD.org`) sort like timestamped files at
+   `YYYY-MM-DD 00:00:00`.
+5. Files with equal timestamps sort by the rest of the filename
+   alphanumerically.
+6. Files without a recognized timestamp sort last by path, alphanumerically.
+7. Tasks within a file sort top to bottom.
 
-IDs remain stable while the underlying files do not change. Filtered views may
-show non-contiguous IDs because excluded items still keep their global IDs.
+IDs remain stable while each task's status group, file identity, and heading
+order do not change. Filtered views may show non-contiguous IDs because
+excluded items still keep their global IDs. Task properties such as priority,
+schedule, deadline, tags, and project do not affect canonical ID assignment.
 Relative date concepts such as today, overdue, and upcoming do not affect
 canonical ID assignment.
 
