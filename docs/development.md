@@ -108,6 +108,21 @@ cargo test --features ssh --test integration <test-name>
 cargo build --features ssh
 ```
 
+An optional ignored live SSH check can verify a real server without making CI
+depend on external network state:
+
+```bash
+PKMS_TEST_SSH_TARGET='user@example.org#22' \
+PKMS_TEST_SSH_PATH=/absolute/path/that/exists \
+PKMS_TEST_SSH_MISSING_PATH=/absolute/path/that/does/not/exist \
+PKMS_TEST_SSH_IDENTITY=~/.ssh/id_ed25519 \
+cargo test --features ssh test_check_remote_file_links_live_ssh -- --ignored
+```
+
+`PKMS_TEST_SSH_KNOWN_HOSTS` can override `~/.ssh/known_hosts`. The live check
+uses strict host-key verification and passwordless public-key auth, matching
+normal `check --remote-file-links` behavior.
+
 When feature interactions are relevant, prefer an explicit combined-feature
 build:
 

@@ -202,6 +202,89 @@ fn test_check_remote_file_links_reports_unsupported_targets() {
 }
 
 #[test]
+#[ignore = "requires PKMS_TEST_SSH_TARGET, PKMS_TEST_SSH_PATH, and PKMS_TEST_SSH_MISSING_PATH"]
+#[cfg(feature = "ssh")]
+fn test_check_remote_file_links_live_ssh() {
+    let target = std::env::var("PKMS_TEST_SSH_TARGET")
+        .expect("set PKMS_TEST_SSH_TARGET to user@host or user@host#port");
+    let existing_path = std::env::var("PKMS_TEST_SSH_PATH")
+        .expect("set PKMS_TEST_SSH_PATH to an existing absolute remote path");
+    let missing_path = std::env::var("PKMS_TEST_SSH_MISSING_PATH")
+        .expect("set PKMS_TEST_SSH_MISSING_PATH to a missing absolute remote path");
+    assert!(
+        existing_path.starts_with('/'),
+        "PKMS_TEST_SSH_PATH must be absolute"
+    );
+    assert!(
+        missing_path.starts_with('/'),
+        "PKMS_TEST_SSH_MISSING_PATH must be absolute"
+    );
+
+    let (_dir, root) = setup_clean_db();
+    db_write(
+        &root,
+        "remote.org",
+        &format!(
+            r#":PROPERTIES:
+:ID:       aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa
+:END:
+#+title: Remote
+
+[[file:/ssh:{target}:{existing_path}]]
+[[file:/ssh:{target}:{missing_path}]]
+"#,
+        ),
+    );
+
+    let (stdout, stderr, status) = run_with_config(
+        &[
+            "--db",
+            root.to_str().unwrap(),
+            "--output-format",
+            "json",
+            "check",
+            "--remote-file-links",
+        ],
+        &live_ssh_config(),
+    );
+    let v = assert_json_output(&["check", "--remote-file-links"], &stdout);
+
+    assert!(
+        !status.success(),
+        "missing remote path should make check unhealthy\nstdout: {stdout}\nstderr: {stderr}"
+    );
+    assert_eq!(v["healthy"], false);
+    let errors = v["file_link_errors"].as_array().unwrap();
+    assert!(errors.is_empty(), "unexpected SSH errors: {errors:?}");
+    let broken = v["broken_file_links"].as_array().unwrap();
+    assert_eq!(broken.len(), 1, "expected only the missing path: {v}");
+    assert_eq!(
+        broken[0]["target_path"],
+        format!("/ssh:{target}:{missing_path}")
+    );
+}
+
+#[cfg(feature = "ssh")]
+fn live_ssh_config() -> String {
+    let mut config = String::from("[ssh]\n");
+    if let Ok(identity_file) = std::env::var("PKMS_TEST_SSH_IDENTITY") {
+        config.push_str(&format!(
+            "identity_file = {}\n",
+            toml_string(&identity_file)
+        ));
+    }
+    if let Ok(known_hosts) = std::env::var("PKMS_TEST_SSH_KNOWN_HOSTS") {
+        config.push_str(&format!("known_hosts = {}\n", toml_string(&known_hosts)));
+    }
+    config
+}
+
+#[cfg(feature = "ssh")]
+fn toml_string(value: &str) -> String {
+    serde_json::to_string(value).unwrap()
+}
+
+#[test]
 fn test_check_file_links_skips_ssh_targets_without_remote_flag() {
     let (_dir, root) = setup_clean_db();
     db_write(
