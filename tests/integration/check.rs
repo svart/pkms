@@ -150,6 +150,77 @@ fn test_check_file_links_json() {
 }
 
 #[test]
+fn test_check_file_links_deterministic_order() {
+    let (_dir, root) = setup_clean_db();
+    db_write(
+        &root,
+        "beta.org",
+        r#":PROPERTIES:
+:ID:       bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb
+:END:
+#+title: Beta
+
+[[file:beta-missing.org]]
+"#,
+    );
+    db_write(
+        &root,
+        "alpha.org",
+        r#":PROPERTIES:
+:ID:       aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa
+:END:
+#+title: Alpha
+
+[[file:zeta-missing.org]]
+[[file:alpha-missing.org]]
+"#,
+    );
+
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "check",
+        "--file-links",
+    ]);
+
+    assert!(!status.success());
+    let observed: Vec<_> = v["broken_file_links"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|entry| {
+            (
+                entry["source_uuid"].as_str().unwrap().to_string(),
+                entry["source_title"].as_str().unwrap().to_string(),
+                entry["target_path"].as_str().unwrap().to_string(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        observed,
+        vec![
+            (
+                "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa".to_string(),
+                "Alpha".to_string(),
+                "alpha-missing.org".to_string(),
+            ),
+            (
+                "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa".to_string(),
+                "Alpha".to_string(),
+                "zeta-missing.org".to_string(),
+            ),
+            (
+                "bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb".to_string(),
+                "Beta".to_string(),
+                "beta-missing.org".to_string(),
+            ),
+        ]
+    );
+}
+
+#[test]
 fn test_check_attachment_links_human() {
     let (_dir, root) = setup_db();
     let (stdout, _stderr, status) = run(&[
@@ -195,6 +266,77 @@ fn test_check_attachment_links_json() {
     assert!(
         v.get("stats").is_none(),
         "stats should not appear with --attachment-links only"
+    );
+}
+
+#[test]
+fn test_check_attachment_links_deterministic_order() {
+    let (_dir, root) = setup_clean_db();
+    db_write(
+        &root,
+        "beta.org",
+        r#":PROPERTIES:
+:ID:       bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb
+:END:
+#+title: Beta
+
+[[attachment:beta.png]]
+"#,
+    );
+    db_write(
+        &root,
+        "alpha.org",
+        r#":PROPERTIES:
+:ID:       aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa
+:END:
+#+title: Alpha
+
+[[attachment:zeta.png]]
+[[attachment:alpha.png]]
+"#,
+    );
+
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "check",
+        "--attachment-links",
+    ]);
+
+    assert!(!status.success());
+    let observed: Vec<_> = v["broken_attachment_links"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|entry| {
+            (
+                entry["source_uuid"].as_str().unwrap().to_string(),
+                entry["source_title"].as_str().unwrap().to_string(),
+                entry["target_path"].as_str().unwrap().to_string(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        observed,
+        vec![
+            (
+                "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa".to_string(),
+                "Alpha".to_string(),
+                "alpha.png".to_string(),
+            ),
+            (
+                "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa".to_string(),
+                "Alpha".to_string(),
+                "zeta.png".to_string(),
+            ),
+            (
+                "bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb".to_string(),
+                "Beta".to_string(),
+                "beta.png".to_string(),
+            ),
+        ]
     );
 }
 
