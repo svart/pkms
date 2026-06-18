@@ -8,7 +8,6 @@
 //! output via [`OutputContext`](crate::output::OutputContext).
 
 pub mod check;
-pub mod context;
 pub mod extract;
 pub mod fix;
 pub mod get;

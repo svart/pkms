@@ -29,14 +29,6 @@ fn test_error_note_not_found_json() {
             "suggest".into(),
             "Nonexistent".into(),
         ],
-        vec![
-            "--db".into(),
-            db.clone(),
-            "--output-format".into(),
-            "json".into(),
-            "context".into(),
-            "Nonexistent".into(),
-        ],
     ];
     for args in &cases {
         let args_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
@@ -159,14 +151,6 @@ fn test_json_error_exit_code() {
             "--output-format".into(),
             "json".into(),
             "suggest".into(),
-            "DoesNotExist".into(),
-        ],
-        vec![
-            "--db".into(),
-            db.clone(),
-            "--output-format".into(),
-            "json".into(),
-            "context".into(),
             "DoesNotExist".into(),
         ],
     ];

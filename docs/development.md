@@ -251,7 +251,7 @@ Consumers read targets from stdin via automatic pipe detection or
 
 Producers: `resolve`, `query`, `orphans`, `stats --hubs`, `suggest`.
 
-Consumers: `get`, `suggest`, `validate`, `context`, `task list`.
+Consumers: `get`, `suggest`, `validate`, `task list`.
 
 Keep producer and consumer contracts compatible when changing structured output.
 Update schemas under `skills/pkms-manager/schemas/` when JSON output changes.

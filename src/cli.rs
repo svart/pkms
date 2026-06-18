@@ -46,8 +46,6 @@ pub enum Command {
     Stats(StatsArgs),
     #[command(about = "List orphan notes (no incoming or outgoing links)")]
     Orphans(OrphansArgs),
-    #[command(about = "Build a context window for AI consumption")]
-    Context(ContextArgs),
     #[command(about = "Fast UUID/title resolution without full graph load")]
     Resolve(ResolveArgs),
     #[command(about = "Fix broken links by replacing UUIDs across the database")]
@@ -144,24 +142,6 @@ pub struct OrphansArgs {
     pub limit: Option<usize>,
     #[arg(long, help = "Include daily notes in the orphans list")]
     pub with_dailies: bool,
-}
-
-#[derive(Debug, Args)]
-pub struct ContextArgs {
-    #[arg(help = "UUID, file path, or note title")]
-    pub target: Option<String>,
-    #[arg(short, long, default_value = "1", help = "Traversal depth")]
-    pub depth: u32,
-    #[arg(short, long, help = "Maximum tokens in output")]
-    pub max_tokens: Option<usize>,
-    #[arg(
-        long,
-        default_value = "cl100k_base",
-        help = "Token encoding: cl100k_base (GPT-4) or o200k_base (GPT-4o)"
-    )]
-    pub encoding: String,
-    #[arg(long, help = "Read UUIDs from NDJSON stdin")]
-    pub from_stdin: bool,
 }
 
 #[derive(Debug, Args)]

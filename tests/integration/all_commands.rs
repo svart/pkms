@@ -1,4 +1,24 @@
 use super::*;
+
+#[test]
+fn test_context_command_is_removed_from_help() {
+    let (stdout, stderr, status) = run(&["--help"]);
+
+    assert!(
+        status.success(),
+        "Expected help to succeed\nstdout: {}\nstderr: {}",
+        stdout,
+        stderr
+    );
+    assert!(
+        !stdout
+            .lines()
+            .any(|line| line.trim_start().starts_with("context ")),
+        "context command should not appear in help:\n{}",
+        stdout
+    );
+}
+
 #[test]
 fn test_all_commands_json() {
     let (_dir, root) = setup_db();
@@ -111,19 +131,6 @@ fn test_all_commands_json() {
                 "path".into(),
                 "Note A".into(),
                 "Note C".into(),
-            ],
-            true,
-        ),
-        (
-            vec![
-                "--db".into(),
-                db.clone(),
-                "--output-format".into(),
-                "json".into(),
-                "context".into(),
-                "Note A".into(),
-                "--depth".into(),
-                "1".into(),
             ],
             true,
         ),

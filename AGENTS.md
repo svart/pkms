@@ -109,7 +109,7 @@ Command pipelining:
 - Consumers read targets from stdin via automatic pipe detection or
   `--from-stdin`.
 - Producers: `resolve`, `query`, `orphans`, `stats --hubs`, `suggest`.
-- Consumers: `get`, `suggest`, `validate`, `context`, `task list`.
+- Consumers: `get`, `suggest`, `validate`, `task list`.
 
 Feature flags:
 

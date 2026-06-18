@@ -25,7 +25,6 @@ rayon = "1"
 tiktoken-rs = "0.11"
 tabled = { version = "0.20", default-features = false, features = ["std"] }
 terminal_size = "0.4"
-handlebars = "6"
 # Keep shlex on the 1.x line to share the transitive build-dependency version
 # and minimize the dependency tree.
 shlex = "1.3"

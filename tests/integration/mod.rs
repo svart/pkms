@@ -1,7 +1,6 @@
 mod all_commands;
 mod check;
 mod config;
-mod context;
 mod error;
 mod extract;
 mod fix;

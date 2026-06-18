@@ -43,7 +43,6 @@ pkms get <target> --links
 pkms get <target> --heading "Section title"
 pkms get <target> --headings --no-content
 pkms path <from> <to>
-pkms context <target> --depth 2 --max-tokens 4000
 ```
 
 `serve` exists only in builds made with the `web` feature:

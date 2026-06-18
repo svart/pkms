@@ -17,7 +17,6 @@ when `--from-stdin` is set.
 - `get`
 - `suggest`
 - `validate`
-- `context`
 - `task list`
 
 ## Examples

@@ -46,7 +46,7 @@ Load only the file needed for the task:
 - Command syntax overview: `references/commands.md`
 - Health and validation: `references/check.md`, `references/validate.md`
 - Lookup and search: `references/resolve.md`, `references/query.md`
-- Note inspection and graph navigation: `references/get.md`, `references/path.md`, `references/context.md`
+- Note inspection and graph navigation: `references/get.md`, `references/path.md`
 - Note creation and repair: `references/new.md`, `references/fix.md`
 - Suggestions and orphan linking: `references/suggest.md`, `references/orphans.md`
 - TODO and agenda tasks: `references/task.md`
@@ -69,7 +69,7 @@ JSON schemas for maintained structured outputs live in `schemas/`.
 
 1. Find candidate notes with `resolve`, `query`, tags, or hubs.
 2. Read relevant notes with `get --links`.
-3. Use `context <target> --depth N --max-tokens M` when the output is for an LLM.
+3. Use `get <target> --links` to gather neighboring note detail when the output is for an LLM.
 4. Summarize findings with citations to note titles/UUIDs when useful.
 
 ### Validate and Maintain
@@ -149,7 +149,7 @@ Use NDJSON for command chaining. Producers emit one JSON object per line;
 consumers read UUID/path targets from stdin.
 
 Common producers: `resolve`, `query`, `orphans`, `stats --hubs`, `suggest`.
-Common consumers: `get`, `suggest`, `validate`, `context`, `task list`.
+Common consumers: `get`, `suggest`, `validate`, `task list`.
 
 Use `--from-stdin` when the consumer also has other flags or scope could be
 ambiguous.

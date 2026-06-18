@@ -40,7 +40,6 @@ fn command_name(command: &Command) -> &'static str {
         Command::Validate(_) => "validate",
         Command::Stats(_) => "stats",
         Command::Orphans(_) => "orphans",
-        Command::Context(_) => "context",
         Command::Resolve(_) => "resolve",
         Command::Fix(_) => "fix",
         Command::Suggest(_) => "suggest",
@@ -79,23 +78,6 @@ fn dispatch(cli: &Cli, command_ctx: &CommandContext<'_>) -> Result<ExitCode> {
         }
         Command::Info => commands::info::run(cfg, ctx).map(|()| ExitCode::SUCCESS)?,
         Command::InitConfig(args) => init_config(args.db.as_deref(), ctx)?,
-        Command::Context(args) => {
-            let targets = input::resolve_targets(&args.target, args.from_stdin)?;
-            commands::context::run(
-                cfg,
-                ctx,
-                &commands::context::ContextOptions {
-                    targets,
-                    depth: args.depth,
-                    max_tokens: args.max_tokens,
-                    encoding: args
-                        .encoding
-                        .parse::<tokens::Encoding>()
-                        .map_err(|_| anyhow::anyhow!("Unknown encoding: {}", args.encoding))?,
-                },
-            )
-            .map(|()| ExitCode::SUCCESS)?
-        }
         Command::Resolve(args) => {
             commands::resolve::run(cfg, ctx, &commands::resolve::ResolveOptions::from(args))
                 .map(|()| ExitCode::SUCCESS)?

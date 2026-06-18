@@ -17,7 +17,6 @@ read targets from stdin automatically when possible or explicitly with
 - `get`
 - `suggest`
 - `validate`
-- `context`
 - `task list`
 
 ## Examples
