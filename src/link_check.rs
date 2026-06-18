@@ -4,7 +4,7 @@ use rayon::prelude::*;
 use std::cmp::Ordering;
 use std::path::{Path, PathBuf};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum LinkCheckKind {
     File,
     Attachment,
@@ -127,61 +127,33 @@ pub fn run_local_link_checks(
 }
 
 fn compare_jobs(a: &LinkCheckJob, b: &LinkCheckJob) -> Ordering {
-    compare_job_parts(
-        a.kind,
-        &a.source_uuid,
-        &a.source_title,
-        &a.source_path,
-        &a.target,
-        b.kind,
-        &b.source_uuid,
-        &b.source_title,
-        &b.source_path,
-        &b.target,
-    )
+    job_sort_key(a).cmp(&job_sort_key(b))
 }
 
 fn compare_broken_targets(a: &LinkCheckBrokenTarget, b: &LinkCheckBrokenTarget) -> Ordering {
-    compare_job_parts(
-        a.kind,
-        &a.source_uuid,
-        &a.source_title,
-        &a.source_path,
-        &a.target,
-        b.kind,
-        &b.source_uuid,
-        &b.source_title,
-        &b.source_path,
-        &b.target,
+    broken_target_sort_key(a).cmp(&broken_target_sort_key(b))
+}
+
+fn job_sort_key(job: &LinkCheckJob) -> (LinkCheckKind, &str, &str, &Path, &str) {
+    (
+        job.kind,
+        job.source_uuid.as_str(),
+        job.source_title.as_str(),
+        job.source_path.as_path(),
+        job.target.as_str(),
     )
 }
 
-#[allow(clippy::too_many_arguments)]
-fn compare_job_parts(
-    a_kind: LinkCheckKind,
-    a_uuid: &str,
-    a_title: &str,
-    a_path: &Path,
-    a_target: &str,
-    b_kind: LinkCheckKind,
-    b_uuid: &str,
-    b_title: &str,
-    b_path: &Path,
-    b_target: &str,
-) -> Ordering {
-    kind_order(a_kind)
-        .cmp(&kind_order(b_kind))
-        .then_with(|| a_uuid.cmp(b_uuid))
-        .then_with(|| a_title.cmp(b_title))
-        .then_with(|| a_path.cmp(b_path))
-        .then_with(|| a_target.cmp(b_target))
-}
-
-fn kind_order(kind: LinkCheckKind) -> u8 {
-    match kind {
-        LinkCheckKind::File => 0,
-        LinkCheckKind::Attachment => 1,
-    }
+fn broken_target_sort_key(
+    target: &LinkCheckBrokenTarget,
+) -> (LinkCheckKind, &str, &str, &Path, &str) {
+    (
+        target.kind,
+        target.source_uuid.as_str(),
+        target.source_title.as_str(),
+        target.source_path.as_path(),
+        target.target.as_str(),
+    )
 }
 
 #[cfg(test)]
