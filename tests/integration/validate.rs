@@ -70,6 +70,63 @@ fn test_validate_broken_note() {
 }
 
 #[test]
+fn test_validate_broken_file_link_json() {
+    let (_dir, root) = setup_clean_db();
+    db_write(
+        &root,
+        "source.org",
+        r#":PROPERTIES:
+:ID:       aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa
+:END:
+#+title: Source
+
+[[file:target.org::needle]]
+[[file:target.org::missing]]
+[[attachment:missing.png]]
+"#,
+    );
+    db_write(
+        &root,
+        "target.org",
+        r#":PROPERTIES:
+:ID:       bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb
+:END:
+#+title: Target
+
+needle
+"#,
+    );
+
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "validate",
+        "Source",
+    ]);
+
+    assert!(status.success());
+    assert_eq!(v["healthy"], false);
+    assert_eq!(
+        v["broken_files"].as_array().unwrap(),
+        &[serde_json::json!("target.org::missing")]
+    );
+    let issues: Vec<_> = v["issues"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|issue| issue.as_str())
+        .collect();
+    assert!(issues.contains(&"1 broken file link(s)"));
+    assert!(
+        issues.iter().all(|issue| !issue.contains("attachment")),
+        "validate should not report attachment links: {:?}",
+        issues
+    );
+}
+
+#[test]
 fn test_validate_note_not_found() {
     let (_dir, root) = setup_db();
     let (stdout, stderr, status) = run(&[

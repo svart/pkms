@@ -1,6 +1,7 @@
 use crate::cli::OutputFormat;
 use crate::config::ResolvedConfig;
-use crate::graph::{Graph, file_link_target_exists, resolve_file_link_path};
+use crate::graph::{Graph, resolve_file_link_path};
+use crate::link_check::local_file_link_target_exists;
 use crate::output::OutputContext;
 use crate::parser::{ID_PROPERTY_RE, Link, TITLE_RE, UUID_FORMAT_RE, validate_filetags_format};
 use anyhow::Result;
@@ -147,7 +148,9 @@ fn check_broken_links(
             Link::Internal(uuid) if !graph.nodes.contains_key(uuid) => {
                 broken_internal.push(uuid.clone());
             }
-            Link::File(path_str) if !file_link_target_exists(path_str, &node.path, db_root) => {
+            Link::File(path_str)
+                if !local_file_link_target_exists(path_str, &node.path, db_root) =>
+            {
                 broken_files.push(path_str.clone());
             }
             _ => {}
