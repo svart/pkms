@@ -127,6 +127,7 @@ fn test_check_help_shows_remote_file_links_flag() {
 }
 
 #[test]
+#[cfg(not(feature = "ssh"))]
 fn test_check_remote_file_links_requires_ssh_feature() {
     let (_dir, root) = setup_clean_db();
     db_write(
@@ -155,6 +156,48 @@ fn test_check_remote_file_links_requires_ssh_feature() {
         ),
         "stderr: {}",
         stderr
+    );
+}
+
+#[test]
+#[cfg(feature = "ssh")]
+fn test_check_remote_file_links_reports_unsupported_targets() {
+    let (_dir, root) = setup_clean_db();
+    db_write(
+        &root,
+        "remote.org",
+        r#":PROPERTIES:
+:ID:       aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa
+:END:
+#+title: Remote
+
+[[file:/ssh:jump|example.com:/tmp/file.txt]]
+"#,
+    );
+
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "check",
+        "--remote-file-links",
+    ]);
+    assert!(
+        !status.success(),
+        "remote target should be unsupported: {v}"
+    );
+    assert_eq!(v["healthy"], false);
+    assert_eq!(v["broken_file_links"].as_array().unwrap().len(), 0);
+    let errors = v["file_link_errors"].as_array().unwrap();
+    assert_eq!(errors.len(), 1);
+    assert_eq!(errors[0]["backend"], "ssh");
+    assert_eq!(errors[0]["error_kind"], "unsupported");
+    assert!(
+        errors[0]["message"]
+            .as_str()
+            .unwrap()
+            .contains("multi-hop TRAMP syntax")
     );
 }
 

@@ -2,12 +2,12 @@ use crate::cli::CheckArgs;
 use crate::config::ResolvedConfig;
 use crate::graph::{DuplicateInfo, Graph, GraphStats, OverlinkEntry, SelfLinkEntry};
 use crate::link_check::{
-    LinkCheckErrorTarget, LinkCheckJob, LinkCheckKind, LinkCheckResults, is_ssh_file_target,
-    run_local_link_checks, sort_link_check_jobs,
+    LinkCheckErrorTarget, LinkCheckJob, LinkCheckKind, LinkCheckResults, SshFileCheckOptions,
+    is_ssh_file_target, run_local_link_checks, run_ssh_link_checks, sort_link_check_jobs,
 };
 use crate::output::OutputContext;
 use crate::parser::{Link, validate_filetags_format};
-use anyhow::{Result, bail};
+use anyhow::Result;
 use serde::Serialize;
 use std::fmt::Write;
 use std::path::Path;
@@ -140,7 +140,7 @@ pub fn execute(config: &ResolvedConfig, opts: &CheckOptions) -> Result<CheckComm
     let db_root = config.resolved_db_root();
 
     let display_opts = CheckDisplayOptions::from_options(opts);
-    let issue_data = collect_check_data(&graph, db_root, opts, &display_opts)?;
+    let issue_data = collect_check_data(config, &graph, db_root, opts, &display_opts)?;
     let output = build_check_output(&issue_data, &display_opts);
     let exit_code = if output.healthy {
         ExitCode::SUCCESS
@@ -151,9 +151,17 @@ pub fn execute(config: &ResolvedConfig, opts: &CheckOptions) -> Result<CheckComm
     Ok(CheckCommandOutput { output, exit_code })
 }
 
+#[cfg(feature = "ssh")]
+fn ensure_remote_file_links_available(_requested: bool) -> Result<()> {
+    Ok(())
+}
+
+#[cfg(not(feature = "ssh"))]
 fn ensure_remote_file_links_available(requested: bool) -> Result<()> {
     if requested {
-        bail!("SSH file-link checks are not available in this build. Rebuild with --features ssh.")
+        anyhow::bail!(
+            "SSH file-link checks are not available in this build. Rebuild with --features ssh."
+        )
     }
     Ok(())
 }
@@ -194,6 +202,7 @@ impl CheckDisplayOptions {
 }
 
 fn collect_check_data<'a>(
+    config: &'a ResolvedConfig,
     graph: &'a Graph,
     db_root: &'a Path,
     opts: &CheckOptions,
@@ -203,8 +212,13 @@ fn collect_check_data<'a>(
 
     let link_jobs =
         collect_local_link_check_jobs(graph, display_opts.show_file, display_opts.show_attach);
-    let (broken_file, file_link_errors, broken_attachment) =
-        split_link_check_results(run_local_link_checks(link_jobs, db_root));
+    let mut link_results = run_local_link_checks(link_jobs, db_root);
+    if opts.remote_file_links {
+        let ssh_jobs = collect_ssh_link_check_jobs(graph);
+        let ssh_options = SshFileCheckOptions::from_config(config.ssh.as_ref());
+        link_results.extend(run_ssh_link_checks(ssh_jobs, &ssh_options));
+    }
+    let (broken_file, file_link_errors, broken_attachment) = split_link_check_results(link_results);
 
     let mut filetags_issues = Vec::new();
     if display_opts.show_filetags {
@@ -304,6 +318,26 @@ fn collect_local_link_check_jobs(
                     ));
                 }
                 _ => {}
+            }
+        }
+    }
+    sort_link_check_jobs(&mut jobs);
+    jobs
+}
+
+fn collect_ssh_link_check_jobs(graph: &Graph) -> Vec<LinkCheckJob> {
+    let mut jobs = Vec::new();
+    for node in graph.nodes.values() {
+        for link in &node.outgoing {
+            if let Link::File(target) = link
+                && is_ssh_file_target(target)
+            {
+                jobs.push(LinkCheckJob::ssh_file(
+                    node.uuid.clone(),
+                    node.title.clone(),
+                    node.path.clone(),
+                    target.clone(),
+                ));
             }
         }
     }
