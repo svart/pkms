@@ -128,10 +128,11 @@ Normal code changes: keep the edit narrow, add focused tests near the changed
 behavior, and use [Local development loop](docs/development.md#local-development-loop).
 
 Before committing or handing off: run the
-[Fast pre-commit gate](docs/development.md#fast-pre-commit-gate), plus any
-[Feature-specific checks](docs/development.md#feature-specific-checks) for code
-you touched. CI owns the full matrix in
-[Full CI gate](docs/development.md#full-ci-gate).
+[Fast pre-commit gate](docs/development.md#fast-pre-commit-gate). Use
+[Feature-specific checks](docs/development.md#feature-specific-checks) for
+focused local debugging when useful. Run the
+[Full CI gate](docs/development.md#full-ci-gate) only when the user explicitly
+requests the full matrix.
 
 Adding or changing commands: follow
 [Adding or changing commands](docs/development.md#adding-or-changing-commands),

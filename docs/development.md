@@ -54,19 +54,20 @@ integration suite has a chainable `TestDb` builder for notes and tasks.
 
 ## Fast Pre-Commit Gate
 
-Before committing or handing work off for review, run the fast default-feature
+Before committing or handing work off for review, run the fast full-feature
 gate:
 
 ```bash
-cargo fmt --check
-cargo clippy -- -D warnings
-cargo test
-cargo build
+cargo fmt --all -- --check
+cargo clippy --all-targets --all-features -- -D warnings
+cargo test --all-features
+cargo build --all-features
 ```
 
-This is intentionally shorter than CI. It catches formatting, default-feature
-lint, unit tests, integration tests, and default builds without making every
-local commit wait on the full feature matrix.
+This is intentionally shorter than CI but covers the complete feature set in a
+single pass. It catches formatting, all-feature lint, unit tests, integration
+tests, and all-feature builds without making every local commit wait on the
+full feature-by-feature matrix.
 
 Also run focused commands for the files you changed. Examples:
 
@@ -76,10 +77,16 @@ cargo test task
 cargo test --test integration task
 ```
 
-If the change touches feature-gated code, run the relevant checks from the next
-section before committing.
+Use the feature-specific checks below during implementation when they provide a
+faster focused loop. They are not additional required pre-commit gates; the
+full-feature pre-commit gate above is the normal local gate before committing.
 
 ## Feature-Specific Checks
+
+These commands are useful for focused local debugging or for shortening the
+edit-test loop while working inside one feature area. Run the relevant focused
+check when it helps, then use the [Fast Pre-Commit Gate](#fast-pre-commit-gate)
+before committing.
 
 Todoist changes:
 
@@ -123,8 +130,8 @@ cargo test --features ssh test_check_remote_file_links_live_ssh -- --ignored
 uses strict host-key verification and passwordless public-key auth, matching
 normal `check --remote-file-links` behavior.
 
-When feature interactions are relevant, prefer an explicit combined-feature
-build:
+When feature interactions are relevant during implementation, prefer an
+explicit combined-feature build:
 
 ```bash
 cargo build --features todoist,web,ssh
@@ -133,8 +140,10 @@ cargo build --all-features
 
 ## Full CI Gate
 
-CI should run the comprehensive matrix. Local development should not routinely
-wait on this full gate unless preparing a release or investigating CI behavior.
+CI should run the comprehensive matrix. Local agents should run this full matrix
+only when the user explicitly requests it, or when the user asks to investigate
+CI behavior. Do not run it automatically for ordinary commits, handoffs, or
+version bumps.
 
 ```bash
 cargo fmt --all -- --check
@@ -315,11 +324,12 @@ Only commit when the user asks for a commit. Before committing:
 - Keep `README.md` concise; put detailed usage in `docs/`.
 - Update `skills/pkms-manager/` only when CLI behavior or agent workflows
   change.
-- Run the [Fast pre-commit gate](#fast-pre-commit-gate) and relevant
-  [Feature-specific checks](#feature-specific-checks).
+- Run the [Fast pre-commit gate](#fast-pre-commit-gate).
 
 Before release-ready version commits:
 
 - Update the package version in `Cargo.toml`.
 - Update the corresponding `Cargo.lock` package entry.
-- Run or confirm the [Full CI gate](#full-ci-gate).
+- Run the [Fast pre-commit gate](#fast-pre-commit-gate).
+- Run or confirm the [Full CI gate](#full-ci-gate) only when the user
+  explicitly requests the full matrix.

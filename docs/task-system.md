@@ -414,15 +414,15 @@ When changing task behavior:
   `skills/pkms-manager/references/task.md` for user-visible behavior.
 - Update schemas under `skills/pkms-manager/schemas/` when JSON output changes.
 - Add focused integration tests under `tests/integration/task.rs`.
-- Verify default and relevant feature builds.
+- Verify the all-features pre-commit gate.
 
 Use the development workflow in [Development](development.md) before finalizing
-code or documentation changes. For normal local work, run the fast pre-commit
-gate plus relevant feature-specific checks. CI runs the full gate.
+code or documentation changes. For normal local work, run the fast all-features
+pre-commit gate. Run the full matrix only when explicitly requested.
 
 ```bash
-cargo fmt --check
-cargo clippy -- -D warnings
-cargo build
-cargo test
+cargo fmt --all -- --check
+cargo clippy --all-targets --all-features -- -D warnings
+cargo test --all-features
+cargo build --all-features
 ```
