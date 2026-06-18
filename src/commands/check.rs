@@ -2,8 +2,7 @@ use crate::cli::CheckArgs;
 use crate::config::ResolvedConfig;
 use crate::graph::{DuplicateInfo, Graph, GraphStats, OverlinkEntry, SelfLinkEntry};
 use crate::link_check::{
-    LinkCheckBrokenTarget, LinkCheckJob, LinkCheckKind, run_local_link_checks_sequential,
-    sort_link_check_jobs,
+    LinkCheckBrokenTarget, LinkCheckJob, LinkCheckKind, run_local_link_checks, sort_link_check_jobs,
 };
 use crate::output::OutputContext;
 use crate::parser::{Link, validate_filetags_format};
@@ -180,7 +179,7 @@ fn collect_check_data<'a>(
     let link_jobs =
         collect_local_link_check_jobs(graph, display_opts.show_file, display_opts.show_attach);
     let (broken_file, broken_attachment) =
-        split_broken_link_targets(run_local_link_checks_sequential(link_jobs, db_root));
+        split_broken_link_targets(run_local_link_checks(link_jobs, db_root));
 
     let mut filetags_issues = Vec::new();
     if display_opts.show_filetags {

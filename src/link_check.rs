@@ -1,5 +1,6 @@
 use crate::graph::file_link_target_exists;
 use crate::util::attachment_target_exists;
+use rayon::prelude::*;
 use std::cmp::Ordering;
 use std::path::{Path, PathBuf};
 
@@ -110,12 +111,12 @@ pub fn check_local_link_job(job: LinkCheckJob, db_root: &Path) -> LinkCheckOutco
     }
 }
 
-pub fn run_local_link_checks_sequential(
+pub fn run_local_link_checks(
     jobs: Vec<LinkCheckJob>,
     db_root: &Path,
 ) -> Vec<LinkCheckBrokenTarget> {
     let mut broken: Vec<LinkCheckBrokenTarget> = jobs
-        .into_iter()
+        .into_par_iter()
         .filter_map(|job| match check_local_link_job(job, db_root) {
             LinkCheckOutcome::Ok => None,
             LinkCheckOutcome::Broken(target) => Some(target),
