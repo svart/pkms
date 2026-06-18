@@ -164,9 +164,12 @@ pkms task list --from-stdin
 pkms task list state:TODO tags:work,!blocked
 pkms task list state:opened,!waiting
 pkms task list prio:A,B,C
+pkms task list date:fri
+pkms task list after:tom before:"2026-06-19 12:00"
 pkms task list --columns +Project
 pkms task agenda --columns -Project
 pkms task agenda week type:SCHED project:Alpha
+pkms task agenda date:tom
 pkms task p<id> show
 pkms task p<id> open
 pkms task p<id> state WAITING

@@ -217,8 +217,10 @@ Supported task criteria include:
 - `type:SCHED,DEADL` or `kind:SCHED`.
 - `prio:A`, `priority:A,B,C`, and `prio:none`.
 - `date:today`, `date:week`, `date:overdue`, `date:upcoming`,
-  `date:YYYY-MM-DD`, and comma-separated date filters.
-- `after:YYYY-MM-DD`, `before:YYYY-MM-DD`, with optional `HH:MM`.
+  `date:YYYY-MM-DD`, modifier-style date words such as `date:tom` and
+  `date:fri`, and comma-separated date filters.
+- `after:YYYY-MM-DD`, `before:YYYY-MM-DD`, optional `HH:MM`, and
+  modifier-style date words such as `after:tom` and `before:fri`.
 - `scope:<note-title-uuid-or-path>` for PKMS task scope.
 - `project:<name-or-id>`, including `!` exclusions.
 

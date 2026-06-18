@@ -5,10 +5,11 @@ use crate::config::{ColumnSource, ColumnView, ResolvedConfig};
 use crate::input;
 use crate::output::Column;
 use crate::tasks::clock::TaskClock;
-use crate::tasks::filter::{SourceSelection, TaskFilters, parse_task_filters};
+use crate::tasks::filter::{SourceSelection, TaskFilters, parse_task_filters_on};
 use crate::tasks::provider::TaskListView;
 use crate::util;
 use anyhow::{Result, bail};
+use chrono::NaiveDate;
 
 #[derive(Debug, Clone, Copy)]
 pub(super) enum ShortcutKind {
@@ -132,7 +133,8 @@ pub(super) fn plan_task_list_request(
     args: &TaskListArgs,
     raw_filters: &[String],
 ) -> Result<TaskListRequest> {
-    let filters = parse_task_filters(raw_filters)?;
+    let clock = TaskClock::now();
+    let filters = parse_task_filters_on(raw_filters, clock.today)?;
     tracing::debug!(
         source = ?filters.source,
         filter_count = raw_filters.len(),
@@ -140,7 +142,6 @@ pub(super) fn plan_task_list_request(
         has_criteria = filters.has_criteria(),
         "running task list"
     );
-    let clock = TaskClock::now();
     let scope = task_scope(args.from_stdin, &filters.criteria.scope)?;
     if args.group.is_some() && !matches!(filters.source, SourceSelection::Pkms) {
         bail!("task list --group is available only for source:pkms");
@@ -187,8 +188,11 @@ fn task_scope(from_stdin: bool, filter_scope: &[String]) -> Result<Vec<String>> 
     Ok(filter_scope.to_vec())
 }
 
-pub(super) fn shortcut_display_source(raw_filters: &[String]) -> Result<SourceSelection> {
-    let filters = parse_task_filters(raw_filters)?;
+pub(super) fn shortcut_display_source(
+    raw_filters: &[String],
+    today: NaiveDate,
+) -> Result<SourceSelection> {
+    let filters = parse_task_filters_on(raw_filters, today)?;
     Ok(filters.source)
 }
 
@@ -263,7 +267,8 @@ pub(super) fn plan_agenda_request(
         None => {}
     }
 
-    let filters = parse_task_filters(&args.filters)?;
+    let clock = TaskClock::now();
+    let filters = parse_task_filters_on(&args.filters, clock.today)?;
     tracing::debug!(
         source = ?filters.source,
         filter_count = args.filters.len(),
@@ -271,7 +276,6 @@ pub(super) fn plan_agenda_request(
         has_criteria = filters.has_criteria(),
         "running task agenda"
     );
-    let clock = TaskClock::now();
     let columns = if matches!(filters.source, SourceSelection::Pkms) && !filters.has_criteria() {
         AgendaColumns::Pkms(resolve_task_columns(
             config,
@@ -304,8 +308,8 @@ fn plan_agenda_shortcut_request(
     args: &TaskShortcutArgs,
     kind: ShortcutKind,
 ) -> Result<AgendaRequest> {
-    let filters = parse_task_filters(&args.filters)?;
     let clock = TaskClock::now();
+    let filters = parse_task_filters_on(&args.filters, clock.today)?;
     let columns = resolve_task_table_columns(
         config,
         filters.source,
@@ -328,8 +332,8 @@ fn plan_agenda_upcoming_request(
     config: &ResolvedConfig,
     args: &TaskUpcomingArgs,
 ) -> Result<AgendaRequest> {
-    let filters = parse_task_filters(&args.filters)?;
     let clock = TaskClock::now();
+    let filters = parse_task_filters_on(&args.filters, clock.today)?;
     let kind = ShortcutKind::Upcoming {
         days: args.days.max(0),
     };

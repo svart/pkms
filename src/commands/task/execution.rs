@@ -53,7 +53,7 @@ pub(super) fn collect_shortcut_items_on(
     kind: plan::ShortcutKind,
     clock: TaskClock,
 ) -> Result<Vec<TaskItem>> {
-    let filters = crate::tasks::filter::parse_task_filters(raw_filters)?;
+    let filters = crate::tasks::filter::parse_task_filters_on(raw_filters, clock.today)?;
     let mut items =
         providers::collect_task_items(config, &filters, plan::shortcut_task_view(kind), clock)?;
     apply_task_filter_criteria_on(config, &mut items, &filters.criteria, clock.today)?;

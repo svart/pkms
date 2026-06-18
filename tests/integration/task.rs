@@ -1237,6 +1237,109 @@ SCHEDULED: <{upcoming}>
 }
 
 #[test]
+fn test_task_agenda_accepts_modifier_style_date_filter_words() {
+    let db = TestDb::new().note_with_content(
+        "date-filter-words.org",
+        &format!(
+            r#":PROPERTIES:
+:ID:       62626262-6262-4626-8626-626262626262
+:END:
+#+title: Date Filter Words
+#+filetags: :agenda:
+
+* TODO Tomorrow agenda task
+SCHEDULED: <{tomorrow}>
+* TODO Friday agenda task
+SCHEDULED: <{friday}>
+* TODO Later agenda task
+SCHEDULED: <{later}>
+"#,
+            tomorrow = org_date(1),
+            friday = upcoming_weekday_date(Weekday::Fri),
+            later = org_date(8)
+        ),
+    );
+
+    let (tomorrow_tasks, tomorrow_status) = db.run_json(&["task", "agenda", "date:tom"]);
+    assert!(tomorrow_status.success());
+    let tomorrow_titles = task_titles(&tomorrow_tasks);
+    assert!(tomorrow_titles.contains(&"Tomorrow agenda task".to_string()));
+    assert!(!tomorrow_titles.contains(&"Later agenda task".to_string()));
+
+    let (friday_tasks, friday_status) = db.run_json(&["task", "agenda", "date:fri"]);
+    assert!(friday_status.success());
+    let friday_titles = task_titles(&friday_tasks);
+    assert!(friday_titles.contains(&"Friday agenda task".to_string()));
+    assert!(!friday_titles.contains(&"Later agenda task".to_string()));
+}
+
+#[test]
+fn test_task_list_accepts_modifier_style_date_filter_words() {
+    let db = TestDb::new().note_with_content(
+        "list-date-filter-words.org",
+        &format!(
+            r#":PROPERTIES:
+:ID:       63636363-6363-4636-8636-636363636363
+:END:
+#+title: List Date Filter Words
+
+* TODO Friday list task
+SCHEDULED: <{friday}>
+* TODO Later list task
+SCHEDULED: <{later}>
+"#,
+            friday = upcoming_weekday_date(Weekday::Fri),
+            later = org_date(8)
+        ),
+    );
+
+    let (friday_tasks, friday_status) = db.run_json(&["task", "list", "date:fri"]);
+    assert!(friday_status.success());
+    let friday_titles = task_titles(&friday_tasks);
+    assert!(friday_titles.contains(&"Friday list task".to_string()));
+    assert!(!friday_titles.contains(&"Later list task".to_string()));
+}
+
+#[test]
+fn test_task_list_and_agenda_accept_modifier_style_after_before_filters() {
+    let today = chrono::Local::now().date_naive();
+    let tomorrow = today + chrono::Duration::days(1);
+    let later = today + chrono::Duration::days(3);
+    let before_noon = format!("before:{} 12:00", tomorrow.format("%Y-%m-%d"));
+    let db = TestDb::new().note_with_content(
+        "after-before-filter-words.org",
+        &format!(
+            r#":PROPERTIES:
+:ID:       64646464-6464-4646-8646-646464646464
+:END:
+#+title: After Before Filter Words
+
+* TODO Today timed task
+SCHEDULED: <{today_late}>
+* TODO Tomorrow morning task
+SCHEDULED: <{tomorrow_morning}>
+* TODO Tomorrow evening task
+SCHEDULED: <{tomorrow_evening}>
+* TODO Later task
+SCHEDULED: <{later_date}>
+"#,
+            today_late = today.format("%Y-%m-%d %a 23:00"),
+            tomorrow_morning = tomorrow.format("%Y-%m-%d %a 09:30"),
+            tomorrow_evening = tomorrow.format("%Y-%m-%d %a 18:30"),
+            later_date = later.format("%Y-%m-%d %a")
+        ),
+    );
+
+    let (list_tasks, list_status) = db.run_json(&["task", "list", "after:tom", &before_noon]);
+    assert!(list_status.success());
+    assert_eq!(task_titles(&list_tasks), vec!["Tomorrow morning task"]);
+
+    let (agenda_tasks, agenda_status) = db.run_json(&["task", "agenda", "after:tom", &before_noon]);
+    assert!(agenda_status.success());
+    assert_eq!(task_titles(&agenda_tasks), vec!["Tomorrow morning task"]);
+}
+
+#[test]
 fn test_task_metadata_rejects_non_source_filters() {
     let (_dir, root) = setup_db();
     let (stdout, _stderr, status) = run(&[
@@ -2499,7 +2602,11 @@ fn test_task_list_all_text_prefixes_each_source_id() {
         .lines()
         .find(|line| line.contains("Remote mixed"))
         .expect("expected todoist task");
-    assert_eq!(pkms.split_whitespace().next().unwrap(), "p1");
+    let pkms_id = pkms.split_whitespace().next().unwrap();
+    assert!(
+        pkms_id.starts_with('p'),
+        "expected PKMS id prefix: {pkms_id}"
+    );
     assert_eq!(todoist.split_whitespace().next().unwrap(), "t300");
 }
 

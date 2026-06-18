@@ -2,7 +2,9 @@ use anyhow::{Result, bail};
 use chrono::{Duration, NaiveDate, NaiveDateTime};
 use serde::Serialize;
 
+use crate::tasks::clock::TaskClock;
 use crate::tasks::model::TaskItem;
+use crate::tasks::modifiers::parse_task_date_arg_on;
 use crate::tasks::scope::ResolvedScope;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -48,6 +50,10 @@ pub fn parse_source_selection(filters: &[String]) -> Result<SourceSelection> {
 }
 
 pub fn parse_task_filters(filters: &[String]) -> Result<TaskFilters> {
+    parse_task_filters_on(filters, TaskClock::now().today)
+}
+
+pub fn parse_task_filters_on(filters: &[String], today: NaiveDate) -> Result<TaskFilters> {
     let mut selected = Vec::new();
     let mut todoist_filter = None;
     let mut criteria = TaskFilterCriteria::default();
@@ -88,9 +94,9 @@ pub fn parse_task_filters(filters: &[String]) -> Result<TaskFilters> {
                 "tags" | "tag" => criteria.tags = Some(value),
                 "type" | "kind" => criteria.kind = Some(value.to_ascii_uppercase()),
                 "prio" | "priority" => criteria.prio = Some(parse_priority_filter(&value)),
-                "date" => criteria.date = Some(parse_date_filter(&value)?),
-                "after" => criteria.after = Some(parse_datetime_filter(&value)?),
-                "before" => criteria.before = Some(parse_datetime_filter(&value)?),
+                "date" => criteria.date = Some(parse_date_filter(&value, today)?),
+                "after" => criteria.after = Some(parse_datetime_filter("after", &value, today)?),
+                "before" => criteria.before = Some(parse_datetime_filter("before", &value, today)?),
                 "scope" => criteria.scope.push(value),
                 "project" => criteria.project = Some(value),
                 _ => bail!("Task filter '{filter}' is not implemented yet"),
@@ -393,7 +399,7 @@ fn parse_priority_filter(value: &str) -> String {
     }
 }
 
-fn parse_date_filter(value: &str) -> Result<TaskDateFilter> {
+fn parse_date_filter(value: &str, today: NaiveDate) -> Result<TaskDateFilter> {
     let values: Vec<_> = value
         .split(',')
         .map(str::trim)
@@ -402,29 +408,39 @@ fn parse_date_filter(value: &str) -> Result<TaskDateFilter> {
     if values.len() > 1 {
         return values
             .into_iter()
-            .map(parse_single_date_filter)
+            .map(|value| parse_single_date_filter(value, today))
             .collect::<Result<Vec<_>>>()
             .map(TaskDateFilter::Any);
     }
-    parse_single_date_filter(value.trim())
+    parse_single_date_filter(value.trim(), today)
 }
 
-fn parse_single_date_filter(value: &str) -> Result<TaskDateFilter> {
-    match value {
+fn parse_single_date_filter(value: &str, today: NaiveDate) -> Result<TaskDateFilter> {
+    match value.to_ascii_lowercase().as_str() {
         "today" => Ok(TaskDateFilter::Today),
         "week" => Ok(TaskDateFilter::Week),
         "overdue" => Ok(TaskDateFilter::Overdue),
         "upcoming" => Ok(TaskDateFilter::Upcoming),
-        _ => Ok(TaskDateFilter::Exact(parse_date(value)?)),
+        _ => Ok(TaskDateFilter::Exact(parse_modifier_style_filter_date(
+            value, today,
+        )?)),
     }
 }
 
-fn parse_datetime_filter(value: &str) -> Result<NaiveDateTime> {
-    NaiveDateTime::parse_from_str(value, "%Y-%m-%d %H:%M")
-        .or_else(|_| parse_date(value).map(|date| date.and_hms_opt(0, 0, 0).unwrap()))
-        .map_err(|_| {
-            anyhow::anyhow!("Invalid date/time '{value}'. Use YYYY-MM-DD or YYYY-MM-DD HH:MM.")
-        })
+fn parse_modifier_style_filter_date(value: &str, today: NaiveDate) -> Result<NaiveDate> {
+    let parsed = parse_task_date_arg_on("task filter", value, today)?;
+    let date = parsed
+        .split_whitespace()
+        .next()
+        .ok_or_else(|| anyhow::anyhow!("Invalid task filter date '{value}'."))?;
+    parse_date(date)
+}
+
+fn parse_datetime_filter(name: &str, value: &str, today: NaiveDate) -> Result<NaiveDateTime> {
+    let parsed = parse_task_date_arg_on(name, value, today)?;
+    NaiveDateTime::parse_from_str(&parsed, "%Y-%m-%d %H:%M")
+        .or_else(|_| parse_date(&parsed).map(|date| date.and_hms_opt(0, 0, 0).unwrap()))
+        .map_err(|_| anyhow::anyhow!("Invalid date/time '{value}'."))
 }
 
 fn parse_date(value: &str) -> Result<NaiveDate> {
@@ -552,6 +568,88 @@ mod tests {
                 TaskDateFilter::Exact(NaiveDate::from_ymd_opt(2026, 5, 10).unwrap()),
                 TaskDateFilter::Upcoming,
             ]))
+        );
+    }
+
+    #[test]
+    fn parses_modifier_style_date_filter_words() {
+        let today = NaiveDate::from_ymd_opt(2026, 5, 27).unwrap();
+        let filters = parse_task_filters_on(&["date:tom,fri".to_string()], today).unwrap();
+        assert_eq!(
+            filters.criteria.date,
+            Some(TaskDateFilter::Any(vec![
+                TaskDateFilter::Exact(NaiveDate::from_ymd_opt(2026, 5, 28).unwrap()),
+                TaskDateFilter::Exact(NaiveDate::from_ymd_opt(2026, 5, 29).unwrap()),
+            ]))
+        );
+    }
+
+    #[test]
+    fn parses_modifier_style_date_filter_datetime() {
+        let today = NaiveDate::from_ymd_opt(2026, 5, 27).unwrap();
+        let filters = parse_task_filters_on(&["date:2026-05-29 09:30".to_string()], today).unwrap();
+        assert_eq!(
+            filters.criteria.date,
+            Some(TaskDateFilter::Exact(
+                NaiveDate::from_ymd_opt(2026, 5, 29).unwrap()
+            ))
+        );
+    }
+
+    #[test]
+    fn parses_modifier_style_after_before_filter_words() {
+        let today = NaiveDate::from_ymd_opt(2026, 5, 27).unwrap();
+        let filters =
+            parse_task_filters_on(&["after:tom".to_string(), "before:fri".to_string()], today)
+                .unwrap();
+        assert_eq!(
+            filters.criteria.after,
+            Some(
+                NaiveDate::from_ymd_opt(2026, 5, 28)
+                    .unwrap()
+                    .and_hms_opt(0, 0, 0)
+                    .unwrap()
+            )
+        );
+        assert_eq!(
+            filters.criteria.before,
+            Some(
+                NaiveDate::from_ymd_opt(2026, 5, 29)
+                    .unwrap()
+                    .and_hms_opt(0, 0, 0)
+                    .unwrap()
+            )
+        );
+    }
+
+    #[test]
+    fn parses_modifier_style_after_before_filter_datetimes() {
+        let today = NaiveDate::from_ymd_opt(2026, 5, 27).unwrap();
+        let filters = parse_task_filters_on(
+            &[
+                "after:2026-05-29 09:30".to_string(),
+                "before:2026-05-30 18:45".to_string(),
+            ],
+            today,
+        )
+        .unwrap();
+        assert_eq!(
+            filters.criteria.after,
+            Some(
+                NaiveDate::from_ymd_opt(2026, 5, 29)
+                    .unwrap()
+                    .and_hms_opt(9, 30, 0)
+                    .unwrap()
+            )
+        );
+        assert_eq!(
+            filters.criteria.before,
+            Some(
+                NaiveDate::from_ymd_opt(2026, 5, 30)
+                    .unwrap()
+                    .and_hms_opt(18, 45, 0)
+                    .unwrap()
+            )
         );
     }
 

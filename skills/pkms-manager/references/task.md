@@ -60,14 +60,14 @@ only source filters:
 | Type exclusion | `type:!SCHED` | Excludes tasks with a scheduled timestamp. |
 | Priority | `prio:A`, `priority:A` | Matches priority `A`, `B`, or `C`; matching is case-insensitive. |
 | No priority | `prio:none`, `priority:none` | Matches tasks without a priority. |
-| Exact agenda date | `date:YYYY-MM-DD` | Matches scheduled or deadline dates on that day. |
+| Exact date | `date:YYYY-MM-DD`, `date:tom`, `date:fri` | Matches scheduled or deadline dates on that day. Accepts the same date words as `sch:`/`dl:` modifiers. |
 | Today | `date:today` | Matches scheduled or deadline dates today. |
 | Week | `date:week` | Matches scheduled or deadline dates through the next 7 days. |
 | Overdue | `date:overdue`, `overdue` | Matches overdue tasks. |
 | Upcoming | `date:upcoming`, `upcoming` | Matches non-overdue tasks after today. |
-| Multiple dates | `date:today,overdue,YYYY-MM-DD` | Matches any listed date filter. |
-| After | `after:YYYY-MM-DD`, `after:YYYY-MM-DD HH:MM` | Matches tasks on or after the date/time. |
-| Before | `before:YYYY-MM-DD`, `before:YYYY-MM-DD HH:MM` | Matches tasks on or before the date/time. |
+| Multiple dates | `date:today,overdue,YYYY-MM-DD,fri` | Matches any listed date filter. |
+| After | `after:YYYY-MM-DD`, `after:YYYY-MM-DD HH:MM`, `after:tom`, `after:fri` | Matches tasks on or after the date/time. Date words use the same parser as `sch:`/`dl:` modifiers; date-only values resolve to `00:00`. |
+| Before | `before:YYYY-MM-DD`, `before:YYYY-MM-DD HH:MM`, `before:tom`, `before:fri` | Matches tasks on or before the date/time. Date words use the same parser as `sch:`/`dl:` modifiers; date-only values resolve to `00:00`. |
 | Scope | `scope:<target>` | Restricts PKMS tasks to a note title, UUID, or path. |
 | Project | `project:<name-or-id>` | Matches PKMS `PROJECT` properties and Todoist project names or ids. |
 | Project exclusion | `project:!<name-or-id>` | Excludes matching projects. |

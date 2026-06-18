@@ -117,7 +117,7 @@ fn run_shortcut(
 ) -> Result<()> {
     let clock = TaskClock::now();
     let mut items = execution::collect_shortcut_items_on(config, &args.filters, kind, clock)?;
-    let source = plan::shortcut_display_source(&args.filters)?;
+    let source = plan::shortcut_display_source(&args.filters, clock.today)?;
     execution::sort_task_items(&mut items, "priority")?;
     let columns = plan::resolve_task_table_columns(
         config,
