@@ -10,9 +10,19 @@ pub enum LinkCheckKind {
     Attachment,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum LinkCheckBackend {
     Local,
+    Ssh,
+}
+
+impl LinkCheckBackend {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            LinkCheckBackend::Local => "local",
+            LinkCheckBackend::Ssh => "ssh",
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -59,6 +69,7 @@ pub struct LinkCheckJob {
 pub enum LinkCheckOutcome {
     Ok,
     Broken(LinkCheckBrokenTarget),
+    Error(LinkCheckErrorTarget),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -68,6 +79,24 @@ pub struct LinkCheckBrokenTarget {
     pub source_title: String,
     pub source_path: PathBuf,
     pub target: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LinkCheckErrorTarget {
+    pub kind: LinkCheckKind,
+    pub backend: LinkCheckBackend,
+    pub source_uuid: String,
+    pub source_title: String,
+    pub source_path: PathBuf,
+    pub target: String,
+    pub error_kind: String,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct LinkCheckResults {
+    pub broken: Vec<LinkCheckBrokenTarget>,
+    pub errors: Vec<LinkCheckErrorTarget>,
 }
 
 impl LinkCheckJob {
@@ -110,6 +139,10 @@ pub fn sort_link_check_jobs(jobs: &mut [LinkCheckJob]) {
 
 pub fn sort_broken_targets(targets: &mut [LinkCheckBrokenTarget]) {
     targets.sort_by(compare_broken_targets);
+}
+
+pub fn sort_link_check_errors(errors: &mut [LinkCheckErrorTarget]) {
+    errors.sort_by(compare_error_targets);
 }
 
 pub fn is_ssh_file_target(target: &str) -> bool {
@@ -207,6 +240,18 @@ pub fn check_local_link_job(job: LinkCheckJob, db_root: &Path) -> LinkCheckOutco
                 attachment_target_exists(db_root, &job.source_uuid, &job.target)
             }
         },
+        LinkCheckBackend::Ssh => {
+            return LinkCheckOutcome::Error(LinkCheckErrorTarget {
+                kind: job.kind,
+                backend: job.backend,
+                source_uuid: job.source_uuid,
+                source_title: job.source_title,
+                source_path: job.source_path,
+                target: job.target,
+                error_kind: "unsupported_backend".to_string(),
+                message: "SSH link jobs cannot be checked by the local checker".to_string(),
+            });
+        }
     };
 
     if exists {
@@ -222,19 +267,22 @@ pub fn check_local_link_job(job: LinkCheckJob, db_root: &Path) -> LinkCheckOutco
     }
 }
 
-pub fn run_local_link_checks(
-    jobs: Vec<LinkCheckJob>,
-    db_root: &Path,
-) -> Vec<LinkCheckBrokenTarget> {
-    let mut broken: Vec<LinkCheckBrokenTarget> = jobs
+pub fn run_local_link_checks(jobs: Vec<LinkCheckJob>, db_root: &Path) -> LinkCheckResults {
+    let outcomes: Vec<LinkCheckOutcome> = jobs
         .into_par_iter()
-        .filter_map(|job| match check_local_link_job(job, db_root) {
-            LinkCheckOutcome::Ok => None,
-            LinkCheckOutcome::Broken(target) => Some(target),
-        })
+        .map(|job| check_local_link_job(job, db_root))
         .collect();
-    sort_broken_targets(&mut broken);
-    broken
+    let mut results = LinkCheckResults::default();
+    for outcome in outcomes {
+        match outcome {
+            LinkCheckOutcome::Ok => {}
+            LinkCheckOutcome::Broken(target) => results.broken.push(target),
+            LinkCheckOutcome::Error(target) => results.errors.push(target),
+        }
+    }
+    sort_broken_targets(&mut results.broken);
+    sort_link_check_errors(&mut results.errors);
+    results
 }
 
 fn compare_jobs(a: &LinkCheckJob, b: &LinkCheckJob) -> Ordering {
@@ -243,6 +291,10 @@ fn compare_jobs(a: &LinkCheckJob, b: &LinkCheckJob) -> Ordering {
 
 fn compare_broken_targets(a: &LinkCheckBrokenTarget, b: &LinkCheckBrokenTarget) -> Ordering {
     broken_target_sort_key(a).cmp(&broken_target_sort_key(b))
+}
+
+fn compare_error_targets(a: &LinkCheckErrorTarget, b: &LinkCheckErrorTarget) -> Ordering {
+    error_target_sort_key(a).cmp(&error_target_sort_key(b))
 }
 
 fn job_sort_key(job: &LinkCheckJob) -> (LinkCheckKind, &str, &str, &Path, &str) {
@@ -264,6 +316,28 @@ fn broken_target_sort_key(
         target.source_title.as_str(),
         target.source_path.as_path(),
         target.target.as_str(),
+    )
+}
+
+fn error_target_sort_key(
+    target: &LinkCheckErrorTarget,
+) -> (
+    LinkCheckKind,
+    LinkCheckBackend,
+    &str,
+    &str,
+    &Path,
+    &str,
+    &str,
+) {
+    (
+        target.kind,
+        target.backend,
+        target.source_uuid.as_str(),
+        target.source_title.as_str(),
+        target.source_path.as_path(),
+        target.target.as_str(),
+        target.error_kind.as_str(),
     )
 }
 

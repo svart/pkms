@@ -2,8 +2,8 @@ use crate::cli::CheckArgs;
 use crate::config::ResolvedConfig;
 use crate::graph::{DuplicateInfo, Graph, GraphStats, OverlinkEntry, SelfLinkEntry};
 use crate::link_check::{
-    LinkCheckBrokenTarget, LinkCheckJob, LinkCheckKind, is_ssh_file_target, run_local_link_checks,
-    sort_link_check_jobs,
+    LinkCheckErrorTarget, LinkCheckJob, LinkCheckKind, LinkCheckResults, is_ssh_file_target,
+    run_local_link_checks, sort_link_check_jobs,
 };
 use crate::output::OutputContext;
 use crate::parser::{Link, validate_filetags_format};
@@ -24,6 +24,8 @@ pub struct CheckOutput {
     pub broken_links: Option<Vec<BrokenLinkEntry>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub broken_file_links: Option<Vec<BrokenFileLinkEntry>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub file_link_errors: Option<Vec<FileLinkErrorEntry>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub broken_attachment_links: Option<Vec<BrokenAttachmentLinkEntry>>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -61,6 +63,16 @@ pub struct BrokenFileLinkEntry {
     pub source_uuid: String,
     pub source_title: String,
     pub target_path: String,
+}
+
+#[derive(Clone, Serialize)]
+pub struct FileLinkErrorEntry {
+    pub source_uuid: String,
+    pub source_title: String,
+    pub target_path: String,
+    pub backend: String,
+    pub error_kind: String,
+    pub message: String,
 }
 
 #[derive(Clone, Serialize)]
@@ -191,8 +203,8 @@ fn collect_check_data<'a>(
 
     let link_jobs =
         collect_local_link_check_jobs(graph, display_opts.show_file, display_opts.show_attach);
-    let (broken_file, broken_attachment) =
-        split_broken_link_targets(run_local_link_checks(link_jobs, db_root));
+    let (broken_file, file_link_errors, broken_attachment) =
+        split_link_check_results(run_local_link_checks(link_jobs, db_root));
 
     let mut filetags_issues = Vec::new();
     if display_opts.show_filetags {
@@ -257,6 +269,7 @@ fn collect_check_data<'a>(
         graph,
         db_root,
         broken_file,
+        file_link_errors,
         broken_attachment,
         filetags_issues,
         self_link_entries,
@@ -298,13 +311,18 @@ fn collect_local_link_check_jobs(
     jobs
 }
 
-fn split_broken_link_targets(
-    broken_targets: Vec<LinkCheckBrokenTarget>,
-) -> (Vec<BrokenFileLinkEntry>, Vec<BrokenAttachmentLinkEntry>) {
+fn split_link_check_results(
+    results: LinkCheckResults,
+) -> (
+    Vec<BrokenFileLinkEntry>,
+    Vec<FileLinkErrorEntry>,
+    Vec<BrokenAttachmentLinkEntry>,
+) {
     let mut broken_file = Vec::new();
+    let mut file_link_errors = Vec::new();
     let mut broken_attachment = Vec::new();
 
-    for target in broken_targets {
+    for target in results.broken {
         match target.kind {
             LinkCheckKind::File => broken_file.push(BrokenFileLinkEntry {
                 source_uuid: target.source_uuid,
@@ -319,7 +337,24 @@ fn split_broken_link_targets(
         }
     }
 
-    (broken_file, broken_attachment)
+    for error in results.errors {
+        if error.kind == LinkCheckKind::File {
+            file_link_errors.push(file_link_error_entry(error));
+        }
+    }
+
+    (broken_file, file_link_errors, broken_attachment)
+}
+
+fn file_link_error_entry(error: LinkCheckErrorTarget) -> FileLinkErrorEntry {
+    FileLinkErrorEntry {
+        source_uuid: error.source_uuid,
+        source_title: error.source_title,
+        target_path: error.target,
+        backend: error.backend.as_str().to_string(),
+        error_kind: error.error_kind,
+        message: error.message,
+    }
 }
 
 struct CheckDisplayOptions {
@@ -336,6 +371,7 @@ struct CheckData<'a> {
     graph: &'a Graph,
     db_root: &'a Path,
     broken_file: Vec<BrokenFileLinkEntry>,
+    file_link_errors: Vec<FileLinkErrorEntry>,
     broken_attachment: Vec<BrokenAttachmentLinkEntry>,
     filetags_issues: Vec<FiletagsIssue>,
     self_link_entries: Vec<SelfLinkEntry>,
@@ -350,6 +386,7 @@ impl CheckData<'_> {
             && stats.parse_error_count == 0
             && stats.duplicate_uuid_count == 0
             && self.broken_file.is_empty()
+            && self.file_link_errors.is_empty()
             && self.broken_attachment.is_empty()
             && self.filetags_issues.is_empty()
             && self.self_link_entries.is_empty()
@@ -412,6 +449,11 @@ fn build_check_output(data: &CheckData, opts: &CheckDisplayOptions) -> CheckOutp
         } else {
             None
         },
+        file_link_errors: if opts.show_file {
+            Some(data.file_link_errors.to_vec())
+        } else {
+            None
+        },
         broken_attachment_links: if opts.show_attach {
             Some(data.broken_attachment.to_vec())
         } else {
@@ -443,6 +485,7 @@ pub fn render_text(output: &CheckOutput) -> String {
 
     let has_any_output = output.stats.is_some()
         || output.broken_file_links.is_some()
+        || output.file_link_errors.is_some()
         || output.broken_attachment_links.is_some()
         || output.filetags_issues.is_some()
         || output.duplicates.is_some()
@@ -477,6 +520,9 @@ pub fn render_text(output: &CheckOutput) -> String {
 
     if let Some(broken_file) = &output.broken_file_links {
         let _ = writeln!(text, "  Broken files:   {}", broken_file.len());
+    }
+    if let Some(file_link_errors) = &output.file_link_errors {
+        let _ = writeln!(text, "  File errors:    {}", file_link_errors.len());
     }
     if let Some(broken_attachment) = &output.broken_attachment_links {
         let _ = writeln!(text, "  Broken attach:  {}", broken_attachment.len());
@@ -552,6 +598,24 @@ pub fn render_text(output: &CheckOutput) -> String {
         let _ = writeln!(text, "Broken file links ({}):", broken_file.len());
         for entry in broken_file {
             let _ = writeln!(text, "  {} -> {}", entry.source_title, entry.target_path);
+        }
+    }
+
+    if let Some(file_link_errors) = &output.file_link_errors
+        && !file_link_errors.is_empty()
+    {
+        text.push('\n');
+        let _ = writeln!(text, "File link errors ({}):", file_link_errors.len());
+        for entry in file_link_errors {
+            let _ = writeln!(
+                text,
+                "  {} -> {} [{}:{}] {}",
+                entry.source_title,
+                entry.target_path,
+                entry.backend,
+                entry.error_kind,
+                entry.message
+            );
         }
     }
 
@@ -678,6 +742,7 @@ mod tests {
             duplicates: None,
             broken_links: None,
             broken_file_links: None,
+            file_link_errors: None,
             broken_attachment_links: None,
             failed_files: None,
             filetags_issues: None,
@@ -714,6 +779,30 @@ mod tests {
         assert!(text.contains("  Broken files:   1"));
         assert!(text.contains("Broken file links (1):"));
         assert!(text.contains("  Source Note -> missing.org"));
+        assert!(text.ends_with("Status: issues found\n"));
+    }
+
+    #[test]
+    fn renders_file_link_errors_from_typed_output() {
+        let mut output = healthy_output();
+        output.stats = None;
+        output.file_link_errors = Some(vec![FileLinkErrorEntry {
+            source_uuid: "source".to_string(),
+            source_title: "Source Note".to_string(),
+            target_path: "/ssh:example.org:/tmp/file.txt".to_string(),
+            backend: "ssh".to_string(),
+            error_kind: "host_key".to_string(),
+            message: "known host mismatch".to_string(),
+        }]);
+        output.healthy = false;
+
+        let text = render_text(&output);
+
+        assert!(text.contains("  File errors:    1"));
+        assert!(text.contains("File link errors (1):"));
+        assert!(text.contains(
+            "  Source Note -> /ssh:example.org:/tmp/file.txt [ssh:host_key] known host mismatch"
+        ));
         assert!(text.ends_with("Status: issues found\n"));
     }
 
