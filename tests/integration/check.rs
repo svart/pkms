@@ -159,6 +159,35 @@ fn test_check_remote_file_links_requires_ssh_feature() {
 }
 
 #[test]
+fn test_check_file_links_skips_ssh_targets_without_remote_flag() {
+    let (_dir, root) = setup_clean_db();
+    db_write(
+        &root,
+        "remote.org",
+        r#":PROPERTIES:
+:ID:       aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa
+:END:
+#+title: Remote
+
+[[file:/ssh:example.com:/tmp/missing.txt::needle]]
+"#,
+    );
+
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "check",
+        "--file-links",
+    ]);
+
+    assert!(status.success(), "check should skip remote targets: {v}");
+    assert_eq!(v["healthy"], true);
+    assert_eq!(v["broken_file_links"].as_array().unwrap().len(), 0);
+}
+
+#[test]
 fn test_check_file_links_json() {
     let (_dir, root) = setup_db();
     let (v, status) = run_json(&[

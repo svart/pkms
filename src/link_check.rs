@@ -15,6 +15,36 @@ pub enum LinkCheckBackend {
     Local,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct SshConnectionKey {
+    pub user: String,
+    pub host: String,
+    pub port: u16,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SshFileTarget {
+    pub connection: SshConnectionKey,
+    pub path: String,
+    pub line_spec: Option<String>,
+    pub raw_target: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SshFileTargetParseErrorKind {
+    EmptyUser,
+    EmptyHost,
+    InvalidPort,
+    MissingPath,
+    UnsupportedSyntax,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SshFileTargetParseError {
+    pub kind: SshFileTargetParseErrorKind,
+    pub message: String,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LinkCheckJob {
     pub kind: LinkCheckKind,
@@ -82,7 +112,88 @@ pub fn sort_broken_targets(targets: &mut [LinkCheckBrokenTarget]) {
     targets.sort_by(compare_broken_targets);
 }
 
+pub fn is_ssh_file_target(target: &str) -> bool {
+    normalized_file_target(target).starts_with("/ssh:")
+}
+
+pub fn split_file_link_line_spec(target: &str) -> (&str, Option<&str>) {
+    target
+        .split_once("::")
+        .map_or((target, None), |(path, line_spec)| (path, Some(line_spec)))
+}
+
+pub fn parse_ssh_file_target(
+    target: &str,
+    default_user: &str,
+) -> Result<Option<SshFileTarget>, SshFileTargetParseError> {
+    let normalized = normalized_file_target(target);
+    if !normalized.starts_with("/ssh:") {
+        return Ok(None);
+    }
+
+    let (without_line_spec, line_spec) = split_file_link_line_spec(normalized);
+    let rest = without_line_spec.trim_start_matches("/ssh:");
+    if rest.contains('|') {
+        return Err(ssh_parse_error(
+            SshFileTargetParseErrorKind::UnsupportedSyntax,
+            "SSH file links do not support multi-hop TRAMP syntax",
+        ));
+    }
+
+    let (login, path) = rest.split_once(':').ok_or_else(|| {
+        ssh_parse_error(
+            SshFileTargetParseErrorKind::MissingPath,
+            "SSH file link is missing a remote path",
+        )
+    })?;
+    if path.is_empty() {
+        return Err(ssh_parse_error(
+            SshFileTargetParseErrorKind::MissingPath,
+            "SSH file link is missing a remote path",
+        ));
+    }
+    if !path.starts_with('/') {
+        return Err(ssh_parse_error(
+            SshFileTargetParseErrorKind::MissingPath,
+            "SSH file links must use absolute remote paths",
+        ));
+    }
+
+    let (user, host_and_port) = if let Some((user, host_and_port)) = login.rsplit_once('@') {
+        if user.is_empty() {
+            return Err(ssh_parse_error(
+                SshFileTargetParseErrorKind::EmptyUser,
+                "SSH file link has an empty user",
+            ));
+        }
+        (user, host_and_port)
+    } else {
+        (default_user, login)
+    };
+    if user.is_empty() {
+        return Err(ssh_parse_error(
+            SshFileTargetParseErrorKind::EmptyUser,
+            "SSH file link needs a user or a non-empty default user",
+        ));
+    }
+
+    let (host, port) = parse_host_and_port(host_and_port)?;
+    Ok(Some(SshFileTarget {
+        connection: SshConnectionKey {
+            user: user.to_string(),
+            host,
+            port,
+        },
+        path: path.to_string(),
+        line_spec: line_spec.map(str::to_string),
+        raw_target: target.to_string(),
+    }))
+}
+
 pub fn local_file_link_target_exists(target: &str, source_path: &Path, db_root: &Path) -> bool {
+    if is_ssh_file_target(target) {
+        return true;
+    }
     file_link_target_exists(target, source_path, db_root)
 }
 
@@ -156,6 +267,48 @@ fn broken_target_sort_key(
     )
 }
 
+fn normalized_file_target(target: &str) -> &str {
+    target.strip_prefix("org:").unwrap_or(target)
+}
+
+fn parse_host_and_port(host_and_port: &str) -> Result<(String, u16), SshFileTargetParseError> {
+    let (host, port) = if let Some((host, raw_port)) = host_and_port.rsplit_once('#') {
+        if raw_port.is_empty() {
+            return Err(ssh_parse_error(
+                SshFileTargetParseErrorKind::InvalidPort,
+                "SSH file link has an empty port",
+            ));
+        }
+        let port = raw_port.parse::<u16>().map_err(|_| {
+            ssh_parse_error(
+                SshFileTargetParseErrorKind::InvalidPort,
+                "SSH file link has an invalid port",
+            )
+        })?;
+        (host, port)
+    } else {
+        (host_and_port, 22)
+    };
+
+    if host.is_empty() {
+        return Err(ssh_parse_error(
+            SshFileTargetParseErrorKind::EmptyHost,
+            "SSH file link has an empty host",
+        ));
+    }
+    Ok((host.to_string(), port))
+}
+
+fn ssh_parse_error(
+    kind: SshFileTargetParseErrorKind,
+    message: impl Into<String>,
+) -> SshFileTargetParseError {
+    SshFileTargetParseError {
+        kind,
+        message: message.into(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -221,5 +374,63 @@ mod tests {
                 target: "missing.png".to_string(),
             })
         );
+    }
+
+    #[test]
+    fn parses_tramp_ssh_file_targets() {
+        let target = parse_ssh_file_target(
+            "/ssh:alice@example.org#2222:/var/log/app.log::needle",
+            "local",
+        )
+        .unwrap()
+        .unwrap();
+
+        assert_eq!(
+            target,
+            SshFileTarget {
+                connection: SshConnectionKey {
+                    user: "alice".to_string(),
+                    host: "example.org".to_string(),
+                    port: 2222,
+                },
+                path: "/var/log/app.log".to_string(),
+                line_spec: Some("needle".to_string()),
+                raw_target: "/ssh:alice@example.org#2222:/var/log/app.log::needle".to_string(),
+            }
+        );
+    }
+
+    #[test]
+    fn parses_ssh_file_targets_with_default_user_and_port() {
+        let target = parse_ssh_file_target("org:/ssh:example.org:/tmp/file.txt", "local")
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(target.connection.user, "local");
+        assert_eq!(target.connection.host, "example.org");
+        assert_eq!(target.connection.port, 22);
+        assert_eq!(target.path, "/tmp/file.txt");
+        assert_eq!(target.line_spec, None);
+    }
+
+    #[test]
+    fn rejects_unsupported_ssh_file_target_syntax() {
+        let error =
+            parse_ssh_file_target("/ssh:jump|example.org:/tmp/file.txt", "local").unwrap_err();
+
+        assert_eq!(error.kind, SshFileTargetParseErrorKind::UnsupportedSyntax);
+    }
+
+    #[test]
+    fn local_file_checks_skip_ssh_file_targets() {
+        let dir = tempfile::tempdir().unwrap();
+        let db_root = dir.path();
+        let source_path = db_root.join("source.org");
+
+        assert!(local_file_link_target_exists(
+            "/ssh:example.org:/missing/file.txt::needle",
+            &source_path,
+            db_root
+        ));
     }
 }

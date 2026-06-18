@@ -2,7 +2,8 @@ use crate::cli::CheckArgs;
 use crate::config::ResolvedConfig;
 use crate::graph::{DuplicateInfo, Graph, GraphStats, OverlinkEntry, SelfLinkEntry};
 use crate::link_check::{
-    LinkCheckBrokenTarget, LinkCheckJob, LinkCheckKind, run_local_link_checks, sort_link_check_jobs,
+    LinkCheckBrokenTarget, LinkCheckJob, LinkCheckKind, is_ssh_file_target, run_local_link_checks,
+    sort_link_check_jobs,
 };
 use crate::output::OutputContext;
 use crate::parser::{Link, validate_filetags_format};
@@ -273,12 +274,14 @@ fn collect_local_link_check_jobs(
     for node in graph.nodes.values() {
         for link in &node.outgoing {
             match link {
-                Link::File(target) if include_files => jobs.push(LinkCheckJob::file(
-                    node.uuid.clone(),
-                    node.title.clone(),
-                    node.path.clone(),
-                    target.clone(),
-                )),
+                Link::File(target) if include_files && !is_ssh_file_target(target) => {
+                    jobs.push(LinkCheckJob::file(
+                        node.uuid.clone(),
+                        node.title.clone(),
+                        node.path.clone(),
+                        target.clone(),
+                    ));
+                }
                 Link::Attachment(target) if include_attachments => {
                     jobs.push(LinkCheckJob::attachment(
                         node.uuid.clone(),
