@@ -9,6 +9,7 @@ for choosing commands.
 pkms check
 pkms check --id-links
 pkms check --file-links
+pkms check --remote-file-links
 pkms check --attachment-links
 pkms check --filetags
 pkms check --self-links
@@ -16,6 +17,9 @@ pkms check --overlinks
 pkms check --cross-links <note-a> <note-b>
 pkms validate <target>
 ```
+
+`check --remote-file-links` requires an `ssh` feature build and explicitly
+checks SSH `file:` links. Without that flag, SSH file targets are skipped.
 
 ## Lookup and Search
 

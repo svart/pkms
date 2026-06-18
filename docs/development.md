@@ -99,11 +99,20 @@ cargo test --features web --test integration <test-name>
 cargo build --features web
 ```
 
+SSH file-link check changes:
+
+```bash
+cargo clippy --features ssh -- -D warnings
+cargo test --features ssh <test-name>
+cargo test --features ssh --test integration <test-name>
+cargo build --features ssh
+```
+
 When feature interactions are relevant, prefer an explicit combined-feature
 build:
 
 ```bash
-cargo build --features todoist,web
+cargo build --features todoist,web,ssh
 cargo build --all-features
 ```
 
@@ -119,14 +128,17 @@ cargo clippy --locked --all-targets --all-features -- -D warnings
 cargo build --locked
 cargo build --locked --features todoist
 cargo build --locked --features web
+cargo build --locked --features ssh
 cargo build --locked --all-features
 cargo test --locked
 cargo test --locked --features todoist
 cargo test --locked --features web
-cargo test --locked --features todoist,web
+cargo test --locked --features ssh
+cargo test --locked --features todoist,web,ssh
 cargo run --locked -- --help
 cargo run --locked --features todoist -- --help
 cargo run --locked --features web -- --help
+cargo run --locked --features ssh -- check --help
 cargo build --locked --release
 ```
 

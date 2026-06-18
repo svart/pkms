@@ -10,6 +10,7 @@ pkms check
 pkms check --stats
 pkms check --id-links
 pkms check --file-links
+pkms check --remote-file-links
 pkms check --attachment-links
 pkms check --filetags
 pkms check --self-links
@@ -23,9 +24,15 @@ flags are given, output is limited to those sections.
 `check --stats` reports orphan counts with the same policy as default
 `pkms orphans`: daily notes are excluded.
 
+`check --remote-file-links` requires a build with `--features ssh`. It checks
+TRAMP-style SSH `file:` links explicitly and reports remote auth, host-key,
+timeout, unsupported syntax, and SFTP failures in `file_link_errors`. Without
+that flag, SSH `file:` links are skipped and no network access is attempted.
+
 ## Agent Workflow
 
 - Use `--id-links` before fixing broken UUIDs.
 - Use `--self-links` after broad UUID replacement.
 - Use `--filetags` after changing note headers.
+- Use `--remote-file-links` only when remote SSH checks are intended.
 - Use JSON for automation: `pkms --output-format json check --id-links`.

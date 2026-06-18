@@ -41,6 +41,19 @@ Internal links use org-roam IDs:
 `pkms` also recognizes `file:`, URL, and `attachment:` links. Health checks can
 validate local `file:` and `attachment:` targets.
 
+SSH `file:` links may use a TRAMP-style target when `pkms` is built with the
+`ssh` feature and `check --remote-file-links` is requested:
+
+```org
+[[file:/ssh:host:/absolute/path]]
+[[file:/ssh:user@host:/absolute/path]]
+[[file:/ssh:user@host#222:/absolute/path]]
+```
+
+Remote checks are not run by default. Without `--remote-file-links`, SSH file
+targets are skipped by `check` and `validate` instead of being treated as local
+absolute paths.
+
 ## Heading Nodes
 
 Headings with `:ID:` properties become first-class graph nodes. This allows

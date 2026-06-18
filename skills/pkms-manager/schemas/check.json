@@ -9,6 +9,22 @@
     "duplicates": { "type": "object", "additionalProperties": true },
     "broken_links": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
     "broken_file_links": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
+    "file_link_errors": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+          "source_uuid": { "type": "string" },
+          "source_title": { "type": "string" },
+          "target_path": { "type": "string" },
+          "backend": { "type": "string" },
+          "error_kind": { "type": "string" },
+          "message": { "type": "string" }
+        },
+        "required": ["target_path", "backend", "error_kind", "message"]
+      }
+    },
     "broken_attachment_links": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
     "failed_files": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
     "filetags_issues": { "type": "array", "items": { "type": "object", "additionalProperties": true } },

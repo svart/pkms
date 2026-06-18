@@ -20,10 +20,16 @@ Build with the local web viewer:
 cargo install --path . --features web
 ```
 
+Build with SSH-backed remote file-link checks:
+
+```bash
+cargo install --path . --features ssh
+```
+
 Features can be combined when needed:
 
 ```bash
-cargo install --path . --features todoist,web
+cargo install --path . --features todoist,web,ssh
 ```
 
 Run directly from the checkout:
@@ -44,3 +50,9 @@ commands that need Todoist data. Configure a token with `TODOIST_API_TOKEN` or
 The `web` feature enables `serve`. Default builds do not expose that command.
 The web viewer renders org notes as static HTML and uses KaTeX for formulas and
 Syntect for source block highlighting.
+
+## SSH Feature
+
+The `ssh` feature enables explicit remote `file:` link checks for TRAMP-style
+SSH targets such as `/ssh:host:/absolute/path`. Default builds keep
+`--remote-file-links` visible but reject it with setup guidance.

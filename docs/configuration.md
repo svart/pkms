@@ -14,6 +14,14 @@ inbox = "Inbox"
 [agenda]
 open_todo_states = ["TODO", "WAITING", "IN-PROGRESS"]
 closed_todo_states = ["DONE"]
+
+[ssh]
+identity_file = "~/.ssh/id_ed25519"
+known_hosts = "~/.ssh/known_hosts"
+connect_timeout_ms = 5000
+operation_timeout_ms = 5000
+max_connections = 4
+agent = true
 ```
 
 ## Database Root Resolution
@@ -98,6 +106,33 @@ gated by the feature build and token availability.
 
 Keep config files containing `[todoist].token` private. `pkms info` does not
 print token values.
+
+## SSH File-Link Checks
+
+SSH file-link checks require a binary built with `--features ssh` and are only
+run when `pkms check --remote-file-links` is requested. All `[ssh]` fields are
+optional:
+
+```toml
+[ssh]
+identity_file = "~/.ssh/id_ed25519"
+known_hosts = "~/.ssh/known_hosts"
+connect_timeout_ms = 5000
+operation_timeout_ms = 5000
+max_connections = 4
+agent = true
+```
+
+`identity_file` is a passwordless private key path. Encrypted keys fail rather
+than prompting for a passphrase. `known_hosts` defaults to
+`~/.ssh/known_hosts`; unknown or changed host keys are errors. `agent` defaults
+to `true`, so the SSH agent is tried after a configured key fails or when no
+key is configured. Password and keyboard-interactive authentication are never
+attempted.
+
+`connect_timeout_ms` bounds connection setup. `operation_timeout_ms` bounds
+authentication and SFTP operations. `max_connections` bounds concurrent SSH
+host groups; links for the same `user@host#port` reuse one SSH/SFTP session.
 
 ## Agenda States
 

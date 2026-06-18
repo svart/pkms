@@ -36,3 +36,24 @@ selected format is `ndjson`; prefer `json` for those commands.
 
 NDJSON is one JSON object per line. Pipeline consumers read the `uuid` field by
 default unless the command documents a narrower input shape.
+
+## Check Output Notes
+
+`pkms --output-format json check --file-links` reports missing local or remote
+files in `broken_file_links`. When SSH remote file-link checking is enabled
+with `check --remote-file-links`, non-missing remote failures are reported in
+`file_link_errors` instead:
+
+```json
+{
+  "source_uuid": "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa",
+  "source_title": "Example Note",
+  "target_path": "/ssh:example.org:/srv/doc.org",
+  "backend": "ssh",
+  "error_kind": "hostkey",
+  "message": "host example.org:22 is not present in /home/user/.ssh/known_hosts"
+}
+```
+
+`file_link_errors` makes `healthy` false. Missing remote files still use
+`broken_file_links`.

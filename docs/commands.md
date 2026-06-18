@@ -17,6 +17,7 @@ pkms check
 pkms check --stats
 pkms check --id-links
 pkms check --file-links
+pkms check --remote-file-links
 pkms check --attachment-links
 pkms check --filetags
 pkms check --self-links
@@ -28,6 +29,28 @@ pkms validate <target>
 `check` scans the database and returns exit code 1 when issues are found.
 `validate` checks one note or reads targets from NDJSON stdin with
 `--from-stdin`.
+
+`check --remote-file-links` is explicit network access for SSH `file:` links
+and requires a binary built with `--features ssh`. It implies file-link output
+but does not imply attachment checks. Supported targets use TRAMP-style SSH
+syntax with absolute remote paths:
+
+```org
+[[file:/ssh:host:/absolute/path]]
+[[file:/ssh:user@host:/absolute/path]]
+[[file:/ssh:user@host#222:/absolute/path::needle]]
+```
+
+Without `--remote-file-links`, SSH `file:` targets are skipped instead of being
+treated as local absolute paths. `validate` is local-only and also skips SSH
+file targets.
+
+SSH checks use strict `known_hosts` verification and passwordless public-key
+authentication only. A configured private key is tried first, then the SSH
+agent when enabled. Password and keyboard-interactive prompts are not used.
+Missing remote files are reported in `broken_file_links`; auth, host-key,
+timeout, unsupported syntax, and other SSH/SFTP failures are reported in
+`file_link_errors`.
 
 ## Lookup and Search
 
