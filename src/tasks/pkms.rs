@@ -456,6 +456,7 @@ mod tests {
                 closed_todo_states: vec!["DONE".to_string(), "CANCELED".to_string()],
             }),
             todoist: None,
+            ssh: None,
         }
         .resolve(Some(std::path::PathBuf::from(".")))
         .unwrap()

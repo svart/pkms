@@ -13,6 +13,7 @@ pub struct Config {
     pub tasks: Option<TaskConfig>,
     pub agenda: Option<AgendaConfig>,
     pub todoist: Option<TodoistConfig>,
+    pub ssh: Option<SshConfig>,
 }
 
 #[derive(Debug, Clone)]
@@ -25,6 +26,7 @@ pub struct ResolvedConfig {
     pub tasks: Option<TaskConfig>,
     pub agenda: Option<AgendaConfig>,
     pub todoist: Option<TodoistConfig>,
+    pub ssh: Option<SshConfig>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -42,6 +44,17 @@ pub struct TodoistConfig {
     pub token: Option<String>,
     pub token_env: Option<String>,
     pub default_filter: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SshConfig {
+    pub identity_file: Option<PathBuf>,
+    pub known_hosts: Option<PathBuf>,
+    pub connect_timeout_ms: Option<u64>,
+    pub operation_timeout_ms: Option<u32>,
+    pub max_connections: Option<usize>,
+    pub agent: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -150,6 +163,7 @@ impl Config {
                 tasks: None,
                 agenda: None,
                 todoist: None,
+                ssh: None,
             })
         }
     }
@@ -176,6 +190,7 @@ impl Config {
             tasks: self.tasks,
             agenda: self.agenda,
             todoist: self.todoist,
+            ssh: self.ssh,
         };
         tracing::debug!(
             db_root = %resolved.db_root.display(),
@@ -205,6 +220,7 @@ impl ResolvedConfig {
             tasks: None,
             agenda: None,
             todoist: None,
+            ssh: None,
         }
     }
 
@@ -410,6 +426,16 @@ pub fn generate_default_config(db_root: Option<&std::path::Path>) -> String {
 # token = "..." # optional; env var below takes precedence
 # token_env = "TODOIST_API_TOKEN"
 # default_filter = "today | overdue"
+
+# SSH file-link checks are disabled unless pkms is built with --features ssh and
+# `pkms check --remote-file-links` is passed. Password prompts are not used.
+# [ssh]
+# identity_file = "~/.ssh/id_ed25519"
+# known_hosts = "~/.ssh/known_hosts"
+# connect_timeout_ms = 5000
+# operation_timeout_ms = 5000
+# max_connections = 4
+# agent = true
 "#,
     )
 }
@@ -436,6 +462,7 @@ mod tests {
             tasks: None,
             agenda: None,
             todoist: None,
+            ssh: None,
         };
         assert_eq!(
             config.resolve_new_notes_dir(),
@@ -454,6 +481,7 @@ mod tests {
             tasks: None,
             agenda: None,
             todoist: None,
+            ssh: None,
         };
         assert_eq!(config.resolve_new_notes_dir(), PathBuf::from("/abs/path"));
     }
@@ -469,6 +497,7 @@ mod tests {
             tasks: None,
             agenda: None,
             todoist: None,
+            ssh: None,
         };
         assert_eq!(
             config.resolve_new_notes_dir(),
@@ -487,6 +516,7 @@ mod tests {
             tasks: None,
             agenda: None,
             todoist: None,
+            ssh: None,
         };
         assert_eq!(
             config.resolve_daily_notes_dir(),
@@ -505,6 +535,7 @@ mod tests {
             tasks: None,
             agenda: None,
             todoist: None,
+            ssh: None,
         };
         assert_eq!(
             config.resolve_daily_notes_dir(),
@@ -523,6 +554,7 @@ mod tests {
             tasks: None,
             agenda: None,
             todoist: None,
+            ssh: None,
         };
         assert_eq!(
             config.resolve_daily_notes_dir(),
@@ -541,6 +573,7 @@ mod tests {
             tasks: None,
             agenda: None,
             todoist: None,
+            ssh: None,
         };
         let patterns = config.resolve_ignore_patterns();
         assert_eq!(patterns.len(), 2);
@@ -558,6 +591,7 @@ mod tests {
             tasks: None,
             agenda: None,
             todoist: None,
+            ssh: None,
         };
         let patterns = config.resolve_ignore_patterns();
         assert!(patterns.is_empty());
@@ -599,6 +633,7 @@ mod tests {
             tasks: None,
             agenda: None,
             todoist: None,
+            ssh: None,
         };
         let info = config.resolved_info();
         assert_eq!(info.db_root, PathBuf::from("/actual/db"));
@@ -623,6 +658,14 @@ enabled = true
 token = "config-token"
 token_env = "PKMS_TEST_TODOIST_TOKEN"
 default_filter = "today | overdue"
+
+[ssh]
+identity_file = "~/.ssh/id_ed25519"
+known_hosts = "~/.ssh/known_hosts"
+connect_timeout_ms = 7000
+operation_timeout_ms = 8000
+max_connections = 2
+agent = false
 "#;
         let config: Config = toml::from_str(content).unwrap();
         assert_eq!(config.db_root, Some(PathBuf::from("/test/db")));
@@ -644,6 +687,19 @@ default_filter = "today | overdue"
             Some("PKMS_TEST_TODOIST_TOKEN")
         );
         assert_eq!(todoist.default_filter.as_deref(), Some("today | overdue"));
+        let ssh = config.ssh.unwrap();
+        assert_eq!(
+            ssh.identity_file.as_deref(),
+            Some(Path::new("~/.ssh/id_ed25519"))
+        );
+        assert_eq!(
+            ssh.known_hosts.as_deref(),
+            Some(Path::new("~/.ssh/known_hosts"))
+        );
+        assert_eq!(ssh.connect_timeout_ms, Some(7000));
+        assert_eq!(ssh.operation_timeout_ms, Some(8000));
+        assert_eq!(ssh.max_connections, Some(2));
+        assert_eq!(ssh.agent, Some(false));
     }
 
     #[test]
@@ -739,6 +795,7 @@ tasks = ["Id", "Project", "Heading"]
             tasks: None,
             agenda: None,
             todoist: None,
+            ssh: None,
         };
         assert!(!config.todoist_enabled());
         assert_eq!(config.todoist_token_env(), "TODOIST_API_TOKEN");
@@ -761,6 +818,7 @@ tasks = ["Id", "Project", "Heading"]
                 token_env: Some("PKMS_TEST_MISSING_TODOIST_TOKEN".to_string()),
                 default_filter: None,
             }),
+            ssh: None,
         };
         let error = config.todoist_token().unwrap_err().to_string();
         assert!(error.contains("PKMS_TEST_MISSING_TODOIST_TOKEN"));
@@ -782,6 +840,7 @@ tasks = ["Id", "Project", "Heading"]
                 token_env: Some("PKMS_TEST_MISSING_TODOIST_TOKEN".to_string()),
                 default_filter: None,
             }),
+            ssh: None,
         };
         assert_eq!(config.todoist_token().unwrap(), "config-token");
     }

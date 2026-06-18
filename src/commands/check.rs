@@ -6,7 +6,7 @@ use crate::link_check::{
 };
 use crate::output::OutputContext;
 use crate::parser::{Link, validate_filetags_format};
-use anyhow::Result;
+use anyhow::{Result, bail};
 use serde::Serialize;
 use std::fmt::Write;
 use std::path::Path;
@@ -85,6 +85,7 @@ pub struct FiletagsIssue {
 pub struct CheckOptions {
     pub stats: bool,
     pub file_links: bool,
+    pub remote_file_links: bool,
     pub attachment_links: bool,
     pub id_links: bool,
     pub filetags: bool,
@@ -103,6 +104,7 @@ impl From<&CheckArgs> for CheckOptions {
         CheckOptions {
             stats: args.stats,
             file_links: args.file_links,
+            remote_file_links: args.remote_file_links,
             attachment_links: args.attachment_links,
             id_links: args.id_links,
             filetags: args.filetags,
@@ -119,6 +121,8 @@ pub fn run(config: &ResolvedConfig, ctx: &OutputContext, opts: &CheckOptions) ->
 }
 
 pub fn execute(config: &ResolvedConfig, opts: &CheckOptions) -> Result<CheckCommandOutput> {
+    ensure_remote_file_links_available(opts.remote_file_links)?;
+
     let graph = Graph::load(config)?;
     let db_root = config.resolved_db_root();
 
@@ -132,6 +136,13 @@ pub fn execute(config: &ResolvedConfig, opts: &CheckOptions) -> Result<CheckComm
     };
 
     Ok(CheckCommandOutput { output, exit_code })
+}
+
+fn ensure_remote_file_links_available(requested: bool) -> Result<()> {
+    if requested {
+        bail!("SSH file-link checks are not available in this build. Rebuild with --features ssh.")
+    }
+    Ok(())
 }
 
 pub fn render(ctx: &OutputContext, output: &CheckCommandOutput) -> Result<ExitCode> {
@@ -150,6 +161,7 @@ impl CheckDisplayOptions {
         let any_explicit = opts.stats
             || opts.id_links
             || opts.file_links
+            || opts.remote_file_links
             || opts.attachment_links
             || opts.filetags
             || opts.self_links
@@ -159,7 +171,7 @@ impl CheckDisplayOptions {
         CheckDisplayOptions {
             show_stats: opts.stats || !any_explicit,
             show_id: opts.id_links || !any_explicit,
-            show_file: opts.file_links || !any_explicit,
+            show_file: opts.file_links || opts.remote_file_links || !any_explicit,
             show_attach: opts.attachment_links || !any_explicit,
             show_filetags: opts.filetags || !any_explicit,
             show_self_links: opts.self_links || !any_explicit,

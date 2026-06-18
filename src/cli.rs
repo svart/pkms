@@ -83,6 +83,11 @@ pub struct CheckArgs {
     pub stats: bool,
     #[arg(long, help = "Check that file: link targets exist on disk")]
     pub file_links: bool,
+    #[arg(
+        long,
+        help = "Check remote SSH file: link targets (requires --features ssh)"
+    )]
+    pub remote_file_links: bool,
     #[arg(long, help = "Check that attachment: link targets exist on disk")]
     pub attachment_links: bool,
     #[arg(long, help = "Check that id: link targets exist in the database")]

@@ -120,6 +120,45 @@ fn test_check_file_links_human() {
 }
 
 #[test]
+fn test_check_help_shows_remote_file_links_flag() {
+    let (stdout, _stderr, status) = run(&["check", "--help"]);
+    assert!(status.success());
+    assert!(stdout.contains("--remote-file-links"), "stdout: {}", stdout);
+}
+
+#[test]
+fn test_check_remote_file_links_requires_ssh_feature() {
+    let (_dir, root) = setup_clean_db();
+    db_write(
+        &root,
+        "remote.org",
+        r#":PROPERTIES:
+:ID:       aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa
+:END:
+#+title: Remote
+
+[[file:/ssh:example.com:/tmp/file.txt]]
+"#,
+    );
+
+    let (stdout, stderr, status) = run(&[
+        "--db",
+        root.to_str().unwrap(),
+        "check",
+        "--remote-file-links",
+    ]);
+    assert!(!status.success());
+    assert!(stdout.is_empty(), "stdout: {}", stdout);
+    assert!(
+        stderr.contains(
+            "SSH file-link checks are not available in this build. Rebuild with --features ssh."
+        ),
+        "stderr: {}",
+        stderr
+    );
+}
+
+#[test]
 fn test_check_file_links_json() {
     let (_dir, root) = setup_db();
     let (v, status) = run_json(&[

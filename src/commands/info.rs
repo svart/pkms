@@ -73,6 +73,7 @@ mod tests {
             tasks: None,
             agenda: None,
             todoist: None,
+            ssh: None,
         }
     }
 
