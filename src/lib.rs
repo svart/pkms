@@ -7,6 +7,7 @@ pub mod corpus;
 pub mod discovery;
 pub mod graph;
 pub mod input;
+pub mod link_check;
 pub mod logging;
 pub mod org_date;
 pub mod org_edit;
