@@ -1,11 +1,12 @@
 use crate::cli::CheckArgs;
 use crate::config::ResolvedConfig;
-use crate::graph::{
-    DuplicateInfo, Graph, GraphStats, OverlinkEntry, SelfLinkEntry, file_link_target_exists,
+use crate::graph::{DuplicateInfo, Graph, GraphStats, OverlinkEntry, SelfLinkEntry};
+use crate::link_check::{
+    LinkCheckBrokenTarget, LinkCheckJob, LinkCheckKind, run_local_link_checks_sequential,
+    sort_link_check_jobs,
 };
 use crate::output::OutputContext;
 use crate::parser::{Link, validate_filetags_format};
-use crate::util;
 use anyhow::Result;
 use serde::Serialize;
 use std::fmt::Write;
@@ -176,40 +177,10 @@ fn collect_check_data<'a>(
 ) -> Result<CheckData<'a>> {
     let cross_links_specified = opts.cross_links.is_some();
 
-    let mut broken_file = Vec::new();
-    let mut broken_attachment = Vec::new();
-
-    if display_opts.show_file {
-        for node in graph.nodes.values() {
-            for link in &node.outgoing {
-                if let Link::File(target) = link
-                    && !file_link_target_exists(target, &node.path, db_root)
-                {
-                    broken_file.push(BrokenFileLinkEntry {
-                        source_uuid: node.uuid.clone(),
-                        source_title: node.title.clone(),
-                        target_path: target.clone(),
-                    });
-                }
-            }
-        }
-    }
-
-    if display_opts.show_attach {
-        for node in graph.nodes.values() {
-            for link in &node.outgoing {
-                if let Link::Attachment(target) = link
-                    && !util::attachment_target_exists(db_root, &node.uuid, target)
-                {
-                    broken_attachment.push(BrokenAttachmentLinkEntry {
-                        source_uuid: node.uuid.clone(),
-                        source_title: node.title.clone(),
-                        target_path: target.clone(),
-                    });
-                }
-            }
-        }
-    }
+    let link_jobs =
+        collect_local_link_check_jobs(graph, display_opts.show_file, display_opts.show_attach);
+    let (broken_file, broken_attachment) =
+        split_broken_link_targets(run_local_link_checks_sequential(link_jobs, db_root));
 
     let mut filetags_issues = Vec::new();
     if display_opts.show_filetags {
@@ -280,6 +251,61 @@ fn collect_check_data<'a>(
         overlink_entries,
         cross_link_result,
     })
+}
+
+fn collect_local_link_check_jobs(
+    graph: &Graph,
+    include_files: bool,
+    include_attachments: bool,
+) -> Vec<LinkCheckJob> {
+    let mut jobs = Vec::new();
+    for node in graph.nodes.values() {
+        for link in &node.outgoing {
+            match link {
+                Link::File(target) if include_files => jobs.push(LinkCheckJob::file(
+                    node.uuid.clone(),
+                    node.title.clone(),
+                    node.path.clone(),
+                    target.clone(),
+                )),
+                Link::Attachment(target) if include_attachments => {
+                    jobs.push(LinkCheckJob::attachment(
+                        node.uuid.clone(),
+                        node.title.clone(),
+                        node.path.clone(),
+                        target.clone(),
+                    ));
+                }
+                _ => {}
+            }
+        }
+    }
+    sort_link_check_jobs(&mut jobs);
+    jobs
+}
+
+fn split_broken_link_targets(
+    broken_targets: Vec<LinkCheckBrokenTarget>,
+) -> (Vec<BrokenFileLinkEntry>, Vec<BrokenAttachmentLinkEntry>) {
+    let mut broken_file = Vec::new();
+    let mut broken_attachment = Vec::new();
+
+    for target in broken_targets {
+        match target.kind {
+            LinkCheckKind::File => broken_file.push(BrokenFileLinkEntry {
+                source_uuid: target.source_uuid,
+                source_title: target.source_title,
+                target_path: target.target,
+            }),
+            LinkCheckKind::Attachment => broken_attachment.push(BrokenAttachmentLinkEntry {
+                source_uuid: target.source_uuid,
+                source_title: target.source_title,
+                target_path: target.target,
+            }),
+        }
+    }
+
+    (broken_file, broken_attachment)
 }
 
 struct CheckDisplayOptions {
@@ -675,5 +701,93 @@ mod tests {
         assert!(text.contains("Broken file links (1):"));
         assert!(text.contains("  Source Note -> missing.org"));
         assert!(text.ends_with("Status: issues found\n"));
+    }
+
+    #[test]
+    fn collects_only_requested_local_link_check_jobs_in_stable_order() {
+        let dir = tempfile::tempdir().unwrap();
+        let db_root = dir.path();
+        std::fs::write(
+            db_root.join("beta.org"),
+            r#":PROPERTIES:
+:ID:       bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb
+:END:
+#+title: Beta
+
+[[file:beta-missing.org]]
+[[attachment:beta.png]]
+[[id:cccccccc-cccc-4ccc-cccc-cccccccccccc]]
+[[https://example.com]]
+"#,
+        )
+        .unwrap();
+        std::fs::write(
+            db_root.join("alpha.org"),
+            r#":PROPERTIES:
+:ID:       aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa
+:END:
+#+title: Alpha
+
+[[attachment:alpha.png]]
+[[file:alpha-missing.org]]
+"#,
+        )
+        .unwrap();
+        let config = ResolvedConfig::for_test_db(db_root);
+        let graph = Graph::load(&config).unwrap();
+
+        let all_jobs = collect_local_link_check_jobs(&graph, true, true);
+        let all_observed: Vec<_> = all_jobs
+            .iter()
+            .map(|job| {
+                (
+                    job.kind,
+                    job.source_uuid.as_str(),
+                    job.source_title.as_str(),
+                    job.target.as_str(),
+                )
+            })
+            .collect();
+        assert_eq!(
+            all_observed,
+            vec![
+                (
+                    LinkCheckKind::File,
+                    "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa",
+                    "Alpha",
+                    "alpha-missing.org",
+                ),
+                (
+                    LinkCheckKind::File,
+                    "bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb",
+                    "Beta",
+                    "beta-missing.org",
+                ),
+                (
+                    LinkCheckKind::Attachment,
+                    "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa",
+                    "Alpha",
+                    "alpha.png",
+                ),
+                (
+                    LinkCheckKind::Attachment,
+                    "bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb",
+                    "Beta",
+                    "beta.png",
+                ),
+            ]
+        );
+
+        let file_jobs = collect_local_link_check_jobs(&graph, true, false);
+        assert_eq!(file_jobs.len(), 2);
+        assert!(file_jobs.iter().all(|job| job.kind == LinkCheckKind::File));
+
+        let attachment_jobs = collect_local_link_check_jobs(&graph, false, true);
+        assert_eq!(attachment_jobs.len(), 2);
+        assert!(
+            attachment_jobs
+                .iter()
+                .all(|job| job.kind == LinkCheckKind::Attachment)
+        );
     }
 }
