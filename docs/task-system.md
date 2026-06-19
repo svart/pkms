@@ -37,9 +37,10 @@ pkms task p<ID> mod dep:<parent-id>
 pkms task p<ID> postpone --to tomorrow
 ```
 
-With a build that includes the `todoist` feature, the same views and ID-first
-actions can include Todoist tasks when filters select `source:todoist` or
-`source:all`:
+With a build that includes the `todoist` feature, task views can include Todoist
+tasks when filters select `source:todoist` or `source:all`. Todoist creation uses
+`source:todoist`, and supported Todoist ID-first actions use stable
+`todoist:<remote-id>` targets:
 
 ```bash
 pkms task list source:todoist
@@ -166,6 +167,9 @@ pkms task <ID> done [--dry-run]
 pkms task <ID> postpone --to <DATE>
 pkms task <ID> mod <MODIFIER>...
 ```
+
+`open` is PKMS-only because provider-backed tasks do not have a local source
+heading to open.
 
 Hidden subcommands such as `pkms task show <ID>` may exist internally for clap
 dispatch, but docs and examples should prefer ID-first usage.

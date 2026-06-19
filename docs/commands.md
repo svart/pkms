@@ -89,13 +89,15 @@ pkms serve <target> --port 0
 `serve` starts a foreground local HTTP server and renders the selected note as
 HTML. Internal `id:` links navigate to `/?id=<uuid>`, so the browser address bar
 tracks the rendered note. Local `file:` links and `attachment:` links are served
-as assets when they resolve under the database root or the user's home
-directory; image assets are embedded in the page. Free-standing `http://` and
-`https://` URLs in rendered text are clickable after org links are resolved. Org
-tables are rendered as HTML tables, note and heading tags are shown as compact
-chips, heading `SCHEDULED` and `DEADLINE` timestamps are shown as planning
-badges, source blocks are highlighted server-side with Syntect, and TeX formula
-text is rendered to static KaTeX HTML without client-side JavaScript.
+as assets only when the rendered note declares the exact link. `file:` targets
+must resolve under the database root, and `attachment:` targets must resolve
+under the supported org-attach roots for the note UUID; image assets are embedded
+in the page. Free-standing `http://` and `https://` URLs in rendered text are
+clickable after org links are resolved. Org tables are rendered as HTML tables,
+note and heading tags are shown as compact chips, heading `SCHEDULED` and
+`DEADLINE` timestamps are shown as planning badges, source blocks are highlighted
+server-side with Syntect, and TeX formula text is rendered to static KaTeX HTML
+without client-side JavaScript.
 The note header includes an "Open in Emacs" button that opens the rendered note
 file through the same `emacsclient -n` editor path used by task opening.
 The page also includes collapsible floating panels: note contents on the left

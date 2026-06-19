@@ -286,7 +286,7 @@ fn process_one_show(
                 }
                 None => {
                     anyhow::bail!(
-                        "No TODO heading found in note '{}'. Use a numeric canonical ID (from todo/agenda) or --uuid to specify an exact note.",
+                        "No TODO heading found in note '{}'. Use a numeric canonical ID from task list or task agenda, or --uuid to specify an exact note.",
                         note_title
                     );
                 }
@@ -337,7 +337,7 @@ fn process_one_show(
                     }
                     None => {
                         found = Some(anyhow::anyhow!(
-                            "No TODO heading found in note '{}'. Use a numeric canonical ID (from todo/agenda) or --uuid to specify an exact note.",
+                            "No TODO heading found in note '{}'. Use a numeric canonical ID from task list or task agenda, or --uuid to specify an exact note.",
                             note_title
                         ));
                     }

@@ -149,8 +149,8 @@ pkms task p5 open --line 42
 
 ## Task Namespace
 
-The `task` namespace is the newer task-oriented command surface. Local PKMS
-commands are available now:
+The `task` namespace is the task-oriented command surface. Local PKMS commands
+include:
 
 ```bash
 pkms task list
