@@ -14,6 +14,8 @@ use tabled::settings::Style;
 #[derive(Debug, Serialize)]
 pub(super) struct TaskStateChangeOutput {
     pub id: String,
+    #[serde(skip_serializing)]
+    pub title: String,
     pub path: String,
     pub line_number: usize,
     pub old_state: String,
@@ -159,6 +161,7 @@ pub(super) fn print_state_change(
             } else {
                 "Changed"
             };
+            print_task_title(&output.title);
             println!(
                 "{action} {}:{} from {} to {}",
                 output.path, output.line_number, output.old_state, output.new_state
@@ -210,11 +213,10 @@ pub(super) fn print_mutation_output(
     };
     match ctx.format {
         OutputFormat::Text => {
-            let title = terminal_markup::format_if_terminal_supported(&output.item.title);
+            print_task_title(&output.item.title);
             println!(
-                "Changed {} task: {} (action {}; id {})",
+                "Changed {} task (action {}; id {})",
                 source_name(&output.item),
-                title,
                 action,
                 output.item.display_id
             );
@@ -238,6 +240,9 @@ pub(super) fn print_mod_output(
     match ctx.format {
         OutputFormat::Text => {
             if output.changed {
+                if let Some(item) = &output.item {
+                    print_task_title(&item.title);
+                }
                 for change in &output.changes {
                     let old = display_mod_value(change.property, change.old.as_deref(), today);
                     let new = display_mod_value(change.property, change.new.as_deref(), today);
@@ -263,6 +268,11 @@ pub(super) fn print_mod_output(
             Ok(exit_code)
         }
     }
+}
+
+fn print_task_title(title: &str) {
+    let title = terminal_markup::format_if_terminal_supported(title);
+    println!("Task: {title}");
 }
 
 fn display_mod_value(property: &str, value: Option<&str>, today: NaiveDate) -> String {

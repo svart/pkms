@@ -396,8 +396,9 @@ end of the referenced task's subtree; `dep:` removes the current parent task
 dependency. `task mod` is strict: task titles change only through `title:<text>`,
 and unrecognized modifiers fail instead of becoming title text. Todoist
 `task mod` rejects `state:` and `dep:`/`depend:`.
-When changes are made, text output prints one diff line per changed property,
-such as `Scheduled: Today (2026-06-02) -> Scheduled: Tomorrow (2026-06-03)`.
+When changes are made, text output starts with `Task: <task title>` and then
+prints one diff line per changed property, such as
+`Scheduled: Today (2026-06-02) -> Scheduled: Tomorrow (2026-06-03)`.
 If no properties change, it prints `Nothing changed` and exits
 nonzero. ID-first `task <ID> postpone` works only for recurring tasks. For PKMS,
 the task must have a recurring `SCHEDULED` or `DEADLINE` timestamp and the

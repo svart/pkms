@@ -204,8 +204,9 @@ pkms task todoist:<remote-id> mod dl:
 
 On ANSI-capable terminals, task text output renders inline `=code=`,
 `~orange code~`, and mentions such as `@alice`. Piped text output keeps the
-stored strings unchanged unless ANSI output is forced. JSON/NDJSON output is
-unchanged.
+stored strings unchanged unless ANSI output is forced. Changed-task detail text
+output starts with `Task: <task title>` before the change lines.
+JSON/NDJSON output is unchanged.
 
 See [TODO and Agenda](todo-agenda.md) for task IDs, filtering, table columns,
 editor behavior, task state changes, and show output parent/child chains.

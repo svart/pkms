@@ -1907,6 +1907,28 @@ fn test_task_state_dry_run_does_not_edit_file() {
 }
 
 #[test]
+fn test_task_state_text_starts_with_task_title() {
+    let (_dir, root) = setup_db();
+    let (stdout, stderr, status) = run(&[
+        "--db",
+        root.to_str().unwrap(),
+        "task",
+        "p1",
+        "state",
+        "waiting",
+    ]);
+    assert!(status.success(), "task state failed:\n{stdout}\n{stderr}");
+    let mut lines = stdout.lines();
+    assert_eq!(lines.next(), Some("Task: Morning routine"));
+    assert!(
+        lines
+            .next()
+            .is_some_and(|line| line.contains("from TODO to WAITING")),
+        "stdout: {stdout}"
+    );
+}
+
+#[test]
 fn test_task_state_writes_canonical_config_spelling() {
     let (_dir, root) = setup_db();
     let (v, status) = run_json(&[
@@ -1921,6 +1943,7 @@ fn test_task_state_writes_canonical_config_spelling() {
     ]);
     assert!(status.success());
     assert_eq!(v["new_state"], "WAITING");
+    assert!(v.get("title").is_none());
     let path = v["path"].as_str().unwrap();
     let line_number = v["line_number"].as_u64().unwrap() as usize;
     let content = std::fs::read_to_string(path).unwrap();
@@ -2326,7 +2349,7 @@ SCHEDULED: <{today}>
     assert!(status.success(), "task mod failed:\n{stdout}\n{stderr}");
     assert_eq!(
         stdout.trim(),
-        format!("Scheduled: Today ({today}) -> Scheduled: Tomorrow ({tomorrow})")
+        format!("Task: Mod task\nScheduled: Today ({today}) -> Scheduled: Tomorrow ({tomorrow})")
     );
 }
 

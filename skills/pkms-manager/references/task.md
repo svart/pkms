@@ -221,7 +221,8 @@ and deadline edits work for PKMS and Todoist tasks. For PKMS,
 `state:` rewrites the org TODO keyword and `dep:`/`depend:` moves the whole
 task subtree to the end of the referenced task's subtree when a task ID is
 provided. `task mod` is strict: task titles change only through `title:<text>`,
-and unrecognized modifiers fail instead of becoming title text. If no
-properties change, `mod` prints `Nothing changed` and exits nonzero. Todoist
-`task mod` rejects `state:`. Todoist `task <ID> state` supports only `open`
-and `done`.
+and unrecognized modifiers fail instead of becoming title text. Changed-task
+detail text output starts with `Task: <task title>` before the change lines. If
+no properties change, `mod` prints `Nothing changed` and exits nonzero.
+Todoist `task mod` rejects `state:`. Todoist `task <ID> state` supports only
+`open` and `done`.

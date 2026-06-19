@@ -330,11 +330,15 @@ fn set_pkms_task_state(
     let new_state = canonical_state(config, requested_state)?;
     let graph = crate::graph::Graph::load(config)?;
     let (path, line_number) = graph.resolve_canonical_task_id(config, canonical_id)?;
+    let title = task_title_in_graph(&graph, &path, line_number).with_context(|| {
+        format!("Resolved task but could not find title at {path}:{line_number}")
+    })?;
     let output = pkms_mutation::replace_heading_state(&path, line_number, &new_state, dry_run)?;
     render::print_state_change(
         ctx,
         &render::TaskStateChangeOutput {
             id: TaskId::Pkms(canonical_id).display_id(),
+            title,
             path: output.path,
             line_number: output.line_number,
             old_state: output.old_state,
@@ -342,6 +346,23 @@ fn set_pkms_task_state(
             dry_run,
         },
     )
+}
+
+fn task_title_in_graph(
+    graph: &crate::graph::Graph,
+    path: &str,
+    line_number: usize,
+) -> Option<String> {
+    let path = Path::new(path);
+    graph
+        .results
+        .iter()
+        .find(|result| result.path == path)?
+        .parsed
+        .headings
+        .iter()
+        .find(|heading| heading.line_number == line_number)
+        .map(|heading| heading.title.clone())
 }
 
 #[cfg(feature = "todoist")]
