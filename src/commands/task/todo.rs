@@ -177,12 +177,7 @@ pub fn run_on(
     } else {
         sort_items(&mut items, &sort_fields);
 
-        let total_before_limit = items.len();
-
-        if let Some(l) = opts.limit {
-            items.truncate(l);
-        }
-
+        let total_before_limit = apply_limit(&mut items, opts.limit);
         let shown = items.len();
         let footer = format_footer(shown, total_before_limit, "TODO");
 

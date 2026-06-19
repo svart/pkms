@@ -103,11 +103,7 @@ pub fn run_with_clock(
     let sort_fields = parse_task_sort_fields(opts.sort.as_deref().unwrap_or("date,priority"))?;
     sort_items(&mut items, &sort_fields);
 
-    let total = items.len();
-
-    if let Some(l) = opts.limit {
-        items.truncate(l);
-    }
+    let total = apply_limit(&mut items, opts.limit);
 
     let flat = opts.today || opts.upcoming || opts.overdue;
 

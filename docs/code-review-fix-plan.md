@@ -132,17 +132,24 @@ Goal: reject typos in nested config tables instead of silently ignoring them.
 Goal: reduce the chance of future divergence between old PKMS task paths and
 source-neutral task paths.
 
-- [ ] Inventory remaining duplicate task list and agenda responsibilities:
-  - [ ] Sort parsing.
-  - [ ] Limit handling.
-  - [ ] Date filtering.
-  - [ ] Priority filtering.
-  - [ ] Text, JSON, and NDJSON rendering.
-- [ ] Decide whether to migrate PKMS-only `TaskRecord` flows toward `TaskItem`
+- [x] Inventory remaining duplicate task list and agenda responsibilities:
+  - [x] Sort parsing.
+  - [x] Limit handling.
+  - [x] Date filtering.
+  - [x] Priority filtering.
+  - [x] Text, JSON, and NDJSON rendering.
+- [x] Decide whether to migrate PKMS-only `TaskRecord` flows toward `TaskItem`
       earlier, or keep `TaskRecord` but share validation and rendering helpers.
-- [ ] Extract only abstractions with immediate duplication reduction; avoid a
+- [x] Extract only abstractions with immediate duplication reduction; avoid a
       large rewrite.
-- [ ] Add regression tests before refactoring each behavior.
+- [x] Add regression tests before refactoring each behavior.
+
+Decision: keep the PKMS-only `TaskRecord` flows for now because they preserve
+canonical task ID and grouped table behavior directly. Share narrow helpers
+instead: sort validation is now common across paths, and flat limit handling is
+centralized. Date filtering, priority filtering, and full rendering migration
+should wait for a deliberate `TaskRecord` to `TaskItem` migration with dedicated
+coverage.
 
 ## Final Gate
 

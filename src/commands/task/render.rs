@@ -1,5 +1,5 @@
 use crate::cli::OutputFormat;
-use crate::commands::task_common::{RowItem, print_table_with_empty_message};
+use crate::commands::task_common::{RowItem, apply_limit, print_table_with_empty_message};
 use crate::output::{ALL_COLUMNS, Column, OutputContext, terminal_markup};
 use crate::tasks::filter::SourceSelection;
 use crate::tasks::model::{TaskItem, TaskSourceKind};
@@ -346,10 +346,7 @@ pub(super) fn print_task_items(
     limit: Option<usize>,
     columns: Option<&[Column]>,
 ) -> Result<()> {
-    let total = items.len();
-    if let Some(limit) = limit {
-        items.truncate(limit);
-    }
+    let total = apply_limit(&mut items, limit);
 
     match ctx.format {
         OutputFormat::Text => print_task_table(&items, total, source, columns),
@@ -373,10 +370,7 @@ pub(super) fn print_agenda_task_items(
     columns: Option<&[Column]>,
     today: NaiveDate,
 ) -> Result<()> {
-    let total = items.len();
-    if let Some(limit) = limit {
-        items.truncate(limit);
-    }
+    let total = apply_limit(&mut items, limit);
 
     match ctx.format {
         OutputFormat::Text => print_agenda_task_table(&items, total, source, columns, today),

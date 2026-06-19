@@ -283,6 +283,25 @@ fn test_task_list_limit_json() {
 }
 
 #[test]
+fn test_task_agenda_limit_json() {
+    let (_dir, root) = setup_db();
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "task",
+        "agenda",
+        "--limit",
+        "1",
+    ]);
+
+    assert!(status.success());
+    assert!(v["items"].as_array().unwrap().len() <= 1);
+    assert!(v["total"].as_u64().unwrap_or(0) >= v["items"].as_array().unwrap().len() as u64);
+}
+
+#[test]
 fn test_task_list_group_state_json() {
     let (_dir, root) = setup_db();
     let (task, task_status) = run_json(&[

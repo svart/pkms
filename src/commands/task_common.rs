@@ -224,6 +224,14 @@ pub fn sort_items<T: RowItem>(items: &mut [T], sort_fields: &[&str]) {
     });
 }
 
+pub fn apply_limit<T>(items: &mut Vec<T>, limit: Option<usize>) -> usize {
+    let total = items.len();
+    if let Some(limit) = limit {
+        items.truncate(limit);
+    }
+    total
+}
+
 pub fn parse_task_sort_fields(sort: &str) -> Result<Vec<&str>> {
     let fields: Vec<&str> = sort
         .split(',')
