@@ -191,7 +191,9 @@ On ANSI-capable terminals, task text output renders inline `=code=`,
 `~orange code~`, and mentions such as `@alice`. Piped text output keeps the
 stored strings unchanged unless ANSI output is forced. Changed-task detail text
 output starts with `Task: <task title>` before the change lines.
-JSON/NDJSON output is unchanged.
+If a successful task mutation changes the canonical task ID assignment, pkms
+prints a colored `WARN: Task IDs changed` line to stderr after the command
+output. JSON/NDJSON stdout is unchanged and remains parseable.
 
 See [TODO and Agenda](todo-agenda.md) for the full task guide, including task
 IDs, filters, table columns, editor behavior, source selection, Todoist details,

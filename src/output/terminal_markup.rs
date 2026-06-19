@@ -14,11 +14,23 @@ pub fn format_if_terminal_supported(text: &str) -> String {
 }
 
 pub fn terminal_markup_enabled() -> bool {
+    terminal_markup_enabled_for_stream(std::io::stdout().is_terminal())
+}
+
+pub fn format_stderr_warning(text: &str) -> String {
+    if terminal_markup_enabled_for_stream(std::io::stderr().is_terminal()) {
+        format_orange(text)
+    } else {
+        text.to_string()
+    }
+}
+
+fn terminal_markup_enabled_for_stream(stream_is_terminal: bool) -> bool {
     let term = std::env::var("TERM").ok();
     let clicolor = std::env::var("CLICOLOR").ok();
     let clicolor_force = std::env::var("CLICOLOR_FORCE").ok();
     terminal_markup_enabled_from(
-        std::io::stdout().is_terminal(),
+        stream_is_terminal,
         term.as_deref(),
         std::env::var_os("NO_COLOR").is_some(),
         clicolor.as_deref(),
@@ -27,7 +39,7 @@ pub fn terminal_markup_enabled() -> bool {
 }
 
 fn terminal_markup_enabled_from(
-    stdout_is_terminal: bool,
+    stream_is_terminal: bool,
     term: Option<&str>,
     no_color: bool,
     clicolor: Option<&str>,
@@ -39,11 +51,15 @@ fn terminal_markup_enabled_from(
     if no_color || clicolor == Some("0") {
         return false;
     }
-    stdout_is_terminal && term != Some("dumb")
+    stream_is_terminal && term != Some("dumb")
 }
 
 fn env_flag_enabled(value: Option<&str>) -> bool {
     value.is_some_and(|value| !value.is_empty() && value != "0")
+}
+
+fn format_orange(text: &str) -> String {
+    format!("{ORANGE_PREFIX}{text}{RESET}")
 }
 
 pub fn format_terminal_markup(text: &str) -> String {
@@ -227,6 +243,14 @@ mod tests {
         let text = "mid=word= unmatched ~ spaced ~ and email@example.com";
 
         assert_eq!(format_terminal_markup(text), text);
+    }
+
+    #[test]
+    fn formats_warning_text_in_orange() {
+        assert_eq!(
+            format_orange("WARN: Task IDs changed"),
+            "\x1b[38;5;166mWARN: Task IDs changed\x1b[0m"
+        );
     }
 
     #[test]

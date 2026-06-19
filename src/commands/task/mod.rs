@@ -6,15 +6,18 @@ use crate::cli::{
 use crate::commands::open::OpenOptions;
 use crate::commands::show::{HeadingTarget, ShowOptions};
 use crate::config::ResolvedConfig;
-use crate::output::OutputContext;
+use crate::output::{OutputContext, terminal_markup};
 use crate::tasks::clock::TaskClock;
 #[cfg(feature = "todoist")]
 use crate::tasks::filter::SourceSelection;
 use crate::tasks::filter::parse_task_filters;
 use crate::tasks::id::TaskId;
 use crate::tasks::model::TaskSourceKind;
+use crate::tasks::modifiers::TaskModifierSpec;
 use crate::tasks::provider::TaskMetadataRow;
-use anyhow::{Result, bail};
+use anyhow::{Result, anyhow, bail};
+use std::collections::HashMap;
+use std::io::{self, Write};
 use std::process::ExitCode;
 
 mod agenda;
@@ -38,7 +41,8 @@ pub fn run(
     ctx: &OutputContext,
     command: &TaskCommand,
 ) -> Result<ExitCode> {
-    match command {
+    let task_id_snapshot = task_id_snapshot_before_command(config, command);
+    let exit_code = match command {
         TaskCommand::List(args) => success(run_list(config, ctx, args)),
         TaskCommand::Agenda(args) => success(run_agenda(config, ctx, args)),
         TaskCommand::Inbox(args) => success(run_shortcut(config, ctx, args, ShortcutKind::Inbox)),
@@ -49,7 +53,9 @@ pub fn run(
         TaskCommand::Add(args) => success(run_add(config, ctx, args)),
         TaskCommand::Postpone(args) => success(run_postpone(config, ctx, args)),
         TaskCommand::Target(args) => id_command::run(config, ctx, args),
-    }
+    }?;
+    maybe_warn_task_ids_changed(config, task_id_snapshot);
+    Ok(exit_code)
 }
 
 fn success(result: Result<()>) -> Result<ExitCode> {
@@ -291,4 +297,136 @@ fn source_sort_key(source: &TaskSourceKind) -> u8 {
         TaskSourceKind::Pkms => 0,
         TaskSourceKind::Todoist => 1,
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct TaskIdSnapshot(Vec<TaskIdentity>);
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct TaskIdentity {
+    path: String,
+    ordinal: usize,
+}
+
+impl TaskIdSnapshot {
+    fn capture(config: &ResolvedConfig) -> Result<Self> {
+        let graph = crate::graph::Graph::load(config)?;
+        let entries = graph.all_task_entries(config);
+        let identities = task_identities_by_location(&entries);
+        let mut ordered = Vec::new();
+        for (_, path, line_number) in entries {
+            let key = (path.clone(), line_number);
+            let identity = identities.get(&key).ok_or_else(|| {
+                anyhow!("Task ID snapshot missing task identity for {path}:{line_number}")
+            })?;
+            ordered.push(identity.clone());
+        }
+        Ok(Self(ordered))
+    }
+}
+
+fn task_identities_by_location(
+    entries: &[(usize, String, usize)],
+) -> HashMap<(String, usize), TaskIdentity> {
+    let mut line_numbers_by_path: HashMap<&str, Vec<usize>> = HashMap::new();
+    for (_, path, line_number) in entries {
+        line_numbers_by_path
+            .entry(path.as_str())
+            .or_default()
+            .push(*line_number);
+    }
+
+    let mut identities = HashMap::new();
+    for (path, line_numbers) in &mut line_numbers_by_path {
+        line_numbers.sort_unstable();
+        for (index, line_number) in line_numbers.iter().enumerate() {
+            let path = (*path).to_string();
+            identities.insert(
+                (path.clone(), *line_number),
+                TaskIdentity {
+                    path,
+                    ordinal: index + 1,
+                },
+            );
+        }
+    }
+
+    identities
+}
+
+fn task_id_snapshot_before_command(
+    config: &ResolvedConfig,
+    command: &TaskCommand,
+) -> Option<TaskIdSnapshot> {
+    if !command_may_change_pkms_task_ids(command) {
+        return None;
+    }
+    match TaskIdSnapshot::capture(config) {
+        Ok(snapshot) => Some(snapshot),
+        Err(err) => {
+            tracing::debug!(error = %err, "could not snapshot task IDs before command");
+            None
+        }
+    }
+}
+
+fn maybe_warn_task_ids_changed(config: &ResolvedConfig, before: Option<TaskIdSnapshot>) {
+    let Some(before) = before else {
+        return;
+    };
+    match TaskIdSnapshot::capture(config) {
+        Ok(after) if before != after => print_task_id_change_warning(),
+        Ok(_) => {}
+        Err(err) => {
+            tracing::debug!(error = %err, "could not snapshot task IDs after command");
+        }
+    }
+}
+
+fn print_task_id_change_warning() {
+    let _ = io::stdout().flush();
+    eprintln!(
+        "{}",
+        terminal_markup::format_stderr_warning(
+            "WARN: Task IDs changed; run `pkms task list` before using task IDs again."
+        )
+    );
+}
+
+fn command_may_change_pkms_task_ids(command: &TaskCommand) -> bool {
+    match command {
+        TaskCommand::State(args) => !args.dry_run && is_pkms_task_id(&args.id),
+        TaskCommand::Done(args) => !args.dry_run && is_pkms_task_id(&args.id),
+        TaskCommand::Add(args) => add_may_write_pkms_task(args),
+        TaskCommand::Postpone(args) => is_pkms_task_id(&args.id),
+        TaskCommand::Target(args) => target_may_write_pkms_task(args),
+        TaskCommand::List(_)
+        | TaskCommand::Agenda(_)
+        | TaskCommand::Inbox(_)
+        | TaskCommand::Show(_)
+        | TaskCommand::Open(_) => false,
+    }
+}
+
+fn add_may_write_pkms_task(args: &crate::cli::TaskAddArgs) -> bool {
+    TaskModifierSpec::parse(&args.text)
+        .is_ok_and(|spec| spec.source_or_default().eq_ignore_ascii_case("pkms"))
+}
+
+fn target_may_write_pkms_task(args: &[String]) -> bool {
+    let Some((id, rest)) = args.split_first() else {
+        return false;
+    };
+    if !is_pkms_task_id(id) {
+        return false;
+    }
+    matches!(
+        rest.first().map(String::as_str),
+        Some("state" | "done" | "postpone" | "mod")
+    )
+}
+
+fn is_pkms_task_id(id: &str) -> bool {
+    id.parse::<TaskId>()
+        .is_ok_and(|id| matches!(id, TaskId::Pkms(_)))
 }

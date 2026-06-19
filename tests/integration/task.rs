@@ -2100,6 +2100,86 @@ fn test_task_done_writes_closed_state() {
 }
 
 #[test]
+fn test_task_done_warns_when_task_ids_change() {
+    let db = TestDb::new().note_with_content(
+        "task-id-warning.org",
+        r#":PROPERTIES:
+:ID:       51515151-5151-4151-8151-515151515151
+:END:
+#+title: Task ID Warning
+
+* TODO First task
+* TODO Second task
+"#,
+    );
+
+    let (stdout, stderr, status) = db.run(&["task", "p1", "done"]);
+
+    assert!(status.success(), "task done failed:\n{stdout}\n{stderr}");
+    assert!(
+        stdout.contains("Changed"),
+        "mutation output should stay on stdout:\n{stdout}"
+    );
+    assert!(
+        stderr
+            .lines()
+            .last()
+            .is_some_and(|line| line.contains("WARN: Task IDs changed")),
+        "expected task ID warning on stderr:\n{stderr}"
+    );
+}
+
+#[test]
+fn test_task_state_does_not_warn_when_task_ids_stay_stable() {
+    let db = TestDb::new().note_with_content(
+        "stable-task-ids.org",
+        r#":PROPERTIES:
+:ID:       52525252-5252-4252-8252-525252525252
+:END:
+#+title: Stable Task IDs
+
+* TODO First task
+* TODO Second task
+"#,
+    );
+
+    let (stdout, stderr, status) = db.run(&["task", "p1", "state", "waiting"]);
+
+    assert!(status.success(), "task state failed:\n{stdout}\n{stderr}");
+    assert!(stdout.contains("from TODO to WAITING"));
+    assert!(
+        !stderr.contains("Task IDs changed"),
+        "state changes within the open group should not warn:\n{stderr}"
+    );
+}
+
+#[test]
+fn test_task_json_stdout_stays_parseable_when_task_ids_change() {
+    let db = TestDb::new().note_with_content(
+        "json-task-id-warning.org",
+        r#":PROPERTIES:
+:ID:       53535353-5353-4353-8353-535353535353
+:END:
+#+title: JSON Task ID Warning
+
+* TODO First task
+* TODO Second task
+"#,
+    );
+
+    let (stdout, stderr, status) = db.run(&["--output-format", "json", "task", "p1", "done"]);
+
+    assert!(status.success(), "task done failed:\n{stdout}\n{stderr}");
+    let v: serde_json::Value = serde_json::from_str(stdout.trim()).unwrap();
+    assert_eq!(v["old_state"], "TODO");
+    assert_eq!(v["new_state"], "DONE");
+    assert!(
+        stderr.contains("WARN: Task IDs changed"),
+        "expected warning on stderr:\n{stderr}"
+    );
+}
+
+#[test]
 fn test_task_state_rejects_unknown_state() {
     let (_dir, root) = setup_db();
     let (stdout, _stderr, status) = run(&[
@@ -2198,6 +2278,30 @@ fn test_task_mod_pkms_sets_and_clears_scheduled_date() {
     assert_eq!(v["changed"], true);
     assert_eq!(v["changes"][0]["property"], "Scheduled");
     assert_eq!(v["item"]["scheduled"], serde_json::Value::Null);
+}
+
+#[test]
+fn test_task_mod_planning_line_shift_does_not_warn_when_task_ids_stay_stable() {
+    let db = TestDb::new().note_with_content(
+        "planning-line-shift.org",
+        r#":PROPERTIES:
+:ID:       54545454-5454-4454-8454-545454545454
+:END:
+#+title: Planning Line Shift
+
+* TODO First task
+* TODO Second task
+"#,
+    );
+
+    let (stdout, stderr, status) = db.run(&["task", "p1", "mod", "sch:2026-07-01"]);
+
+    assert!(status.success(), "task mod failed:\n{stdout}\n{stderr}");
+    assert!(stdout.contains("Scheduled: None -> Scheduled: 2026-07-01"));
+    assert!(
+        !stderr.contains("Task IDs changed"),
+        "line shifts alone should not warn:\n{stderr}"
+    );
 }
 
 #[test]

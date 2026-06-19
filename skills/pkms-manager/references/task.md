@@ -28,6 +28,10 @@ timestamps sort by the rest of the filename alphanumerically; files without a
 recognized timestamp sort last by path alphanumerically; tasks within a file
 sort top to bottom. Priority, schedule, deadline, tags, project, today,
 overdue, and upcoming do not affect canonical ID assignment.
+After successful PKMS task mutations, a colored `WARN: Task IDs changed` line
+is written to stderr when the edit changes the canonical task ID assignment.
+Rerun `pkms task list` before issuing more numeric task-ID commands. Structured
+stdout remains JSON/NDJSON only.
 
 Explicit Todoist and mixed-source task views use the same table shape plus a
 `Project` column:

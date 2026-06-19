@@ -28,6 +28,12 @@ schedule, deadline, tags, and project do not affect canonical ID assignment.
 Relative date concepts such as today, overdue, and upcoming do not affect
 canonical ID assignment.
 
+After a successful `pkms task` mutation, pkms warns on stderr when the edit
+changes the canonical task ID assignment. The warning is printed after the
+normal command output, colored on ANSI-capable terminals, and says to rerun
+`pkms task list` before using task IDs again. JSON and NDJSON stdout remain
+parseable.
+
 The `task` namespace accepts these PKMS task ID forms:
 
 ```text
