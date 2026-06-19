@@ -117,15 +117,15 @@ source-neutral execution paths.
 
 Goal: reject typos in nested config tables instead of silently ignoring them.
 
-- [ ] Add `#[serde(deny_unknown_fields)]` to nested config structs where safe:
-  - [ ] `AgendaConfig`
-  - [ ] `TodoistConfig`
-  - [ ] `TaskConfig`
-- [ ] Add config tests for unknown fields in each nested table.
-- [ ] Confirm generated default config remains valid.
-- [ ] Run focused checks:
-  - [ ] `cargo test config`
-  - [ ] `cargo test --test integration config`
+- [x] Add `#[serde(deny_unknown_fields)]` to nested config structs where safe:
+  - [x] `AgendaConfig`
+  - [x] `TodoistConfig`
+  - [x] `TaskConfig`
+- [x] Add config tests for unknown fields in each nested table.
+- [x] Confirm generated default config remains valid.
+- [x] Run focused checks:
+  - [x] `cargo test config`
+  - [x] `cargo test --test integration config`
 
 ## Phase 6: Simplification Follow-Up
 

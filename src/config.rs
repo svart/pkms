@@ -30,6 +30,7 @@ pub struct ResolvedConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct AgendaConfig {
     #[serde(default = "default_open_todo_states")]
     pub open_todo_states: Vec<String>,
@@ -38,6 +39,7 @@ pub struct AgendaConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct TodoistConfig {
     #[serde(default)]
     pub enabled: bool,
@@ -58,6 +60,7 @@ pub struct SshConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct TaskConfig {
     pub inbox: Option<String>,
 }
@@ -700,6 +703,66 @@ agent = false
         assert_eq!(ssh.operation_timeout_ms, Some(8000));
         assert_eq!(ssh.max_connections, Some(2));
         assert_eq!(ssh.agent, Some(false));
+    }
+
+    fn assert_unknown_config_field_rejected(content: &str, field: &str) {
+        let err = toml::from_str::<Config>(content).unwrap_err().to_string();
+        assert!(
+            err.contains("unknown field"),
+            "expected unknown field error for {field}, got: {err}"
+        );
+        assert!(
+            err.contains(field),
+            "expected error to mention {field}, got: {err}"
+        );
+    }
+
+    #[test]
+    fn test_agenda_config_rejects_unknown_fields() {
+        assert_unknown_config_field_rejected(
+            r#"
+db_root = "/test/db"
+
+[agenda]
+open_todo_states = ["TODO"]
+typo = true
+"#,
+            "typo",
+        );
+    }
+
+    #[test]
+    fn test_todoist_config_rejects_unknown_fields() {
+        assert_unknown_config_field_rejected(
+            r#"
+db_root = "/test/db"
+
+[todoist]
+enabled = true
+tokne = "secret"
+"#,
+            "tokne",
+        );
+    }
+
+    #[test]
+    fn test_task_config_rejects_unknown_fields() {
+        assert_unknown_config_field_rejected(
+            r#"
+db_root = "/test/db"
+
+[tasks]
+inbox = "Inbox"
+unk = "value"
+"#,
+            "unk",
+        );
+    }
+
+    #[test]
+    fn test_generate_default_config_is_valid_config() {
+        let content = generate_default_config(Some(Path::new("/my/notes")));
+        toml::from_str::<Config>(&content).unwrap();
     }
 
     #[test]
