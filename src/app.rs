@@ -21,16 +21,22 @@ impl App {
 }
 
 pub fn print_error(ctx: Option<&OutputContext>, err: &anyhow::Error) {
-    if ctx.is_some_and(OutputContext::is_json) {
-        println!("{}", serde_json::json!({"error": err.to_string()}));
+    if let Some(ctx) = ctx.filter(|ctx| ctx.is_structured()) {
+        let output = serde_json::json!({"error": err.to_string()});
+        if let Err(print_err) = ctx.print_structured(&output) {
+            eprintln!("Error: {print_err}");
+        }
     } else {
         eprintln!("Error: {err}");
     }
 }
 
 pub fn startup_error(ctx: &OutputContext, err: anyhow::Error) -> ExitCode {
-    if ctx.is_json() {
-        println!("{}", serde_json::json!({"error": err.to_string()}));
+    if ctx.is_structured() {
+        let output = serde_json::json!({"error": err.to_string()});
+        if let Err(print_err) = ctx.print_structured(&output) {
+            eprintln!("Error: {print_err}");
+        }
     } else {
         eprintln!("Error: {err:#}");
     }

@@ -78,3 +78,35 @@ fn test_cli_db_root_overrides_env_and_config_file() {
 
     assert!(v["total_notes"].as_u64().unwrap_or(0) > 0);
 }
+
+#[test]
+fn test_init_config_ndjson_emits_single_json_line() {
+    let (_db_dir, root) = setup_empty_db();
+    let config_home = tempfile::tempdir().unwrap();
+    let output = Command::new(pkms_binary())
+        .args([
+            "--db",
+            root.to_str().unwrap(),
+            "--output-format",
+            "ndjson",
+            "init-config",
+            "--db",
+            root.to_str().unwrap(),
+        ])
+        .env("XDG_CONFIG_HOME", config_home.path())
+        .env_remove("PKMS_DB_ROOT")
+        .output()
+        .unwrap();
+
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+    assert!(
+        output.status.success(),
+        "command failed\nstdout: {stdout}\nstderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let value = assert_single_ndjson_object(&["init-config"], &stdout);
+    assert_eq!(
+        value["created"].as_str().unwrap(),
+        config_home.path().join("pkms.toml").to_string_lossy()
+    );
+}

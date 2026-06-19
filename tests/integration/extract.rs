@@ -55,6 +55,19 @@ fn test_extract_dry_run_does_not_write_files() {
 }
 
 #[test]
+fn test_extract_ndjson_dry_run_emits_single_json_line() {
+    let db = TestDb::clean();
+    write_extract_fixture(&db, "");
+
+    let (stdout, _stderr, status) = db.run(&["--output-format", "ndjson", "extract", HEADING_UUID]);
+
+    assert!(status.success(), "stdout: {stdout}");
+    let value = assert_single_ndjson_object(&["extract", HEADING_UUID], &stdout);
+    assert_eq!(value["uuid"], HEADING_UUID);
+    assert_eq!(value["applied"], false);
+}
+
+#[test]
 fn test_extract_apply_creates_note_and_replaces_subtree() {
     let db = TestDb::clean();
     let source_path = write_extract_fixture(&db, ":PROJECT: Alpha\n");

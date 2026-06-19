@@ -125,6 +125,40 @@ fn test_missing_db_json_error() {
 }
 
 #[test]
+fn test_missing_db_ndjson_error_is_single_line() {
+    let dir = tempfile::tempdir().unwrap();
+    let output = std::process::Command::new(pkms_binary())
+        .args(["--output-format", "ndjson", "stats"])
+        .env("XDG_CONFIG_HOME", dir.path())
+        .env_remove("PKMS_DB_ROOT")
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+
+    assert!(!output.status.success());
+    let value = assert_single_ndjson_object(&["--output-format", "ndjson", "stats"], &stdout);
+    assert!(value.get("error").is_some());
+}
+
+#[test]
+fn test_command_error_ndjson_is_single_line() {
+    let (_dir, root) = setup_db();
+    let args = [
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "ndjson",
+        "validate",
+        "Nonexistent",
+    ];
+    let (stdout, _stderr, status) = run(&args);
+
+    assert!(!status.success());
+    let value = assert_single_ndjson_object(&args, &stdout);
+    assert!(value.get("error").is_some());
+}
+
+#[test]
 fn test_json_error_exit_code() {
     let (_dir, root) = setup_db();
     let db = root.to_str().unwrap().to_string();

@@ -72,14 +72,36 @@ pub struct OutputContext {
 }
 
 impl OutputContext {
-    pub fn is_json(&self) -> bool {
+    pub fn is_structured(&self) -> bool {
         matches!(self.format, OutputFormat::Json | OutputFormat::Ndjson)
+    }
+
+    pub fn is_json(&self) -> bool {
+        matches!(self.format, OutputFormat::Json)
+    }
+
+    pub fn is_ndjson(&self) -> bool {
+        matches!(self.format, OutputFormat::Ndjson)
     }
 
     pub fn print_json<T: Serialize + ?Sized>(&self, output: &T) -> Result<()> {
         let _ = self;
         println!("{}", serde_json::to_string_pretty(output)?);
         Ok(())
+    }
+
+    pub fn print_json_line<T: Serialize + ?Sized>(&self, output: &T) -> Result<()> {
+        let _ = self;
+        println!("{}", serde_json::to_string(output)?);
+        Ok(())
+    }
+
+    pub fn print_structured<T: Serialize + ?Sized>(&self, output: &T) -> Result<()> {
+        if self.is_ndjson() {
+            self.print_json_line(output)
+        } else {
+            self.print_json(output)
+        }
     }
 
     pub fn print_ndjson<T: Serialize>(&self, items: &[T]) -> Result<()> {
@@ -124,5 +146,28 @@ mod tests {
         assert_eq!(Column::Date.name(), "Date");
         assert_eq!(Column::Project.name(), "Project");
         assert_eq!(Column::Heading.name(), "Heading");
+    }
+
+    #[test]
+    fn test_output_context_format_helpers() {
+        let json = OutputContext {
+            format: OutputFormat::Json,
+        };
+        let ndjson = OutputContext {
+            format: OutputFormat::Ndjson,
+        };
+        let text = OutputContext {
+            format: OutputFormat::Text,
+        };
+
+        assert!(json.is_structured());
+        assert!(json.is_json());
+        assert!(!json.is_ndjson());
+        assert!(ndjson.is_structured());
+        assert!(!ndjson.is_json());
+        assert!(ndjson.is_ndjson());
+        assert!(!text.is_structured());
+        assert!(!text.is_json());
+        assert!(!text.is_ndjson());
     }
 }

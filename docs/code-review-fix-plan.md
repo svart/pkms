@@ -60,33 +60,33 @@ Goal: make parser behavior consistent with common org-mode keyword casing.
 
 Goal: ensure `--output-format ndjson` never prints pretty multi-line JSON.
 
-- [ ] Split output format helpers in `src/output.rs`:
-  - [ ] `is_structured()` or equivalent for `json` and `ndjson`.
-  - [ ] `is_json()` for only `json`, if still useful.
-  - [ ] `print_json_line()` or equivalent for a single compact JSON object.
-- [ ] Update non-stream commands that currently treat `ndjson` as pretty JSON:
-  - [ ] `check`
-  - [ ] `info`
-  - [ ] `fix`
-  - [ ] `path`
-  - [ ] `new`
-  - [ ] `extract`
-  - [ ] `serve` startup output
-  - [ ] `init-config`
-  - [ ] startup and command error output
-- [ ] Decide and document the non-stream `ndjson` behavior:
-  - [ ] Prefer one compact JSON object on one line.
-  - [ ] Keep stream producers emitting one object per record.
-- [ ] Add integration tests that parse every line of non-stream `ndjson` output
+- [x] Split output format helpers in `src/output.rs`:
+  - [x] `is_structured()` or equivalent for `json` and `ndjson`.
+  - [x] `is_json()` for only `json`, if still useful.
+  - [x] `print_json_line()` or equivalent for a single compact JSON object.
+- [x] Update non-stream commands that currently treat `ndjson` as pretty JSON:
+  - [x] `check`
+  - [x] `info`
+  - [x] `fix`
+  - [x] `path`
+  - [x] `new`
+  - [x] `extract`
+  - [x] `serve` startup output
+  - [x] `init-config`
+  - [x] startup and command error output
+- [x] Decide and document the non-stream `ndjson` behavior:
+  - [x] Prefer one compact JSON object on one line.
+  - [x] Keep stream producers emitting one object per record.
+- [x] Add integration tests that parse every line of non-stream `ndjson` output
       as exactly one JSON value where the command supports structured output.
-- [ ] Update docs if wording changes:
-  - [ ] `docs/json-output.md`
-  - [ ] `docs/pipelining.md`
-  - [ ] `skills/pkms-manager/references/pipelining.md`
-- [ ] Run focused checks:
-  - [ ] `cargo test output`
-  - [ ] `cargo test --test integration pipe`
-  - [ ] `cargo test --test integration all_commands`
+- [x] Update docs if wording changes:
+  - [x] `docs/json-output.md`
+  - [x] `docs/pipelining.md`
+  - [x] `skills/pkms-manager/references/pipelining.md`
+- [x] Run focused checks:
+  - [x] `cargo test output`
+  - [x] `cargo test --test integration pipe`
+  - [x] `cargo test --test integration all_commands`
 
 ## Phase 4: Task Sort And Group Validation
 

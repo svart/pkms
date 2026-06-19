@@ -167,8 +167,8 @@ fn ensure_remote_file_links_available(requested: bool) -> Result<()> {
 }
 
 pub fn render(ctx: &OutputContext, output: &CheckCommandOutput) -> Result<ExitCode> {
-    if ctx.is_json() {
-        ctx.print_json(&output.output)?;
+    if ctx.is_structured() {
+        ctx.print_structured(&output.output)?;
     } else {
         print!("{}", render_text(&output.output));
     }

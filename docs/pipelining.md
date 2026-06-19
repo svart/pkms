@@ -4,6 +4,9 @@ Commands can be chained through NDJSON. Producers emit one JSON object per line,
 usually with a `uuid` field. Consumers read targets from stdin when piped or
 when `--from-stdin` is set.
 
+Only the producer commands below emit record streams. Other commands that accept
+`--output-format ndjson` emit one compact JSON object on one line.
+
 ## Producers
 
 - `resolve --output-format ndjson`

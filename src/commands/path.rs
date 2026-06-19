@@ -89,8 +89,8 @@ fn build_output(graph: &Graph, opts: &PathOptions) -> Result<PathOutput> {
 }
 
 fn render(ctx: &OutputContext, output: &PathOutput) -> Result<()> {
-    if ctx.is_json() {
-        ctx.print_json(output)
+    if ctx.is_structured() {
+        ctx.print_structured(output)
     } else {
         print!("{}", render_text(output));
         Ok(())

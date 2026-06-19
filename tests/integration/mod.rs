@@ -130,6 +130,24 @@ pub fn assert_ndjson_output(args: &[&str], stdout: &str) -> Vec<serde_json::Valu
         .collect()
 }
 
+pub fn assert_single_ndjson_object(args: &[&str], stdout: &str) -> serde_json::Value {
+    let values = assert_ndjson_output(args, stdout);
+    assert_eq!(
+        values.len(),
+        1,
+        "Expected exactly one NDJSON line for {:?}\nstdout: {}",
+        args,
+        stdout
+    );
+    assert!(
+        values[0].is_object(),
+        "Expected one NDJSON object for {:?}\nstdout: {}",
+        args,
+        stdout
+    );
+    values.into_iter().next().unwrap()
+}
+
 fn run_pipe(producer_args: &[&str], consumer_args: &[&str]) -> (String, String, ExitStatus) {
     let producer_config_home = setup_test_config_home();
     let mut producer = Command::new(pkms_binary());

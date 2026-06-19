@@ -235,6 +235,40 @@ fn test_serve_accepts_cwd_relative_note_path() {
 }
 
 #[test]
+fn test_serve_ndjson_startup_emits_single_json_line() {
+    let (_dir, root) = setup_db();
+    let config_home = setup_test_config_home();
+    let mut child = Command::new(pkms_binary())
+        .args([
+            "--db",
+            root.to_str().unwrap(),
+            "--output-format",
+            "ndjson",
+            "serve",
+            "Note A",
+            "--port",
+            "0",
+        ])
+        .env("XDG_CONFIG_HOME", config_home.path())
+        .env_remove("PKMS_DB_ROOT")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("failed to spawn pkms serve");
+
+    let stdout = child.stdout.take().unwrap();
+    let mut reader = BufReader::new(stdout);
+    let mut line = String::new();
+    reader.read_line(&mut line).unwrap();
+    let value = assert_single_ndjson_object(&["serve", "Note A"], &line);
+    assert_eq!(value["uuid"], "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa");
+    assert!(value["url"].as_str().unwrap().starts_with("http://"));
+
+    child.kill().unwrap();
+    let _ = child.wait();
+}
+
+#[test]
 fn test_serve_asset_endpoint_only_serves_linked_note_assets() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path().to_path_buf();

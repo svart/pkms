@@ -18,8 +18,8 @@ pub struct FixOutput {
 }
 
 fn print_fix_output(ctx: &OutputContext, output: &FixOutput) -> Result<()> {
-    if ctx.is_json() {
-        ctx.print_json(output)?;
+    if ctx.is_structured() {
+        ctx.print_structured(output)?;
     } else {
         if output.applied {
             println!(

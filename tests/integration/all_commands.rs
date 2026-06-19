@@ -263,3 +263,81 @@ fn test_all_commands_json() {
         assert_json_object_output(&args_refs, &stdout);
     }
 }
+
+#[test]
+fn test_non_stream_commands_ndjson_emit_single_json_line() {
+    let (_dir, root) = setup_db();
+    let db = root.to_str().unwrap().to_string();
+    let cases: Vec<(Vec<String>, bool)> = vec![
+        (
+            vec![
+                "--db".into(),
+                db.clone(),
+                "--output-format".into(),
+                "ndjson".into(),
+                "check".into(),
+            ],
+            false,
+        ),
+        (
+            vec![
+                "--db".into(),
+                db.clone(),
+                "--output-format".into(),
+                "ndjson".into(),
+                "info".into(),
+            ],
+            true,
+        ),
+        (
+            vec![
+                "--db".into(),
+                db.clone(),
+                "--output-format".into(),
+                "ndjson".into(),
+                "path".into(),
+                "Note A".into(),
+                "Note C".into(),
+            ],
+            true,
+        ),
+        (
+            vec![
+                "--db".into(),
+                db.clone(),
+                "--output-format".into(),
+                "ndjson".into(),
+                "new".into(),
+                "Parametric Test".into(),
+            ],
+            true,
+        ),
+        (
+            vec![
+                "--db".into(),
+                db.clone(),
+                "--output-format".into(),
+                "ndjson".into(),
+                "fix".into(),
+                "ffffffff-ffff-4fff-ffff-ffffffffffff".into(),
+                "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa".into(),
+            ],
+            true,
+        ),
+    ];
+
+    for (args, expect_success) in &cases {
+        let args_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
+        let (stdout, stderr, status) = run(&args_refs);
+        if *expect_success {
+            assert!(
+                status.success(),
+                "Expected success for {:?}\nstdout: {}\nstderr: {}",
+                args_refs,
+                stdout,
+                stderr
+            );
+        }
+        assert_single_ndjson_object(&args_refs, &stdout);
+    }
+}

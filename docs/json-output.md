@@ -14,8 +14,9 @@ passing a stream of note or task records to another command.
 
 NDJSON is stream-oriented only for commands that produce multiple records, such
 as the producers listed in [Pipelining](pipelining.md). Commands that are not
-stream producers may print a single JSON object in structured mode even when the
-selected format is `ndjson`; prefer `json` for those commands.
+stream producers print one compact JSON object on one line when the selected
+format is `ndjson`; prefer `json` for those commands when pretty output is more
+useful.
 
 ## Example JSON
 

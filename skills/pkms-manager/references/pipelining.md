@@ -4,6 +4,9 @@ Use NDJSON to chain commands. Producers emit one JSON object per line; consumers
 read targets from stdin automatically when possible or explicitly with
 `--from-stdin`.
 
+Only the producer commands below emit record streams. Other commands that accept
+`--output-format ndjson` emit one compact JSON object on one line.
+
 ## Producers
 
 - `resolve --output-format ndjson`

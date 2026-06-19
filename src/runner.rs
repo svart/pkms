@@ -153,11 +153,8 @@ fn init_config(db: Option<&std::path::Path>, ctx: &OutputContext) -> Result<Exit
     let content = config::generate_default_config(db);
     std::fs::create_dir_all(config_path.parent().unwrap())?;
     std::fs::write(&config_path, &content)?;
-    if ctx.is_json() {
-        println!(
-            "{}",
-            serde_json::json!({"created": config_path.to_string_lossy()})
-        );
+    if ctx.is_structured() {
+        ctx.print_structured(&serde_json::json!({"created": config_path.to_string_lossy()}))?;
     } else {
         println!("Created config at {}", config_path.display());
     }

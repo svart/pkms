@@ -132,8 +132,8 @@ fn execute(config: &ResolvedConfig, opts: &ExtractOptions) -> Result<ExtractOutp
 }
 
 fn render(ctx: &OutputContext, output: &ExtractOutput) -> Result<()> {
-    if ctx.is_json() {
-        ctx.print_json(output)?;
+    if ctx.is_structured() {
+        ctx.print_structured(output)?;
     } else {
         if output.applied {
             println!("Extracted heading:");

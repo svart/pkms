@@ -158,8 +158,8 @@ pub fn run(config: &ResolvedConfig, ctx: &OutputContext, opts: &NewOptions) -> R
         heading: heading_output,
     };
 
-    if ctx.is_json() {
-        ctx.print_json(&output)?;
+    if ctx.is_structured() {
+        ctx.print_structured(&output)?;
     } else {
         println!("New note:");
         println!("  Title:    {}", output.title);

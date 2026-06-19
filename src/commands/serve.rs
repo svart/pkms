@@ -52,8 +52,8 @@ pub fn run(config: &ResolvedConfig, ctx: &OutputContext, opts: &ServeOptions) ->
         port: addr.port(),
         uuid: initial_uuid.clone(),
     };
-    if ctx.is_json() {
-        ctx.print_json(&started)?;
+    if ctx.is_structured() {
+        ctx.print_structured(&started)?;
     } else {
         println!("Serving {}", url);
     }
