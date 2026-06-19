@@ -111,6 +111,40 @@ SCHEDULED: <2026-06-04 Thu>
 }
 
 #[test]
+fn test_check_ignores_links_inside_uppercase_source_blocks() {
+    let (_dir, root) = setup_clean_db();
+    db_write(
+        &root,
+        "uppercase-src.org",
+        r#":PROPERTIES:
+:ID:       aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa
+:END:
+#+title: Uppercase Source Block
+
+#+BEGIN_SRC org
+[[id:bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb]]
+* TODO Not a task
+#+END_SRC
+"#,
+    );
+
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "check",
+        "--id-links",
+    ]);
+
+    assert!(
+        status.success(),
+        "check should ignore source block links: {v}"
+    );
+    assert_eq!(v["broken_links"].as_array().unwrap().len(), 0);
+}
+
+#[test]
 fn test_check_file_links_human() {
     let (_dir, root) = setup_db();
     let (stdout, _stderr, status) = run(&["--db", root.to_str().unwrap(), "check", "--file-links"]);

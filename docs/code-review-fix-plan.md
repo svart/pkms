@@ -34,27 +34,27 @@ directory through `/asset`.
 
 Goal: make parser behavior consistent with common org-mode keyword casing.
 
-- [ ] Add small parser helpers for case-insensitive org keyword and drawer
+- [x] Add small parser helpers for case-insensitive org keyword and drawer
       marker matching.
-- [ ] Make source block detection case-insensitive for both begin and end
+- [x] Make source block detection case-insensitive for both begin and end
       markers in `src/parser.rs`.
-- [ ] Make `#+filetags:` parsing case-insensitive, matching existing
+- [x] Make `#+filetags:` parsing case-insensitive, matching existing
       `#+title:` behavior.
-- [ ] Review property drawer parsing for case handling:
-  - [ ] `:PROPERTIES:` and `:END:` should be accepted case-insensitively.
-  - [ ] Property keys such as `:ID:`, `:CATEGORY:`, `:PROJECT:`,
+- [x] Review property drawer parsing for case handling:
+  - [x] `:PROPERTIES:` and `:END:` should be accepted case-insensitively.
+  - [x] Property keys such as `:ID:`, `:CATEGORY:`, `:PROJECT:`,
         `:ROAM_ALIASES:`, and `:ROAM_REFS:` should follow org-mode casing
         expectations consistently.
-- [ ] Add parser tests covering:
-  - [ ] `#+BEGIN_SRC` / `#+END_SRC` content does not create links or tasks.
-  - [ ] `#+FILETAGS:` populates tags.
-  - [ ] Mixed-case drawer markers do not leak properties into body parsing.
-- [ ] Add one integration regression covering the previous false broken-link or
+- [x] Add parser tests covering:
+  - [x] `#+BEGIN_SRC` / `#+END_SRC` content does not create links or tasks.
+  - [x] `#+FILETAGS:` populates tags.
+  - [x] Mixed-case drawer markers do not leak properties into body parsing.
+- [x] Add one integration regression covering the previous false broken-link or
       false task behavior.
-- [ ] Run focused checks:
-  - [ ] `cargo test parser`
-  - [ ] `cargo test --test integration check`
-  - [ ] `cargo test --test integration task`
+- [x] Run focused checks:
+  - [x] `cargo test parser`
+  - [x] `cargo test --test integration check`
+  - [x] `cargo test --test integration task`
 
 ## Phase 3: Structured Output Contract
 

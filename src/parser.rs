@@ -100,7 +100,7 @@ enum PropertyKey {
 
 impl PropertyKey {
     fn parse(key: &str) -> Self {
-        match key {
+        match key.to_ascii_uppercase().as_str() {
             "ID" => PropertyKey::Id,
             "CATEGORY" => PropertyKey::Category,
             "PROJECT" => PropertyKey::Project,
@@ -134,16 +134,18 @@ pub(crate) static TITLE_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"(?im)^#\+title:\s*(.*)$").unwrap());
 
 pub(crate) static FILETAGS_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"(?m)^#\+filetags:\s*(.+)$").unwrap());
+    LazyLock::new(|| Regex::new(r"(?im)^#\+filetags:\s*(.+)$").unwrap());
 
 pub(crate) static ID_PROPERTY_RE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r":ID:\s+([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})").unwrap()
+    Regex::new(r"(?i):ID:\s+([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})")
+        .unwrap()
 });
 
-static CATEGORY_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r":CATEGORY:\s+(.+)").unwrap());
+static CATEGORY_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?i):CATEGORY:\s+(.+)").unwrap());
 
 static ALIASES_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r":ROAM_ALIASES:\s+(.*)").unwrap());
+    LazyLock::new(|| Regex::new(r"(?i):ROAM_ALIASES:\s+(.*)").unwrap());
 
 pub(crate) static UUID_FORMAT_RE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$").unwrap()
@@ -204,22 +206,22 @@ impl ParseContext {
         let trimmed = line.trim();
 
         if self.in_src_block {
-            if trimmed == "#+end_src" {
+            if trimmed.eq_ignore_ascii_case("#+end_src") {
                 self.in_src_block = false;
             }
             return;
         }
 
-        if trimmed.starts_with("#+begin_src") {
+        if starts_with_ignore_ascii_case(trimmed, "#+begin_src") {
             self.in_src_block = true;
             return;
         }
 
-        if trimmed == ":PROPERTIES:" {
+        if trimmed.eq_ignore_ascii_case(":PROPERTIES:") {
             self.in_properties = true;
             return;
         }
-        if trimmed == ":END:" {
+        if trimmed.eq_ignore_ascii_case(":END:") {
             self.in_properties = false;
             return;
         }
@@ -478,6 +480,12 @@ fn parse_property(line: &str) -> Option<(PropertyKey, &str)> {
     None
 }
 
+fn starts_with_ignore_ascii_case(value: &str, prefix: &str) -> bool {
+    value
+        .get(..prefix.len())
+        .is_some_and(|head| head.eq_ignore_ascii_case(prefix))
+}
+
 fn unquote_property_word(value: &str) -> String {
     value.trim_matches('"').to_string()
 }
@@ -594,6 +602,56 @@ Some content here."#;
         assert_eq!(note.roam_refs, vec!["https://example.com"]);
         assert_eq!(note.outgoing.len(), 4);
         assert!(matches!(note.outgoing[0], Link::Internal(_)));
+    }
+
+    #[test]
+    fn test_parse_ignores_uppercase_source_blocks() {
+        let content = r#":PROPERTIES:
+:ID:       a1b2c3d4-e5f6-7890-abcd-ef1234567890
+:END:
+#+title: source block note
+
+#+BEGIN_SRC org
+[[id:deadbeef-dead-beef-dead-beef00000001]]
+* TODO Not a task
+#+END_SRC
+"#;
+        let note = parse_note(content);
+        assert!(note.outgoing.is_empty());
+        assert!(note.headings.is_empty());
+    }
+
+    #[test]
+    fn test_parse_uppercase_filetags_keyword() {
+        let content = r#":PROPERTIES:
+:ID:       a1b2c3d4-e5f6-7890-abcd-ef1234567890
+:END:
+#+TITLE: uppercase keyword note
+#+FILETAGS: :book:tech:
+"#;
+        let note = parse_note(content);
+        assert_eq!(note.filetags, vec!["book", "tech"]);
+
+        let summary = parse_note_summary(content);
+        assert_eq!(summary.filetags, vec!["book", "tech"]);
+    }
+
+    #[test]
+    fn test_parse_mixed_case_property_drawer_markers_and_keys() {
+        let content = r#":properties:
+:id:       a1b2c3d4-e5f6-7890-abcd-ef1234567890
+:category: example
+:roam_aliases: "Alias One"
+:end:
+#+title: mixed case drawer note
+"#;
+        let note = parse_note(content);
+        assert_eq!(
+            note.uuids.first().map(String::as_str),
+            Some("a1b2c3d4-e5f6-7890-abcd-ef1234567890")
+        );
+        assert_eq!(note.categories, vec!["example"]);
+        assert_eq!(note.aliases, vec!["Alias One"]);
     }
 
     #[test]
