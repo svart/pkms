@@ -87,27 +87,23 @@ pkms serve <target> --port 0
 ```
 
 `serve` starts a foreground local HTTP server and renders the selected note as
-HTML. Internal `id:` links navigate to `/?id=<uuid>`, so the browser address bar
-tracks the rendered note. Local `file:` links and `attachment:` links are served
-as assets only when the rendered note declares the exact link. `file:` targets
-must resolve under the database root, and `attachment:` targets must resolve
-under the supported org-attach roots for the note UUID; image assets are embedded
-in the page. Free-standing `http://` and `https://` URLs in rendered text are
-clickable after org links are resolved. Org tables are rendered as HTML tables,
-note and heading tags are shown as compact chips, heading `SCHEDULED` and
-`DEADLINE` timestamps are shown as planning badges, source blocks are highlighted
-server-side with Syntect, and TeX formula text is rendered to static KaTeX HTML
-without client-side JavaScript.
-The note header includes an "Open in Emacs" button that opens the rendered note
-file through the same `emacsclient -n` editor path used by task opening.
-The page also includes collapsible floating panels: note contents on the left
-from the heading hierarchy, and backlinks on the top right from notes that link
-to the current note. On wide viewports both panels open by default; on
-constrained viewports they start collapsed. Opening a panel keeps it floating in
-the nearest top corner and may cover the note text instead of changing the main
-note column width. Hovering over an internal note link opens a scrollable note
-preview after a short delay; links inside the preview remain clickable, and
-clicking back in the original note closes the preview.
+HTML:
+
+- Internal `id:` links navigate to `/?id=<uuid>`, so the browser address bar
+  tracks the rendered note.
+- Local `file:` and `attachment:` links are served only when the rendered note
+  declares the exact link. `file:` targets must resolve under the database root;
+  `attachment:` targets must resolve under the supported org-attach roots.
+- Free-standing `http://` and `https://` URLs become clickable after org links
+  are resolved.
+- Org tables, tag chips, planning badges, Syntect source highlighting, and
+  static KaTeX formula HTML are rendered server-side.
+- The note header includes an "Open in Emacs" button using the same
+  `emacsclient -n` editor path as task opening.
+- Floating contents and backlink panels are open by default on wide viewports
+  and collapsed on constrained viewports.
+- Hovering over an internal note link opens a scrollable note preview after a
+  short delay.
 
 ## Statistics and Discovery
 
@@ -164,43 +160,30 @@ pkms task agenda upcoming --days 7
 pkms task list --group state
 pkms task list --from-stdin
 pkms task list state:TODO tags:work,!blocked
-pkms task list state:opened,!waiting
-pkms task list prio:A,B,C
-pkms task list date:fri
 pkms task list after:tom before:"2026-06-19 12:00"
 pkms task list --columns +Project
-pkms task agenda --columns -Project
 pkms task agenda week type:SCHED project:Alpha
-pkms task agenda date:tom
 pkms task p<id> show
 pkms task p<id> open
 pkms task p<id> state WAITING
 pkms task p<id> done
-pkms task list source:todoist
-pkms task agenda today source:todoist
-pkms task agenda week source:all
-pkms task agenda today source:all
 pkms task inbox
-pkms task inbox source:todoist
-pkms task list projects source:todoist
-pkms task list tags source:todoist
-pkms task todoist:<remote-id> show
 pkms task add "Capture local task"
 pkms task add title:"Call Alice" sch:mon dead:to tag:phone prio:B
-pkms task add title:"Waiting on Alice" state:WAITING
 pkms task add note:"Project Alpha" title:"Follow up"
 pkms task add dep:2 title:"Follow up on parent task"
+pkms task p<id> mod sch:2026-05-24
+pkms task p<id> mod dep:<parent-id>
+pkms task p<id> postpone --to 2026-06-01
 pkms task add source:todoist "Buy milk tomorrow"
 pkms task add source:todoist title:"Call Alice" due:2026-05-24 priority:B
-pkms task add source:todoist title:"Call Alice" sch:tod tag:phone prio:B
+pkms task list source:todoist
+pkms task agenda week source:all
+pkms task inbox source:todoist
+pkms task todoist:<remote-id> show
 pkms task todoist:<remote-id> done
-pkms task p<id> postpone --to 2026-06-01
 pkms task todoist:<remote-id> postpone --to tomorrow
-pkms task p<id> mod sch:2026-05-24
-pkms task p<id> mod state:WAITING
 pkms task todoist:<remote-id> mod sch:
-pkms task p<id> mod dl:2026-05-30
-pkms task p<id> mod dep:<parent-id>
 pkms task todoist:<remote-id> mod dl:
 ```
 
@@ -210,8 +193,9 @@ stored strings unchanged unless ANSI output is forced. Changed-task detail text
 output starts with `Task: <task title>` before the change lines.
 JSON/NDJSON output is unchanged.
 
-See [TODO and Agenda](todo-agenda.md) for task IDs, filtering, table columns,
-editor behavior, task state changes, and show output parent/child chains.
+See [TODO and Agenda](todo-agenda.md) for the full task guide, including task
+IDs, filters, table columns, editor behavior, source selection, Todoist details,
+state changes, and show output parent/child chains.
 
 `pkms task inbox` and default `pkms task add` use the PKMS inbox note configured
 as `[tasks].inbox`. The value can be a note title, UUID, absolute path, or path

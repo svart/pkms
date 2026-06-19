@@ -147,26 +147,7 @@ pkms task p5 open --editor "emacsclient -n"
 pkms task p5 open --line 42
 ```
 
-## Task Namespace
-
-The `task` namespace is the task-oriented command surface. Local PKMS commands
-include:
-
-```bash
-pkms task list
-pkms task agenda
-pkms task agenda today
-pkms task agenda week
-pkms task agenda overdue
-pkms task agenda upcoming --days 7
-pkms task list source:pkms
-```
-
-PKMS, Todoist, and mixed-source task views use the standard task table columns:
-
-```text
-Id,Date,State,Type,Prio,Tags,Project,Note,Heading
-```
+## Sources and Output
 
 Text task views render IDs for the selected source set. In source-neutral views
 with only one source selected, `Id` is the bare source id. With `source:all`,
@@ -227,7 +208,8 @@ pkms task list 'scope:Some Note Title' after:2026-05-01 before:"2026-05-25 18:00
 pkms task list source:todoist 'todoist.filter:today | overdue'
 ```
 
-When built with `--features todoist`, Todoist read commands are available:
+When built with `--features todoist`, Todoist-backed reads and writes are
+available:
 
 ```bash
 pkms task list source:todoist
@@ -237,7 +219,6 @@ pkms task agenda week source:all
 pkms task agenda today source:all
 pkms task agenda overdue source:todoist
 pkms task agenda upcoming --days 7 source:all
-pkms task inbox
 pkms task inbox source:todoist
 pkms task list projects source:todoist
 pkms task list tags source:todoist
@@ -245,25 +226,15 @@ pkms task list projects source:all
 pkms task list tags source:all
 pkms task list source:todoist 'todoist.filter:today | overdue'
 pkms task todoist:<remote-id> show
-pkms task add "Capture local task"
-pkms task add title:"Call Alice" due:2026-05-24 deadline:2026-05-30 tag:phone priority:B
-pkms task add title:"Waiting on Alice" state:WAITING
-pkms task add note:"Project Alpha" title:"Follow up"
-pkms task add dep:2 title:"Follow up on parent task"
 pkms task add source:todoist "Buy milk tomorrow"
 pkms task add source:todoist project:Inbox "Buy milk tomorrow"
 pkms task add source:todoist title:"Call Alice" due:2026-05-24 tag:phone priority:B
 pkms task add source:todoist title:"Call Alice" sch:tod tag:phone prio:B
 pkms task todoist:<remote-id> done
 pkms task todoist:<remote-id> done --dry-run
-pkms task p<id> postpone --to 2026-06-01
 pkms task todoist:<remote-id> postpone --to tomorrow
-pkms task p<id> mod sch:2026-05-24
-pkms task p<id> mod state:WAITING
 pkms task todoist:<remote-id> mod sch:2026-05-24
 pkms task todoist:<remote-id> mod sch:
-pkms task p<id> mod dl:2026-05-30
-pkms task p<id> mod dep:<parent-id>
 pkms task todoist:<remote-id> mod dl:
 ```
 
