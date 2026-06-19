@@ -1,0 +1,162 @@
+# Code Review Fix Plan
+
+This plan tracks fixes from the repository-wide code review. Work through it in
+order unless a later task is clearly independent. Each task should land as a
+small, focused change with tests near the affected behavior.
+
+## Phase 1: Serve Asset Access
+
+Goal: prevent `pkms serve` from exposing arbitrary files under the user's home
+directory through `/asset`.
+
+- [ ] Confirm the intended serve asset policy:
+  - [ ] `attachment:` targets may resolve only through the supported org-attach
+        layouts for the note UUID.
+  - [ ] `file:` targets may resolve only if the note actually contains the same
+        parsed file link target, or only under `db_root` if that is the desired
+        stricter policy.
+  - [ ] No request should be allowed just because the resolved path is under
+        `dirs::home_dir()`.
+- [ ] Replace the broad home-directory allowlist in
+      `src/commands/serve/assets.rs`.
+- [ ] Validate `/asset` requests in `src/commands/serve/http.rs` against the
+      note's parsed outgoing file or attachment links before reading from disk.
+- [ ] Add serve tests covering:
+  - [ ] A linked DB-local file or image is still served.
+  - [ ] A linked attachment is still served.
+  - [ ] An unlinked file under the home directory is rejected.
+  - [ ] Path traversal and absolute-path variants are rejected.
+- [ ] Run focused checks:
+  - [ ] `cargo test --features web serve`
+  - [ ] `cargo test --features web --test integration serve`
+
+## Phase 2: Org Parser Case Handling
+
+Goal: make parser behavior consistent with common org-mode keyword casing.
+
+- [ ] Add small parser helpers for case-insensitive org keyword and drawer
+      marker matching.
+- [ ] Make source block detection case-insensitive for both begin and end
+      markers in `src/parser.rs`.
+- [ ] Make `#+filetags:` parsing case-insensitive, matching existing
+      `#+title:` behavior.
+- [ ] Review property drawer parsing for case handling:
+  - [ ] `:PROPERTIES:` and `:END:` should be accepted case-insensitively.
+  - [ ] Property keys such as `:ID:`, `:CATEGORY:`, `:PROJECT:`,
+        `:ROAM_ALIASES:`, and `:ROAM_REFS:` should follow org-mode casing
+        expectations consistently.
+- [ ] Add parser tests covering:
+  - [ ] `#+BEGIN_SRC` / `#+END_SRC` content does not create links or tasks.
+  - [ ] `#+FILETAGS:` populates tags.
+  - [ ] Mixed-case drawer markers do not leak properties into body parsing.
+- [ ] Add one integration regression covering the previous false broken-link or
+      false task behavior.
+- [ ] Run focused checks:
+  - [ ] `cargo test parser`
+  - [ ] `cargo test --test integration check`
+  - [ ] `cargo test --test integration task`
+
+## Phase 3: Structured Output Contract
+
+Goal: ensure `--output-format ndjson` never prints pretty multi-line JSON.
+
+- [ ] Split output format helpers in `src/output.rs`:
+  - [ ] `is_structured()` or equivalent for `json` and `ndjson`.
+  - [ ] `is_json()` for only `json`, if still useful.
+  - [ ] `print_json_line()` or equivalent for a single compact JSON object.
+- [ ] Update non-stream commands that currently treat `ndjson` as pretty JSON:
+  - [ ] `check`
+  - [ ] `info`
+  - [ ] `fix`
+  - [ ] `path`
+  - [ ] `new`
+  - [ ] `extract`
+  - [ ] `serve` startup output
+  - [ ] `init-config`
+  - [ ] startup and command error output
+- [ ] Decide and document the non-stream `ndjson` behavior:
+  - [ ] Prefer one compact JSON object on one line.
+  - [ ] Keep stream producers emitting one object per record.
+- [ ] Add integration tests that parse every line of non-stream `ndjson` output
+      as exactly one JSON value where the command supports structured output.
+- [ ] Update docs if wording changes:
+  - [ ] `docs/json-output.md`
+  - [ ] `docs/pipelining.md`
+  - [ ] `skills/pkms-manager/references/pipelining.md`
+- [ ] Run focused checks:
+  - [ ] `cargo test output`
+  - [ ] `cargo test --test integration pipe`
+  - [ ] `cargo test --test integration all_commands`
+
+## Phase 4: Task Sort And Group Validation
+
+Goal: make task list and agenda validation consistent across PKMS-only and
+source-neutral execution paths.
+
+- [ ] Extract shared task sort parsing and validation:
+  - [ ] Use one accepted-field list for all task list and agenda paths.
+  - [ ] Ensure empty sort fields are rejected consistently.
+  - [ ] Support only fields that each path can actually sort by, or document and
+        implement missing fields for PKMS records.
+- [ ] Replace direct `split(',')` sort parsing in:
+  - [ ] `src/commands/task/todo.rs`
+  - [ ] `src/commands/task/agenda.rs`
+- [ ] Validate `task list --group` before rendering:
+  - [ ] Accept only `state`, `file`, and `priority`.
+  - [ ] Reject unknown group fields with a clear error.
+- [ ] Add integration tests covering:
+  - [ ] `task list --sort unknown` fails on the default PKMS path.
+  - [ ] `task agenda --sort unknown` fails on the default PKMS path.
+  - [ ] `task list --group unknown` fails.
+  - [ ] Valid sort and group fields still work.
+- [ ] Run focused checks:
+  - [ ] `cargo test task`
+  - [ ] `cargo test --test integration task`
+
+## Phase 5: Config Strictness
+
+Goal: reject typos in nested config tables instead of silently ignoring them.
+
+- [ ] Add `#[serde(deny_unknown_fields)]` to nested config structs where safe:
+  - [ ] `AgendaConfig`
+  - [ ] `TodoistConfig`
+  - [ ] `TaskConfig`
+- [ ] Add config tests for unknown fields in each nested table.
+- [ ] Confirm generated default config remains valid.
+- [ ] Run focused checks:
+  - [ ] `cargo test config`
+  - [ ] `cargo test --test integration config`
+
+## Phase 6: Simplification Follow-Up
+
+Goal: reduce the chance of future divergence between old PKMS task paths and
+source-neutral task paths.
+
+- [ ] Inventory remaining duplicate task list and agenda responsibilities:
+  - [ ] Sort parsing.
+  - [ ] Limit handling.
+  - [ ] Date filtering.
+  - [ ] Priority filtering.
+  - [ ] Text, JSON, and NDJSON rendering.
+- [ ] Decide whether to migrate PKMS-only `TaskRecord` flows toward `TaskItem`
+      earlier, or keep `TaskRecord` but share validation and rendering helpers.
+- [ ] Extract only abstractions with immediate duplication reduction; avoid a
+      large rewrite.
+- [ ] Add regression tests before refactoring each behavior.
+
+## Final Gate
+
+Run the normal fast pre-commit gate after the fixes are complete:
+
+- [ ] `cargo fmt --all -- --check`
+- [ ] `cargo clippy --all-targets --all-features -- -D warnings`
+- [ ] `cargo test --all-features`
+- [ ] `cargo build --all-features`
+
+## Notes
+
+- [ ] Keep each phase independently reviewable.
+- [ ] Update user docs and `skills/pkms-manager/` references when CLI behavior
+      or output contracts change.
+- [ ] Do not change canonical task ID behavior while fixing task validation.
+- [ ] Keep `pkms serve` foreground-only and free of persistent derived state.
