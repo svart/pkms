@@ -93,25 +93,25 @@ Goal: ensure `--output-format ndjson` never prints pretty multi-line JSON.
 Goal: make task list and agenda validation consistent across PKMS-only and
 source-neutral execution paths.
 
-- [ ] Extract shared task sort parsing and validation:
-  - [ ] Use one accepted-field list for all task list and agenda paths.
-  - [ ] Ensure empty sort fields are rejected consistently.
-  - [ ] Support only fields that each path can actually sort by, or document and
+- [x] Extract shared task sort parsing and validation:
+  - [x] Use one accepted-field list for all task list and agenda paths.
+  - [x] Ensure empty sort fields are rejected consistently.
+  - [x] Support only fields that each path can actually sort by, or document and
         implement missing fields for PKMS records.
-- [ ] Replace direct `split(',')` sort parsing in:
-  - [ ] `src/commands/task/todo.rs`
-  - [ ] `src/commands/task/agenda.rs`
-- [ ] Validate `task list --group` before rendering:
-  - [ ] Accept only `state`, `file`, and `priority`.
-  - [ ] Reject unknown group fields with a clear error.
-- [ ] Add integration tests covering:
-  - [ ] `task list --sort unknown` fails on the default PKMS path.
-  - [ ] `task agenda --sort unknown` fails on the default PKMS path.
-  - [ ] `task list --group unknown` fails.
-  - [ ] Valid sort and group fields still work.
-- [ ] Run focused checks:
-  - [ ] `cargo test task`
-  - [ ] `cargo test --test integration task`
+- [x] Replace direct `split(',')` sort parsing in:
+  - [x] `src/commands/task/todo.rs`
+  - [x] `src/commands/task/agenda.rs`
+- [x] Validate `task list --group` before rendering:
+  - [x] Accept only `state`, `file`, and `priority`.
+  - [x] Reject unknown group fields with a clear error.
+- [x] Add integration tests covering:
+  - [x] `task list --sort unknown` fails on the default PKMS path.
+  - [x] `task agenda --sort unknown` fails on the default PKMS path.
+  - [x] `task list --group unknown` fails.
+  - [x] Valid sort and group fields still work.
+- [x] Run focused checks:
+  - [x] `cargo test task`
+  - [x] `cargo test --test integration task`
 
 ## Phase 5: Config Strictness
 

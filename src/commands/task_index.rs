@@ -77,6 +77,10 @@ impl RowItem for TaskRecord {
         &self.heading_title
     }
 
+    fn project(&self) -> Option<&str> {
+        self.project.as_deref()
+    }
+
     fn filetags(&self) -> &[String] {
         &self.filetags
     }

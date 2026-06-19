@@ -1,12 +1,16 @@
 use crate::org_date::parse_org_date;
 use crate::output::{ALL_COLUMNS, Column, adaptive_column_widths, terminal_markup};
 use crate::tasks::clock::TaskClock;
+use anyhow::{Result, bail};
 use chrono::{NaiveDate, Timelike};
 use std::collections::HashSet;
 use tabled::builder::Builder;
 use tabled::settings::object::{Columns, Object, Rows};
 use tabled::settings::style::{Border, Style};
 use tabled::settings::{Modify, Span, Width};
+
+pub const TASK_SORT_FIELD_HELP: &str =
+    "priority, date, scheduled, deadline, file, source, state, task, title, or project";
 
 pub fn combine_tags(filetags: &[String], heading_tags: &[String]) -> String {
     let mut seen = HashSet::new();
@@ -112,6 +116,9 @@ pub trait RowItem {
             "scheduled" => self.scheduled_date_str().cmp(&other.scheduled_date_str()),
             "deadline" => self.deadline_date_str().cmp(&other.deadline_date_str()),
             "date" => self.effective_date().cmp(&other.effective_date()),
+            "source" => std::cmp::Ordering::Equal,
+            "task" | "title" => self.heading_title().cmp(other.heading_title()),
+            "project" => self.project().cmp(&other.project()),
             _ => std::cmp::Ordering::Equal,
         }
     }
@@ -215,6 +222,32 @@ pub fn sort_items<T: RowItem>(items: &mut [T], sort_fields: &[&str]) {
         }
         std::cmp::Ordering::Equal
     });
+}
+
+pub fn parse_task_sort_fields(sort: &str) -> Result<Vec<&str>> {
+    let fields: Vec<&str> = sort
+        .split(',')
+        .map(|field| field.trim())
+        .filter(|field| !field.is_empty())
+        .collect();
+    if fields.is_empty() {
+        bail!("Task sort must include at least one field");
+    }
+    for field in &fields {
+        match *field {
+            "priority" | "date" | "scheduled" | "deadline" | "file" | "source" | "state"
+            | "task" | "title" | "project" => {}
+            other => bail!("Unknown task sort field '{other}'. Use {TASK_SORT_FIELD_HELP}."),
+        }
+    }
+    Ok(fields)
+}
+
+pub fn validate_task_group_field(group_field: &str) -> Result<()> {
+    match group_field {
+        "state" | "file" | "priority" => Ok(()),
+        other => bail!("Unknown task group field '{other}'. Use state, file, or priority."),
+    }
 }
 
 pub fn print_table<T: RowItem>(

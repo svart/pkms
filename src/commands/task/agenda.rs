@@ -100,11 +100,7 @@ pub fn run_with_clock(
         }
     }
 
-    let sort_fields: Vec<&str> = opts
-        .sort
-        .as_deref()
-        .map(|s| s.split(',').map(|s| s.trim()).collect())
-        .unwrap_or_else(|| vec!["date", "priority"]);
+    let sort_fields = parse_task_sort_fields(opts.sort.as_deref().unwrap_or("date,priority"))?;
     sort_items(&mut items, &sort_fields);
 
     let total = items.len();

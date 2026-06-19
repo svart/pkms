@@ -106,13 +106,10 @@ pub fn run_on(
         items.retain(|item| item_datetimes(item).iter().any(|dt| dt <= before_dt));
     }
 
-    let sort_fields: Vec<&str> = opts
-        .sort
-        .as_deref()
-        .map(|s| s.split(',').map(|s| s.trim()).collect())
-        .unwrap_or_else(|| vec!["priority"]);
+    let sort_fields = parse_task_sort_fields(opts.sort.as_deref().unwrap_or("priority"))?;
 
     if let Some(group_field) = &opts.group {
+        validate_task_group_field(group_field)?;
         let mut groups: BTreeMap<String, Vec<TaskRecord>> = BTreeMap::new();
         for item in items {
             let key = get_group_key(&item, group_field);

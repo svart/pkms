@@ -1,4 +1,5 @@
 use super::{plan, providers, render};
+use crate::commands::task_common::parse_task_sort_fields;
 use crate::config::ResolvedConfig;
 use crate::output::Column;
 use crate::tasks::clock::TaskClock;
@@ -7,7 +8,7 @@ use crate::tasks::model::TaskItem;
 use crate::tasks::provider::TaskListView;
 use crate::tasks::scope::ResolvedScope;
 use crate::workspace::Workspace;
-use anyhow::{Result, bail};
+use anyhow::Result;
 use chrono::NaiveDate;
 
 pub(super) struct TaskListExecution {
@@ -169,25 +170,4 @@ pub(super) fn sort_task_items(items: &mut [TaskItem], sort: &str) -> Result<()> 
             .then_with(|| a.title.cmp(&b.title))
     });
     Ok(())
-}
-
-fn parse_task_sort_fields(sort: &str) -> Result<Vec<&str>> {
-    let fields: Vec<&str> = sort
-        .split(',')
-        .map(|field| field.trim())
-        .filter(|field| !field.is_empty())
-        .collect();
-    if fields.is_empty() {
-        bail!("Task sort must include at least one field");
-    }
-    for field in &fields {
-        match *field {
-            "priority" | "date" | "scheduled" | "deadline" | "file" | "source" | "state"
-            | "task" | "title" | "project" => {}
-            other => bail!(
-                "Unknown task sort field '{other}'. Use priority, date, scheduled, deadline, file, source, state, task, title, or project."
-            ),
-        }
-    }
-    Ok(fields)
 }

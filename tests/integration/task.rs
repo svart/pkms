@@ -307,6 +307,28 @@ fn test_task_list_group_state_json() {
 }
 
 #[test]
+fn test_task_list_rejects_unknown_group_field() {
+    let (_dir, root) = setup_db();
+    let (stdout, _stderr, status) = run(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "task",
+        "list",
+        "--group",
+        "unknown",
+    ]);
+
+    assert!(!status.success());
+    let v = assert_json_error_output(&["task", "list", "--group", "unknown"], &stdout);
+    assert_eq!(
+        v["error"],
+        "Unknown task group field 'unknown'. Use state, file, or priority."
+    );
+}
+
+#[test]
 fn test_task_list_from_stdin_scopes_to_resolved_note() {
     let (_dir, root) = setup_db();
     let (task_stdout, task_stderr, task_status) = run_pipe(
@@ -1031,6 +1053,30 @@ fn test_task_list_source_neutral_sort_supports_file_sort_field() {
 }
 
 #[test]
+fn test_task_list_pkms_default_rejects_unknown_sort_field() {
+    let (_dir, root) = setup_db();
+    let (stdout, _stderr, status) = run(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "task",
+        "list",
+        "--sort",
+        "unknown",
+    ]);
+
+    assert!(!status.success());
+    let v = assert_json_error_output(&["task", "list", "--sort", "unknown"], &stdout);
+    assert!(
+        v["error"]
+            .as_str()
+            .unwrap()
+            .contains("Unknown task sort field 'unknown'")
+    );
+}
+
+#[test]
 fn test_task_list_rejects_unknown_sort_field() {
     let (_dir, root) = setup_db();
     let (stdout, _stderr, status) = run(&[
@@ -1056,6 +1102,47 @@ fn test_task_list_rejects_unknown_sort_field() {
 }
 
 #[test]
+fn test_task_list_pkms_default_rejects_empty_sort_field() {
+    let (_dir, root) = setup_db();
+    let (stdout, _stderr, status) = run(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "task",
+        "list",
+        "--sort",
+        "",
+    ]);
+
+    assert!(!status.success());
+    let v = assert_json_error_output(&["task", "list", "--sort", ""], &stdout);
+    assert!(
+        v["error"]
+            .as_str()
+            .unwrap()
+            .contains("Task sort must include at least one field")
+    );
+}
+
+#[test]
+fn test_task_list_pkms_default_sorts_by_task_title() {
+    let db = TestDb::new()
+        .note(
+            "tasks.org",
+            "Sort Tasks",
+            "44444444-4444-4444-8444-444444444444",
+        )
+        .task("tasks.org", "TODO", "Beta task")
+        .task("tasks.org", "TODO", "Alpha task");
+
+    let (v, status) = db.run_json(&["task", "list", "--sort", "title"]);
+
+    assert!(status.success());
+    assert_eq!(task_titles(&v), vec!["Alpha task", "Beta task"]);
+}
+
+#[test]
 fn test_task_agenda_source_neutral_sort_supports_date_sort_fields() {
     let (_dir, root) = setup_db();
     let (v, status) = run_json(&[
@@ -1072,6 +1159,30 @@ fn test_task_agenda_source_neutral_sort_supports_date_sort_fields() {
 
     assert!(status.success());
     assert!(v["items"].is_array());
+}
+
+#[test]
+fn test_task_agenda_pkms_default_rejects_unknown_sort_field() {
+    let (_dir, root) = setup_db();
+    let (stdout, _stderr, status) = run(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "task",
+        "agenda",
+        "--sort",
+        "unknown",
+    ]);
+
+    assert!(!status.success());
+    let v = assert_json_error_output(&["task", "agenda", "--sort", "unknown"], &stdout);
+    assert!(
+        v["error"]
+            .as_str()
+            .unwrap()
+            .contains("Unknown task sort field 'unknown'")
+    );
 }
 
 #[test]
