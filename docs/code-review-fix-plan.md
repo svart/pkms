@@ -153,17 +153,31 @@ coverage.
 
 ## Final Gate
 
-Run the normal fast pre-commit gate after the fixes are complete:
+Run the full feature matrix after the fixes are complete:
 
-- [ ] `cargo fmt --all -- --check`
-- [ ] `cargo clippy --all-targets --all-features -- -D warnings`
-- [ ] `cargo test --all-features`
-- [ ] `cargo build --all-features`
+- [x] `cargo fmt --all -- --check`
+- [x] `cargo clippy --locked --all-targets -- -D warnings`
+- [x] `cargo clippy --locked --all-targets --all-features -- -D warnings`
+- [x] `cargo build --locked`
+- [x] `cargo build --locked --features todoist`
+- [x] `cargo build --locked --features web`
+- [x] `cargo build --locked --features ssh`
+- [x] `cargo build --locked --all-features`
+- [x] `cargo test --locked`
+- [x] `cargo test --locked --features todoist`
+- [x] `cargo test --locked --features web`
+- [x] `cargo test --locked --features ssh`
+- [x] `cargo test --locked --features todoist,web,ssh`
+- [x] `cargo run --locked -- --help`
+- [x] `cargo run --locked --features todoist -- --help`
+- [x] `cargo run --locked --features web -- --help`
+- [x] `cargo run --locked --features ssh -- check --help`
+- [x] `cargo build --locked --release`
 
 ## Notes
 
-- [ ] Keep each phase independently reviewable.
-- [ ] Update user docs and `skills/pkms-manager/` references when CLI behavior
+- [x] Keep each phase independently reviewable.
+- [x] Update user docs and `skills/pkms-manager/` references when CLI behavior
       or output contracts change.
-- [ ] Do not change canonical task ID behavior while fixing task validation.
-- [ ] Keep `pkms serve` foreground-only and free of persistent derived state.
+- [x] Do not change canonical task ID behavior while fixing task validation.
+- [x] Keep `pkms serve` foreground-only and free of persistent derived state.
