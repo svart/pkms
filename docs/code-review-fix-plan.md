@@ -9,26 +9,26 @@ small, focused change with tests near the affected behavior.
 Goal: prevent `pkms serve` from exposing arbitrary files under the user's home
 directory through `/asset`.
 
-- [ ] Confirm the intended serve asset policy:
-  - [ ] `attachment:` targets may resolve only through the supported org-attach
+- [x] Confirm the intended serve asset policy:
+  - [x] `attachment:` targets may resolve only through the supported org-attach
         layouts for the note UUID.
-  - [ ] `file:` targets may resolve only if the note actually contains the same
+  - [x] `file:` targets may resolve only if the note actually contains the same
         parsed file link target, or only under `db_root` if that is the desired
         stricter policy.
-  - [ ] No request should be allowed just because the resolved path is under
+  - [x] No request should be allowed just because the resolved path is under
         `dirs::home_dir()`.
-- [ ] Replace the broad home-directory allowlist in
+- [x] Replace the broad home-directory allowlist in
       `src/commands/serve/assets.rs`.
-- [ ] Validate `/asset` requests in `src/commands/serve/http.rs` against the
+- [x] Validate `/asset` requests in `src/commands/serve/http.rs` against the
       note's parsed outgoing file or attachment links before reading from disk.
-- [ ] Add serve tests covering:
-  - [ ] A linked DB-local file or image is still served.
-  - [ ] A linked attachment is still served.
-  - [ ] An unlinked file under the home directory is rejected.
-  - [ ] Path traversal and absolute-path variants are rejected.
-- [ ] Run focused checks:
-  - [ ] `cargo test --features web serve`
-  - [ ] `cargo test --features web --test integration serve`
+- [x] Add serve tests covering:
+  - [x] A linked DB-local file or image is still served.
+  - [x] A linked attachment is still served.
+  - [x] An unlinked file under the home directory is rejected.
+  - [x] Path traversal and absolute-path variants are rejected.
+- [x] Run focused checks:
+  - [x] `cargo test --features web serve`
+  - [x] `cargo test --features web --test integration serve`
 
 ## Phase 2: Org Parser Case Handling
 

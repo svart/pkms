@@ -2,9 +2,11 @@ use super::{assets, inline::percent_decode, render_note_html, render_preview_htm
 use crate::commands::open;
 use crate::config::ResolvedConfig;
 use crate::graph::{Graph, resolve_file_link_path};
+use crate::parser::{Link, parse_note};
 use anyhow::{Context, Result};
 use std::io::{self, BufRead, BufReader, Write};
 use std::net::TcpStream;
+use std::path::Path;
 
 pub(super) struct ServeState<'a> {
     pub(super) config: &'a ResolvedConfig,
@@ -176,16 +178,31 @@ fn asset_response(state: &ServeState<'_>, query: Option<&str>) -> Result<HttpRes
         return Ok(HttpResponse::not_found("Missing target"));
     };
     let note = state.graph.resolve_target(&note_uuid)?;
-    let path = match kind.as_str() {
-        "file" => resolve_file_link_path(&target, &note.path, state.config.resolved_db_root()),
-        "attachment" => assets::resolve_existing_attachment(
-            state.config.resolved_db_root(),
-            &note.uuid,
-            &target,
-        ),
+    if !note_declares_asset_link(&note.path, &kind, &target)? {
+        return Ok(HttpResponse::not_found("Asset not found"));
+    }
+    let (path, allowed) = match kind.as_str() {
+        "file" => {
+            let path = resolve_file_link_path(&target, &note.path, state.config.resolved_db_root());
+            let allowed = assets::is_db_asset_allowed(&path, state.config.resolved_db_root());
+            (path, allowed)
+        }
+        "attachment" => {
+            let path = assets::resolve_existing_attachment(
+                state.config.resolved_db_root(),
+                &note.uuid,
+                &target,
+            );
+            let allowed = assets::is_attachment_asset_allowed(
+                &path,
+                state.config.resolved_db_root(),
+                &note.uuid,
+            );
+            (path, allowed)
+        }
         _ => return Ok(HttpResponse::not_found("Unknown asset kind")),
     };
-    if !assets::is_asset_allowed(&path, state.config.resolved_db_root()) || !path.is_file() {
+    if !allowed || !path.is_file() {
         return Ok(HttpResponse::not_found("Asset not found"));
     }
     let body = std::fs::read(&path)?;
@@ -194,6 +211,26 @@ fn asset_response(state: &ServeState<'_>, query: Option<&str>) -> Result<HttpRes
         content_type: assets::mime_type(&path),
         body,
     })
+}
+
+fn note_declares_asset_link(note_path: &Path, kind: &str, target: &str) -> Result<bool> {
+    let content = std::fs::read_to_string(note_path)
+        .with_context(|| format!("Failed to read {}", note_path.display()))?;
+    let parsed = parse_note(&content);
+    Ok(parsed
+        .outgoing
+        .iter()
+        .chain(
+            parsed
+                .headings
+                .iter()
+                .flat_map(|heading| heading.outgoing.iter()),
+        )
+        .any(|link| match (kind, link) {
+            ("file", Link::File(link_target)) => link_target == target,
+            ("attachment", Link::Attachment(link_target)) => link_target == target,
+            _ => false,
+        }))
 }
 
 pub(super) fn open_response(

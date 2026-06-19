@@ -234,6 +234,111 @@ fn test_serve_accepts_cwd_relative_note_path() {
     let _ = child.wait();
 }
 
+#[test]
+fn test_serve_asset_endpoint_only_serves_linked_note_assets() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().to_path_buf();
+    let home = tempfile::tempdir().unwrap();
+    let config_home = setup_test_config_home();
+    let roam = root.join("roam");
+    let assets = roam.join("assets");
+    std::fs::create_dir_all(&assets).unwrap();
+    std::fs::create_dir_all(root.join(".attach/aa/aaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa")).unwrap();
+    std::fs::write(roam.join("linked.txt"), "linked file").unwrap();
+    std::fs::write(
+        root.join(".attach/aa/aaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa/attach.txt"),
+        "linked attachment",
+    )
+    .unwrap();
+    std::fs::write(roam.join("secret.txt"), "db secret").unwrap();
+    std::fs::write(home.path().join("home-secret.txt"), "home secret").unwrap();
+    std::fs::write(
+        roam.join("a.org"),
+        r#":PROPERTIES:
+:ID:       aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa
+:END:
+#+title: Alpha
+
+[[file:linked.txt][Linked file]]
+[[attachment:attach.txt][Linked attachment]]
+"#,
+    )
+    .unwrap();
+
+    let mut child = Command::new(pkms_binary())
+        .args([
+            "--db",
+            root.to_str().unwrap(),
+            "serve",
+            "Alpha",
+            "--port",
+            "0",
+        ])
+        .env("XDG_CONFIG_HOME", config_home.path())
+        .env("HOME", home.path())
+        .env_remove("PKMS_DB_ROOT")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("failed to spawn pkms serve");
+
+    let stdout = child.stdout.take().unwrap();
+    let mut reader = BufReader::new(stdout);
+    let mut line = String::new();
+    reader.read_line(&mut line).unwrap();
+    assert!(
+        line.starts_with("Serving http://"),
+        "unexpected line: {line}"
+    );
+    let url = line.trim().strip_prefix("Serving ").unwrap();
+    let (_, rest) = url.split_once("://").unwrap();
+    let (host_port, _) = rest.split_once('/').unwrap();
+
+    let linked_file = http_get(
+        host_port,
+        &asset_path("aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa", "file", "linked.txt"),
+    );
+    assert!(linked_file.contains("HTTP/1.1 200 OK"));
+    assert!(linked_file.contains("linked file"));
+
+    let linked_attachment = http_get(
+        host_port,
+        &asset_path(
+            "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa",
+            "attachment",
+            "attach.txt",
+        ),
+    );
+    assert!(linked_attachment.contains("HTTP/1.1 200 OK"));
+    assert!(linked_attachment.contains("linked attachment"));
+
+    for rejected_target in [
+        home.path()
+            .join("home-secret.txt")
+            .to_string_lossy()
+            .to_string(),
+        roam.join("secret.txt").to_string_lossy().to_string(),
+        "assets/../secret.txt".to_string(),
+    ] {
+        let response = http_get(
+            host_port,
+            &asset_path(
+                "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa",
+                "file",
+                &rejected_target,
+            ),
+        );
+        assert!(
+            response.contains("HTTP/1.1 404 Not Found"),
+            "unexpected response for {rejected_target}:\n{response}"
+        );
+        assert!(!response.contains("secret"));
+    }
+
+    child.kill().unwrap();
+    let _ = child.wait();
+}
+
 fn http_get(host_port: &str, path: &str) -> String {
     let mut stream = TcpStream::connect(host_port).unwrap();
     let write_result = write!(
@@ -249,6 +354,28 @@ fn http_get(host_port: &str, path: &str) -> String {
     }
     assert_complete_http_response(&response, path);
     String::from_utf8(response).expect("serve response should be utf-8")
+}
+
+fn asset_path(note_uuid: &str, kind: &str, target: &str) -> String {
+    format!(
+        "/asset?note={}&kind={}&target={}",
+        percent_encode(note_uuid),
+        percent_encode(kind),
+        percent_encode(target)
+    )
+}
+
+fn percent_encode(text: &str) -> String {
+    let mut encoded = String::new();
+    for byte in text.bytes() {
+        match byte {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                encoded.push(byte as char);
+            }
+            _ => encoded.push_str(&format!("%{byte:02X}")),
+        }
+    }
+    encoded
 }
 
 fn assert_complete_http_response(response: &[u8], path: &str) {

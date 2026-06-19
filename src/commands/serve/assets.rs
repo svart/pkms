@@ -74,16 +74,31 @@ pub(super) fn resolve_existing_attachment(db_root: &Path, uuid: &str, target: &s
     }
 }
 
-pub(super) fn is_asset_allowed(path: &Path, db_root: &Path) -> bool {
+pub(super) fn is_db_asset_allowed(path: &Path, db_root: &Path) -> bool {
     let Ok(canonical_path) = std::fs::canonicalize(path) else {
         return false;
     };
-    if let Ok(canonical_root) = std::fs::canonicalize(db_root)
-        && canonical_path.starts_with(canonical_root)
-    {
-        return true;
+    std::fs::canonicalize(db_root)
+        .is_ok_and(|canonical_root| canonical_path.starts_with(canonical_root))
+}
+
+pub(super) fn is_attachment_asset_allowed(path: &Path, db_root: &Path, uuid: &str) -> bool {
+    let Ok(canonical_path) = std::fs::canonicalize(path) else {
+        return false;
+    };
+    attachment_roots(db_root, uuid)
+        .into_iter()
+        .filter_map(|root| std::fs::canonicalize(root).ok())
+        .any(|root| canonical_path.starts_with(root))
+}
+
+fn attachment_roots(db_root: &Path, uuid: &str) -> Vec<PathBuf> {
+    let mut roots = Vec::new();
+    if uuid.len() > 2 {
+        roots.push(db_root.join(".attach").join(&uuid[..2]).join(&uuid[2..]));
     }
-    dirs::home_dir().is_some_and(|home| canonical_path.starts_with(home))
+    roots.push(db_root.join(".attach").join(uuid));
+    roots
 }
 
 pub(super) fn is_image_path(path: &Path) -> bool {
