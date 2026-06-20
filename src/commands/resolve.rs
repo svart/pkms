@@ -36,12 +36,13 @@ fn scan_files(
     root: &Path,
     ignore_patterns: &[String],
     uuid_query: Option<&str>,
+    require_todos: bool,
 ) -> Vec<ResolvedNote> {
     let Ok(files) = discovery::walk_org_files(root, ignore_patterns) else {
         return Vec::new();
     };
 
-    let do_full_scan = uuid_query.is_some();
+    let do_full_scan = uuid_query.is_some() || require_todos;
     let mut notes = Vec::new();
 
     for path in &files {
@@ -54,13 +55,15 @@ fn scan_files(
             let Some(primary_uuid) = summary.uuids.first().cloned() else {
                 continue;
             };
-            let uq = uuid_query.unwrap();
-            let matched_heading = summary
-                .uuids
-                .iter()
-                .skip(1)
-                .find(|u| u.to_lowercase().contains(&uq.to_lowercase()))
-                .cloned();
+            let matched_heading = uuid_query.and_then(|uq| {
+                let uq = uq.to_lowercase();
+                summary
+                    .uuids
+                    .iter()
+                    .skip(1)
+                    .find(|u| u.to_lowercase().contains(&uq))
+                    .cloned()
+            });
             notes.push(resolved_note_from_parsed(
                 path,
                 &summary,
@@ -134,7 +137,7 @@ pub fn run(config: &ResolvedConfig, ctx: &OutputContext, opts: &ResolveOptions) 
 pub fn execute(config: &ResolvedConfig, opts: &ResolveOptions) -> Result<ResolveCommandOutput> {
     let db_root = config.resolved_db_root();
     let ignore = config.resolve_ignore_patterns();
-    let notes = scan_files(db_root, &ignore, opts.uuid.as_deref());
+    let notes = scan_files(db_root, &ignore, opts.uuid.as_deref(), opts.todos);
 
     let title_query = opts.title.as_ref().map(|s| s.to_lowercase());
 
@@ -385,5 +388,39 @@ mod tests {
         let fields = Some(HashSet::from(["key".to_string()]));
         let result = filter_fields(&v, fields.as_ref());
         assert_eq!(result, v);
+    }
+
+    #[test]
+    fn resolve_todos_finds_tasks_after_header_scan_window() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut content = String::from(
+            r#":PROPERTIES:
+:ID:       aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa
+:END:
+#+title: Alpha
+
+"#,
+        );
+        for i in 0..110 {
+            let _ = writeln!(content, "Line {i}");
+        }
+        content.push_str("* TODO Late task\n");
+        std::fs::write(dir.path().join("alpha.org"), content).unwrap();
+        let config = ResolvedConfig::for_test_db(dir.path());
+        let output = execute(
+            &config,
+            &ResolveOptions {
+                uuid: None,
+                title: Some("Alpha".to_string()),
+                tags: None,
+                limit: None,
+                fields: None,
+                todos: true,
+            },
+        )
+        .unwrap();
+
+        assert_eq!(output.output.total, 1);
+        assert!(output.output.results[0].has_todos);
     }
 }

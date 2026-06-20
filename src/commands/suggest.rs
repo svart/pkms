@@ -124,9 +124,9 @@ fn neighbor_relevance(
     }
 
     if !ctx.content_keywords.is_empty()
-        && let Ok(nc) = std::fs::read_to_string(&neighbor.path)
+        && let Some(content) = node_content(graph, neighbor)
     {
-        let ncl = nc.to_lowercase();
+        let ncl = content.to_lowercase();
         let cm = ctx
             .content_keywords
             .iter()
@@ -217,6 +217,7 @@ fn score_title_overlap(
 
 fn score_content_match(
     other: &crate::graph::Node,
+    graph: &Graph,
     ctx: &SuggestionContext,
     title_overlap: bool,
     reasons: &mut Vec<String>,
@@ -224,7 +225,7 @@ fn score_content_match(
     if ctx.content_keywords.is_empty() {
         return 0.0;
     }
-    let Ok(other_content) = std::fs::read_to_string(&other.path) else {
+    let Some(other_content) = node_content(graph, other) else {
         return 0.0;
     };
     let other_lc = other_content.to_lowercase();
@@ -391,7 +392,7 @@ fn compute_scores<'a>(
             factor_scores.insert("title".to_string(), title_s);
         }
 
-        let content_s = score_content_match(other, ctx, title_s > 0.0, &mut reasons);
+        let content_s = score_content_match(other, graph, ctx, title_s > 0.0, &mut reasons);
         if content_s > 0.0 {
             score += content_s;
             *factor_scores.entry("content".to_string()).or_insert(0.0) += content_s;
@@ -449,11 +450,7 @@ fn compute_suggestions_for_node(
         .ok_or_else(|| anyhow::anyhow!("Note not found: {target}"))?;
 
     let heading_context: Option<String> = if graph.heading_uuid_to_primary.contains_key(target) {
-        if let Ok(content) = std::fs::read_to_string(&node.path) {
-            find_heading_title_for_uuid(&content, target)
-        } else {
-            None
-        }
+        node_content(graph, &node).and_then(|content| find_heading_title_for_uuid(content, target))
     } else {
         None
     };
@@ -471,7 +468,7 @@ fn compute_suggestions_for_node(
         .collect();
 
     let mut content_keywords: HashSet<String> = HashSet::new();
-    if let Ok(content) = std::fs::read_to_string(&node.path) {
+    if let Some(content) = node_content(graph, &node) {
         let content_lower = content.to_lowercase();
         for word in content_lower.split_whitespace() {
             let clean: String = word
@@ -555,6 +552,10 @@ fn compute_suggestions_for_node(
         .collect();
 
     Ok((node, suggestions, total, showed, heading_context))
+}
+
+fn node_content<'a>(graph: &'a Graph, node: &Node) -> Option<&'a str> {
+    graph.raw_content_for_path(&node.path)
 }
 
 pub struct SuggestOptions {

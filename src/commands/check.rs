@@ -414,17 +414,24 @@ struct CheckData<'a> {
 }
 
 impl CheckData<'_> {
-    fn is_healthy(&self) -> bool {
+    fn is_healthy(&self, opts: &CheckDisplayOptions) -> bool {
         let stats = self.graph.stats();
-        stats.broken_link_count == 0
-            && stats.parse_error_count == 0
-            && stats.duplicate_uuid_count == 0
-            && self.broken_file.is_empty()
-            && self.file_link_errors.is_empty()
-            && self.broken_attachment.is_empty()
-            && self.filetags_issues.is_empty()
-            && self.self_link_entries.is_empty()
-            && self.overlink_entries.is_empty()
+        let id_healthy = !opts.show_id
+            || (stats.broken_link_count == 0
+                && stats.parse_error_count == 0
+                && stats.duplicate_uuid_count == 0);
+        let stats_healthy = !opts.show_stats
+            || (stats.broken_link_count == 0
+                && stats.parse_error_count == 0
+                && stats.duplicate_uuid_count == 0);
+        id_healthy
+            && stats_healthy
+            && (!opts.show_file
+                || (self.broken_file.is_empty() && self.file_link_errors.is_empty()))
+            && (!opts.show_attach || self.broken_attachment.is_empty())
+            && (!opts.show_filetags || self.filetags_issues.is_empty())
+            && (!opts.show_self_links || self.self_link_entries.is_empty())
+            && (!opts.show_overlinks || self.overlink_entries.is_empty())
     }
 }
 
@@ -463,7 +470,7 @@ fn build_check_output(data: &CheckData, opts: &CheckDisplayOptions) -> CheckOutp
         vec![]
     };
 
-    let healthy = data.is_healthy();
+    let healthy = data.is_healthy(opts);
 
     CheckOutput {
         db_root: data.db_root.display().to_string(),
@@ -838,6 +845,42 @@ mod tests {
             "  Source Note -> /ssh:example.org:/tmp/file.txt [ssh:host_key] known host mismatch"
         ));
         assert!(text.ends_with("Status: issues found\n"));
+    }
+
+    #[test]
+    fn targeted_file_link_check_health_ignores_hidden_id_link_issues() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("alpha.org"),
+            r#":PROPERTIES:
+:ID:       aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa
+:END:
+#+title: Alpha
+
+[[id:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb]]
+"#,
+        )
+        .unwrap();
+        let config = ResolvedConfig::for_test_db(dir.path());
+        let output = execute(
+            &config,
+            &CheckOptions {
+                stats: false,
+                file_links: true,
+                remote_file_links: false,
+                attachment_links: false,
+                id_links: false,
+                filetags: false,
+                self_links: false,
+                overlinks: false,
+                cross_links: None,
+            },
+        )
+        .unwrap();
+
+        assert!(output.output.healthy);
+        assert!(output.output.broken_links.is_none());
+        assert_eq!(output.output.broken_file_links.unwrap().len(), 0);
     }
 
     #[test]

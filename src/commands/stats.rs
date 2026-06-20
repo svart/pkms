@@ -2,7 +2,6 @@ use crate::cli::{OutputFormat, StatsArgs};
 use crate::config::ResolvedConfig;
 use crate::graph::Graph;
 use crate::output::OutputContext;
-use crate::parser::Link;
 use crate::util::format_size;
 use anyhow::Result;
 use serde::Serialize;
@@ -182,17 +181,13 @@ pub fn render(ctx: &OutputContext, output: &StatsCommandOutput) -> Result<()> {
 
 fn build_hubs_output(graph: &Graph, limit: usize) -> HubsOutput {
     let hubs = graph.hubs(limit);
+    let degrees = graph.authored_internal_degrees();
 
     let hubs: Vec<HubEntryDetailed> = hubs
         .iter()
         .enumerate()
         .map(|(i, (n, deg))| {
-            let outgoing = n
-                .outgoing
-                .iter()
-                .filter(|l| matches!(l, Link::Internal(_)))
-                .count();
-            let incoming = graph.backlinks.get(&n.uuid).map_or(0, std::vec::Vec::len);
+            let (outgoing, incoming) = degrees.get(&n.uuid).copied().unwrap_or_default();
             HubEntryDetailed {
                 rank: i + 1,
                 uuid: n.uuid.clone(),

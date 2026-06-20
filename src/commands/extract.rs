@@ -111,13 +111,16 @@ fn execute(config: &ResolvedConfig, opts: &ExtractOptions) -> Result<ExtractOutp
         let (_, newline) = split_line_ending(&source_lines[start_idx]);
         let mut updated_lines = source_lines;
         updated_lines.splice(start_idx..end_idx, [format!("{replacement}{newline}")]);
-        write_lines(&source_path, &updated_lines).with_context(|| {
-            format!(
-                "Created new note at {} but failed to rewrite source {}",
-                new_path.display(),
-                source_path.display()
-            )
-        })?;
+        if let Err(error) = write_lines(&source_path, &updated_lines) {
+            let _ = std::fs::remove_file(&new_path);
+            return Err(error).with_context(|| {
+                format!(
+                    "Created new note at {} but failed to rewrite source {}",
+                    new_path.display(),
+                    source_path.display()
+                )
+            });
+        }
     }
 
     Ok(ExtractOutput {

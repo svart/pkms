@@ -9,24 +9,19 @@ use super::{Graph, GraphStats};
 
 impl Graph {
     fn primary_nodes(&self) -> Vec<&super::Node> {
-        let mut seen = std::collections::HashSet::new();
         self.nodes
             .values()
-            .filter(|n| seen.insert(&n.uuid))
+            .filter(|node| !self.heading_uuid_to_primary.contains_key(&node.uuid))
             .collect()
     }
 
     pub fn hubs(&self, limit: usize) -> Vec<(&super::Node, usize)> {
+        let degrees = self.authored_internal_degrees();
         let mut degrees: Vec<(&super::Node, usize)> = self
             .primary_nodes()
             .iter()
             .map(|n| {
-                let outgoing = n
-                    .outgoing
-                    .iter()
-                    .filter(|l| matches!(l, Link::Internal(_)))
-                    .count();
-                let incoming = self.backlinks.get(&n.uuid).map_or(0, std::vec::Vec::len);
+                let (outgoing, incoming) = degrees.get(&n.uuid).copied().unwrap_or_default();
                 (*n, outgoing + incoming)
             })
             .collect();
@@ -75,12 +70,12 @@ impl Graph {
     }
 
     pub fn orphan_nodes_including_dailies(&self) -> Vec<&super::Node> {
+        let degrees = self.authored_internal_degrees();
         self.primary_nodes()
             .into_iter()
             .filter(|n| {
-                let has_outgoing = n.outgoing.iter().any(|l| matches!(l, Link::Internal(_)));
-                let has_incoming = self.backlinks.get(&n.uuid).is_some_and(|b| !b.is_empty());
-                !has_outgoing && !has_incoming
+                let (outgoing, incoming) = degrees.get(&n.uuid).copied().unwrap_or_default();
+                outgoing == 0 && incoming == 0
             })
             .collect()
     }
@@ -93,23 +88,23 @@ impl Graph {
     }
 
     pub fn stats(&self) -> GraphStats {
-        let total_notes = self.path_to_uuid.len();
+        let total_notes = self.primary_nodes().len();
         let total_internal_links: usize = self
-            .nodes
-            .values()
-            .flat_map(|n| &n.outgoing)
+            .results
+            .iter()
+            .flat_map(authored_links)
             .filter(|l| matches!(l, Link::Internal(_)))
             .count();
         let total_file_links: usize = self
-            .nodes
-            .values()
-            .flat_map(|n| &n.outgoing)
+            .results
+            .iter()
+            .flat_map(authored_links)
             .filter(|l| matches!(l, Link::File(_)))
             .count();
         let total_url_links: usize = self
-            .nodes
-            .values()
-            .flat_map(|n| &n.outgoing)
+            .results
+            .iter()
+            .flat_map(authored_links)
             .filter(|l| matches!(l, Link::Url(_)))
             .count();
         let total_links = total_internal_links + total_file_links + total_url_links;
@@ -136,4 +131,54 @@ impl Graph {
             missing_title_count,
         }
     }
+
+    pub(crate) fn authored_internal_degrees(&self) -> HashMap<String, (usize, usize)> {
+        let mut degrees: HashMap<String, (usize, usize)> = self
+            .primary_nodes()
+            .into_iter()
+            .map(|node| (node.uuid.clone(), (0, 0)))
+            .collect();
+
+        for result in &self.results {
+            let Some(source_uuid) = self.path_to_uuid.get(&result.path) else {
+                continue;
+            };
+            if self.heading_uuid_to_primary.contains_key(source_uuid) {
+                continue;
+            }
+
+            for link in authored_links(result) {
+                let Link::Internal(target_uuid) = link else {
+                    continue;
+                };
+
+                degrees.entry(source_uuid.clone()).or_default().0 += 1;
+                if let Some(target_primary) = self.primary_uuid_for_node_uuid(target_uuid) {
+                    degrees.entry(target_primary.to_string()).or_default().1 += 1;
+                }
+            }
+        }
+
+        degrees
+    }
+
+    fn primary_uuid_for_node_uuid<'a>(&'a self, uuid: &'a str) -> Option<&'a str> {
+        if let Some(primary) = self.heading_uuid_to_primary.get(uuid) {
+            return Some(primary.as_str());
+        }
+        self.nodes
+            .contains_key(uuid)
+            .then_some(uuid)
+            .filter(|uuid| !self.heading_uuid_to_primary.contains_key(*uuid))
+    }
+}
+
+fn authored_links(result: &super::FileScanResult) -> impl Iterator<Item = &Link> {
+    result.parsed.outgoing.iter().chain(
+        result
+            .parsed
+            .headings
+            .iter()
+            .flat_map(|h| h.outgoing.iter()),
+    )
 }

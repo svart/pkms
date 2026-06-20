@@ -172,8 +172,21 @@ impl Graph {
     }
 
     pub fn from_corpus(corpus: &Corpus) -> Self {
-        let results = corpus.results().to_vec();
-        let mut graph = Graph::build(results.clone());
+        Self::from_results(corpus.results().to_vec())
+    }
+
+    pub fn from_corpus_without_raw_content(corpus: &Corpus) -> Self {
+        Self::from_results(
+            corpus
+                .results()
+                .iter()
+                .map(FileScanResult::without_raw_content)
+                .collect(),
+        )
+    }
+
+    fn from_results(results: Vec<FileScanResult>) -> Self {
+        let mut graph = Graph::build_from_results(&results);
         graph.results = results;
         tracing::debug!(
             node_count = graph.nodes.len(),
@@ -253,6 +266,13 @@ impl Graph {
             primary_uuid: primary_uuid.to_string(),
             line_number: heading.line_number,
         })
+    }
+
+    pub(crate) fn raw_content_for_path(&self, path: &Path) -> Option<&str> {
+        self.results
+            .iter()
+            .find(|result| result.path == path)
+            .and_then(|result| result.raw_content.as_deref())
     }
 }
 

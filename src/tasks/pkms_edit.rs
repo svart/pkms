@@ -165,6 +165,7 @@ fn move_org_subtree_between_files(
         .with_context(|| format!("Failed to read task note: {}", source_path.display()))?;
     let mut target_content = std::fs::read_to_string(target_path)
         .with_context(|| format!("Failed to read task note: {}", target_path.display()))?;
+    let original_target_content = target_content.clone();
     normalize_trailing_newline(&mut source_content);
     normalize_trailing_newline(&mut target_content);
 
@@ -191,8 +192,21 @@ fn move_org_subtree_between_files(
 
     std::fs::write(target_path, target_lines.concat())
         .with_context(|| format!("Failed to write task note: {}", target_path.display()))?;
-    std::fs::write(source_path, source_lines.concat())
-        .with_context(|| format!("Failed to write task note: {}", source_path.display()))?;
+    if let Err(error) = std::fs::write(source_path, source_lines.concat()) {
+        let rollback = std::fs::write(target_path, original_target_content);
+        if let Err(rollback_error) = rollback {
+            return Err(error).with_context(|| {
+                format!(
+                    "Failed to write task note: {}; also failed to restore {}: {}",
+                    source_path.display(),
+                    target_path.display(),
+                    rollback_error
+                )
+            });
+        }
+        return Err(error)
+            .with_context(|| format!("Failed to write task note: {}", source_path.display()));
+    }
     Ok(insert_idx + 1)
 }
 

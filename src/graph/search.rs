@@ -134,16 +134,14 @@ impl Graph {
             let Some(node) = self.nodes.get(uuid) else {
                 continue;
             };
-            let content = scan_result
-                .raw_content
-                .clone()
-                .or_else(|| std::fs::read_to_string(&scan_result.path).ok());
-            let Some(content) = content else {
-                continue;
+            let lines = if let Some(content) = scan_result.raw_content.as_deref() {
+                content_match_lines(content, &query)
+            } else {
+                std::fs::read_to_string(&scan_result.path)
+                    .ok()
+                    .and_then(|content| content_match_lines(&content, &query))
             };
-            let Some(lines) = content_match_lines(&content, &query) else {
-                continue;
-            };
+            let Some(lines) = lines else { continue };
             results.push(ContentSearchResult { node, lines });
         }
 
@@ -169,15 +167,11 @@ impl Graph {
 }
 
 fn content_match_lines(content: &str, query: &str) -> Option<Vec<String>> {
-    if !content.to_lowercase().contains(query) {
-        return None;
-    }
-
     let mut lines = Vec::new();
     for (i, line) in content.lines().enumerate() {
         if line.to_lowercase().contains(query) {
             lines.push(format!("{}: {}", i + 1, line.trim()));
         }
     }
-    Some(lines)
+    (!lines.is_empty()).then_some(lines)
 }

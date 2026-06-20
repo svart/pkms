@@ -164,25 +164,25 @@ impl BuildContext {
         }
     }
 
-    fn process_result(&mut self, result: FileScanResult) {
-        if let Some(err) = result.parse_error {
-            self.parse_errors.push((result.path.clone(), err));
-            self.skipped_files.push(result.path);
+    fn process_result(&mut self, result: &FileScanResult) {
+        if let Some(err) = &result.parse_error {
+            self.parse_errors.push((result.path.clone(), err.clone()));
+            self.skipped_files.push(result.path.clone());
             return;
         }
 
-        let parsed = result.parsed;
-        let path = result.path;
+        let parsed = &result.parsed;
+        let path = &result.path;
 
         if parsed.uuids.is_empty() {
-            self.skipped_files.push(path);
+            self.skipped_files.push(path.clone());
             return;
         }
 
-        let primary_uuid = &parsed.uuids[0];
+        let primary_uuid = parsed.uuids[0].clone();
 
         if let Some(existing) = self.seen_uuids.get(primary_uuid.as_str())
-            && existing != &path
+            && existing != path
         {
             self.duplicate_uuids.push(DuplicateEntry {
                 value: primary_uuid.clone(),
@@ -197,7 +197,7 @@ impl BuildContext {
         }
 
         if let Some(existing) = self.all_uuids_seen.get(primary_uuid.as_str())
-            && existing != &path
+            && existing != path
         {
             self.duplicate_uuids.push(DuplicateEntry {
                 value: primary_uuid.clone(),
@@ -247,17 +247,16 @@ impl BuildContext {
         self.uuid_to_outgoing
             .insert(primary_uuid.clone(), primary_outgoing);
 
-        let mut node =
-            Node::from_parsed(primary_uuid.clone(), title.clone(), path.clone(), &parsed);
-        node.outgoing = self.uuid_to_outgoing[primary_uuid].clone();
+        let mut node = Node::from_parsed(primary_uuid.clone(), title.clone(), path.clone(), parsed);
+        node.outgoing = self.uuid_to_outgoing[&primary_uuid].clone();
 
         self.nodes.insert(primary_uuid.clone(), node);
 
-        self.check_heading_uuids(&parsed, primary_uuid, &path);
+        self.check_heading_uuids(parsed, &primary_uuid, path);
 
-        self.process_headings(primary_uuid, &parsed, &path);
+        self.process_headings(&primary_uuid, parsed, path);
 
-        self.path_to_uuid.insert(path, primary_uuid.clone());
+        self.path_to_uuid.insert(path.clone(), primary_uuid.clone());
         self.title_to_uuid
             .entry(title)
             .or_default()
@@ -329,6 +328,12 @@ impl BuildContext {
 
 impl Graph {
     pub fn build(results: Vec<FileScanResult>) -> Self {
+        let mut graph = Self::build_from_results(&results);
+        graph.results = results;
+        graph
+    }
+
+    pub(crate) fn build_from_results(results: &[FileScanResult]) -> Self {
         let mut ctx = BuildContext::new();
         for result in results {
             ctx.process_result(result);

@@ -113,6 +113,7 @@ fn check_duplicate_uuids(
     if all_ids.len() > 1 {
         let primary = &all_ids[0];
         let mut seen_heading_ids = std::collections::HashSet::new();
+        let current_path = node.path.display().to_string();
         for id in all_ids.iter().skip(1) {
             if id == primary {
                 issues.push(format!(
@@ -124,12 +125,19 @@ fn check_duplicate_uuids(
                     "Duplicate UUID: heading-level :ID: {} is used by multiple headings in this note",
                     id
                 ));
-            } else if let Some(other) = graph.find_node(id)
-                && other.uuid != node.uuid
-            {
+            } else if let Some(duplicate) = graph.duplicates.duplicate_uuids.iter().find(|entry| {
+                entry.value == *id && entry.paths.iter().any(|path| path != &current_path)
+            }) {
+                let other_paths = duplicate
+                    .paths
+                    .iter()
+                    .filter(|path| *path != &current_path)
+                    .cloned()
+                    .collect::<Vec<_>>()
+                    .join(", ");
                 issues.push(format!(
-                    "Duplicate UUID: heading-level :ID: {} belongs to another note \"{}\"",
-                    id, other.title
+                    "Duplicate UUID: heading-level :ID: {} belongs to another note ({})",
+                    id, other_paths
                 ));
             }
         }
@@ -463,5 +471,35 @@ mod tests {
         assert!(text.contains("Broken file links:\n  -> missing.org"));
         assert!(text.contains("Issue: 1 broken internal link(s)"));
         assert!(text.ends_with("Status: 1 issue(s)\n"));
+    }
+
+    #[test]
+    fn validate_allows_unique_heading_uuid_in_same_note() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("alpha.org"),
+            r#":PROPERTIES:
+:ID:       aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa
+:END:
+#+title: Alpha
+
+* Section
+:PROPERTIES:
+:ID:       bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb
+:END:
+Body
+"#,
+        )
+        .unwrap();
+        let config = ResolvedConfig::for_test_db(dir.path());
+        let outputs = execute(
+            &config,
+            &ValidateOptions {
+                targets: vec!["aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa".to_string()],
+            },
+        )
+        .unwrap();
+
+        assert!(outputs[0].healthy, "issues: {:?}", outputs[0].issues);
     }
 }

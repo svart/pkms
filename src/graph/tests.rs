@@ -132,6 +132,38 @@ fn test_orphan_detection() {
 }
 
 #[test]
+fn loaded_stats_count_notes_once_and_ignore_synthetic_heading_links() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(
+        dir.path().join("alpha.org"),
+        r#":PROPERTIES:
+:ID:       aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa
+:END:
+#+title: Alpha
+
+* Section
+:PROPERTIES:
+:ID:       bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb
+:END:
+Body
+"#,
+    )
+    .unwrap();
+    let config = crate::config::ResolvedConfig::for_test_db(dir.path());
+    let graph = Graph::load(&config).unwrap();
+    let stats = graph.stats();
+
+    assert_eq!(stats.total_notes, 1);
+    assert_eq!(stats.total_internal_links, 0);
+    assert_eq!(stats.total_links, 0);
+    assert_eq!(stats.orphan_notes, 1);
+    assert_eq!(
+        graph.directory_breakdown(dir.path()),
+        vec![(String::new(), 1)]
+    );
+}
+
+#[test]
 fn test_shortest_path() {
     let results = vec![
         make_note("a", "A", vec![Link::Internal("b".to_string())]),

@@ -13,6 +13,17 @@ pub struct FileScanResult {
     pub parse_error: Option<String>,
 }
 
+impl FileScanResult {
+    pub fn without_raw_content(&self) -> Self {
+        Self {
+            path: self.path.clone(),
+            parsed: self.parsed.clone(),
+            raw_content: None,
+            parse_error: self.parse_error.clone(),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Corpus {
     results: Vec<FileScanResult>,
