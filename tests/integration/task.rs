@@ -508,6 +508,114 @@ SCHEDULED: <{scheduled}>
 }
 
 #[test]
+fn test_task_agenda_days_filters_window_json() {
+    let db = TestDb::clean();
+    let overdue = org_date(-1);
+    let today = org_date(0);
+    let tomorrow = org_date(1);
+    let day_after = org_date(2);
+    let later = org_date(3);
+    db.write_roam(
+        "days-window.org",
+        &format!(
+            r#":PROPERTIES:
+:ID:       56565656-5656-4656-8656-565656565656
+:END:
+#+title: Days Window
+#+filetags: :agenda:
+
+* TODO Overdue window task
+SCHEDULED: <{overdue}>
+* TODO Today window task
+SCHEDULED: <{today}>
+* TODO Tomorrow window task
+SCHEDULED: <{tomorrow}>
+* TODO Day after window task
+SCHEDULED: <{day_after}>
+* TODO Later window task
+SCHEDULED: <{later}>
+"#
+        ),
+    );
+
+    let (v, status) = db.run_json(&["task", "agenda", "--days", "3"]);
+
+    assert!(status.success());
+    assert_eq!(v["total"], 4);
+    let titles = task_titles(&v);
+    assert!(titles.contains(&"Overdue window task".to_string()));
+    assert!(titles.contains(&"Today window task".to_string()));
+    assert!(titles.contains(&"Tomorrow window task".to_string()));
+    assert!(titles.contains(&"Day after window task".to_string()));
+    assert!(!titles.contains(&"Later window task".to_string()));
+
+    let (filtered, filtered_status) = db.run_json(&["task", "agenda", "--days", "3", "state:TODO"]);
+    assert!(filtered_status.success());
+    assert_eq!(filtered["total"], 4);
+    assert!(!task_titles(&filtered).contains(&"Later window task".to_string()));
+}
+
+#[test]
+fn test_task_agenda_days_text_splits_each_day() {
+    let db = TestDb::clean();
+    let overdue = org_date(-1);
+    let today = org_date(0);
+    let tomorrow = org_date(1);
+    let day_after_date = chrono::Local::now().date_naive() + chrono::Duration::days(2);
+    let day_after = day_after_date.format("%Y-%m-%d").to_string();
+    let later = org_date(3);
+    db.write_roam(
+        "days-sections.org",
+        &format!(
+            r#":PROPERTIES:
+:ID:       67676767-6767-4676-8676-676767676767
+:END:
+#+title: Days Sections
+#+filetags: :agenda:
+
+* TODO Overdue section task
+SCHEDULED: <{overdue}>
+* TODO Today section task
+SCHEDULED: <{today}>
+* TODO Tomorrow section task
+SCHEDULED: <{tomorrow}>
+* TODO Day after section task
+SCHEDULED: <{day_after}>
+* TODO Later section task
+SCHEDULED: <{later}>
+"#
+        ),
+    );
+
+    let (stdout, stderr, status) =
+        db.run(&["task", "agenda", "--days", "3", "--columns=date,heading"]);
+
+    assert!(
+        status.success(),
+        "task agenda --days failed:\n{stdout}\n{stderr}"
+    );
+    let day_after_header = format!("=== {} ===", day_after_date.format("%Y-%m-%d %a"));
+    let overdue_idx = stdout.find("=== Overdue ===").expect("overdue section");
+    let today_idx = stdout.find("=== Today ===").expect("today section");
+    let tomorrow_idx = stdout.find("=== Tomorrow ===").expect("tomorrow section");
+    let day_after_idx = stdout.find(&day_after_header).expect("day-after section");
+    assert!(overdue_idx < today_idx);
+    assert!(today_idx < tomorrow_idx);
+    assert!(tomorrow_idx < day_after_idx);
+    assert!(stdout.contains("Overdue section task"), "stdout:\n{stdout}");
+    assert!(stdout.contains("Today section task"), "stdout:\n{stdout}");
+    assert!(
+        stdout.contains("Tomorrow section task"),
+        "stdout:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("Day after section task"),
+        "stdout:\n{stdout}"
+    );
+    assert!(!stdout.contains("Later section task"), "stdout:\n{stdout}");
+}
+
+#[test]
 fn test_task_list_daily_note_date_includes_weekday_without_planning_markers() {
     let db = TestDb::new().note_with_content(
         "2024-06-15.org",

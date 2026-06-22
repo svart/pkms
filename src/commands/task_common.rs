@@ -232,6 +232,25 @@ pub fn apply_limit<T>(items: &mut Vec<T>, limit: Option<usize>) -> usize {
     total
 }
 
+pub fn agenda_window_cutoff(today: NaiveDate, days: i64) -> Option<NaiveDate> {
+    if days <= 0 {
+        return None;
+    }
+    chrono::Duration::try_days(days - 1).and_then(|duration| today.checked_add_signed(duration))
+}
+
+pub fn date_in_agenda_window(date: NaiveDate, today: NaiveDate, days: i64) -> bool {
+    agenda_window_cutoff(today, days).is_some_and(|cutoff| date >= today && date <= cutoff)
+}
+
+pub fn agenda_day_section_label(today: NaiveDate, date: NaiveDate) -> String {
+    match (date - today).num_days() {
+        0 => "=== Today ===".to_string(),
+        1 => "=== Tomorrow ===".to_string(),
+        _ => format!("=== {} ===", date.format("%Y-%m-%d %a")),
+    }
+}
+
 pub fn parse_task_sort_fields(sort: &str) -> Result<Vec<&str>> {
     let fields: Vec<&str> = sort
         .split(',')

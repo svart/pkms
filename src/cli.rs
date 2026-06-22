@@ -383,7 +383,7 @@ pub struct TaskListArgs {
 
 #[derive(Debug, Args)]
 #[command(
-    after_help = "Filters:\n  source:pkms|todoist|all, src:pkms|todoist|all\n  state:TODO|opened|closed, tags:tag,!other, type:SCHED,DEADL, prio:A[,B,C], project:Name\n  date:today|week|overdue|upcoming|YYYY-MM-DD|tom|fri[,value...], after:YYYY-MM-DD[ HH:MM]|tom|fri, before:YYYY-MM-DD[ HH:MM]|tom|fri\n  todoist.filter:<query> (requires source:todoist or source:all)\n\nExamples:\n  pkms task agenda source:todoist\n  pkms task agenda source:all date:today,overdue tag:waiting\n  pkms task agenda state:opened,!waiting prio:A,B,C\n  pkms task agenda today source:todoist"
+    after_help = "Filters:\n  source:pkms|todoist|all, src:pkms|todoist|all\n  state:TODO|opened|closed, tags:tag,!other, type:SCHED,DEADL, prio:A[,B,C], project:Name\n  date:today|week|overdue|upcoming|YYYY-MM-DD|tom|fri[,value...], after:YYYY-MM-DD[ HH:MM]|tom|fri, before:YYYY-MM-DD[ HH:MM]|tom|fri\n  todoist.filter:<query> (requires source:todoist or source:all)\n\nExamples:\n  pkms task agenda source:todoist\n  pkms task agenda --days 7\n  pkms task agenda source:all date:today,overdue tag:waiting\n  pkms task agenda state:opened,!waiting prio:A,B,C\n  pkms task agenda today source:todoist"
 )]
 pub struct TaskAgendaArgs {
     #[command(subcommand)]
@@ -394,6 +394,8 @@ pub struct TaskAgendaArgs {
     pub sort: Option<String>,
     #[arg(long, help = "Maximum results")]
     pub limit: Option<usize>,
+    #[arg(long, help = "Number of days from today to show, plus overdue tasks")]
+    pub days: Option<i64>,
     #[command(flatten)]
     pub table: TaskTableArgs,
 }

@@ -1,5 +1,5 @@
 use super::{plan, providers, render};
-use crate::commands::task_common::parse_task_sort_fields;
+use crate::commands::task_common::{date_in_agenda_window, parse_task_sort_fields};
 use crate::config::ResolvedConfig;
 use crate::output::Column;
 use crate::tasks::clock::TaskClock;
@@ -22,6 +22,7 @@ pub(super) struct AgendaExecution {
     pub(super) source: SourceSelection,
     pub(super) items: Vec<TaskItem>,
     pub(super) limit: Option<usize>,
+    pub(super) days: Option<i64>,
     pub(super) columns: Option<Vec<Column>>,
     pub(super) today: NaiveDate,
     pub(super) render_kind: plan::AgendaRenderKind,
@@ -73,6 +74,9 @@ pub(super) fn execute_task_agenda(
         &request.filters.criteria,
         request.clock.today,
     )?;
+    if let Some(days) = request.days {
+        retain_agenda_window_task_items_on(&mut items, days, request.clock.today);
+    }
     sort_task_items(
         &mut items,
         request.sort.as_deref().unwrap_or("date,priority"),
@@ -81,6 +85,7 @@ pub(super) fn execute_task_agenda(
         source: request.filters.source,
         items,
         limit: request.limit,
+        days: request.days,
         columns: request.source_neutral_columns().map(<[Column]>::to_vec),
         today: request.clock.today,
         render_kind: request.render_kind,
@@ -141,6 +146,16 @@ pub(super) fn retain_upcoming_task_items_on(
         item.effective_date()
             .and_then(|date| NaiveDate::parse_from_str(date, "%Y-%m-%d").ok())
             .is_some_and(|date| date > today && date <= cutoff)
+    });
+}
+
+fn retain_agenda_window_task_items_on(items: &mut Vec<TaskItem>, days: i64, today: NaiveDate) {
+    items.retain(|item| {
+        item.is_overdue_on(today)
+            || item
+                .dates()
+                .into_iter()
+                .any(|date| date_in_agenda_window(date, today, days))
     });
 }
 

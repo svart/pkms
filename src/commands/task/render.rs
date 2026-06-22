@@ -1,5 +1,7 @@
 use crate::cli::OutputFormat;
-use crate::commands::task_common::{RowItem, apply_limit, print_table_with_empty_message};
+use crate::commands::task_common::{
+    RowItem, agenda_day_section_label, apply_limit, print_table_with_empty_message,
+};
 use crate::output::{ALL_COLUMNS, Column, OutputContext, terminal_markup};
 use crate::tasks::filter::SourceSelection;
 use crate::tasks::model::{TaskItem, TaskSourceKind};
@@ -7,6 +9,7 @@ use crate::tasks::provider::TaskMetadataRow;
 use anyhow::Result;
 use chrono::{NaiveDate, NaiveDateTime};
 use serde::Serialize;
+use std::collections::BTreeMap;
 use std::process::ExitCode;
 use tabled::builder::Builder;
 use tabled::settings::Style;
@@ -369,11 +372,12 @@ pub(super) fn print_agenda_task_items(
     limit: Option<usize>,
     columns: Option<&[Column]>,
     today: NaiveDate,
+    days: Option<i64>,
 ) -> Result<()> {
     let total = apply_limit(&mut items, limit);
 
     match ctx.format {
-        OutputFormat::Text => print_agenda_task_table(&items, total, source, columns, today),
+        OutputFormat::Text => print_agenda_task_table(&items, total, source, columns, today, days),
         OutputFormat::Json => {
             #[derive(Serialize)]
             struct TaskListOutput {
@@ -411,7 +415,12 @@ fn print_agenda_task_table(
     source: SourceSelection,
     columns: Option<&[Column]>,
     today: NaiveDate,
+    days: Option<i64>,
 ) -> Result<()> {
+    if let Some(days) = days {
+        return print_windowed_agenda_task_table(items, total, source, columns, today, days);
+    }
+
     let mut overdue = Vec::new();
     let mut today_items = Vec::new();
     let mut upcoming = Vec::new();
@@ -439,6 +448,61 @@ fn print_agenda_task_table(
         ("=== Upcoming ===", upcoming_rows.as_slice()),
     ];
     let item_count = overdue_rows.len() + today_rows.len() + upcoming_rows.len();
+    let footer = format!("Shown: {}, Total: {} task(s)", item_count, total);
+    print_table_with_empty_message(
+        &sections,
+        task_columns(columns),
+        false,
+        &footer,
+        "No tasks found.",
+    );
+    Ok(())
+}
+
+fn print_windowed_agenda_task_table(
+    items: &[TaskItem],
+    total: usize,
+    source: SourceSelection,
+    columns: Option<&[Column]>,
+    today: NaiveDate,
+    days: i64,
+) -> Result<()> {
+    let mut overdue = Vec::new();
+    let mut daily_items: BTreeMap<i64, Vec<TaskItem>> = BTreeMap::new();
+
+    for item in items {
+        if item.is_overdue_on(today) {
+            overdue.push(item.clone());
+        } else {
+            for date in item.dates() {
+                let offset = (date - today).num_days();
+                if (0..days).contains(&offset) {
+                    daily_items.entry(offset).or_default().push(item.clone());
+                    break;
+                }
+            }
+        }
+    }
+
+    overdue.sort_by(|a, b| a.effective_date().cmp(&b.effective_date()));
+    for items in daily_items.values_mut() {
+        items.sort_by(|a, b| a.effective_date().cmp(&b.effective_date()));
+    }
+
+    let mut labels = vec!["=== Overdue ===".to_string()];
+    let mut rows = vec![task_rows(&overdue, source)];
+    for (offset, items) in &daily_items {
+        let date = today + chrono::Duration::days(*offset);
+        labels.push(agenda_day_section_label(today, date));
+        rows.push(task_rows(items, source));
+    }
+
+    let sections: Vec<(&str, &[TaskRow<'_>])> = labels
+        .iter()
+        .zip(rows.iter())
+        .map(|(label, rows)| (label.as_str(), rows.as_slice()))
+        .collect();
+    let item_count = rows.iter().map(Vec::len).sum::<usize>();
     let footer = format!("Shown: {}, Total: {} task(s)", item_count, total);
     print_table_with_empty_message(
         &sections,

@@ -11,6 +11,7 @@ use crate::workspace::Workspace;
 use anyhow::Result;
 use chrono::NaiveDate;
 use serde::Serialize;
+use std::collections::BTreeMap;
 
 pub struct AgendaOptions {
     pub state: Option<String>,
@@ -22,6 +23,7 @@ pub struct AgendaOptions {
     pub date: Option<NaiveDate>,
     pub sort: Option<String>,
     pub limit: Option<usize>,
+    pub days: Option<i64>,
     pub today: bool,
     pub week: bool,
     pub line_sep: bool,
@@ -74,6 +76,10 @@ pub fn run_with_clock(
         records.retain(|item| item.has_effective_date(filter_date.as_str()));
     }
 
+    if let Some(days) = opts.days {
+        records.retain(|item| record_in_agenda_window(item, today_date, days));
+    }
+
     if opts.overdue {
         records.retain(|item| item.is_overdue);
     }
@@ -113,6 +119,14 @@ pub fn run_with_clock(
                 let sections = [("", items.as_slice())];
                 let footer = format!("Total: {} planned item(s)", items.len());
                 print_table(&sections, &opts.columns, opts.line_sep, &footer);
+            } else if let Some(days) = opts.days {
+                print_windowed_agenda_task_table(
+                    &items,
+                    days,
+                    today_date,
+                    &opts.columns,
+                    opts.line_sep,
+                );
             } else {
                 let today_str = today_date.format("%Y-%m-%d").to_string();
 
@@ -167,4 +181,56 @@ pub fn run_with_clock(
     }
 
     Ok(())
+}
+
+fn record_in_agenda_window(item: &TaskRecord, today: NaiveDate, days: i64) -> bool {
+    item.is_overdue
+        || record_date(item).is_some_and(|date| date_in_agenda_window(date, today, days))
+}
+
+fn record_date(item: &TaskRecord) -> Option<NaiveDate> {
+    item.effective_date()
+        .and_then(|date| NaiveDate::parse_from_str(date, "%Y-%m-%d").ok())
+}
+
+fn print_windowed_agenda_task_table(
+    items: &[TaskRecord],
+    days: i64,
+    today: NaiveDate,
+    columns: &[Column],
+    line_sep: bool,
+) {
+    let mut overdue = Vec::new();
+    let mut daily_items: BTreeMap<i64, Vec<TaskRecord>> = BTreeMap::new();
+
+    for item in items {
+        if item.is_overdue {
+            overdue.push(item.clone());
+        } else if let Some(date) = record_date(item) {
+            let offset = (date - today).num_days();
+            if (0..days).contains(&offset) {
+                daily_items.entry(offset).or_default().push(item.clone());
+            }
+        }
+    }
+
+    overdue.sort_by(|a, b| a.effective_date().cmp(&b.effective_date()));
+    for items in daily_items.values_mut() {
+        items.sort_by(|a, b| a.effective_date().cmp(&b.effective_date()));
+    }
+
+    let mut labels = vec!["=== Overdue ===".to_string()];
+    let mut groups = vec![overdue];
+    for (offset, items) in daily_items {
+        let date = today + chrono::Duration::days(offset);
+        labels.push(agenda_day_section_label(today, date));
+        groups.push(items);
+    }
+    let sections: Vec<(&str, &[TaskRecord])> = labels
+        .iter()
+        .zip(groups.iter())
+        .map(|(label, items)| (label.as_str(), items.as_slice()))
+        .collect();
+    let footer = format!("Total: {} planned item(s)", items.len());
+    print_table(&sections, columns, line_sep, &footer);
 }

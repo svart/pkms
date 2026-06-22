@@ -151,6 +151,7 @@ fn run_agenda(config: &ResolvedConfig, ctx: &OutputContext, args: &TaskAgendaArg
                 date: None,
                 sort: request.sort.clone(),
                 limit: request.limit,
+                days: request.days,
                 today: false,
                 week: false,
                 line_sep: request.line_sep,
@@ -180,6 +181,7 @@ fn render_task_agenda(ctx: &OutputContext, output: AgendaExecution) -> Result<()
             output.limit,
             output.columns.as_deref(),
             output.today,
+            output.days,
         ),
     }
 }
