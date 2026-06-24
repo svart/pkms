@@ -28,7 +28,6 @@ Use [docs/development.md](docs/development.md) for specific workflows:
 - [Local development loop](docs/development.md#local-development-loop)
 - [Fast pre-commit gate](docs/development.md#fast-pre-commit-gate)
 - [Feature-specific checks](docs/development.md#feature-specific-checks)
-- [Full CI gate](docs/development.md#full-ci-gate)
 - [Adding or changing commands](docs/development.md#adding-or-changing-commands)
 - [Output contracts](docs/development.md#output-contracts)
 - [Task-system changes](docs/development.md#task-system-changes)
@@ -130,9 +129,7 @@ behavior, and use [Local development loop](docs/development.md#local-development
 Before committing or handing off: run the
 [Fast pre-commit gate](docs/development.md#fast-pre-commit-gate). Use
 [Feature-specific checks](docs/development.md#feature-specific-checks) for
-focused local debugging when useful. Run the
-[Full CI gate](docs/development.md#full-ci-gate) only when the user explicitly
-requests the full matrix.
+focused local debugging when useful.
 
 Adding or changing commands: follow
 [Adding or changing commands](docs/development.md#adding-or-changing-commands),

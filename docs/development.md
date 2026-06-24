@@ -64,10 +64,10 @@ cargo test --all-features
 cargo build --all-features
 ```
 
-This is intentionally shorter than CI but covers the complete feature set in a
-single pass. It catches formatting, all-feature lint, unit tests, integration
-tests, and all-feature builds without making every local commit wait on the
-full feature-by-feature matrix.
+This gate covers the complete feature set in a single pass. It catches
+formatting, all-feature lint, unit tests, integration tests, and all-feature
+builds without making every local commit wait on the full feature-by-feature
+matrix.
 
 Also run focused commands for the files you changed. Examples:
 
@@ -115,8 +115,8 @@ cargo test --features ssh --test integration <test-name>
 cargo build --features ssh
 ```
 
-An optional ignored live SSH check can verify a real server without making CI
-depend on external network state:
+An optional ignored live SSH check can verify a real server without making the
+normal local gate depend on external network state:
 
 ```bash
 PKMS_TEST_SSH_TARGET='user@example.org#22' \
@@ -137,37 +137,6 @@ explicit combined-feature build:
 cargo build --features todoist,web,ssh
 cargo build --all-features
 ```
-
-## Full CI Gate
-
-CI should run the comprehensive matrix. Local agents should run this full matrix
-only when the user explicitly requests it, or when the user asks to investigate
-CI behavior. Do not run it automatically for ordinary commits, handoffs, or
-version bumps.
-
-```bash
-cargo fmt --all -- --check
-cargo clippy --locked --all-targets -- -D warnings
-cargo clippy --locked --all-targets --all-features -- -D warnings
-cargo build --locked
-cargo build --locked --features todoist
-cargo build --locked --features web
-cargo build --locked --features ssh
-cargo build --locked --all-features
-cargo test --locked
-cargo test --locked --features todoist
-cargo test --locked --features web
-cargo test --locked --features ssh
-cargo test --locked --features todoist,web,ssh
-cargo run --locked -- --help
-cargo run --locked --features todoist -- --help
-cargo run --locked --features web -- --help
-cargo run --locked --features ssh -- check --help
-cargo build --locked --release
-```
-
-The Gitea workflow in `.gitea/workflows/rust.yml` is expected to match this
-gate. If the documented gate changes, update CI in the same change.
 
 ## Project Structure
 
@@ -200,7 +169,6 @@ src/
 tests/integration/    # binary-level integration tests with mock databases
 docs/                 # detailed user and contributor docs
 skills/               # Codex skills for note and pkms workflows
-.gitea/workflows/     # CI and release automation
 ```
 
 ## Adding or Changing Commands
@@ -331,5 +299,3 @@ Before release-ready version commits:
 - Update the package version in `Cargo.toml`.
 - Update the corresponding `Cargo.lock` package entry.
 - Run the [Fast pre-commit gate](#fast-pre-commit-gate).
-- Run or confirm the [Full CI gate](#full-ci-gate) only when the user
-  explicitly requests the full matrix.
