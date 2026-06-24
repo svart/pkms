@@ -2,6 +2,7 @@
 name = "pkms"
 version = "1.9.2"
 edition = "2024"
+license = "MIT"
 
 [features]
 default = []
