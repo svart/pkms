@@ -7,7 +7,7 @@ use std::collections::HashSet;
 use tabled::builder::Builder;
 use tabled::settings::object::{Columns, Object, Rows};
 use tabled::settings::style::{Border, Style};
-use tabled::settings::{Modify, Span, Width};
+use tabled::settings::{Modify, Padding, Span, Width};
 
 pub const TASK_SORT_FIELD_HELP: &str =
     "priority, date, scheduled, deadline, file, source, state, task, title, or project";
@@ -245,10 +245,40 @@ pub fn date_in_agenda_window(date: NaiveDate, today: NaiveDate, days: i64) -> bo
 
 pub fn agenda_day_section_label(today: NaiveDate, date: NaiveDate) -> String {
     match (date - today).num_days() {
-        0 => "=== Today ===".to_string(),
-        1 => "=== Tomorrow ===".to_string(),
-        _ => format!("=== {} ===", date.format("%Y-%m-%d %a")),
+        0 => "Today".to_string(),
+        1 => "Tomorrow".to_string(),
+        _ => date.format("%Y-%m-%d %a").to_string(),
     }
+}
+
+fn rendered_section_width(
+    cols: &[Column],
+    max_widths: &[usize; 9],
+    wrap: Option<&[(Column, usize)]>,
+) -> usize {
+    let content_width = cols
+        .iter()
+        .map(|col| {
+            wrap.and_then(|widths| {
+                widths
+                    .iter()
+                    .find_map(|(wrapped_col, width)| (*wrapped_col == *col).then_some(*width))
+            })
+            .unwrap_or(max_widths[*col as usize])
+        })
+        .sum::<usize>();
+    content_width + cols.len().saturating_sub(1) + 2 * cols.len()
+}
+
+fn section_top_delimiter(label: &str, width: usize) -> String {
+    let title = label.trim();
+    let fill_width = width.saturating_sub(title.chars().count() + 7).max(1);
+    format!("╭─── {title} {}╮", "─".repeat(fill_width))
+}
+
+fn section_bottom_delimiter(width: usize) -> String {
+    let fill_width = width.saturating_sub(2).max(1);
+    format!("╰{}╯", "─".repeat(fill_width))
 }
 
 pub fn parse_task_sort_fields(sort: &str) -> Result<Vec<&str>> {
@@ -310,6 +340,10 @@ pub fn print_table_with_empty_message<T: RowItem>(
         }
     }
     let wrap = adaptive_column_widths(cols, &max_widths);
+    let section_width = rendered_section_width(cols, &max_widths, wrap.as_deref());
+    let uses_section_boxes = sections
+        .iter()
+        .any(|(label, items)| !label.trim().is_empty() && !items.is_empty());
 
     let mut builder = Builder::new();
     let headers: Vec<String> = cols.iter().map(|c| c.name().to_string()).collect();
@@ -326,14 +360,14 @@ pub fn print_table_with_empty_message<T: RowItem>(
         if items.is_empty() {
             continue;
         }
-        if need_sep {
+        if need_sep && !uses_section_boxes {
             builder.push_record(empty_row.clone());
             no_border_rows.push(row_idx);
             row_idx += 1;
         }
-        if !label.is_empty() {
+        if !label.trim().is_empty() {
             let mut label_row: Vec<String> = std::iter::repeat_n(String::new(), n_cols).collect();
-            label_row[0] = label.to_string();
+            label_row[0] = section_top_delimiter(label, section_width);
             builder.push_record(label_row);
             section_rows.push(row_idx);
             no_border_rows.push(row_idx);
@@ -349,12 +383,22 @@ pub fn print_table_with_empty_message<T: RowItem>(
                 row_idx += 1;
             }
         }
+        if !label.trim().is_empty() {
+            let mut label_row: Vec<String> = std::iter::repeat_n(String::new(), n_cols).collect();
+            label_row[0] = section_bottom_delimiter(section_width);
+            builder.push_record(label_row);
+            section_rows.push(row_idx);
+            no_border_rows.push(row_idx);
+            row_idx += 1;
+        }
         need_sep = true;
     }
 
     let mut table = builder.build();
     table.with(Style::blank());
-    table.with(Modify::new(Rows::one(1)).with(Border::new().top('─')));
+    if !section_rows.contains(&1) {
+        table.with(Modify::new(Rows::one(1)).with(Border::new().top('─')));
+    }
     if line_sep && row_idx > 2 {
         for i in 2..row_idx {
             if !no_border_rows.contains(&i) {
@@ -385,6 +429,7 @@ pub fn print_table_with_empty_message<T: RowItem>(
     }
     for &sec_row in &section_rows {
         table.with(Modify::new((sec_row, 0)).with(Span::column(n_cols as isize)));
+        table.with(Modify::new(Rows::one(sec_row)).with(Padding::zero()));
     }
     let rendered = table.to_string();
     println!(

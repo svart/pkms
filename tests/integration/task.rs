@@ -37,6 +37,10 @@ fn upcoming_weekday_date(weekday: Weekday) -> String {
         .to_string()
 }
 
+fn section_box_start(title: &str) -> String {
+    format!("╭─── {title}")
+}
+
 #[test]
 fn test_task_help_lists_subcommands() {
     let (stdout, stderr, status) = run(&["task", "--help"]);
@@ -326,6 +330,27 @@ fn test_task_list_group_state_json() {
 }
 
 #[test]
+fn test_task_list_group_text_uses_boxed_section_delimiters() {
+    let (_dir, root) = setup_db();
+    let (stdout, stderr, status) = run(&[
+        "--db",
+        root.to_str().unwrap(),
+        "task",
+        "list",
+        "--group",
+        "state",
+    ]);
+
+    assert!(status.success(), "task list failed:\n{stdout}\n{stderr}");
+    assert!(
+        stdout.contains(&section_box_start("TODO (")),
+        "stdout:\n{stdout}"
+    );
+    assert!(stdout.contains('╰'), "stdout:\n{stdout}");
+    assert!(!stdout.contains("=== TODO"), "stdout:\n{stdout}");
+}
+
+#[test]
 fn test_task_list_rejects_unknown_group_field() {
     let (_dir, root) = setup_db();
     let (stdout, _stderr, status) = run(&[
@@ -484,8 +509,16 @@ SCHEDULED: <{scheduled}>
 
     let (stdout, stderr, status) = db.run(&["task", "agenda"]);
     assert!(status.success(), "task agenda failed:\n{stdout}\n{stderr}");
-    assert!(stdout.contains("=== Upcoming ==="), "stdout:\n{stdout}");
-    assert!(!stdout.contains("=== Today ==="), "stdout:\n{stdout}");
+    assert!(
+        stdout.contains(&section_box_start("Upcoming")),
+        "stdout:\n{stdout}"
+    );
+    assert!(stdout.contains('╰'), "stdout:\n{stdout}");
+    assert!(!stdout.contains("=== Upcoming ==="), "stdout:\n{stdout}");
+    assert!(
+        !stdout.contains(&section_box_start("Today")),
+        "stdout:\n{stdout}"
+    );
     assert!(stdout.contains(&scheduled), "stdout:\n{stdout}");
 
     let (stdout, stderr, status) = db.run(&["task", "agenda", "state:TODO"]);
@@ -493,8 +526,16 @@ SCHEDULED: <{scheduled}>
         status.success(),
         "filtered task agenda failed:\n{stdout}\n{stderr}"
     );
-    assert!(stdout.contains("=== Upcoming ==="), "stdout:\n{stdout}");
-    assert!(!stdout.contains("=== Today ==="), "stdout:\n{stdout}");
+    assert!(
+        stdout.contains(&section_box_start("Upcoming")),
+        "stdout:\n{stdout}"
+    );
+    assert!(stdout.contains('╰'), "stdout:\n{stdout}");
+    assert!(!stdout.contains("=== Upcoming ==="), "stdout:\n{stdout}");
+    assert!(
+        !stdout.contains(&section_box_start("Today")),
+        "stdout:\n{stdout}"
+    );
     assert!(stdout.contains(&scheduled), "stdout:\n{stdout}");
 
     let (v, status) = db.run_json(&["task", "agenda", "date:today"]);
@@ -594,14 +635,22 @@ SCHEDULED: <{later}>
         status.success(),
         "task agenda --days failed:\n{stdout}\n{stderr}"
     );
-    let day_after_header = format!("=== {} ===", day_after_date.format("%Y-%m-%d %a"));
-    let overdue_idx = stdout.find("=== Overdue ===").expect("overdue section");
-    let today_idx = stdout.find("=== Today ===").expect("today section");
-    let tomorrow_idx = stdout.find("=== Tomorrow ===").expect("tomorrow section");
+    let day_after_header = section_box_start(&day_after_date.format("%Y-%m-%d %a").to_string());
+    let overdue_idx = stdout
+        .find(&section_box_start("Overdue"))
+        .expect("overdue section");
+    let today_idx = stdout
+        .find(&section_box_start("Today"))
+        .expect("today section");
+    let tomorrow_idx = stdout
+        .find(&section_box_start("Tomorrow"))
+        .expect("tomorrow section");
     let day_after_idx = stdout.find(&day_after_header).expect("day-after section");
     assert!(overdue_idx < today_idx);
     assert!(today_idx < tomorrow_idx);
     assert!(tomorrow_idx < day_after_idx);
+    assert!(stdout.contains('╰'), "stdout:\n{stdout}");
+    assert!(!stdout.contains("=== Overdue ==="), "stdout:\n{stdout}");
     assert!(stdout.contains("Overdue section task"), "stdout:\n{stdout}");
     assert!(stdout.contains("Today section task"), "stdout:\n{stdout}");
     assert!(
@@ -3133,14 +3182,16 @@ fn test_task_agenda_todoist_text_splits_default_view_into_sections() {
         String::from_utf8_lossy(&output.stderr)
     );
     let stdout = String::from_utf8_lossy(&output.stdout);
-    let overdue_section = stdout.find("=== Overdue ===").expect("stdout");
-    let today_section = stdout.find("=== Today ===").expect("stdout");
-    let upcoming_section = stdout.find("=== Upcoming ===").expect("stdout");
+    let overdue_section = stdout.find(&section_box_start("Overdue")).expect("stdout");
+    let today_section = stdout.find(&section_box_start("Today")).expect("stdout");
+    let upcoming_section = stdout.find(&section_box_start("Upcoming")).expect("stdout");
     assert!(overdue_section < today_section);
     assert!(today_section < upcoming_section);
     assert!(overdue_section < stdout.find("Overdue remote").expect("stdout"));
     assert!(today_section < stdout.find("Today remote").expect("stdout"));
     assert!(upcoming_section < stdout.find("Upcoming remote").expect("stdout"));
+    assert!(stdout.contains('╰'), "stdout:\n{stdout}");
+    assert!(!stdout.contains("=== Overdue ==="), "stdout:\n{stdout}");
 }
 
 #[cfg(feature = "todoist")]

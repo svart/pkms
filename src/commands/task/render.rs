@@ -443,9 +443,9 @@ fn print_agenda_task_table(
     let today_rows = task_rows(&today_items, source);
     let upcoming_rows = task_rows(&upcoming, source);
     let sections = [
-        ("=== Overdue ===", overdue_rows.as_slice()),
-        ("=== Today ===", today_rows.as_slice()),
-        ("=== Upcoming ===", upcoming_rows.as_slice()),
+        ("Overdue", overdue_rows.as_slice()),
+        ("Today", today_rows.as_slice()),
+        ("Upcoming", upcoming_rows.as_slice()),
     ];
     let item_count = overdue_rows.len() + today_rows.len() + upcoming_rows.len();
     let footer = format!("Shown: {}, Total: {} task(s)", item_count, total);
@@ -489,7 +489,7 @@ fn print_windowed_agenda_task_table(
         items.sort_by(|a, b| a.effective_date().cmp(&b.effective_date()));
     }
 
-    let mut labels = vec!["=== Overdue ===".to_string()];
+    let mut labels = vec!["Overdue".to_string()];
     let mut rows = vec![task_rows(&overdue, source)];
     for (offset, items) in &daily_items {
         let date = today + chrono::Duration::days(*offset);

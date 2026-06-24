@@ -129,7 +129,7 @@ pub fn run_on(
         let footer = format_footer(shown, total_before_limit, "TODO");
         let section_labels: Vec<String> = groups
             .iter()
-            .map(|(k, v)| format!("=== {k} ({}) ===", v.len()))
+            .map(|(k, v)| format!("{k} ({})", v.len()))
             .collect();
 
         match ctx.format {
