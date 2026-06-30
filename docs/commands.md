@@ -156,6 +156,7 @@ pkms task list
 pkms task agenda
 pkms task agenda today
 pkms task agenda overdue
+pkms task agenda upcoming
 pkms task agenda upcoming --days 7
 pkms task list --group state
 pkms task list --from-stdin

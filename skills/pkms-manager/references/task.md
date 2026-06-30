@@ -8,7 +8,7 @@ pkms task agenda
 pkms task agenda today
 pkms task agenda week
 pkms task agenda overdue
-pkms task agenda upcoming --days 7
+pkms task agenda upcoming
 pkms task p5 show
 pkms task p5 open
 pkms task p5 state WAITING
@@ -104,6 +104,7 @@ pkms task agenda today source:todoist
 pkms task agenda week source:all
 pkms task agenda today source:all
 pkms task agenda overdue source:todoist
+pkms task agenda upcoming source:all
 pkms task agenda upcoming --days 7 source:all
 pkms task inbox
 pkms task inbox source:todoist
@@ -138,13 +139,16 @@ Each chain entry includes the canonical task ID used by `task list`,
 `task agenda`, `task p<ID> show`, and `task p<ID> open`.
 
 For Todoist-backed agenda views, bare `task agenda source:todoist` uses the
-Todoist `!no date` filter to show only scheduled tasks. `today` uses `today`,
-`overdue` uses `overdue`, `week` uses `next 7 days`, and `upcoming --days N` uses
-`due after: today & next N days`. `todoist.filter:<query>` overrides those generated agenda
-filters when the assistant needs custom Todoist syntax.
+Todoist `!no date` filter to fetch scheduled tasks. Agenda shortcuts are aliases
+for local date filters: `today` equals `date:today`, `week` equals `date:week`,
+`overdue` equals `date:overdue`, and `upcoming` equals `date:upcoming`.
+`task agenda upcoming --days N` is equivalent to `task agenda --days N
+date:upcoming`. `todoist.filter:<query>` overrides the default Todoist fetch
+query when the assistant needs custom Todoist syntax, while local criteria such
+as `date:today` still apply to fetched items.
 
 Prefer stable shortcuts for common assistant requests: `task agenda today`,
-`task agenda overdue`, `task agenda upcoming --days N`, and `task inbox`. The first three
+`task agenda overdue`, `task agenda upcoming`, and `task inbox`. The first three
 accept `source:pkms`, `source:todoist`, or `source:all`; `task inbox` defaults
 to the PKMS inbox note configured as `[tasks].inbox`. Use
 `task inbox source:todoist` for Todoist's `#Inbox` filter. When `[tasks].inbox`

@@ -19,7 +19,7 @@ pkms task agenda
 pkms task agenda today
 pkms task agenda week
 pkms task agenda overdue
-pkms task agenda upcoming --days 7
+pkms task agenda upcoming
 pkms task inbox
 pkms task list projects
 pkms task list tags
@@ -228,16 +228,23 @@ Supported task criteria include:
 - `scope:<note-title-uuid-or-path>` for PKMS task scope.
 - `project:<name-or-id>`, including `!` exclusions.
 
-Agenda shortcut mapping for Todoist:
+Agenda shortcut subcommands are aliases for date filters:
 
-| View | Todoist filter |
-|------|----------------|
-| `task agenda` | `!no date` |
-| `task agenda today` | `today` |
-| `task agenda week` | `next 7 days` |
-| `task agenda overdue` | `overdue` |
-| `task agenda upcoming --days N` | `due after: today & next N days` |
-| `task inbox source:todoist` | `#Inbox` |
+| Shortcut | Equivalent filter |
+|----------|-------------------|
+| `task agenda today` | `task agenda date:today` |
+| `task agenda week` | `task agenda date:week` |
+| `task agenda overdue` | `task agenda date:overdue` |
+| `task agenda upcoming` | `task agenda date:upcoming` |
+
+`task agenda upcoming --days N` is equivalent to
+`task agenda --days N date:upcoming`.
+
+Todoist-backed `task agenda` uses the Todoist `!no date` filter by default to
+fetch scheduled tasks, then applies local criteria such as `date:today` or
+`date:upcoming` to the fetched items. `todoist.filter:<query>` overrides the
+Todoist fetch query, but local task criteria still apply. `task inbox
+source:todoist` uses Todoist's `#Inbox` filter.
 
 Do not expand this into a broad boolean expression language without a concrete
 use case and tests.

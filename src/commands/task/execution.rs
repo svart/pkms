@@ -25,7 +25,6 @@ pub(super) struct AgendaExecution {
     pub(super) days: Option<i64>,
     pub(super) columns: Option<Vec<Column>>,
     pub(super) today: NaiveDate,
-    pub(super) render_kind: plan::AgendaRenderKind,
 }
 
 pub(super) fn execute_task_list(
@@ -88,7 +87,6 @@ pub(super) fn execute_task_agenda(
         days: request.days,
         columns: request.source_neutral_columns().map(<[Column]>::to_vec),
         today: request.clock.today,
-        render_kind: request.render_kind,
     })
 }
 

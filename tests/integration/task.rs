@@ -741,6 +741,86 @@ fn test_task_agenda_week_returns_source_neutral_json() {
 }
 
 #[test]
+fn test_task_agenda_shortcuts_match_date_filters() {
+    let (_dir, root) = setup_clean_db();
+    let yesterday = org_date(-1);
+    let today = org_date(0);
+    let upcoming = org_date(2);
+    let later = org_date(9);
+    db_write(
+        &root,
+        "common/20260630000000-agenda-shortcut-aliases.org",
+        &format!(
+            r#":PROPERTIES:
+:ID:       acacacac-acac-4aca-8cac-acacacacacac
+:END:
+#+title: Agenda Shortcut Aliases
+#+filetags: :agenda:
+
+* TODO Alias overdue task
+SCHEDULED: <{yesterday}>
+* TODO Alias today task
+SCHEDULED: <{today}>
+* TODO Alias upcoming task
+SCHEDULED: <{upcoming}>
+* TODO Alias later task
+SCHEDULED: <{later}>
+"#
+        ),
+    );
+
+    let root = root.to_str().unwrap();
+    for (shortcut, date_filter) in [
+        ("today", "date:today"),
+        ("week", "date:week"),
+        ("overdue", "date:overdue"),
+        ("upcoming", "date:upcoming"),
+    ] {
+        let date_args = ["--db", root, "task", "agenda", date_filter];
+        let shortcut_args = ["--db", root, "task", "agenda", shortcut];
+        let (expected_stdout, expected_stderr, expected_status) = run(&date_args);
+        let (actual_stdout, actual_stderr, actual_status) = run(&shortcut_args);
+        assert!(
+            expected_status.success(),
+            "date filter failed for {date_filter}:\n{expected_stdout}\n{expected_stderr}"
+        );
+        assert!(
+            actual_status.success(),
+            "shortcut failed for {shortcut}:\n{actual_stdout}\n{actual_stderr}"
+        );
+        assert_eq!(actual_stdout, expected_stdout, "shortcut {shortcut}");
+        assert_eq!(actual_stderr, expected_stderr, "shortcut {shortcut}");
+
+        let date_json_args = [
+            "--db",
+            root,
+            "--output-format",
+            "json",
+            "task",
+            "agenda",
+            date_filter,
+        ];
+        let shortcut_json_args = [
+            "--db",
+            root,
+            "--output-format",
+            "json",
+            "task",
+            "agenda",
+            shortcut,
+        ];
+        let (expected_json, expected_status) = run_json(&date_json_args);
+        let (actual_json, actual_status) = run_json(&shortcut_json_args);
+        assert!(
+            expected_status.success(),
+            "date filter failed for {date_filter}"
+        );
+        assert!(actual_status.success(), "shortcut failed for {shortcut}");
+        assert_eq!(actual_json, expected_json, "shortcut {shortcut}");
+    }
+}
+
+#[test]
 fn test_task_agenda_week_honors_columns() {
     let (_dir, root) = setup_db();
     let (stdout, stderr, status) = run(&[
@@ -2454,7 +2534,12 @@ fn test_task_mod_planning_line_shift_does_not_warn_when_task_ids_stay_stable() {
     let (stdout, stderr, status) = db.run(&["task", "p1", "mod", "sch:2026-07-01"]);
 
     assert!(status.success(), "task mod failed:\n{stdout}\n{stderr}");
-    assert!(stdout.contains("Scheduled: None -> Scheduled: 2026-07-01"));
+    let expected_change = if org_date(1) == "2026-07-01" {
+        "Scheduled: None -> Scheduled: Tomorrow (2026-07-01)"
+    } else {
+        "Scheduled: None -> Scheduled: 2026-07-01"
+    };
+    assert!(stdout.contains(expected_change), "stdout:\n{stdout}");
     assert!(
         !stderr.contains("Task IDs changed"),
         "line shifts alone should not warn:\n{stderr}"
@@ -3317,12 +3402,19 @@ fn test_task_list_todoist_datetime_dates_use_pkms_display_format() {
 
 #[cfg(feature = "todoist")]
 #[test]
-fn test_task_agenda_todoist_today_uses_today_filter() {
+fn test_task_agenda_todoist_today_uses_date_alias_filter() {
     let (_dir, root) = setup_db();
+    let today = org_date(0);
+    let body = Box::leak(
+        format!(
+            r#"{{"results":[{{"id":"today","content":"Today task","priority":1,"labels":[],"due":{{"date":"{today}","string":"today"}}}}],"next_cursor":null}}"#
+        )
+        .into_boxed_str(),
+    );
     let (base_url, handle) = spawn_todoist_mock(vec![(
         "GET",
-        "/tasks/filter?query=today&limit=200",
-        r#"{"results":[{"id":"today","content":"Today task","priority":1,"labels":[],"due":{"date":"2026-05-23","string":"today"}}],"next_cursor":null}"#,
+        "/tasks/filter?query=%21no%20date&limit=200",
+        body,
     )]);
     let output = run_with_todoist_env(
         &[
@@ -3349,10 +3441,17 @@ fn test_task_agenda_todoist_today_uses_today_filter() {
 #[test]
 fn test_task_agenda_todoist_dates_use_pkms_json_format() {
     let (_dir, root) = setup_db();
+    let today = org_date(0);
+    let body = Box::leak(
+        format!(
+            r#"{{"results":[{{"id":"today","content":"Today task","priority":1,"labels":[],"due":{{"date":"{today}","string":"today"}}}}],"next_cursor":null}}"#
+        )
+        .into_boxed_str(),
+    );
     let (base_url, handle) = spawn_todoist_mock(vec![(
         "GET",
-        "/tasks/filter?query=today&limit=200",
-        r#"{"results":[{"id":"today","content":"Today task","priority":1,"labels":[],"due":{"date":"2026-05-23","string":"today"}}],"next_cursor":null}"#,
+        "/tasks/filter?query=%21no%20date&limit=200",
+        body,
     )]);
     let output = run_with_todoist_env(
         &[
@@ -3370,8 +3469,15 @@ fn test_task_agenda_todoist_dates_use_pkms_json_format() {
     handle.join().unwrap();
     assert!(output.status.success());
     let v: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
-    assert_eq!(v["items"][0]["scheduled"]["raw"], "<2026-05-23>");
-    assert_eq!(v["items"][0]["scheduled"]["date"], "2026-05-23");
+    let raw = format!("<{today}>");
+    assert_eq!(
+        v["items"][0]["scheduled"]["raw"].as_str(),
+        Some(raw.as_str())
+    );
+    assert_eq!(
+        v["items"][0]["scheduled"]["date"].as_str(),
+        Some(today.as_str())
+    );
 }
 
 #[cfg(feature = "todoist")]
@@ -3405,12 +3511,19 @@ fn test_task_agenda_todoist_defaults_to_scheduled_filter() {
 
 #[cfg(feature = "todoist")]
 #[test]
-fn test_task_agenda_todoist_overdue_uses_overdue_filter() {
+fn test_task_agenda_todoist_overdue_uses_date_alias_filter() {
     let (_dir, root) = setup_db();
+    let overdue = org_date(-1);
+    let body = Box::leak(
+        format!(
+            r#"{{"results":[{{"id":"old","content":"Overdue task","priority":1,"labels":[],"due":{{"date":"{overdue}","string":"yesterday"}}}}],"next_cursor":null}}"#
+        )
+        .into_boxed_str(),
+    );
     let (base_url, handle) = spawn_todoist_mock(vec![(
         "GET",
-        "/tasks/filter?query=overdue&limit=200",
-        r#"{"results":[{"id":"old","content":"Overdue task","priority":1,"labels":[],"due":{"date":"2026-05-22","string":"yesterday"}}],"next_cursor":null}"#,
+        "/tasks/filter?query=%21no%20date&limit=200",
+        body,
     )]);
     let output = run_with_todoist_env(
         &[
@@ -3433,12 +3546,19 @@ fn test_task_agenda_todoist_overdue_uses_overdue_filter() {
 
 #[cfg(feature = "todoist")]
 #[test]
-fn test_task_agenda_todoist_week_uses_next_seven_days_filter() {
+fn test_task_agenda_todoist_week_uses_date_alias_filter() {
     let (_dir, root) = setup_db();
+    let week = org_date(2);
+    let body = Box::leak(
+        format!(
+            r#"{{"results":[{{"id":"week","content":"Week task","priority":1,"labels":[],"due":{{"date":"{week}","string":"next week"}}}}],"next_cursor":null}}"#
+        )
+        .into_boxed_str(),
+    );
     let (base_url, handle) = spawn_todoist_mock(vec![(
         "GET",
-        "/tasks/filter?query=next%207%20days&limit=200",
-        r#"{"results":[{"id":"week","content":"Week task","priority":1,"labels":[],"due":{"date":"2026-05-29","string":"next week"}}],"next_cursor":null}"#,
+        "/tasks/filter?query=%21no%20date&limit=200",
+        body,
     )]);
     let output = run_with_todoist_env(
         &[
@@ -3463,10 +3583,17 @@ fn test_task_agenda_todoist_week_uses_next_seven_days_filter() {
 #[test]
 fn test_task_agenda_todoist_upcoming_excludes_today_and_overdue() {
     let (_dir, root) = setup_db();
+    let upcoming = org_date(1);
+    let body = Box::leak(
+        format!(
+            r#"{{"results":[{{"id":"future","content":"Future task","priority":1,"labels":[],"due":{{"date":"{upcoming}","string":"tomorrow"}}}}],"next_cursor":null}}"#
+        )
+        .into_boxed_str(),
+    );
     let (base_url, handle) = spawn_todoist_mock(vec![(
         "GET",
-        "/tasks/filter?query=due%20after%3A%20today%20%26%20next%207%20days&limit=200",
-        r#"{"results":[{"id":"future","content":"Future task","priority":1,"labels":[],"due":{"date":"2026-05-24","string":"tomorrow"}}],"next_cursor":null}"#,
+        "/tasks/filter?query=%21no%20date&limit=200",
+        body,
     )]);
     let output = run_with_todoist_env(
         &[
@@ -3489,13 +3616,17 @@ fn test_task_agenda_todoist_upcoming_excludes_today_and_overdue() {
 
 #[cfg(feature = "todoist")]
 #[test]
-fn test_task_agenda_todoist_explicit_filter_overrides_agenda_filter() {
+fn test_task_agenda_todoist_explicit_filter_overrides_fetch_query() {
     let (_dir, root) = setup_db();
-    let (base_url, handle) = spawn_todoist_mock(vec![(
-        "GET",
-        "/tasks/filter?query=p1&limit=200",
-        r#"{"results":[{"id":"p1","content":"Priority task","priority":4,"labels":[]}],"next_cursor":null}"#,
-    )]);
+    let today = org_date(0);
+    let body = Box::leak(
+        format!(
+            r#"{{"results":[{{"id":"p1","content":"Priority task","priority":4,"labels":[],"due":{{"date":"{today}","string":"today"}}}}],"next_cursor":null}}"#
+        )
+        .into_boxed_str(),
+    );
+    let (base_url, handle) =
+        spawn_todoist_mock(vec![("GET", "/tasks/filter?query=p1&limit=200", body)]);
     let output = run_with_todoist_env(
         &[
             "--db",
@@ -3518,12 +3649,19 @@ fn test_task_agenda_todoist_explicit_filter_overrides_agenda_filter() {
 
 #[cfg(feature = "todoist")]
 #[test]
-fn test_task_today_todoist_uses_today_filter() {
+fn test_task_today_todoist_uses_date_alias_filter() {
     let (_dir, root) = setup_db();
+    let today = org_date(0);
+    let body = Box::leak(
+        format!(
+            r#"{{"results":[{{"id":"today","content":"Today shortcut","priority":1,"labels":[],"due":{{"date":"{today}","string":"today"}}}}],"next_cursor":null}}"#
+        )
+        .into_boxed_str(),
+    );
     let (base_url, handle) = spawn_todoist_mock(vec![(
         "GET",
-        "/tasks/filter?query=today&limit=200",
-        r#"{"results":[{"id":"today","content":"Today shortcut","priority":1,"labels":[]}],"next_cursor":null}"#,
+        "/tasks/filter?query=%21no%20date&limit=200",
+        body,
     )]);
     let output = run_with_todoist_env(
         &[
@@ -3546,12 +3684,19 @@ fn test_task_today_todoist_uses_today_filter() {
 
 #[cfg(feature = "todoist")]
 #[test]
-fn test_task_upcoming_todoist_uses_days_filter() {
+fn test_task_upcoming_todoist_days_filter_is_applied_locally() {
     let (_dir, root) = setup_db();
+    let soon = org_date(1);
+    let body = Box::leak(
+        format!(
+            r#"{{"results":[{{"id":"soon","content":"Soon shortcut","priority":1,"labels":[],"due":{{"date":"{soon}","string":"tomorrow"}}}}],"next_cursor":null}}"#
+        )
+        .into_boxed_str(),
+    );
     let (base_url, handle) = spawn_todoist_mock(vec![(
         "GET",
-        "/tasks/filter?query=due%20after%3A%20today%20%26%20next%203%20days&limit=200",
-        r#"{"results":[{"id":"soon","content":"Soon shortcut","priority":1,"labels":[]}],"next_cursor":null}"#,
+        "/tasks/filter?query=%21no%20date&limit=200",
+        body,
     )]);
     let output = run_with_todoist_env(
         &[
@@ -3596,8 +3741,13 @@ SCHEDULED: <{today}>
     .unwrap();
     let (base_url, handle) = spawn_todoist_mock(vec![(
         "GET",
-        "/tasks/filter?query=today&limit=200",
-        r#"{"results":[{"id":"remote-today","content":"Remote shortcut today","priority":1,"labels":[]}],"next_cursor":null}"#,
+        "/tasks/filter?query=%21no%20date&limit=200",
+        Box::leak(
+            format!(
+                r#"{{"results":[{{"id":"remote-today","content":"Remote shortcut today","priority":1,"labels":[],"due":{{"date":"{today}","string":"today"}}}}],"next_cursor":null}}"#
+            )
+            .into_boxed_str(),
+        ),
     )]);
     let output = run_with_todoist_env(
         &[
@@ -4207,8 +4357,11 @@ SCHEDULED: <{today}>
         )
         .into_boxed_str(),
     );
-    let (base_url, handle) =
-        spawn_todoist_mock(vec![("GET", "/tasks/filter?query=today&limit=200", body)]);
+    let (base_url, handle) = spawn_todoist_mock(vec![(
+        "GET",
+        "/tasks/filter?query=%21no%20date&limit=200",
+        body,
+    )]);
     let output = run_with_todoist_env(
         &[
             "--db",

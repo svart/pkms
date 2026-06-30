@@ -80,10 +80,11 @@ pkms task agenda
 pkms task agenda today
 pkms task agenda week
 pkms task agenda overdue
-pkms task agenda upcoming --days 7
+pkms task agenda upcoming
 pkms task agenda date:upcoming
 pkms task agenda date:2026-01-01
 pkms task agenda date:today,overdue
+pkms task agenda upcoming --days 7
 pkms task agenda --columns Id,Date,State,Type,Prio,Tags,Project,Note,Heading
 pkms task agenda state:TODO
 pkms task agenda tags:!device,agenda
@@ -92,8 +93,10 @@ pkms task agenda prio:A
 pkms task agenda --sort "date,priority"
 ```
 
-Use `date:upcoming` for all future, non-overdue planned tasks. Use
-`task agenda upcoming --days N` for a bounded upcoming window.
+The `today`, `week`, `overdue`, and `upcoming` subcommands are aliases for
+`date:today`, `date:week`, `date:overdue`, and `date:upcoming`. Use
+`task agenda upcoming --days N` for a bounded upcoming window; this is
+equivalent to `task agenda --days N date:upcoming`.
 
 ## Filters
 
@@ -224,6 +227,7 @@ pkms task agenda today source:todoist
 pkms task agenda week source:all
 pkms task agenda today source:all
 pkms task agenda overdue source:todoist
+pkms task agenda upcoming source:all
 pkms task agenda upcoming --days 7 source:all
 pkms task inbox source:todoist
 pkms task list projects source:todoist
@@ -246,31 +250,23 @@ pkms task todoist:<remote-id> mod dl:
 
 Todoist tasks are fetched only when the source set includes Todoist. Local
 commands such as `pkms task list source:pkms` do not make Todoist requests.
-For Todoist agenda views, `task agenda` translates high-level agenda commands
-and flags to Todoist server-side filters:
-
-| Command or flag | Todoist filter |
-|-----------------|----------------|
-| none | `!no date` |
-| `today` | `today` |
-| `overdue` | `overdue` |
-| `week` | `next 7 days` |
-| `upcoming --days N` | `due after: today & next N days` |
-
-Without an agenda shortcut, Todoist-backed `task agenda` shows only scheduled tasks.
-Text output uses the same default agenda sections as PKMS tasks: overdue, today,
-and upcoming.
-An explicit `todoist.filter:<query>` takes precedence over the default agenda
-filter and agenda command, and is the escape hatch for custom Todoist filter
-syntax.
+Todoist-backed `task agenda` uses Todoist's `!no date` filter by default to fetch
+scheduled tasks. Agenda shortcut subcommands are aliases for local `date:*`
+filters, so `task agenda today source:todoist` has the same output contract as
+`task agenda date:today source:todoist`. Text output uses the same default
+agenda sections as PKMS tasks: overdue, today, and upcoming.
+An explicit `todoist.filter:<query>` takes precedence over the default Todoist
+fetch query and is the escape hatch for custom Todoist filter syntax; local task
+criteria such as `date:today` still apply to fetched items.
 
 Use the stable agenda shortcut commands for common assistant workflows:
 
 | Command | Semantics |
 |---------|-----------|
-| `task agenda today` | Today's PKMS agenda tasks by default; accepts `source:todoist` or `source:all`. |
-| `task agenda overdue` | Overdue PKMS agenda tasks by default; accepts `source:todoist` or `source:all`. |
-| `task agenda upcoming --days N` | Upcoming tasks after today through the next `N` days; defaults to 7. |
+| `task agenda today` | Alias for `task agenda date:today`; accepts `source:todoist` or `source:all`. |
+| `task agenda overdue` | Alias for `task agenda date:overdue`; accepts `source:todoist` or `source:all`. |
+| `task agenda upcoming` | Alias for `task agenda date:upcoming`; accepts `source:todoist` or `source:all`. |
+| `task agenda upcoming --days N` | Bounded alias equivalent to `task agenda --days N date:upcoming`. |
 | `task inbox` | PKMS inbox-note tasks by default; accepts `source:todoist` or `source:all`. |
 
 `task inbox` and default `task add` require a configured PKMS inbox note:

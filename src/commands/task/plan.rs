@@ -1,5 +1,5 @@
 use crate::cli::{
-    TaskAgendaArgs, TaskAgendaCommand, TaskListArgs, TaskShortcutArgs, TaskUpcomingArgs,
+    TaskAgendaArgs, TaskAgendaCommand, TaskListArgs, TaskShortcutArgs, TaskTableArgs,
 };
 use crate::config::{ColumnSource, ColumnView, ResolvedConfig};
 use crate::input;
@@ -13,10 +13,6 @@ use chrono::NaiveDate;
 
 #[derive(Debug, Clone, Copy)]
 pub(super) enum ShortcutKind {
-    Today,
-    Week,
-    Overdue,
-    Upcoming { days: i64 },
     Inbox,
 }
 
@@ -53,18 +49,11 @@ pub(super) struct AgendaRequest {
     pub(super) columns: AgendaColumns,
     pub(super) clock: TaskClock,
     pub(super) view: TaskListView,
-    pub(super) render_kind: AgendaRenderKind,
 }
 
 pub(super) enum AgendaColumns {
     Pkms(Vec<Column>),
     SourceNeutral(Option<Vec<Column>>),
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum AgendaRenderKind {
-    TaskItems,
-    AgendaGroups,
 }
 
 impl TaskListRequest {
@@ -230,20 +219,12 @@ fn resolve_task_columns(
 
 pub(super) fn shortcut_task_view(kind: ShortcutKind) -> TaskListView {
     match kind {
-        ShortcutKind::Today => TaskListView::Today,
-        ShortcutKind::Week => TaskListView::Week,
-        ShortcutKind::Overdue => TaskListView::Overdue,
-        ShortcutKind::Upcoming { days } => TaskListView::Upcoming { days },
         ShortcutKind::Inbox => TaskListView::Inbox,
     }
 }
 
 pub(super) fn shortcut_column_view(kind: ShortcutKind) -> ColumnView {
     match kind {
-        ShortcutKind::Today
-        | ShortcutKind::Week
-        | ShortcutKind::Overdue
-        | ShortcutKind::Upcoming { .. } => ColumnView::Agenda,
         ShortcutKind::Inbox => ColumnView::Tasks,
     }
 }
@@ -254,25 +235,51 @@ pub(super) fn plan_agenda_request(
 ) -> Result<AgendaRequest> {
     match &args.command {
         Some(TaskAgendaCommand::Today(args)) => {
-            return plan_agenda_shortcut_request(config, args, ShortcutKind::Today);
+            return plan_agenda_date_shortcut_request(config, args, "today");
         }
         Some(TaskAgendaCommand::Week(args)) => {
-            return plan_agenda_shortcut_request(config, args, ShortcutKind::Week);
+            return plan_agenda_date_shortcut_request(config, args, "week");
         }
         Some(TaskAgendaCommand::Overdue(args)) => {
-            return plan_agenda_shortcut_request(config, args, ShortcutKind::Overdue);
+            return plan_agenda_date_shortcut_request(config, args, "overdue");
         }
         Some(TaskAgendaCommand::Upcoming(args)) => {
-            return plan_agenda_upcoming_request(config, args);
+            let filters = agenda_date_shortcut_filters(&args.filters, "upcoming");
+            return plan_agenda_request_from_filters(
+                config,
+                &filters,
+                None,
+                args.limit,
+                args.days,
+                &args.table,
+            );
         }
         None => {}
     }
 
+    plan_agenda_request_from_filters(
+        config,
+        &args.filters,
+        args.sort.clone(),
+        args.limit,
+        args.days,
+        &args.table,
+    )
+}
+
+fn plan_agenda_request_from_filters(
+    config: &ResolvedConfig,
+    raw_filters: &[String],
+    sort: Option<String>,
+    limit: Option<usize>,
+    days: Option<i64>,
+    table: &TaskTableArgs,
+) -> Result<AgendaRequest> {
     let clock = TaskClock::now();
-    let filters = parse_task_filters_on(&args.filters, clock.today)?;
+    let filters = parse_task_filters_on(raw_filters, clock.today)?;
     tracing::debug!(
         source = ?filters.source,
-        filter_count = args.filters.len(),
+        filter_count = raw_filters.len(),
         has_todoist_filter = filters.todoist_filter.is_some(),
         has_criteria = filters.has_criteria(),
         "running task agenda"
@@ -282,79 +289,40 @@ pub(super) fn plan_agenda_request(
             config,
             SourceSelection::Pkms,
             ColumnView::Agenda,
-            args.table.columns.as_deref(),
+            table.columns.as_deref(),
         )?)
     } else {
         AgendaColumns::SourceNeutral(resolve_task_table_columns(
             config,
             filters.source,
             ColumnView::Agenda,
-            args.table.columns.as_deref(),
+            table.columns.as_deref(),
         )?)
     };
     Ok(AgendaRequest {
         filters,
-        sort: args.sort.clone(),
-        limit: args.limit,
-        days: args.days.map(|days| days.max(0)),
-        line_sep: args.table.line_sep,
+        sort,
+        limit,
+        days: days.map(|days| days.max(0)),
+        line_sep: table.line_sep,
         columns,
         clock,
         view: TaskListView::Agenda,
-        render_kind: AgendaRenderKind::AgendaGroups,
     })
 }
 
-fn plan_agenda_shortcut_request(
+fn plan_agenda_date_shortcut_request(
     config: &ResolvedConfig,
     args: &TaskShortcutArgs,
-    kind: ShortcutKind,
+    date_filter: &str,
 ) -> Result<AgendaRequest> {
-    let clock = TaskClock::now();
-    let filters = parse_task_filters_on(&args.filters, clock.today)?;
-    let columns = resolve_task_table_columns(
-        config,
-        filters.source,
-        shortcut_column_view(kind),
-        args.table.columns.as_deref(),
-    )?;
-    Ok(AgendaRequest {
-        filters,
-        sort: Some("priority".to_string()),
-        limit: args.limit,
-        days: None,
-        line_sep: args.table.line_sep,
-        columns: AgendaColumns::SourceNeutral(columns),
-        clock,
-        view: shortcut_task_view(kind),
-        render_kind: AgendaRenderKind::TaskItems,
-    })
+    let filters = agenda_date_shortcut_filters(&args.filters, date_filter);
+    plan_agenda_request_from_filters(config, &filters, None, args.limit, None, &args.table)
 }
 
-fn plan_agenda_upcoming_request(
-    config: &ResolvedConfig,
-    args: &TaskUpcomingArgs,
-) -> Result<AgendaRequest> {
-    let clock = TaskClock::now();
-    let filters = parse_task_filters_on(&args.filters, clock.today)?;
-    let kind = ShortcutKind::Upcoming {
-        days: args.days.max(0),
-    };
-    let columns = resolve_task_table_columns(
-        config,
-        filters.source,
-        shortcut_column_view(kind),
-        args.table.columns.as_deref(),
-    )?;
-    Ok(AgendaRequest {
-        filters,
-        sort: Some("priority".to_string()),
-        limit: args.limit,
-        days: None,
-        line_sep: args.table.line_sep,
-        columns: AgendaColumns::SourceNeutral(columns),
-        clock,
-        view: shortcut_task_view(kind),
-        render_kind: AgendaRenderKind::TaskItems,
-    })
+fn agenda_date_shortcut_filters(filters: &[String], date_filter: &str) -> Vec<String> {
+    let mut aliased = Vec::with_capacity(filters.len() + 1);
+    aliased.push(format!("date:{date_filter}"));
+    aliased.extend_from_slice(filters);
+    aliased
 }

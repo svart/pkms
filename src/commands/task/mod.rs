@@ -32,8 +32,7 @@ mod todo;
 use execution::{AgendaExecution, TaskListExecution};
 use mutations::{run_add, run_done, run_postpone, run_state, unsupported_task_source};
 use plan::{
-    AgendaRenderKind, ShortcutKind, TaskListMode, plan_agenda_request, plan_task_list_request,
-    split_task_list_mode,
+    ShortcutKind, TaskListMode, plan_agenda_request, plan_task_list_request, split_task_list_mode,
 };
 
 pub fn run(
@@ -166,24 +165,15 @@ fn run_agenda(config: &ResolvedConfig, ctx: &OutputContext, args: &TaskAgendaArg
 }
 
 fn render_task_agenda(ctx: &OutputContext, output: AgendaExecution) -> Result<()> {
-    match output.render_kind {
-        AgendaRenderKind::TaskItems => render::print_task_items(
-            ctx,
-            output.source,
-            output.items,
-            output.limit,
-            output.columns.as_deref(),
-        ),
-        AgendaRenderKind::AgendaGroups => render::print_agenda_task_items(
-            ctx,
-            output.source,
-            output.items,
-            output.limit,
-            output.columns.as_deref(),
-            output.today,
-            output.days,
-        ),
-    }
+    render::print_agenda_task_items(
+        ctx,
+        output.source,
+        output.items,
+        output.limit,
+        output.columns.as_deref(),
+        output.today,
+        output.days,
+    )
 }
 
 pub(super) fn run_show(

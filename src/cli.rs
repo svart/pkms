@@ -432,8 +432,8 @@ pub struct TaskShortcutArgs {
 pub struct TaskUpcomingArgs {
     #[arg(value_name = "FILTER")]
     pub filters: Vec<String>,
-    #[arg(long, default_value_t = 7, help = "Number of upcoming days to show")]
-    pub days: i64,
+    #[arg(long, help = "Number of upcoming days to show")]
+    pub days: Option<i64>,
     #[arg(long, help = "Maximum results")]
     pub limit: Option<usize>,
     #[command(flatten)]

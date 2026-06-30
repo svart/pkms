@@ -187,7 +187,7 @@ impl TaskDateFilter {
                 let cutoff = today + Duration::days(7);
                 item.dates().iter().any(|item_date| *item_date <= cutoff)
             }
-            TaskDateFilter::Overdue => item.is_overdue,
+            TaskDateFilter::Overdue => item.is_overdue_on(today),
             TaskDateFilter::Upcoming => {
                 !item.is_overdue && item.dates().iter().any(|item_date| *item_date > today)
             }
