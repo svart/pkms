@@ -5,6 +5,7 @@ use super::org_html::{
 use super::{page_css, page_js};
 use crate::config::ResolvedConfig;
 use crate::graph::{Graph, Node};
+use crate::org_edit::parsed_heading_subtree_end_index;
 use crate::parser::{HEADING_RE, Heading, parse_note, strip_org_links};
 use std::collections::BTreeMap;
 use std::fmt::Write as FmtWrite;
@@ -87,14 +88,9 @@ fn heading_preview_content(graph: &Graph, node: &Node, content: &str) -> Option<
         .position(|heading| heading.uuid.as_deref() == Some(node.uuid.as_str()))?;
     let target = &headings[target_idx];
     let start = target.line_number.checked_sub(1)?;
-    let end = headings
-        .iter()
-        .skip(target_idx + 1)
-        .find(|heading| heading.level <= target.level)
-        .and_then(|heading| heading.line_number.checked_sub(1))
-        .unwrap_or_else(|| content.lines().count());
-
     let lines: Vec<&str> = content.lines().collect();
+    let end =
+        parsed_heading_subtree_end_index(&headings, target.line_number, target.level, lines.len());
     if start >= lines.len() || end <= start {
         return None;
     }
