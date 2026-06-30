@@ -1,8 +1,6 @@
 #[cfg(feature = "todoist")]
 use crate::cli::OutputFormat;
-use crate::cli::{
-    TaskAgendaArgs, TaskCommand, TaskListArgs, TaskOpenArgs, TaskShortcutArgs, TaskTargetArgs,
-};
+use crate::cli::{TaskAgendaArgs, TaskCommand, TaskListArgs, TaskShortcutArgs};
 use crate::command_context::CommandContext;
 use crate::commands::open::OpenOptions;
 use crate::commands::show::{HeadingTarget, ShowOptions};
@@ -11,7 +9,7 @@ use crate::output::{OutputContext, terminal_markup};
 use crate::tasks::clock::TaskClock;
 #[cfg(feature = "todoist")]
 use crate::tasks::filter::SourceSelection;
-use crate::tasks::filter::parse_task_filters;
+use crate::tasks::filter::parse_task_filters_on;
 use crate::tasks::id::TaskId;
 use crate::tasks::model::TaskSourceKind;
 use crate::tasks::modifiers::TaskModifierSpec;
@@ -38,19 +36,25 @@ pub fn run(ctx: &CommandContext<'_>, command: &TaskCommand) -> Result<ExitCode> 
     let config = ctx.config();
     let output = ctx.output();
     let task_id_snapshot = task_id_snapshot_before_command(config, command);
+    let clock = TaskClock::now();
+    let runtime = TaskRuntime {
+        config,
+        output,
+        clock,
+    };
     let exit_code = match command {
-        TaskCommand::List(args) => success(run_list(config, output, args)),
-        TaskCommand::Agenda(args) => success(run_agenda(config, output, args)),
-        TaskCommand::Inbox(args) => {
-            success(run_shortcut(config, output, args, ShortcutKind::Inbox))
+        TaskCommand::List(args) => success(run_list(runtime, args)),
+        TaskCommand::Agenda(args) => success(run_agenda(runtime, args)),
+        TaskCommand::Inbox(args) => success(run_shortcut(runtime, args, ShortcutKind::Inbox)),
+        TaskCommand::Show(args) => success(run_show(ctx, &args.id)),
+        TaskCommand::Open(args) => success(run_open(ctx, &args.id, &args.editor, args.line)),
+        TaskCommand::State(args) => {
+            success(run_state(runtime, &args.id, &args.state, args.dry_run))
         }
-        TaskCommand::Show(args) => success(run_show(ctx, args)),
-        TaskCommand::Open(args) => success(run_open(ctx, args)),
-        TaskCommand::State(args) => success(run_state(config, output, args)),
-        TaskCommand::Done(args) => success(run_done(config, output, args)),
-        TaskCommand::Add(args) => success(run_add(config, output, args)),
-        TaskCommand::Postpone(args) => success(run_postpone(config, output, args)),
-        TaskCommand::Target(args) => id_command::run(ctx, args),
+        TaskCommand::Done(args) => success(run_done(runtime, &args.id, args.dry_run)),
+        TaskCommand::Add(args) => success(run_add(runtime, &args.text)),
+        TaskCommand::Postpone(args) => success(run_postpone(runtime, &args.id, &args.to)),
+        TaskCommand::Target(args) => id_command::run(ctx, args, runtime),
     }?;
     maybe_warn_task_ids_changed(config, task_id_snapshot);
     Ok(exit_code)
@@ -60,24 +64,24 @@ fn success(result: Result<()>) -> Result<ExitCode> {
     result.map(|()| ExitCode::SUCCESS)
 }
 
-fn run_list(config: &ResolvedConfig, ctx: &OutputContext, args: &TaskListArgs) -> Result<()> {
-    let (mode, filters) = split_task_list_mode(&args.filters);
-    match mode {
-        TaskListMode::Tasks => run_task_list(config, ctx, args, &filters),
-        TaskListMode::Projects => run_projects(config, ctx, &filters),
-        TaskListMode::Tags => run_tags(config, ctx, &filters),
-    }
+#[derive(Clone, Copy)]
+pub(super) struct TaskRuntime<'a> {
+    config: &'a ResolvedConfig,
+    output: &'a OutputContext,
+    clock: TaskClock,
 }
 
-fn run_task_list(
-    config: &ResolvedConfig,
-    ctx: &OutputContext,
-    args: &TaskListArgs,
-    raw_filters: &[String],
-) -> Result<()> {
-    let request = plan_task_list_request(config, args, raw_filters)?;
-    let output = execution::execute_task_list(config, &request)?;
-    render_task_list(ctx, output)
+fn run_list(runtime: TaskRuntime<'_>, args: &TaskListArgs) -> Result<()> {
+    let (mode, filters) = split_task_list_mode(&args.filters);
+    match mode {
+        TaskListMode::Tasks => {
+            let request = plan_task_list_request(runtime.config, args, &filters, runtime.clock)?;
+            let output = execution::execute_task_list(runtime.config, &request)?;
+            render_task_list(runtime.output, output)
+        }
+        TaskListMode::Projects => run_projects(runtime, &filters),
+        TaskListMode::Tags => run_tags(runtime, &filters),
+    }
 }
 
 fn render_task_list(ctx: &OutputContext, output: TaskListExecution) -> Result<()> {
@@ -107,23 +111,21 @@ fn render_task_list(ctx: &OutputContext, output: TaskListExecution) -> Result<()
 }
 
 fn run_shortcut(
-    config: &ResolvedConfig,
-    ctx: &OutputContext,
+    runtime: TaskRuntime<'_>,
     args: &TaskShortcutArgs,
     kind: ShortcutKind,
 ) -> Result<()> {
-    let clock = TaskClock::now();
-    let mut items = execution::collect_shortcut_items_on(config, &args.filters, kind, clock)?;
-    let source = plan::shortcut_display_source(&args.filters, clock.today)?;
+    let (source, mut items) =
+        execution::collect_shortcut_items_on(runtime.config, &args.filters, kind, runtime.clock)?;
     execution::sort_task_items(&mut items, "priority")?;
     let columns = plan::resolve_task_table_columns(
-        config,
+        runtime.config,
         source,
         plan::shortcut_column_view(kind),
         args.table.columns.as_deref(),
     )?;
     render::print_task_items(
-        ctx,
+        runtime.output,
         source,
         items,
         args.limit,
@@ -132,10 +134,10 @@ fn run_shortcut(
     )
 }
 
-fn run_agenda(config: &ResolvedConfig, ctx: &OutputContext, args: &TaskAgendaArgs) -> Result<()> {
-    let request = plan_agenda_request(config, args)?;
-    let output = execution::execute_task_agenda(config, &request)?;
-    render_task_agenda(ctx, output)
+fn run_agenda(runtime: TaskRuntime<'_>, args: &TaskAgendaArgs) -> Result<()> {
+    let request = plan_agenda_request(runtime.config, args, runtime.clock)?;
+    let output = execution::execute_task_agenda(runtime.config, &request)?;
+    render_task_agenda(runtime.output, output)
 }
 
 fn render_task_agenda(ctx: &OutputContext, output: AgendaExecution) -> Result<()> {
@@ -153,10 +155,10 @@ fn render_task_agenda(ctx: &OutputContext, output: AgendaExecution) -> Result<()
     )
 }
 
-pub(super) fn run_show(ctx: &CommandContext<'_>, args: &TaskTargetArgs) -> Result<()> {
+pub(super) fn run_show(ctx: &CommandContext<'_>, id: &str) -> Result<()> {
     let config = ctx.config();
     let output = ctx.output();
-    match args.id.parse::<TaskId>()? {
+    match id.parse::<TaskId>()? {
         TaskId::Pkms(id) => crate::commands::show::run(
             ctx,
             &ShowOptions {
@@ -171,14 +173,19 @@ pub(super) fn run_show(ctx: &CommandContext<'_>, args: &TaskTargetArgs) -> Resul
     }
 }
 
-pub(super) fn run_open(ctx: &CommandContext<'_>, args: &TaskOpenArgs) -> Result<()> {
-    match args.id.parse::<TaskId>()? {
+pub(super) fn run_open(
+    ctx: &CommandContext<'_>,
+    id: &str,
+    editor: &str,
+    line: Option<usize>,
+) -> Result<()> {
+    match id.parse::<TaskId>()? {
         TaskId::Pkms(id) => crate::commands::open::run(
             ctx,
             &OpenOptions {
                 targets: vec![id.to_string()],
-                editor: args.editor.clone(),
-                line: args.line,
+                editor: editor.to_string(),
+                line,
             },
         ),
         TaskId::Todoist(_) => bail!("Todoist task source is not implemented yet"),
@@ -215,8 +222,8 @@ fn show_todoist_task(_config: &ResolvedConfig, _ctx: &OutputContext, _id: &str) 
     bail!("Todoist support is not available in this build. Rebuild with --features todoist.")
 }
 
-fn run_projects(config: &ResolvedConfig, ctx: &OutputContext, filters: &[String]) -> Result<()> {
-    let filters = parse_task_filters(filters)?;
+fn run_projects(runtime: TaskRuntime<'_>, filters: &[String]) -> Result<()> {
+    let filters = parse_task_filters_on(filters, runtime.clock.today)?;
     if filters.todoist_filter.is_some() {
         bail!("Todoist metadata commands do not accept todoist.filter.");
     }
@@ -224,26 +231,29 @@ fn run_projects(config: &ResolvedConfig, ctx: &OutputContext, filters: &[String]
         bail!("Task metadata commands only accept source filters.");
     }
     let mut rows = providers::collect_task_metadata(
-        config,
+        runtime.config,
         filters.source,
         providers::MetadataKind::Projects,
     )?;
     sort_metadata_rows(&mut rows);
-    render::print_metadata_rows(ctx, "project", &rows)
+    render::print_metadata_rows(runtime.output, "project", &rows)
 }
 
-fn run_tags(config: &ResolvedConfig, ctx: &OutputContext, filters: &[String]) -> Result<()> {
-    let filters = parse_task_filters(filters)?;
+fn run_tags(runtime: TaskRuntime<'_>, filters: &[String]) -> Result<()> {
+    let filters = parse_task_filters_on(filters, runtime.clock.today)?;
     if filters.todoist_filter.is_some() {
         bail!("Todoist metadata commands do not accept todoist.filter.");
     }
     if filters.has_criteria() {
         bail!("Task metadata commands only accept source filters.");
     }
-    let mut rows =
-        providers::collect_task_metadata(config, filters.source, providers::MetadataKind::Tags)?;
+    let mut rows = providers::collect_task_metadata(
+        runtime.config,
+        filters.source,
+        providers::MetadataKind::Tags,
+    )?;
     sort_metadata_rows(&mut rows);
-    render::print_metadata_rows(ctx, "tag", &rows)
+    render::print_metadata_rows(runtime.output, "tag", &rows)
 }
 
 fn sort_metadata_rows(rows: &mut [TaskMetadataRow]) {

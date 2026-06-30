@@ -80,12 +80,13 @@ pub(super) fn collect_shortcut_items_on(
     raw_filters: &[String],
     kind: plan::ShortcutKind,
     clock: TaskClock,
-) -> Result<Vec<TaskItem>> {
+) -> Result<(SourceSelection, Vec<TaskItem>)> {
     let filters = crate::tasks::filter::parse_task_filters_on(raw_filters, clock.today)?;
+    let source = filters.source;
     let mut items =
         providers::collect_task_items(config, &filters, plan::shortcut_task_view(kind), clock)?;
     apply_task_filter_criteria_on(config, &mut items, &filters.criteria, clock.today)?;
-    Ok(items)
+    Ok((source, items))
 }
 
 pub(super) fn execute_task_agenda(

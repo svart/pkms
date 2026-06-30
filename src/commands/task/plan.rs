@@ -9,7 +9,6 @@ use crate::tasks::filter::{SourceSelection, TaskFilters, parse_task_filters_on};
 use crate::tasks::provider::TaskListView;
 use crate::util;
 use anyhow::{Result, bail};
-use chrono::NaiveDate;
 
 #[derive(Debug, Clone, Copy)]
 pub(super) enum ShortcutKind {
@@ -70,8 +69,8 @@ pub(super) fn plan_task_list_request(
     config: &ResolvedConfig,
     args: &TaskListArgs,
     raw_filters: &[String],
+    clock: TaskClock,
 ) -> Result<TaskListRequest> {
-    let clock = TaskClock::now();
     let filters = parse_task_filters_on(raw_filters, clock.today)?;
     tracing::debug!(
         source = ?filters.source,
@@ -114,14 +113,6 @@ fn task_scope(from_stdin: bool, filter_scope: &[String]) -> Result<Vec<String>> 
     Ok(filter_scope.to_vec())
 }
 
-pub(super) fn shortcut_display_source(
-    raw_filters: &[String],
-    today: NaiveDate,
-) -> Result<SourceSelection> {
-    let filters = parse_task_filters_on(raw_filters, today)?;
-    Ok(filters.source)
-}
-
 pub(super) fn resolve_task_table_columns(
     config: &ResolvedConfig,
     source: SourceSelection,
@@ -156,16 +147,17 @@ pub(super) fn shortcut_column_view(kind: ShortcutKind) -> ColumnView {
 pub(super) fn plan_agenda_request(
     config: &ResolvedConfig,
     args: &TaskAgendaArgs,
+    clock: TaskClock,
 ) -> Result<AgendaRequest> {
     match &args.command {
         Some(TaskAgendaCommand::Today(args)) => {
-            return plan_agenda_date_shortcut_request(config, args, "today");
+            return plan_agenda_date_shortcut_request(config, args, "today", clock);
         }
         Some(TaskAgendaCommand::Week(args)) => {
-            return plan_agenda_date_shortcut_request(config, args, "week");
+            return plan_agenda_date_shortcut_request(config, args, "week", clock);
         }
         Some(TaskAgendaCommand::Overdue(args)) => {
-            return plan_agenda_date_shortcut_request(config, args, "overdue");
+            return plan_agenda_date_shortcut_request(config, args, "overdue", clock);
         }
         Some(TaskAgendaCommand::Upcoming(args)) => {
             let filters = agenda_date_shortcut_filters(&args.filters, "upcoming");
@@ -176,6 +168,7 @@ pub(super) fn plan_agenda_request(
                 args.limit,
                 args.days,
                 &args.table,
+                clock,
             );
         }
         None => {}
@@ -188,6 +181,7 @@ pub(super) fn plan_agenda_request(
         args.limit,
         args.days,
         &args.table,
+        clock,
     )
 }
 
@@ -198,8 +192,8 @@ fn plan_agenda_request_from_filters(
     limit: Option<usize>,
     days: Option<i64>,
     table: &TaskTableArgs,
+    clock: TaskClock,
 ) -> Result<AgendaRequest> {
-    let clock = TaskClock::now();
     let filters = parse_task_filters_on(raw_filters, clock.today)?;
     tracing::debug!(
         source = ?filters.source,
@@ -230,9 +224,10 @@ fn plan_agenda_date_shortcut_request(
     config: &ResolvedConfig,
     args: &TaskShortcutArgs,
     date_filter: &str,
+    clock: TaskClock,
 ) -> Result<AgendaRequest> {
     let filters = agenda_date_shortcut_filters(&args.filters, date_filter);
-    plan_agenda_request_from_filters(config, &filters, None, args.limit, None, &args.table)
+    plan_agenda_request_from_filters(config, &filters, None, args.limit, None, &args.table, clock)
 }
 
 fn agenda_date_shortcut_filters(filters: &[String], date_filter: &str) -> Vec<String> {
