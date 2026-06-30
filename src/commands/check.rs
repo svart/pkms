@@ -1,12 +1,13 @@
 use crate::cli::CheckArgs;
 use crate::config::ResolvedConfig;
+use crate::graph::validation::{GraphValidationIssues, GraphValidationOptions};
 use crate::graph::{DuplicateInfo, Graph, GraphStats, OverlinkEntry, SelfLinkEntry};
 use crate::link_check::{
-    LinkCheckErrorTarget, LinkCheckJob, LinkCheckKind, LinkCheckResults, SshFileCheckOptions,
-    is_ssh_file_target, run_local_link_checks, run_ssh_link_checks, sort_link_check_jobs,
+    LinkCheckErrorTarget, LinkCheckKind, LinkCheckResults, SshFileCheckOptions,
+    run_local_link_checks, run_ssh_link_checks,
 };
 use crate::output::OutputContext;
-use crate::parser::{Link, validate_filetags_format};
+use crate::parser::Link;
 use anyhow::Result;
 use serde::Serialize;
 use std::fmt::Write;
@@ -211,48 +212,25 @@ fn collect_check_data<'a>(
     let cross_links_specified = opts.cross_links.is_some();
 
     let link_jobs =
-        collect_local_link_check_jobs(graph, display_opts.show_file, display_opts.show_attach);
+        graph.collect_local_link_check_jobs(display_opts.show_file, display_opts.show_attach);
     let mut link_results = run_local_link_checks(link_jobs, db_root);
     if opts.remote_file_links {
-        let ssh_jobs = collect_ssh_link_check_jobs(graph);
+        let ssh_jobs = graph.collect_ssh_file_link_check_jobs();
         let ssh_options = SshFileCheckOptions::from_config(config.ssh.as_ref());
         link_results.extend(run_ssh_link_checks(ssh_jobs, &ssh_options));
     }
     let (broken_file, file_link_errors, broken_attachment) = split_link_check_results(link_results);
 
-    let mut filetags_issues = Vec::new();
-    if display_opts.show_filetags {
-        for result in &graph.results {
-            if let Some(ref content) = result.raw_content {
-                let node = graph
-                    .path_to_uuid
-                    .get(&result.path)
-                    .and_then(|uuid| graph.nodes.get(uuid));
-                for (raw, reason) in validate_filetags_format(content) {
-                    filetags_issues.push(FiletagsIssue {
-                        path: result.path.display().to_string(),
-                        title: node
-                            .map(|node| node.title.clone())
-                            .or_else(|| result.parsed.title.clone())
-                            .unwrap_or_default(),
-                        issue: format!("tag '{raw}' — {reason}"),
-                    });
-                }
-            }
-        }
-    }
-
-    let self_link_entries = if display_opts.show_self_links {
-        graph.detect_self_links(db_root)
-    } else {
-        vec![]
-    };
-
-    let overlink_entries = if display_opts.show_overlinks {
-        graph.detect_overlinks()
-    } else {
-        vec![]
-    };
+    let validation_issues = graph.collect_validation_issues(
+        db_root,
+        &GraphValidationOptions {
+            internal_links: display_opts.show_id,
+            filetags: display_opts.show_filetags,
+            duplicates: display_opts.show_id,
+            self_links: display_opts.show_self_links,
+            overlinks: display_opts.show_overlinks,
+        },
+    );
 
     let cross_link_result = if cross_links_specified && let Some(ref pair) = opts.cross_links {
         let node_a = graph.resolve_target(&pair[0])?;
@@ -285,64 +263,9 @@ fn collect_check_data<'a>(
         broken_file,
         file_link_errors,
         broken_attachment,
-        filetags_issues,
-        self_link_entries,
-        overlink_entries,
+        validation_issues,
         cross_link_result,
     })
-}
-
-fn collect_local_link_check_jobs(
-    graph: &Graph,
-    include_files: bool,
-    include_attachments: bool,
-) -> Vec<LinkCheckJob> {
-    let mut jobs = Vec::new();
-    for node in graph.nodes.values() {
-        for link in &node.outgoing {
-            match link {
-                Link::File(target) if include_files && !is_ssh_file_target(target) => {
-                    jobs.push(LinkCheckJob::file(
-                        node.uuid.clone(),
-                        node.title.clone(),
-                        node.path.clone(),
-                        target.clone(),
-                    ));
-                }
-                Link::Attachment(target) if include_attachments => {
-                    jobs.push(LinkCheckJob::attachment(
-                        node.uuid.clone(),
-                        node.title.clone(),
-                        node.path.clone(),
-                        target.clone(),
-                    ));
-                }
-                _ => {}
-            }
-        }
-    }
-    sort_link_check_jobs(&mut jobs);
-    jobs
-}
-
-fn collect_ssh_link_check_jobs(graph: &Graph) -> Vec<LinkCheckJob> {
-    let mut jobs = Vec::new();
-    for node in graph.nodes.values() {
-        for link in &node.outgoing {
-            if let Link::File(target) = link
-                && is_ssh_file_target(target)
-            {
-                jobs.push(LinkCheckJob::ssh_file(
-                    node.uuid.clone(),
-                    node.title.clone(),
-                    node.path.clone(),
-                    target.clone(),
-                ));
-            }
-        }
-    }
-    sort_link_check_jobs(&mut jobs);
-    jobs
 }
 
 fn split_link_check_results(
@@ -407,9 +330,7 @@ struct CheckData<'a> {
     broken_file: Vec<BrokenFileLinkEntry>,
     file_link_errors: Vec<FileLinkErrorEntry>,
     broken_attachment: Vec<BrokenAttachmentLinkEntry>,
-    filetags_issues: Vec<FiletagsIssue>,
-    self_link_entries: Vec<SelfLinkEntry>,
-    overlink_entries: Vec<OverlinkEntry>,
+    validation_issues: GraphValidationIssues,
     cross_link_result: Option<CrossLinkResult>,
 }
 
@@ -429,9 +350,9 @@ impl CheckData<'_> {
             && (!opts.show_file
                 || (self.broken_file.is_empty() && self.file_link_errors.is_empty()))
             && (!opts.show_attach || self.broken_attachment.is_empty())
-            && (!opts.show_filetags || self.filetags_issues.is_empty())
-            && (!opts.show_self_links || self.self_link_entries.is_empty())
-            && (!opts.show_overlinks || self.overlink_entries.is_empty())
+            && (!opts.show_filetags || self.validation_issues.filetags.is_empty())
+            && (!opts.show_self_links || self.validation_issues.self_links.is_empty())
+            && (!opts.show_overlinks || self.validation_issues.overlinks.is_empty())
     }
 }
 
@@ -439,18 +360,13 @@ fn build_check_output(data: &CheckData, opts: &CheckDisplayOptions) -> CheckOutp
     let stats = data.graph.stats();
 
     let broken = if opts.show_id {
-        data.graph
-            .broken_links
+        data.validation_issues
+            .broken_internal_links
             .iter()
-            .map(|(src, tgt)| BrokenLinkEntry {
-                source_uuid: src.clone(),
-                source_title: data
-                    .graph
-                    .nodes
-                    .get(src)
-                    .map(|n| n.title.clone())
-                    .unwrap_or_default(),
-                target_uuid: tgt.clone(),
+            .map(|issue| BrokenLinkEntry {
+                source_uuid: issue.source_uuid.clone(),
+                source_title: issue.source_title.clone(),
+                target_uuid: issue.target_uuid.clone(),
             })
             .collect()
     } else {
@@ -480,7 +396,7 @@ fn build_check_output(data: &CheckData, opts: &CheckDisplayOptions) -> CheckOutp
             None
         },
         duplicates: if opts.show_id {
-            Some(data.graph.duplicates.clone())
+            data.validation_issues.duplicates.clone()
         } else {
             None
         },
@@ -502,17 +418,27 @@ fn build_check_output(data: &CheckData, opts: &CheckDisplayOptions) -> CheckOutp
         },
         failed_files: if opts.show_id { Some(failed) } else { None },
         filetags_issues: if opts.show_filetags {
-            Some(data.filetags_issues.to_vec())
+            Some(
+                data.validation_issues
+                    .filetags
+                    .iter()
+                    .map(|issue| FiletagsIssue {
+                        path: issue.path.display().to_string(),
+                        title: issue.title.clone(),
+                        issue: format!("tag '{}' — {}", issue.raw, issue.reason),
+                    })
+                    .collect(),
+            )
         } else {
             None
         },
         self_links: if opts.show_self_links {
-            Some(data.self_link_entries.to_vec())
+            Some(data.validation_issues.self_links.to_vec())
         } else {
             None
         },
         overlinks: if opts.show_overlinks {
-            Some(data.overlink_entries.to_vec())
+            Some(data.validation_issues.overlinks.to_vec())
         } else {
             None
         },
@@ -916,7 +842,7 @@ mod tests {
         let config = ResolvedConfig::for_test_db(db_root);
         let graph = Graph::load(&config).unwrap();
 
-        let all_jobs = collect_local_link_check_jobs(&graph, true, true);
+        let all_jobs = graph.collect_local_link_check_jobs(true, true);
         let all_observed: Vec<_> = all_jobs
             .iter()
             .map(|job| {
@@ -958,11 +884,11 @@ mod tests {
             ]
         );
 
-        let file_jobs = collect_local_link_check_jobs(&graph, true, false);
+        let file_jobs = graph.collect_local_link_check_jobs(true, false);
         assert_eq!(file_jobs.len(), 2);
         assert!(file_jobs.iter().all(|job| job.kind == LinkCheckKind::File));
 
-        let attachment_jobs = collect_local_link_check_jobs(&graph, false, true);
+        let attachment_jobs = graph.collect_local_link_check_jobs(false, true);
         assert_eq!(attachment_jobs.len(), 2);
         assert!(
             attachment_jobs
