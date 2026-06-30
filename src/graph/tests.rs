@@ -1,5 +1,8 @@
 use super::*;
 use crate::graph::search::SearchFields;
+use crate::graph::validation::{
+    DuplicateUuidIssueKind, GraphValidationOptions, NoteValidationIssue, SelfLinkKind,
+};
 use crate::parser::ParsedNote;
 
 fn make_note(uuid: &str, title: &str, outgoing: Vec<Link>) -> FileScanResult {
@@ -161,6 +164,155 @@ Body
         graph.directory_breakdown(dir.path()),
         vec![(String::new(), 1)]
     );
+}
+
+#[test]
+fn collect_node_validation_issues_returns_typed_records() {
+    let dir = tempfile::tempdir().unwrap();
+    let source_uuid = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+    let repeated_heading_uuid = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+    let missing_uuid = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
+    let target_uuid = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
+
+    std::fs::write(
+        dir.path().join("source.org"),
+        format!(
+            r#":PROPERTIES:
+:ID:       {source_uuid}
+:END:
+#+title: Source
+#+filetags: bad
+
+[[id:{source_uuid}]]
+[[id:{missing_uuid}]]
+[[id:{target_uuid}]]
+[[id:{target_uuid}]]
+[[file:missing.org]]
+[[file:source.org]]
+
+* First
+:PROPERTIES:
+:ID:       {repeated_heading_uuid}
+:END:
+* Second
+:PROPERTIES:
+:ID:       {repeated_heading_uuid}
+:END:
+"#,
+        ),
+    )
+    .unwrap();
+    std::fs::write(
+        dir.path().join("target.org"),
+        format!(
+            r#":PROPERTIES:
+:ID:       {target_uuid}
+:END:
+#+title: Target
+"#,
+        ),
+    )
+    .unwrap();
+
+    let config = crate::config::ResolvedConfig::for_test_db(dir.path());
+    let graph = Graph::load(&config).unwrap();
+    let node = graph.resolve_target(source_uuid).unwrap();
+    let issues = graph.collect_node_validation_issues(node, source_uuid, dir.path());
+
+    assert_eq!(issues.broken_internal_links.len(), 1);
+    assert_eq!(issues.broken_internal_links[0].target_uuid, missing_uuid);
+    assert_eq!(issues.broken_file_links.len(), 1);
+    assert_eq!(issues.broken_file_links[0].target_path, "missing.org");
+    assert!(issues.issues.iter().any(|issue| matches!(
+        issue,
+        NoteValidationIssue::InvalidFiletagsFormat { raw, .. } if raw == "bad"
+    )));
+    assert!(issues.issues.iter().any(|issue| matches!(
+        issue,
+        NoteValidationIssue::DuplicateUuid {
+            uuid,
+            kind: DuplicateUuidIssueKind::HeadingRepeatedInNote,
+        } if uuid == repeated_heading_uuid
+    )));
+    assert!(issues.issues.iter().any(|issue| matches!(
+        issue,
+        NoteValidationIssue::SelfLink {
+            link_type: SelfLinkKind::Id,
+            target,
+            suggested_uuid: None,
+        } if target == source_uuid
+    )));
+    assert!(issues.issues.iter().any(|issue| matches!(
+        issue,
+        NoteValidationIssue::SelfLink {
+            link_type: SelfLinkKind::File,
+            target,
+            suggested_uuid: None,
+        } if target == "source.org"
+    )));
+    assert!(issues.issues.iter().any(|issue| matches!(
+        issue,
+        NoteValidationIssue::Overlink { target_uuid: uuid, count: 2, .. } if uuid == target_uuid
+    )));
+}
+
+#[test]
+fn collect_validation_issues_returns_graph_level_health_records() {
+    let dir = tempfile::tempdir().unwrap();
+    let source_uuid = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+    let repeated_heading_uuid = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+    let missing_uuid = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
+
+    std::fs::write(
+        dir.path().join("source.org"),
+        format!(
+            r#":PROPERTIES:
+:ID:       {source_uuid}
+:END:
+#+title: Source
+#+filetags: bad
+
+[[id:{source_uuid}]]
+[[id:{missing_uuid}]]
+
+* First
+:PROPERTIES:
+:ID:       {repeated_heading_uuid}
+:END:
+* Second
+:PROPERTIES:
+:ID:       {repeated_heading_uuid}
+:END:
+"#,
+        ),
+    )
+    .unwrap();
+
+    let config = crate::config::ResolvedConfig::for_test_db(dir.path());
+    let graph = Graph::load(&config).unwrap();
+    let issues = graph.collect_validation_issues(
+        dir.path(),
+        &GraphValidationOptions {
+            internal_links: true,
+            filetags: true,
+            duplicates: true,
+            self_links: true,
+            overlinks: true,
+        },
+    );
+
+    assert_eq!(issues.broken_internal_links.len(), 1);
+    assert_eq!(issues.broken_internal_links[0].target_uuid, missing_uuid);
+    assert_eq!(issues.filetags.len(), 1);
+    assert_eq!(issues.filetags[0].raw, "bad");
+    let duplicates = issues.duplicates.unwrap();
+    assert!(
+        duplicates
+            .duplicate_uuids
+            .iter()
+            .any(|entry| entry.value == repeated_heading_uuid)
+    );
+    assert_eq!(issues.self_links.len(), 1);
 }
 
 #[test]
