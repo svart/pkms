@@ -29,15 +29,9 @@ pub(super) struct TaskListRequest {
     pub(super) sort: Option<String>,
     pub(super) limit: Option<usize>,
     pub(super) group: Option<String>,
-    from_stdin: bool,
     pub(super) line_sep: bool,
-    pub(super) columns: TaskListColumns,
+    pub(super) columns: Option<Vec<Column>>,
     pub(super) clock: TaskClock,
-}
-
-pub(super) enum TaskListColumns {
-    Pkms(Vec<Column>),
-    SourceNeutral(Option<Vec<Column>>),
 }
 
 pub(super) struct AgendaRequest {
@@ -46,55 +40,9 @@ pub(super) struct AgendaRequest {
     pub(super) limit: Option<usize>,
     pub(super) days: Option<i64>,
     pub(super) line_sep: bool,
-    pub(super) columns: AgendaColumns,
+    pub(super) columns: Option<Vec<Column>>,
     pub(super) clock: TaskClock,
     pub(super) view: TaskListView,
-}
-
-pub(super) enum AgendaColumns {
-    Pkms(Vec<Column>),
-    SourceNeutral(Option<Vec<Column>>),
-}
-
-impl TaskListRequest {
-    pub(super) fn uses_pkms_todo_path(&self) -> bool {
-        matches!(self.filters.source, SourceSelection::Pkms)
-            && (!self.filters.has_criteria() || self.group.is_some() || self.from_stdin)
-    }
-
-    pub(super) fn pkms_columns(&self) -> &[Column] {
-        match &self.columns {
-            TaskListColumns::Pkms(columns) => columns,
-            TaskListColumns::SourceNeutral(_) => unreachable!("expected PKMS task columns"),
-        }
-    }
-
-    pub(super) fn source_neutral_columns(&self) -> Option<&[Column]> {
-        match &self.columns {
-            TaskListColumns::SourceNeutral(columns) => columns.as_deref(),
-            TaskListColumns::Pkms(_) => unreachable!("expected source-neutral task columns"),
-        }
-    }
-}
-
-impl AgendaRequest {
-    pub(super) fn uses_pkms_agenda_path(&self) -> bool {
-        matches!(&self.columns, AgendaColumns::Pkms(_))
-    }
-
-    pub(super) fn pkms_columns(&self) -> &[Column] {
-        match &self.columns {
-            AgendaColumns::Pkms(columns) => columns,
-            AgendaColumns::SourceNeutral(_) => unreachable!("expected PKMS agenda columns"),
-        }
-    }
-
-    pub(super) fn source_neutral_columns(&self) -> Option<&[Column]> {
-        match &self.columns {
-            AgendaColumns::SourceNeutral(columns) => columns.as_deref(),
-            AgendaColumns::Pkms(_) => unreachable!("expected source-neutral agenda columns"),
-        }
-    }
 }
 
 impl SourceSelection {
@@ -140,23 +88,12 @@ pub(super) fn plan_task_list_request(
         bail!("task list --from-stdin is available only for source:pkms");
     }
 
-    let uses_pkms_todo_path = matches!(filters.source, SourceSelection::Pkms)
-        && (!filters.has_criteria() || args.group.is_some() || args.from_stdin);
-    let columns = if uses_pkms_todo_path {
-        TaskListColumns::Pkms(resolve_task_columns(
-            config,
-            SourceSelection::Pkms,
-            ColumnView::Tasks,
-            args.table.columns.as_deref(),
-        )?)
-    } else {
-        TaskListColumns::SourceNeutral(resolve_task_table_columns(
-            config,
-            filters.source,
-            ColumnView::Tasks,
-            args.table.columns.as_deref(),
-        )?)
-    };
+    let columns = resolve_task_table_columns(
+        config,
+        filters.source,
+        ColumnView::Tasks,
+        args.table.columns.as_deref(),
+    )?;
 
     Ok(TaskListRequest {
         filters,
@@ -164,7 +101,6 @@ pub(super) fn plan_task_list_request(
         sort: args.sort.clone(),
         limit: args.limit,
         group: args.group.clone(),
-        from_stdin: args.from_stdin,
         line_sep: args.table.line_sep,
         columns,
         clock,
@@ -203,18 +139,6 @@ pub(super) fn resolve_task_table_columns(
         return Ok(None);
     }
     input::resolve_columns(raw_columns, default_columns).map(Some)
-}
-
-fn resolve_task_columns(
-    config: &ResolvedConfig,
-    source: SourceSelection,
-    view: ColumnView,
-    raw_columns: Option<&str>,
-) -> Result<Vec<Column>> {
-    input::resolve_columns(
-        raw_columns,
-        config.default_columns(source.column_source(), view)?,
-    )
 }
 
 pub(super) fn shortcut_task_view(kind: ShortcutKind) -> TaskListView {
@@ -284,21 +208,12 @@ fn plan_agenda_request_from_filters(
         has_criteria = filters.has_criteria(),
         "running task agenda"
     );
-    let columns = if matches!(filters.source, SourceSelection::Pkms) && !filters.has_criteria() {
-        AgendaColumns::Pkms(resolve_task_columns(
-            config,
-            SourceSelection::Pkms,
-            ColumnView::Agenda,
-            table.columns.as_deref(),
-        )?)
-    } else {
-        AgendaColumns::SourceNeutral(resolve_task_table_columns(
-            config,
-            filters.source,
-            ColumnView::Agenda,
-            table.columns.as_deref(),
-        )?)
-    };
+    let columns = resolve_task_table_columns(
+        config,
+        filters.source,
+        ColumnView::Agenda,
+        table.columns.as_deref(),
+    )?;
     Ok(AgendaRequest {
         filters,
         sort,

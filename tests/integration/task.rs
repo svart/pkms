@@ -486,7 +486,8 @@ fn test_task_agenda_text() {
     let (_dir, root) = setup_db();
     let (stdout, stderr, status) = run(&["--db", root.to_str().unwrap(), "task", "agenda"]);
     assert!(status.success(), "task agenda failed:\n{stdout}\n{stderr}");
-    assert!(stdout.contains("planned item"));
+    assert!(stdout.contains("High priority task"));
+    assert!(stdout.contains("task(s)"));
 }
 
 #[test]

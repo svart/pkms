@@ -20,16 +20,14 @@ use std::collections::HashMap;
 use std::io::{self, Write};
 use std::process::ExitCode;
 
-mod agenda;
 mod execution;
 mod id_command;
 mod mutations;
 mod plan;
 mod providers;
 mod render;
-mod todo;
 
-use execution::{AgendaExecution, TaskListExecution};
+use execution::{AgendaExecution, TaskListExecution, TaskListItems};
 use mutations::{run_add, run_done, run_postpone, run_state, unsupported_task_source};
 use plan::{
     ShortcutKind, TaskListMode, plan_agenda_request, plan_task_list_request, split_task_list_mode,
@@ -77,41 +75,34 @@ fn run_task_list(
     raw_filters: &[String],
 ) -> Result<()> {
     let request = plan_task_list_request(config, args, raw_filters)?;
-    if request.uses_pkms_todo_path() {
-        let columns = request.pkms_columns().to_vec();
-        return todo::run_on(
-            config,
-            ctx,
-            &todo::TodoOptions {
-                state: request.filters.criteria.state.clone(),
-                tags: request.filters.criteria.tags.clone(),
-                kind: request.filters.criteria.kind.clone(),
-                sort: request.sort.clone(),
-                limit: request.limit,
-                group: request.group.clone(),
-                scope: request.scope,
-                after: request.filters.criteria.after,
-                before: request.filters.criteria.before,
-                prio: request.filters.criteria.prio.clone(),
-                line_sep: request.line_sep,
-                columns,
-            },
-            request.clock,
-        );
-    }
-
     let output = execution::execute_task_list(config, &request)?;
     render_task_list(ctx, output)
 }
 
 fn render_task_list(ctx: &OutputContext, output: TaskListExecution) -> Result<()> {
-    render::print_task_items(
-        ctx,
-        output.source,
-        output.items,
-        output.limit,
-        output.columns.as_deref(),
-    )
+    match output.items {
+        TaskListItems::Flat { items, limit } => render::print_task_items(
+            ctx,
+            output.source,
+            items,
+            limit,
+            output.columns.as_deref(),
+            output.line_sep,
+        ),
+        TaskListItems::Grouped {
+            group_field,
+            groups,
+            total,
+        } => render::print_grouped_task_items(
+            ctx,
+            output.source,
+            group_field,
+            groups,
+            total,
+            output.columns.as_deref(),
+            output.line_sep,
+        ),
+    }
 }
 
 fn run_shortcut(
@@ -130,36 +121,18 @@ fn run_shortcut(
         plan::shortcut_column_view(kind),
         args.table.columns.as_deref(),
     )?;
-    render::print_task_items(ctx, source, items, args.limit, columns.as_deref())
+    render::print_task_items(
+        ctx,
+        source,
+        items,
+        args.limit,
+        columns.as_deref(),
+        args.table.line_sep,
+    )
 }
 
 fn run_agenda(config: &ResolvedConfig, ctx: &OutputContext, args: &TaskAgendaArgs) -> Result<()> {
     let request = plan_agenda_request(config, args)?;
-    if request.uses_pkms_agenda_path() {
-        let columns = request.pkms_columns().to_vec();
-        return agenda::run_with_clock(
-            config,
-            ctx,
-            &agenda::AgendaOptions {
-                state: None,
-                tags: None,
-                kind: None,
-                prio: None,
-                overdue: false,
-                upcoming: false,
-                date: None,
-                sort: request.sort.clone(),
-                limit: request.limit,
-                days: request.days,
-                today: false,
-                week: false,
-                line_sep: request.line_sep,
-                columns,
-            },
-            request.clock,
-        );
-    }
-
     let output = execution::execute_task_agenda(config, &request)?;
     render_task_agenda(ctx, output)
 }
@@ -170,9 +143,12 @@ fn render_task_agenda(ctx: &OutputContext, output: AgendaExecution) -> Result<()
         output.source,
         output.items,
         output.limit,
-        output.columns.as_deref(),
-        output.today,
-        output.days,
+        render::AgendaTaskRenderOptions {
+            columns: output.columns.as_deref(),
+            line_sep: output.line_sep,
+            today: output.today,
+            days: output.days,
+        },
     )
 }
 
@@ -233,7 +209,9 @@ fn show_todoist_task(config: &ResolvedConfig, ctx: &OutputContext, id: &str) -> 
     let mut item = crate::tasks::todoist::task_to_item_with_metadata(task, metadata.as_ref());
     crate::tasks::todoist::enrich_items_with_pkms_notes(config, std::slice::from_mut(&mut item))?;
     match ctx.format {
-        OutputFormat::Text => render::print_task_table(&[item], 1, SourceSelection::Todoist, None),
+        OutputFormat::Text => {
+            render::print_task_table(&[item], 1, SourceSelection::Todoist, None, false)
+        }
         OutputFormat::Json => ctx.print_json(&item),
         OutputFormat::Ndjson => ctx.print_ndjson(&[item]),
     }

@@ -130,8 +130,7 @@ src/commands/task/
   id_command.rs   # ID-first parsing and dispatch adapter
   providers.rs    # source selection and provider orchestration
   render.rs       # text, JSON, NDJSON, table, and mutation output helpers
-  agenda.rs       # PKMS agenda grouping path
-  todo.rs         # PKMS TODO listing path
+  execution.rs    # source-neutral list, agenda, sorting, filtering, grouping
 ```
 
 Keep provider and mutation logic in `src/tasks/` unless it is only command-line

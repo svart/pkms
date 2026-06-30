@@ -156,7 +156,7 @@ src/
   org_edit.rs         # local org file editing helpers
   graph/              # in-memory graph build, search, traversal, validation
   commands/           # one module per subcommand; task/ and serve/ own helpers
-  commands/task/      # task ID parsing, providers, agenda/todo paths, rendering
+  commands/task/      # task ID parsing, source-neutral providers/execution, rendering
   commands/serve/     # HTTP, assets, page, org HTML, inline, highlighting
   tasks/              # source-neutral task model, filters, providers, mutations
   input.rs            # target/stdin/date/column parsing helpers

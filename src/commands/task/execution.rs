@@ -1,5 +1,7 @@
 use super::{plan, providers, render};
-use crate::commands::task_common::{date_in_agenda_window, parse_task_sort_fields};
+use crate::commands::task_common::{
+    date_in_agenda_window, parse_task_sort_fields, validate_task_group_field,
+};
 use crate::config::ResolvedConfig;
 use crate::output::Column;
 use crate::tasks::clock::TaskClock;
@@ -10,12 +12,25 @@ use crate::tasks::scope::ResolvedScope;
 use crate::workspace::Workspace;
 use anyhow::Result;
 use chrono::NaiveDate;
+use std::collections::BTreeMap;
 
 pub(super) struct TaskListExecution {
     pub(super) source: SourceSelection,
-    pub(super) items: Vec<TaskItem>,
-    pub(super) limit: Option<usize>,
+    pub(super) items: TaskListItems,
+    pub(super) line_sep: bool,
     pub(super) columns: Option<Vec<Column>>,
+}
+
+pub(super) enum TaskListItems {
+    Flat {
+        items: Vec<TaskItem>,
+        limit: Option<usize>,
+    },
+    Grouped {
+        group_field: String,
+        groups: BTreeMap<String, Vec<TaskItem>>,
+        total: usize,
+    },
 }
 
 pub(super) struct AgendaExecution {
@@ -23,6 +38,7 @@ pub(super) struct AgendaExecution {
     pub(super) items: Vec<TaskItem>,
     pub(super) limit: Option<usize>,
     pub(super) days: Option<i64>,
+    pub(super) line_sep: bool,
     pub(super) columns: Option<Vec<Column>>,
     pub(super) today: NaiveDate,
 }
@@ -33,21 +49,29 @@ pub(super) fn execute_task_list(
 ) -> Result<TaskListExecution> {
     let mut items =
         providers::collect_task_items(config, &request.filters, TaskListView::All, request.clock)?;
-    apply_task_filter_criteria_on(
-        config,
-        &mut items,
-        &request.filters.criteria,
-        request.clock.today,
-    )?;
-    sort_task_items(
-        &mut items,
-        request.sort.as_deref().unwrap_or("date,priority"),
-    )?;
+    let mut criteria = request.filters.criteria.clone();
+    criteria.scope = request.scope.clone();
+    apply_task_filter_criteria_on(config, &mut items, &criteria, request.clock.today)?;
+    let sort = request.sort.as_deref().unwrap_or("date,priority");
+    let items = if let Some(group_field) = &request.group {
+        let (groups, total) = group_task_items(items, group_field, sort, request.limit)?;
+        TaskListItems::Grouped {
+            group_field: group_field.clone(),
+            groups,
+            total,
+        }
+    } else {
+        sort_task_items(&mut items, sort)?;
+        TaskListItems::Flat {
+            items,
+            limit: request.limit,
+        }
+    };
     Ok(TaskListExecution {
         source: request.filters.source,
         items,
-        limit: request.limit,
-        columns: request.source_neutral_columns().map(<[Column]>::to_vec),
+        line_sep: request.line_sep,
+        columns: request.columns.clone(),
     })
 }
 
@@ -88,9 +112,49 @@ pub(super) fn execute_task_agenda(
         items,
         limit: request.limit,
         days: request.days,
-        columns: request.source_neutral_columns().map(<[Column]>::to_vec),
+        line_sep: request.line_sep,
+        columns: request.columns.clone(),
         today: request.clock.today,
     })
+}
+
+fn group_task_items(
+    items: Vec<TaskItem>,
+    group_field: &str,
+    sort: &str,
+    limit: Option<usize>,
+) -> Result<(BTreeMap<String, Vec<TaskItem>>, usize)> {
+    validate_task_group_field(group_field)?;
+    let mut groups: BTreeMap<String, Vec<TaskItem>> = BTreeMap::new();
+    for item in items {
+        groups
+            .entry(task_group_key(&item, group_field))
+            .or_default()
+            .push(item);
+    }
+
+    let total = groups.values().map(Vec::len).sum();
+    for group_items in groups.values_mut() {
+        sort_task_items(group_items, sort)?;
+        if let Some(limit) = limit {
+            group_items.truncate(limit);
+        }
+    }
+    Ok((groups, total))
+}
+
+fn task_group_key(item: &TaskItem, group_field: &str) -> String {
+    match group_field {
+        "state" => item.state.as_deref().unwrap_or("NONE").to_string(),
+        "file" => item.note_title.clone().unwrap_or_default(),
+        "priority" => match item.priority_char() {
+            Some('A') => "Priority A".to_string(),
+            Some('B') => "Priority B".to_string(),
+            Some('C') => "Priority C".to_string(),
+            _ => "No Priority".to_string(),
+        },
+        _ => unreachable!("task group field was validated"),
+    }
 }
 
 fn apply_task_filter_criteria_on(
