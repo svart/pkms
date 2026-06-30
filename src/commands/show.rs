@@ -1,6 +1,7 @@
 use crate::cli::OutputFormat;
 use crate::config::ResolvedConfig;
 use crate::graph::Graph;
+use crate::org_edit::parsed_heading_subtree_end_index;
 use crate::output::{OutputContext, terminal_markup};
 use crate::parser::{Link, strip_org_links};
 use anyhow::Result;
@@ -55,27 +56,6 @@ pub struct ShowOptions {
 pub struct HeadingTarget {
     pub note_target: String,
     pub canonical_id: Option<usize>,
-}
-
-fn find_heading_end(content: &str, heading_line: usize) -> usize {
-    let lines: Vec<&str> = content.lines().collect();
-    if heading_line == 0 || heading_line > lines.len() {
-        return lines.len();
-    }
-    let heading_text = lines[heading_line - 1];
-    let level = heading_text.chars().take_while(|c| *c == '*').count();
-    if level == 0 {
-        return lines.len();
-    }
-    for (i, line) in lines.iter().enumerate().skip(heading_line) {
-        if line.starts_with('*') {
-            let l = line.chars().take_while(|c| *c == '*').count();
-            if l <= level {
-                return i + 1;
-            }
-        }
-    }
-    lines.len()
 }
 
 type TaskIdMap = HashMap<(String, usize), usize>;
@@ -192,11 +172,21 @@ fn show_heading_by_line(ctx: HeadingShowContext<'_>, line_number: usize) -> Resu
         })?;
     let heading = &ctx.headings[heading_idx];
 
-    let end_line = find_heading_end(ctx.content, heading.line_number);
+    let content_lines: Vec<&str> = ctx.content.lines().collect();
+    let end_idx = parsed_heading_subtree_end_index(
+        ctx.headings,
+        heading.line_number,
+        heading.level,
+        content_lines.len(),
+    );
+    let end_line = if end_idx >= content_lines.len() {
+        content_lines.len()
+    } else {
+        end_idx + 1
+    };
     let parents = find_parents(ctx.headings, heading_idx, ctx.path, ctx.task_ids);
     let children = find_children(ctx.headings, heading_idx, end_line, ctx.path, ctx.task_ids);
 
-    let content_lines: Vec<&str> = ctx.content.lines().collect();
     let block_content = if heading.line_number <= content_lines.len() {
         let start = heading.line_number - 1;
         let end = end_line - 1;
