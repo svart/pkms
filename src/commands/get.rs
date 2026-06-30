@@ -1,6 +1,7 @@
 use crate::cli::OutputFormat;
 use crate::config::ResolvedConfig;
 use crate::graph::{Graph, Node};
+use crate::org_edit::parsed_heading_subtree_end_index;
 use crate::output::OutputContext;
 use crate::parser;
 use crate::tokens;
@@ -123,25 +124,21 @@ fn get_neighbor_map(graph: &Graph, uuid: &str) -> HashMap<u32, NeighborOutput> {
 
 fn heading_block_from_content(content: &str, heading_title: &str) -> Option<String> {
     let parsed = parser::parse_note(content);
-    let heading = parsed.headings.iter().find(|h| h.title == heading_title)?;
-    let start = heading.line_number.saturating_sub(1);
-    let end = parsed
+    let heading_idx = parsed
         .headings
         .iter()
-        .find(|h| h.line_number > heading.line_number && h.level <= heading.level)
-        .map_or_else(
-            || content.lines().count(),
-            |h| h.line_number.saturating_sub(1),
-        );
+        .position(|heading| heading.title == heading_title)?;
+    let heading = &parsed.headings[heading_idx];
+    let start = heading.line_number.saturating_sub(1);
+    let lines: Vec<&str> = content.lines().collect();
+    let end = parsed_heading_subtree_end_index(
+        &parsed.headings,
+        heading.line_number,
+        heading.level,
+        lines.len(),
+    );
 
-    Some(
-        content
-            .lines()
-            .skip(start)
-            .take(end - start)
-            .collect::<Vec<_>>()
-            .join("\n"),
-    )
+    Some(lines[start..end].join("\n"))
 }
 
 fn process_one_get(
