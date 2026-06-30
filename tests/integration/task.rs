@@ -2612,7 +2612,9 @@ fn test_task_mod_planning_line_shift_does_not_warn_when_task_ids_stay_stable() {
     let (stdout, stderr, status) = db.run(&["task", "p1", "mod", "sch:2026-07-01"]);
 
     assert!(status.success(), "task mod failed:\n{stdout}\n{stderr}");
-    let expected_change = if org_date(1) == "2026-07-01" {
+    let expected_change = if org_date(0) == "2026-07-01" {
+        "Scheduled: None -> Scheduled: Today (2026-07-01)"
+    } else if org_date(1) == "2026-07-01" {
         "Scheduled: None -> Scheduled: Tomorrow (2026-07-01)"
     } else {
         "Scheduled: None -> Scheduled: 2026-07-01"
@@ -3187,7 +3189,7 @@ fn test_task_list_all_text_prefixes_each_source_id() {
         pkms_id.starts_with('p'),
         "expected PKMS id prefix: {pkms_id}"
     );
-    assert_eq!(todoist.split_whitespace().next().unwrap(), "t300");
+    assert_eq!(todoist.split_whitespace().next().unwrap(), "todoist:300");
 }
 
 #[cfg(feature = "todoist")]

@@ -158,9 +158,10 @@ pkms task p5 open --line 42
 
 ## Sources and Output
 
-Text task views render IDs for the selected source set. In source-neutral views
-with only one source selected, `Id` is the bare source id. With `source:all`,
-PKMS ids are prefixed with `p` and Todoist ids are prefixed with `t`.
+Text task views render IDs for the selected source set. With `source:pkms`,
+`Id` is the bare PKMS task ID. With `source:todoist`, `Id` is the bare remote
+ID. With `source:all`, IDs are disambiguated as `p<ID>` for PKMS and
+`todoist:<remote-id>` for Todoist.
 On ANSI-capable terminals, task text renders inline `=code=`, `~orange code~`,
 and mention tokens such as `@alice`; captured or piped text output keeps the
 stored strings unchanged unless ANSI output is forced. JSON/NDJSON output is

@@ -184,10 +184,10 @@ line number. Mutable task properties such as priority, `DEADLINE`,
 `SCHEDULED`, tags, and project do not affect canonical IDs. Clock-relative
 concepts such as today, overdue, and upcoming do not affect canonical IDs.
 Filtered views may show non-contiguous IDs because excluded tasks still occupy
-global ID positions. In single-source text views, IDs may be shown as bare
-source IDs; in `source:all` views, PKMS display IDs are prefixed with `p` and
-Todoist display IDs with `t`. Scripts should rely on source identity fields in
-JSON/NDJSON.
+global ID positions. Single-source text views show bare source IDs: `<ID>` for
+PKMS and `<remote-id>` for Todoist. In `source:all` text views, IDs are
+disambiguated as `p<ID>` for PKMS and `todoist:<remote-id>` for Todoist. Scripts
+should rely on source identity fields in JSON/NDJSON.
 
 `task <ID> show` includes parent and child task chains for nested PKMS tasks.
 Each chain entry carries the same canonical task ID used by `task list`,

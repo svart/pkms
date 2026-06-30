@@ -95,8 +95,11 @@ understand the intended target.
 
 ### Work With Tasks
 
-Use `task list` and `task agenda` for task views. Their `Id` column is the
-canonical ID used by `task` IDs such as `p<ID>` or `pkms:<ID>`.
+Use `task list` and `task agenda` for task views. In `source:pkms` text views,
+the `Id` column is the bare PKMS task ID accepted by ID-first task commands.
+Todoist-only text views show bare remote IDs; use `todoist:<remote-id>` for
+Todoist ID-first actions. Mixed `source:all` views disambiguate IDs as `p<ID>`
+and `todoist:<remote-id>`.
 
 ```bash
 pkms task list --columns Id,Date,Prio,Note,Heading

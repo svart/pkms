@@ -54,10 +54,7 @@ impl RowItem for TaskRow<'_> {
 
     fn display_id(&self) -> String {
         match self.source {
-            SourceSelection::All => match self.item.source {
-                TaskSourceKind::Pkms => format!("p{}", self.item.source_id),
-                TaskSourceKind::Todoist => format!("t{}", self.item.source_id),
-            },
+            SourceSelection::All => self.item.display_id.clone(),
             SourceSelection::Pkms | SourceSelection::Todoist => self.item.source_id.clone(),
         }
     }

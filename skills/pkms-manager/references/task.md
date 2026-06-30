@@ -37,9 +37,9 @@ Explicit Todoist and mixed-source task views use the same table shape plus a
 `Project` column:
 `Id,Date,State,Type,Prio,Tags,Project,Note,Heading`. With only one source, the
 `Id` column is the bare source id. With `source:all`, local PKMS ids use
-`p<ID>` and Todoist ids use `t<remote-id>`. All `task list` and `task agenda`
-JSON/NDJSON item records use the source-neutral `TaskItem` shape, including the
-default `source:pkms` views. Text `Date` cells use `YYYY-MM-DD Day`;
+`p<ID>` and Todoist ids use `todoist:<remote-id>`. All `task list` and
+`task agenda` JSON/NDJSON item records use the source-neutral `TaskItem` shape,
+including the default `source:pkms` views. Text `Date` cells use `YYYY-MM-DD Day`;
 daily-note tasks without planning markers use the daily note date.
 On ANSI-capable terminals, text task output renders inline `=code=`,
 `~orange code~`, and mention tokens such as `@alice`; captured or piped text
