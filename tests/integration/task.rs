@@ -420,6 +420,8 @@ fn test_task_list_pkms_text_uses_bare_source_ids() {
         root.to_str().unwrap(),
         "task",
         "list",
+        "--sort",
+        "priority",
         "--limit",
         "1",
     ]);
@@ -1399,6 +1401,63 @@ fn test_task_list_pkms_default_sorts_by_task_title() {
 }
 
 #[test]
+fn test_task_list_pkms_default_sorts_by_date_then_priority() {
+    let db = task_default_sort_db();
+
+    let (v, status) = db.run_json(&["task", "list"]);
+
+    assert!(status.success());
+    assert_eq!(
+        task_titles(&v),
+        vec![
+            "Same day medium task",
+            "Earlier low task",
+            "Later urgent task"
+        ]
+    );
+}
+
+#[test]
+fn test_task_list_source_neutral_default_sorts_by_date_then_priority() {
+    let db = task_default_sort_db();
+
+    let (v, status) = db.run_json(&["task", "list", "state:TODO"]);
+
+    assert!(status.success());
+    assert_eq!(
+        task_titles(&v),
+        vec![
+            "Same day medium task",
+            "Earlier low task",
+            "Later urgent task"
+        ]
+    );
+}
+
+#[test]
+fn test_task_list_group_sorts_tasks_inside_each_group() {
+    let db = task_default_sort_db();
+
+    let (v, status) = db.run_json(&["task", "list", "--group", "state"]);
+
+    assert!(status.success());
+    let todo_titles: Vec<_> = v["groups"]["TODO"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|item| item["title"].as_str())
+        .collect();
+    assert_eq!(
+        todo_titles,
+        vec![
+            "Same day medium task",
+            "Earlier low task",
+            "Later urgent task"
+        ]
+    );
+}
+
+#[test]
 fn test_task_agenda_source_neutral_sort_supports_date_sort_fields() {
     let (_dir, root) = setup_db();
     let (v, status) = run_json(&[
@@ -1797,6 +1856,24 @@ fn task_titles(v: &serde_json::Value) -> Vec<String> {
         .iter()
         .filter_map(|item| item["title"].as_str().map(str::to_string))
         .collect()
+}
+
+fn task_default_sort_db() -> TestDb {
+    TestDb::new().note_with_content(
+        "sort-defaults.org",
+        r#":PROPERTIES:
+:ID:       55555555-5555-4555-8555-555555555555
+:END:
+#+title: Sort Defaults
+
+* TODO [#A] Later urgent task
+SCHEDULED: <2026-06-02 Tue>
+* TODO [#C] Earlier low task
+SCHEDULED: <2026-06-01 Mon>
+* TODO [#B] Same day medium task
+SCHEDULED: <2026-06-01 Mon>
+"#,
+    )
 }
 
 fn pkms_task_id_for_title(root: &std::path::Path, title: &str) -> String {
@@ -3025,11 +3102,14 @@ fn test_task_list_todoist_uses_mock_api_and_pagination() {
     let v: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
     let items = v["items"].as_array().unwrap();
     assert_eq!(items.len(), 2);
-    assert_eq!(items[0]["source"], "todoist");
-    assert_eq!(items[0]["source_id"], "abc");
-    assert_eq!(items[0]["priority"], "A");
-    assert_eq!(items[0]["project"], "Inbox");
-    assert_eq!(items[0]["project_id"], "inbox");
+    let item = items
+        .iter()
+        .find(|item| item["source_id"] == "abc")
+        .expect("expected paginated todoist task");
+    assert_eq!(item["source"], "todoist");
+    assert_eq!(item["priority"], "A");
+    assert_eq!(item["project"], "Inbox");
+    assert_eq!(item["project_id"], "inbox");
 }
 
 #[cfg(feature = "todoist")]

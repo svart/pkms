@@ -39,7 +39,10 @@ pub(super) fn execute_task_list(
         &request.filters.criteria,
         request.clock.today,
     )?;
-    sort_task_items(&mut items, request.sort.as_deref().unwrap_or("priority"))?;
+    sort_task_items(
+        &mut items,
+        request.sort.as_deref().unwrap_or("date,priority"),
+    )?;
     Ok(TaskListExecution {
         source: request.filters.source,
         items,

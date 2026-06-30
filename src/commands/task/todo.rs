@@ -106,7 +106,7 @@ pub fn run_on(
         items.retain(|item| item_datetimes(item).iter().any(|dt| dt <= before_dt));
     }
 
-    let sort_fields = parse_task_sort_fields(opts.sort.as_deref().unwrap_or("priority"))?;
+    let sort_fields = parse_task_sort_fields(opts.sort.as_deref().unwrap_or("date,priority"))?;
 
     if let Some(group_field) = &opts.group {
         validate_task_group_field(group_field)?;
