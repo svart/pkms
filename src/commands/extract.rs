@@ -2,9 +2,11 @@ use crate::cli::ExtractArgs;
 use crate::commands::new::{create_note_file_exclusive, title_to_slug, unique_note_filename};
 use crate::config::ResolvedConfig;
 use crate::graph::{Graph, HeadingLocation};
-use crate::org_edit::{read_lines, split_line_ending, write_lines};
+use crate::org_edit::{
+    is_heading_line, parsed_heading_subtree_end_index, read_lines, split_line_ending, write_lines,
+};
 use crate::output::OutputContext;
-use crate::parser::{HEADING_RE, Heading, ID_PROPERTY_RE};
+use crate::parser::{Heading, ID_PROPERTY_RE};
 use anyhow::{Context, Result};
 use serde::Serialize;
 use std::path::{Path, PathBuf};
@@ -77,7 +79,7 @@ fn execute(config: &ResolvedConfig, opts: &ExtractOptions) -> Result<ExtractOutp
         .checked_sub(1)
         .ok_or_else(|| anyhow::anyhow!("Invalid heading line number: {}", heading.line_number))?;
     ensure_heading_line(&source_lines, start_idx, heading.line_number)?;
-    let end_idx = subtree_end_index(
+    let end_idx = parsed_heading_subtree_end_index(
         &source_result.parsed.headings,
         heading.line_number,
         heading.level,
@@ -189,22 +191,10 @@ fn ensure_heading_line(lines: &[String], line_idx: usize, line_number: usize) ->
         .get(line_idx)
         .ok_or_else(|| anyhow::anyhow!("Heading line {line_number} no longer exists"))?;
     let (body, _) = split_line_ending(line);
-    if HEADING_RE.captures(body).is_none() {
+    if !is_heading_line(body) {
         anyhow::bail!("Line {line_number} is no longer an org heading");
     }
     Ok(())
-}
-
-fn subtree_end_index(
-    headings: &[Heading],
-    target_line_number: usize,
-    target_level: usize,
-    total_lines: usize,
-) -> usize {
-    headings
-        .iter()
-        .find(|heading| heading.line_number > target_line_number && heading.level <= target_level)
-        .map_or(total_lines, |heading| heading.line_number.saturating_sub(1))
 }
 
 fn remove_root_heading_id(mut subtree: Vec<String>, uuid: &str) -> Result<Vec<String>> {
@@ -257,10 +247,6 @@ fn root_properties_drawer_range(subtree: &[String]) -> Result<Option<(usize, usi
     }
 
     Ok(None)
-}
-
-fn is_heading_line(line: &str) -> bool {
-    HEADING_RE.captures(line).is_some()
 }
 
 fn build_new_note_content(uuid: &str, title: &str, subtree: &[String]) -> String {
@@ -335,7 +321,12 @@ Sibling body
         let target = &parsed.headings[1];
 
         assert_eq!(
-            subtree_end_index(&parsed.headings, target.line_number, target.level, 13),
+            parsed_heading_subtree_end_index(
+                &parsed.headings,
+                target.line_number,
+                target.level,
+                13
+            ),
             11
         );
     }
