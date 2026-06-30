@@ -51,6 +51,7 @@ pub(super) fn handle_connection(mut stream: TcpStream, state: &ServeState<'_>) -
     let mut reader = BufReader::new(stream.try_clone()?);
     let mut request_line = String::new();
     reader.read_line(&mut request_line)?;
+    drain_headers(&mut reader)?;
     let mut parts = request_line.split_whitespace();
     let method = parts.next().unwrap_or_default();
     let target = parts.next().unwrap_or("/");
@@ -92,6 +93,18 @@ pub(super) fn handle_connection(mut stream: TcpStream, state: &ServeState<'_>) -
             &response.body,
         )
     }
+}
+
+fn drain_headers(reader: &mut BufReader<TcpStream>) -> Result<()> {
+    let mut line = String::new();
+    loop {
+        line.clear();
+        let bytes_read = reader.read_line(&mut line)?;
+        if bytes_read == 0 || line == "\r\n" || line == "\n" {
+            break;
+        }
+    }
+    Ok(())
 }
 
 pub(super) struct HttpResponse {
