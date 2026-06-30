@@ -1,6 +1,7 @@
 use crate::cli::OutputFormat;
 use crate::commands::task_common::{
-    RowItem, agenda_day_section_label, apply_limit, print_table_with_empty_message,
+    AgendaWindow, RowItem, RowSeparatorMode, agenda_day_section_label, apply_limit,
+    print_table_with_empty_message,
 };
 use crate::output::{ALL_COLUMNS, Column, OutputContext, terminal_markup};
 use crate::tasks::filter::SourceSelection;
@@ -344,13 +345,12 @@ pub(super) fn print_task_items(
     source: SourceSelection,
     mut items: Vec<TaskItem>,
     limit: Option<usize>,
-    columns: Option<&[Column]>,
-    line_sep: bool,
+    table: TaskTableRenderOptions<'_>,
 ) -> Result<()> {
     let total = apply_limit(&mut items, limit);
 
     match ctx.format {
-        OutputFormat::Text => print_task_table(&items, total, source, columns, line_sep),
+        OutputFormat::Text => print_task_table(&items, total, source, table),
         OutputFormat::Json => {
             #[derive(Serialize)]
             struct TaskListOutput {
@@ -369,11 +369,10 @@ pub(super) fn print_grouped_task_items(
     group_field: String,
     groups: BTreeMap<String, Vec<TaskItem>>,
     total: usize,
-    columns: Option<&[Column]>,
-    line_sep: bool,
+    table: TaskTableRenderOptions<'_>,
 ) -> Result<()> {
     match ctx.format {
-        OutputFormat::Text => print_grouped_task_table(&groups, total, source, columns, line_sep),
+        OutputFormat::Text => print_grouped_task_table(&groups, total, source, table),
         OutputFormat::Json => {
             #[derive(Serialize)]
             struct GroupedTaskListOutput {
@@ -405,11 +404,16 @@ pub(super) fn print_grouped_task_items(
     }
 }
 
-pub(super) struct AgendaTaskRenderOptions<'a> {
+#[derive(Clone, Copy)]
+pub(super) struct TaskTableRenderOptions<'a> {
     pub(super) columns: Option<&'a [Column]>,
-    pub(super) line_sep: bool,
+    pub(super) row_separators: RowSeparatorMode,
+}
+
+pub(super) struct AgendaTaskRenderOptions<'a> {
+    pub(super) table: TaskTableRenderOptions<'a>,
     pub(super) today: NaiveDate,
-    pub(super) days: Option<i64>,
+    pub(super) window: AgendaWindow,
 }
 
 pub(super) fn print_agenda_task_items(
@@ -422,15 +426,9 @@ pub(super) fn print_agenda_task_items(
     let total = apply_limit(&mut items, limit);
 
     match ctx.format {
-        OutputFormat::Text => print_agenda_task_table(
-            &items,
-            total,
-            source,
-            opts.columns,
-            opts.line_sep,
-            opts.today,
-            opts.days,
-        ),
+        OutputFormat::Text => {
+            print_agenda_task_table(&items, total, source, opts.today, opts.window, opts.table)
+        }
         OutputFormat::Json => {
             #[derive(Serialize)]
             struct TaskListOutput {
@@ -447,16 +445,15 @@ pub(super) fn print_task_table(
     items: &[TaskItem],
     total: usize,
     source: SourceSelection,
-    columns: Option<&[Column]>,
-    line_sep: bool,
+    table: TaskTableRenderOptions<'_>,
 ) -> Result<()> {
     let rows = task_rows(items, source);
     let sections = [("", rows.as_slice())];
     let footer = format!("Shown: {}, Total: {} task(s)", rows.len(), total);
     print_table_with_empty_message(
         &sections,
-        task_columns(columns),
-        line_sep,
+        task_columns(table.columns),
+        table.row_separators,
         &footer,
         "No tasks found.",
     );
@@ -467,8 +464,7 @@ fn print_grouped_task_table(
     groups: &BTreeMap<String, Vec<TaskItem>>,
     total: usize,
     source: SourceSelection,
-    columns: Option<&[Column]>,
-    line_sep: bool,
+    table: TaskTableRenderOptions<'_>,
 ) -> Result<()> {
     let labels: Vec<String> = groups
         .iter()
@@ -487,8 +483,8 @@ fn print_grouped_task_table(
     let footer = format!("Shown: {shown}, Total: {total} task(s)");
     print_table_with_empty_message(
         &sections,
-        task_columns(columns),
-        line_sep,
+        task_columns(table.columns),
+        table.row_separators,
         &footer,
         "No tasks found.",
     );
@@ -499,15 +495,12 @@ fn print_agenda_task_table(
     items: &[TaskItem],
     total: usize,
     source: SourceSelection,
-    columns: Option<&[Column]>,
-    line_sep: bool,
     today: NaiveDate,
-    days: Option<i64>,
+    window: AgendaWindow,
+    table: TaskTableRenderOptions<'_>,
 ) -> Result<()> {
-    if let Some(days) = days {
-        return print_windowed_agenda_task_table(
-            items, total, source, columns, line_sep, today, days,
-        );
+    if let AgendaWindow::Days(days) = window {
+        return print_windowed_agenda_task_table(items, total, source, today, days, table);
     }
 
     let mut overdue = Vec::new();
@@ -540,8 +533,8 @@ fn print_agenda_task_table(
     let footer = format!("Shown: {}, Total: {} task(s)", item_count, total);
     print_table_with_empty_message(
         &sections,
-        task_columns(columns),
-        line_sep,
+        task_columns(table.columns),
+        table.row_separators,
         &footer,
         "No tasks found.",
     );
@@ -552,10 +545,9 @@ fn print_windowed_agenda_task_table(
     items: &[TaskItem],
     total: usize,
     source: SourceSelection,
-    columns: Option<&[Column]>,
-    line_sep: bool,
     today: NaiveDate,
     days: i64,
+    table: TaskTableRenderOptions<'_>,
 ) -> Result<()> {
     let mut overdue = Vec::new();
     let mut daily_items: BTreeMap<i64, Vec<TaskItem>> = BTreeMap::new();
@@ -596,8 +588,8 @@ fn print_windowed_agenda_task_table(
     let footer = format!("Shown: {}, Total: {} task(s)", item_count, total);
     print_table_with_empty_message(
         &sections,
-        task_columns(columns),
-        line_sep,
+        task_columns(table.columns),
+        table.row_separators,
         &footer,
         "No tasks found.",
     );

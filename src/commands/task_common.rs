@@ -307,19 +307,61 @@ pub fn validate_task_group_field(group_field: &str) -> Result<()> {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RowSeparatorMode {
+    Off,
+    On,
+}
+
+impl From<bool> for RowSeparatorMode {
+    fn from(enabled: bool) -> Self {
+        if enabled {
+            RowSeparatorMode::On
+        } else {
+            RowSeparatorMode::Off
+        }
+    }
+}
+
+impl RowSeparatorMode {
+    fn is_enabled(self) -> bool {
+        matches!(self, RowSeparatorMode::On)
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AgendaWindow {
+    Sections,
+    Days(i64),
+}
+
+impl AgendaWindow {
+    pub fn from_days(days: Option<i64>) -> Self {
+        days.map(|days| AgendaWindow::Days(days.max(0)))
+            .unwrap_or(AgendaWindow::Sections)
+    }
+
+    pub fn days(self) -> Option<i64> {
+        match self {
+            AgendaWindow::Sections => None,
+            AgendaWindow::Days(days) => Some(days),
+        }
+    }
+}
+
 pub fn print_table<T: RowItem>(
     sections: &[(&str, &[T])],
     cols: &[Column],
-    line_sep: bool,
+    row_separators: RowSeparatorMode,
     footer: &str,
 ) {
-    print_table_with_empty_message(sections, cols, line_sep, footer, "No items found.");
+    print_table_with_empty_message(sections, cols, row_separators, footer, "No items found.");
 }
 
 pub fn print_table_with_empty_message<T: RowItem>(
     sections: &[(&str, &[T])],
     cols: &[Column],
-    line_sep: bool,
+    row_separators: RowSeparatorMode,
     footer: &str,
     empty_message: &str,
 ) {
@@ -399,7 +441,7 @@ pub fn print_table_with_empty_message<T: RowItem>(
     if !section_rows.contains(&1) {
         table.with(Modify::new(Rows::one(1)).with(Border::new().top('─')));
     }
-    if line_sep && row_idx > 2 {
+    if row_separators.is_enabled() && row_idx > 2 {
         for i in 2..row_idx {
             if !no_border_rows.contains(&i) {
                 table.with(Modify::new(Rows::one(i)).with(Border::new().top('─')));

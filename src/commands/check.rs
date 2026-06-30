@@ -1,7 +1,9 @@
 use crate::cli::CheckArgs;
 use crate::command_context::CommandContext;
 use crate::config::ResolvedConfig;
-use crate::graph::validation::{GraphValidationIssues, GraphValidationOptions};
+use crate::graph::validation::{
+    GraphValidationCheck, GraphValidationIssues, GraphValidationOptions,
+};
 use crate::graph::{DuplicateInfo, Graph, GraphStats, OverlinkEntry, SelfLinkEntry};
 use crate::link_check::{
     LinkCheckErrorTarget, LinkCheckKind, LinkCheckResults, SshFileCheckOptions,
@@ -98,15 +100,32 @@ pub struct FiletagsIssue {
 }
 
 pub struct CheckOptions {
-    pub stats: bool,
-    pub file_links: bool,
-    pub remote_file_links: bool,
-    pub attachment_links: bool,
-    pub id_links: bool,
-    pub filetags: bool,
-    pub self_links: bool,
-    pub overlinks: bool,
-    pub cross_links: Option<Vec<String>>,
+    pub checks: CheckSelection,
+    pub cross_links: Option<CrossLinkTargets>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum CheckSelection {
+    Default,
+    Explicit(Vec<CheckItem>),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CheckItem {
+    Stats,
+    FileLinks,
+    RemoteFileLinks,
+    AttachmentLinks,
+    IdLinks,
+    Filetags,
+    SelfLinks,
+    Overlinks,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CrossLinkTargets {
+    pub source: String,
+    pub target: String,
 }
 
 pub struct CheckCommandOutput {
@@ -116,16 +135,78 @@ pub struct CheckCommandOutput {
 
 impl From<&CheckArgs> for CheckOptions {
     fn from(args: &CheckArgs) -> Self {
+        let mut checks = Vec::new();
+        if args.stats {
+            checks.push(CheckItem::Stats);
+        }
+        if args.file_links {
+            checks.push(CheckItem::FileLinks);
+        }
+        if args.remote_file_links {
+            checks.push(CheckItem::RemoteFileLinks);
+        }
+        if args.attachment_links {
+            checks.push(CheckItem::AttachmentLinks);
+        }
+        if args.id_links {
+            checks.push(CheckItem::IdLinks);
+        }
+        if args.filetags {
+            checks.push(CheckItem::Filetags);
+        }
+        if args.self_links {
+            checks.push(CheckItem::SelfLinks);
+        }
+        if args.overlinks {
+            checks.push(CheckItem::Overlinks);
+        }
+        let cross_links = args.cross_links.as_ref().and_then(|targets| {
+            let [source, target] = targets.as_slice() else {
+                return None;
+            };
+            Some(CrossLinkTargets {
+                source: source.clone(),
+                target: target.clone(),
+            })
+        });
+        let checks = if checks.is_empty() && cross_links.is_none() {
+            CheckSelection::Default
+        } else {
+            CheckSelection::Explicit(checks)
+        };
+
         CheckOptions {
-            stats: args.stats,
-            file_links: args.file_links,
-            remote_file_links: args.remote_file_links,
-            attachment_links: args.attachment_links,
-            id_links: args.id_links,
-            filetags: args.filetags,
-            self_links: args.self_links,
-            overlinks: args.overlinks,
-            cross_links: args.cross_links.clone(),
+            checks,
+            cross_links,
+        }
+    }
+}
+
+impl CheckSelection {
+    fn requests(&self, check: CheckItem) -> bool {
+        match self {
+            CheckSelection::Default => false,
+            CheckSelection::Explicit(checks) => checks.contains(&check),
+        }
+    }
+
+    fn shows(&self, section: CheckDisplaySection) -> bool {
+        match self {
+            CheckSelection::Default => true,
+            CheckSelection::Explicit(checks) => match section {
+                CheckDisplaySection::Stats => checks.contains(&CheckItem::Stats),
+                CheckDisplaySection::IdLinks => checks.contains(&CheckItem::IdLinks),
+                CheckDisplaySection::FileLinks => {
+                    checks.contains(&CheckItem::FileLinks)
+                        || checks.contains(&CheckItem::RemoteFileLinks)
+                }
+                CheckDisplaySection::AttachmentLinks => {
+                    checks.contains(&CheckItem::AttachmentLinks)
+                }
+                CheckDisplaySection::Filetags => checks.contains(&CheckItem::Filetags),
+                CheckDisplaySection::SelfLinks => checks.contains(&CheckItem::SelfLinks),
+                CheckDisplaySection::Overlinks => checks.contains(&CheckItem::Overlinks),
+            },
         }
     }
 }
@@ -136,7 +217,7 @@ pub fn run(ctx: &CommandContext<'_>, opts: &CheckOptions) -> Result<ExitCode> {
 }
 
 pub fn execute(config: &ResolvedConfig, opts: &CheckOptions) -> Result<CheckCommandOutput> {
-    ensure_remote_file_links_available(opts.remote_file_links)?;
+    ensure_remote_file_links_available(opts.checks.requests(CheckItem::RemoteFileLinks))?;
 
     let graph = Graph::load(config)?;
     let db_root = config.resolved_db_root();
@@ -180,26 +261,46 @@ pub fn render(ctx: &OutputContext, output: &CheckCommandOutput) -> Result<ExitCo
 
 impl CheckDisplayOptions {
     fn from_options(opts: &CheckOptions) -> Self {
-        let cross_links_specified = opts.cross_links.is_some();
-        let any_explicit = opts.stats
-            || opts.id_links
-            || opts.file_links
-            || opts.remote_file_links
-            || opts.attachment_links
-            || opts.filetags
-            || opts.self_links
-            || opts.overlinks
-            || cross_links_specified;
-
         CheckDisplayOptions {
-            show_stats: opts.stats || !any_explicit,
-            show_id: opts.id_links || !any_explicit,
-            show_file: opts.file_links || opts.remote_file_links || !any_explicit,
-            show_attach: opts.attachment_links || !any_explicit,
-            show_filetags: opts.filetags || !any_explicit,
-            show_self_links: opts.self_links || !any_explicit,
-            show_overlinks: opts.overlinks || !any_explicit,
+            sections: CheckDisplaySection::ALL
+                .iter()
+                .copied()
+                .filter(|section| opts.checks.shows(*section))
+                .collect(),
         }
+    }
+
+    fn shows(&self, section: CheckDisplaySection) -> bool {
+        self.sections.contains(&section)
+    }
+
+    fn local_link_kinds(&self) -> Vec<LinkCheckKind> {
+        let mut kinds = Vec::new();
+        if self.shows(CheckDisplaySection::FileLinks) {
+            kinds.push(LinkCheckKind::File);
+        }
+        if self.shows(CheckDisplaySection::AttachmentLinks) {
+            kinds.push(LinkCheckKind::Attachment);
+        }
+        kinds
+    }
+
+    fn validation_options(&self) -> GraphValidationOptions {
+        let mut checks = Vec::new();
+        if self.shows(CheckDisplaySection::IdLinks) {
+            checks.push(GraphValidationCheck::InternalLinks);
+            checks.push(GraphValidationCheck::Duplicates);
+        }
+        if self.shows(CheckDisplaySection::Filetags) {
+            checks.push(GraphValidationCheck::Filetags);
+        }
+        if self.shows(CheckDisplaySection::SelfLinks) {
+            checks.push(GraphValidationCheck::SelfLinks);
+        }
+        if self.shows(CheckDisplaySection::Overlinks) {
+            checks.push(GraphValidationCheck::Overlinks);
+        }
+        GraphValidationOptions::new(checks)
     }
 }
 
@@ -210,32 +311,22 @@ fn collect_check_data<'a>(
     opts: &CheckOptions,
     display_opts: &CheckDisplayOptions,
 ) -> Result<CheckData<'a>> {
-    let cross_links_specified = opts.cross_links.is_some();
-
-    let link_jobs =
-        graph.collect_local_link_check_jobs(display_opts.show_file, display_opts.show_attach);
+    let local_link_kinds = display_opts.local_link_kinds();
+    let link_jobs = graph.collect_local_link_check_jobs(&local_link_kinds);
     let mut link_results = run_local_link_checks(link_jobs, db_root);
-    if opts.remote_file_links {
+    if opts.checks.requests(CheckItem::RemoteFileLinks) {
         let ssh_jobs = graph.collect_ssh_file_link_check_jobs();
         let ssh_options = SshFileCheckOptions::from_config(config.ssh.as_ref());
         link_results.extend(run_ssh_link_checks(ssh_jobs, &ssh_options));
     }
     let (broken_file, file_link_errors, broken_attachment) = split_link_check_results(link_results);
 
-    let validation_issues = graph.collect_validation_issues(
-        db_root,
-        &GraphValidationOptions {
-            internal_links: display_opts.show_id,
-            filetags: display_opts.show_filetags,
-            duplicates: display_opts.show_id,
-            self_links: display_opts.show_self_links,
-            overlinks: display_opts.show_overlinks,
-        },
-    );
+    let validation_issues =
+        graph.collect_validation_issues(db_root, &display_opts.validation_options());
 
-    let cross_link_result = if cross_links_specified && let Some(ref pair) = opts.cross_links {
-        let node_a = graph.resolve_target(&pair[0])?;
-        let node_b = graph.resolve_target(&pair[1])?;
+    let cross_link_result = if let Some(pair) = &opts.cross_links {
+        let node_a = graph.resolve_target(&pair.source)?;
+        let node_b = graph.resolve_target(&pair.target)?;
         let a_to_b = node_a
             .outgoing
             .iter()
@@ -316,13 +407,30 @@ fn file_link_error_entry(error: LinkCheckErrorTarget) -> FileLinkErrorEntry {
 }
 
 struct CheckDisplayOptions {
-    show_stats: bool,
-    show_id: bool,
-    show_file: bool,
-    show_attach: bool,
-    show_filetags: bool,
-    show_self_links: bool,
-    show_overlinks: bool,
+    sections: Vec<CheckDisplaySection>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum CheckDisplaySection {
+    Stats,
+    IdLinks,
+    FileLinks,
+    AttachmentLinks,
+    Filetags,
+    SelfLinks,
+    Overlinks,
+}
+
+impl CheckDisplaySection {
+    const ALL: [CheckDisplaySection; 7] = [
+        CheckDisplaySection::Stats,
+        CheckDisplaySection::IdLinks,
+        CheckDisplaySection::FileLinks,
+        CheckDisplaySection::AttachmentLinks,
+        CheckDisplaySection::Filetags,
+        CheckDisplaySection::SelfLinks,
+        CheckDisplaySection::Overlinks,
+    ];
 }
 
 struct CheckData<'a> {
@@ -338,29 +446,36 @@ struct CheckData<'a> {
 impl CheckData<'_> {
     fn is_healthy(&self, opts: &CheckDisplayOptions) -> bool {
         let stats = self.graph.stats();
-        let id_healthy = !opts.show_id
+        let show_id = opts.shows(CheckDisplaySection::IdLinks);
+        let show_stats = opts.shows(CheckDisplaySection::Stats);
+        let id_healthy = !show_id
             || (stats.broken_link_count == 0
                 && stats.parse_error_count == 0
                 && stats.duplicate_uuid_count == 0);
-        let stats_healthy = !opts.show_stats
+        let stats_healthy = !show_stats
             || (stats.broken_link_count == 0
                 && stats.parse_error_count == 0
                 && stats.duplicate_uuid_count == 0);
         id_healthy
             && stats_healthy
-            && (!opts.show_file
+            && (!opts.shows(CheckDisplaySection::FileLinks)
                 || (self.broken_file.is_empty() && self.file_link_errors.is_empty()))
-            && (!opts.show_attach || self.broken_attachment.is_empty())
-            && (!opts.show_filetags || self.validation_issues.filetags.is_empty())
-            && (!opts.show_self_links || self.validation_issues.self_links.is_empty())
-            && (!opts.show_overlinks || self.validation_issues.overlinks.is_empty())
+            && (!opts.shows(CheckDisplaySection::AttachmentLinks)
+                || self.broken_attachment.is_empty())
+            && (!opts.shows(CheckDisplaySection::Filetags)
+                || self.validation_issues.filetags.is_empty())
+            && (!opts.shows(CheckDisplaySection::SelfLinks)
+                || self.validation_issues.self_links.is_empty())
+            && (!opts.shows(CheckDisplaySection::Overlinks)
+                || self.validation_issues.overlinks.is_empty())
     }
 }
 
 fn build_check_output(data: &CheckData, opts: &CheckDisplayOptions) -> CheckOutput {
     let stats = data.graph.stats();
+    let show_id = opts.shows(CheckDisplaySection::IdLinks);
 
-    let broken = if opts.show_id {
+    let broken = if show_id {
         data.validation_issues
             .broken_internal_links
             .iter()
@@ -374,7 +489,7 @@ fn build_check_output(data: &CheckData, opts: &CheckDisplayOptions) -> CheckOutp
         vec![]
     };
 
-    let failed = if opts.show_id {
+    let failed = if show_id {
         data.graph
             .parse_errors
             .iter()
@@ -391,34 +506,34 @@ fn build_check_output(data: &CheckData, opts: &CheckDisplayOptions) -> CheckOutp
 
     CheckOutput {
         db_root: data.db_root.display().to_string(),
-        stats: if opts.show_stats {
+        stats: if opts.shows(CheckDisplaySection::Stats) {
             Some(stats.clone())
         } else {
             None
         },
-        duplicates: if opts.show_id {
+        duplicates: if show_id {
             data.validation_issues.duplicates.clone()
         } else {
             None
         },
-        broken_links: if opts.show_id { Some(broken) } else { None },
-        broken_file_links: if opts.show_file {
+        broken_links: if show_id { Some(broken) } else { None },
+        broken_file_links: if opts.shows(CheckDisplaySection::FileLinks) {
             Some(data.broken_file.to_vec())
         } else {
             None
         },
-        file_link_errors: if opts.show_file {
+        file_link_errors: if opts.shows(CheckDisplaySection::FileLinks) {
             Some(data.file_link_errors.to_vec())
         } else {
             None
         },
-        broken_attachment_links: if opts.show_attach {
+        broken_attachment_links: if opts.shows(CheckDisplaySection::AttachmentLinks) {
             Some(data.broken_attachment.to_vec())
         } else {
             None
         },
-        failed_files: if opts.show_id { Some(failed) } else { None },
-        filetags_issues: if opts.show_filetags {
+        failed_files: if show_id { Some(failed) } else { None },
+        filetags_issues: if opts.shows(CheckDisplaySection::Filetags) {
             Some(
                 data.validation_issues
                     .filetags
@@ -433,12 +548,12 @@ fn build_check_output(data: &CheckData, opts: &CheckDisplayOptions) -> CheckOutp
         } else {
             None
         },
-        self_links: if opts.show_self_links {
+        self_links: if opts.shows(CheckDisplaySection::SelfLinks) {
             Some(data.validation_issues.self_links.to_vec())
         } else {
             None
         },
-        overlinks: if opts.show_overlinks {
+        overlinks: if opts.shows(CheckDisplaySection::Overlinks) {
             Some(data.validation_issues.overlinks.to_vec())
         } else {
             None
@@ -792,14 +907,7 @@ mod tests {
         let output = execute(
             &config,
             &CheckOptions {
-                stats: false,
-                file_links: true,
-                remote_file_links: false,
-                attachment_links: false,
-                id_links: false,
-                filetags: false,
-                self_links: false,
-                overlinks: false,
+                checks: CheckSelection::Explicit(vec![CheckItem::FileLinks]),
                 cross_links: None,
             },
         )
@@ -843,7 +951,8 @@ mod tests {
         let config = ResolvedConfig::for_test_db(db_root);
         let graph = Graph::load(&config).unwrap();
 
-        let all_jobs = graph.collect_local_link_check_jobs(true, true);
+        let all_jobs =
+            graph.collect_local_link_check_jobs(&[LinkCheckKind::File, LinkCheckKind::Attachment]);
         let all_observed: Vec<_> = all_jobs
             .iter()
             .map(|job| {
@@ -885,11 +994,11 @@ mod tests {
             ]
         );
 
-        let file_jobs = graph.collect_local_link_check_jobs(true, false);
+        let file_jobs = graph.collect_local_link_check_jobs(&[LinkCheckKind::File]);
         assert_eq!(file_jobs.len(), 2);
         assert!(file_jobs.iter().all(|job| job.kind == LinkCheckKind::File));
 
-        let attachment_jobs = graph.collect_local_link_check_jobs(false, true);
+        let attachment_jobs = graph.collect_local_link_check_jobs(&[LinkCheckKind::Attachment]);
         assert_eq!(attachment_jobs.len(), 2);
         assert!(
             attachment_jobs

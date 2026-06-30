@@ -1,6 +1,7 @@
 use super::{plan, providers, render};
 use crate::commands::task_common::{
-    date_in_agenda_window, parse_task_sort_fields, validate_task_group_field,
+    AgendaWindow, RowSeparatorMode, date_in_agenda_window, parse_task_sort_fields,
+    validate_task_group_field,
 };
 use crate::config::ResolvedConfig;
 use crate::output::Column;
@@ -17,7 +18,7 @@ use std::collections::BTreeMap;
 pub(super) struct TaskListExecution {
     pub(super) source: SourceSelection,
     pub(super) items: TaskListItems,
-    pub(super) line_sep: bool,
+    pub(super) row_separators: RowSeparatorMode,
     pub(super) columns: Option<Vec<Column>>,
 }
 
@@ -37,8 +38,8 @@ pub(super) struct AgendaExecution {
     pub(super) source: SourceSelection,
     pub(super) items: Vec<TaskItem>,
     pub(super) limit: Option<usize>,
-    pub(super) days: Option<i64>,
-    pub(super) line_sep: bool,
+    pub(super) window: AgendaWindow,
+    pub(super) row_separators: RowSeparatorMode,
     pub(super) columns: Option<Vec<Column>>,
     pub(super) today: NaiveDate,
 }
@@ -70,7 +71,7 @@ pub(super) fn execute_task_list(
     Ok(TaskListExecution {
         source: request.filters.source,
         items,
-        line_sep: request.line_sep,
+        row_separators: request.row_separators,
         columns: request.columns.clone(),
     })
 }
@@ -101,7 +102,7 @@ pub(super) fn execute_task_agenda(
         &request.filters.criteria,
         request.clock.today,
     )?;
-    if let Some(days) = request.days {
+    if let Some(days) = request.window.days() {
         retain_agenda_window_task_items_on(&mut items, days, request.clock.today);
     }
     sort_task_items(
@@ -112,8 +113,8 @@ pub(super) fn execute_task_agenda(
         source: request.filters.source,
         items,
         limit: request.limit,
-        days: request.days,
-        line_sep: request.line_sep,
+        window: request.window,
+        row_separators: request.row_separators,
         columns: request.columns.clone(),
         today: request.clock.today,
     })

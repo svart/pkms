@@ -37,10 +37,27 @@ pub struct ContextLine {
 pub struct QueryOptions {
     pub terms: String,
     pub limit: Option<usize>,
-    pub tags: bool,
-    pub title: bool,
-    pub content: bool,
-    pub todos: bool,
+    pub scope: QuerySearchScope,
+    pub todo_filter: QueryTodoFilter,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum QuerySearchScope {
+    All,
+    Only(Vec<QuerySearchField>),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum QuerySearchField {
+    Title,
+    Tags,
+    Content,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum QueryTodoFilter {
+    All,
+    WithTodos,
 }
 
 impl TryFrom<&QueryArgs> for QueryOptions {
@@ -53,11 +70,40 @@ impl TryFrom<&QueryArgs> for QueryOptions {
                 .clone()
                 .ok_or_else(|| anyhow::anyhow!("No search terms specified. Provide terms"))?,
             limit: args.limit,
-            tags: args.tags,
-            title: args.title,
-            content: args.content,
-            todos: args.todos,
+            scope: QuerySearchScope::from_flags(args.title, args.tags, args.content),
+            todo_filter: if args.todos {
+                QueryTodoFilter::WithTodos
+            } else {
+                QueryTodoFilter::All
+            },
         })
+    }
+}
+
+impl QuerySearchScope {
+    fn from_flags(title: bool, tags: bool, content: bool) -> Self {
+        let mut fields = Vec::new();
+        if title {
+            fields.push(QuerySearchField::Title);
+        }
+        if tags {
+            fields.push(QuerySearchField::Tags);
+        }
+        if content {
+            fields.push(QuerySearchField::Content);
+        }
+        if fields.is_empty() {
+            QuerySearchScope::All
+        } else {
+            QuerySearchScope::Only(fields)
+        }
+    }
+
+    fn includes(&self, field: QuerySearchField) -> bool {
+        match self {
+            QuerySearchScope::All => true,
+            QuerySearchScope::Only(fields) => fields.contains(&field),
+        }
     }
 }
 
@@ -69,9 +115,9 @@ pub fn run(ctx: &CommandContext<'_>, opts: &QueryOptions) -> Result<()> {
 pub fn execute(config: &ResolvedConfig, opts: &QueryOptions) -> Result<QueryOutput> {
     let graph = Graph::load(config)?;
 
-    let mut combined = search_by_text(&graph, &opts.terms, opts.tags, opts.title, opts.content)?;
+    let mut combined = search_by_text(&graph, &opts.terms, &opts.scope)?;
 
-    if opts.todos {
+    if opts.todo_filter == QueryTodoFilter::WithTodos {
         combined.retain(|r| graph.nodes.get(&r.uuid).is_some_and(|n| n.has_todos));
     }
 
@@ -93,13 +139,11 @@ pub fn execute(config: &ResolvedConfig, opts: &QueryOptions) -> Result<QueryOutp
 fn search_by_text(
     graph: &Graph,
     terms: &str,
-    only_tags: bool,
-    only_title: bool,
-    only_content: bool,
+    scope: &QuerySearchScope,
 ) -> Result<Vec<QueryResultEntry>> {
-    let search_title = only_title || (!only_tags && !only_content);
-    let search_tags = only_tags || (!only_title && !only_content);
-    let search_content = only_content || (!only_title && !only_tags);
+    let search_title = scope.includes(QuerySearchField::Title);
+    let search_tags = scope.includes(QuerySearchField::Tags);
+    let search_content = scope.includes(QuerySearchField::Content);
 
     let mut combined: Vec<QueryResultEntry> = Vec::new();
 

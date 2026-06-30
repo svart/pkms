@@ -4,6 +4,8 @@ use crate::cli::{TaskAgendaArgs, TaskCommand, TaskListArgs, TaskShortcutArgs};
 use crate::command_context::CommandContext;
 use crate::commands::open::OpenOptions;
 use crate::commands::show::{HeadingTarget, ShowOptions};
+#[cfg(feature = "todoist")]
+use crate::commands::task_common::RowSeparatorMode;
 use crate::config::ResolvedConfig;
 use crate::output::{OutputContext, terminal_markup};
 use crate::tasks::clock::TaskClock;
@@ -91,8 +93,10 @@ fn render_task_list(ctx: &OutputContext, output: TaskListExecution) -> Result<()
             output.source,
             items,
             limit,
-            output.columns.as_deref(),
-            output.line_sep,
+            render::TaskTableRenderOptions {
+                columns: output.columns.as_deref(),
+                row_separators: output.row_separators,
+            },
         ),
         TaskListItems::Grouped {
             group_field,
@@ -104,8 +108,10 @@ fn render_task_list(ctx: &OutputContext, output: TaskListExecution) -> Result<()
             group_field,
             groups,
             total,
-            output.columns.as_deref(),
-            output.line_sep,
+            render::TaskTableRenderOptions {
+                columns: output.columns.as_deref(),
+                row_separators: output.row_separators,
+            },
         ),
     }
 }
@@ -129,8 +135,10 @@ fn run_shortcut(
         source,
         items,
         args.limit,
-        columns.as_deref(),
-        args.table.line_sep,
+        render::TaskTableRenderOptions {
+            columns: columns.as_deref(),
+            row_separators: args.table.line_sep.into(),
+        },
     )
 }
 
@@ -147,10 +155,12 @@ fn render_task_agenda(ctx: &OutputContext, output: AgendaExecution) -> Result<()
         output.items,
         output.limit,
         render::AgendaTaskRenderOptions {
-            columns: output.columns.as_deref(),
-            line_sep: output.line_sep,
+            table: render::TaskTableRenderOptions {
+                columns: output.columns.as_deref(),
+                row_separators: output.row_separators,
+            },
             today: output.today,
-            days: output.days,
+            window: output.window,
         },
     )
 }
@@ -209,9 +219,15 @@ fn show_todoist_task(config: &ResolvedConfig, ctx: &OutputContext, id: &str) -> 
     let mut item = crate::tasks::todoist::task_to_item_with_metadata(task, metadata.as_ref());
     crate::tasks::todoist::enrich_items_with_pkms_notes(config, std::slice::from_mut(&mut item))?;
     match ctx.format {
-        OutputFormat::Text => {
-            render::print_task_table(&[item], 1, SourceSelection::Todoist, None, false)
-        }
+        OutputFormat::Text => render::print_task_table(
+            &[item],
+            1,
+            SourceSelection::Todoist,
+            render::TaskTableRenderOptions {
+                columns: None,
+                row_separators: RowSeparatorMode::Off,
+            },
+        ),
         OutputFormat::Json => ctx.print_json(&item),
         OutputFormat::Ndjson => ctx.print_ndjson(&[item]),
     }

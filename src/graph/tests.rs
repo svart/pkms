@@ -1,7 +1,8 @@
 use super::*;
 use crate::graph::search::SearchFields;
 use crate::graph::validation::{
-    DuplicateUuidIssueKind, GraphValidationOptions, NoteValidationIssue, SelfLinkKind,
+    DuplicateUuidIssueKind, GraphValidationCheck, GraphValidationOptions, NoteValidationIssue,
+    SelfLinkKind,
 };
 use crate::parser::ParsedNote;
 
@@ -292,13 +293,13 @@ fn collect_validation_issues_returns_graph_level_health_records() {
     let graph = Graph::load(&config).unwrap();
     let issues = graph.collect_validation_issues(
         dir.path(),
-        &GraphValidationOptions {
-            internal_links: true,
-            filetags: true,
-            duplicates: true,
-            self_links: true,
-            overlinks: true,
-        },
+        &GraphValidationOptions::new([
+            GraphValidationCheck::InternalLinks,
+            GraphValidationCheck::Filetags,
+            GraphValidationCheck::Duplicates,
+            GraphValidationCheck::SelfLinks,
+            GraphValidationCheck::Overlinks,
+        ]),
     );
 
     assert_eq!(issues.broken_internal_links.len(), 1);

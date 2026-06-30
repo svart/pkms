@@ -1,6 +1,7 @@
 use crate::cli::{
     TaskAgendaArgs, TaskAgendaCommand, TaskListArgs, TaskShortcutArgs, TaskTableArgs,
 };
+use crate::commands::task_common::{AgendaWindow, RowSeparatorMode};
 use crate::config::{ColumnSource, ColumnView, ResolvedConfig};
 use crate::input;
 use crate::output::Column;
@@ -28,7 +29,7 @@ pub(super) struct TaskListRequest {
     pub(super) sort: Option<String>,
     pub(super) limit: Option<usize>,
     pub(super) group: Option<String>,
-    pub(super) line_sep: bool,
+    pub(super) row_separators: RowSeparatorMode,
     pub(super) columns: Option<Vec<Column>>,
     pub(super) clock: TaskClock,
 }
@@ -37,8 +38,8 @@ pub(super) struct AgendaRequest {
     pub(super) filters: TaskFilters,
     pub(super) sort: Option<String>,
     pub(super) limit: Option<usize>,
-    pub(super) days: Option<i64>,
-    pub(super) line_sep: bool,
+    pub(super) window: AgendaWindow,
+    pub(super) row_separators: RowSeparatorMode,
     pub(super) columns: Option<Vec<Column>>,
     pub(super) clock: TaskClock,
     pub(super) view: TaskListView,
@@ -100,7 +101,7 @@ pub(super) fn plan_task_list_request(
         sort: args.sort.clone(),
         limit: args.limit,
         group: args.group.clone(),
-        line_sep: args.table.line_sep,
+        row_separators: args.table.line_sep.into(),
         columns,
         clock,
     })
@@ -212,8 +213,8 @@ fn plan_agenda_request_from_filters(
         filters,
         sort,
         limit,
-        days: days.map(|days| days.max(0)),
-        line_sep: table.line_sep,
+        window: AgendaWindow::from_days(days),
+        row_separators: table.line_sep.into(),
         columns,
         clock,
         view: TaskListView::Agenda,

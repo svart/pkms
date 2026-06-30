@@ -1,6 +1,7 @@
 use super::{DuplicateInfo, Graph, Node, OverlinkEntry, SelfLinkEntry, resolve_file_link_path};
 use crate::link_check::{
-    LinkCheckJob, is_ssh_file_target, local_file_link_target_exists, sort_link_check_jobs,
+    LinkCheckJob, LinkCheckKind, is_ssh_file_target, local_file_link_target_exists,
+    sort_link_check_jobs,
 };
 use crate::parser::{ID_PROPERTY_RE, Link, TITLE_RE, UUID_FORMAT_RE, validate_filetags_format};
 use std::collections::{HashMap, HashSet};
@@ -8,11 +9,28 @@ use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, Default)]
 pub struct GraphValidationOptions {
-    pub internal_links: bool,
-    pub filetags: bool,
-    pub duplicates: bool,
-    pub self_links: bool,
-    pub overlinks: bool,
+    checks: Vec<GraphValidationCheck>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GraphValidationCheck {
+    InternalLinks,
+    Filetags,
+    Duplicates,
+    SelfLinks,
+    Overlinks,
+}
+
+impl GraphValidationOptions {
+    pub fn new(checks: impl IntoIterator<Item = GraphValidationCheck>) -> Self {
+        GraphValidationOptions {
+            checks: checks.into_iter().collect(),
+        }
+    }
+
+    pub fn includes(&self, check: GraphValidationCheck) -> bool {
+        self.checks.contains(&check)
+    }
 }
 
 #[derive(Debug, Clone, Default)]
@@ -99,23 +117,25 @@ impl Graph {
         options: &GraphValidationOptions,
     ) -> GraphValidationIssues {
         GraphValidationIssues {
-            broken_internal_links: if options.internal_links {
+            broken_internal_links: if options.includes(GraphValidationCheck::InternalLinks) {
                 self.collect_broken_internal_link_issues()
             } else {
                 Vec::new()
             },
-            filetags: if options.filetags {
+            filetags: if options.includes(GraphValidationCheck::Filetags) {
                 self.collect_filetags_issues()
             } else {
                 Vec::new()
             },
-            duplicates: options.duplicates.then(|| self.duplicates.clone()),
-            self_links: if options.self_links {
+            duplicates: options
+                .includes(GraphValidationCheck::Duplicates)
+                .then(|| self.duplicates.clone()),
+            self_links: if options.includes(GraphValidationCheck::SelfLinks) {
                 self.detect_self_links(db_root)
             } else {
                 Vec::new()
             },
-            overlinks: if options.overlinks {
+            overlinks: if options.includes(GraphValidationCheck::Overlinks) {
                 self.detect_overlinks()
             } else {
                 Vec::new()
@@ -146,16 +166,14 @@ impl Graph {
         }
     }
 
-    pub fn collect_local_link_check_jobs(
-        &self,
-        include_files: bool,
-        include_attachments: bool,
-    ) -> Vec<LinkCheckJob> {
+    pub fn collect_local_link_check_jobs(&self, kinds: &[LinkCheckKind]) -> Vec<LinkCheckJob> {
         let mut jobs = Vec::new();
         for node in self.nodes.values() {
             for link in &node.outgoing {
                 match link {
-                    Link::File(target) if include_files && !is_ssh_file_target(target) => {
+                    Link::File(target)
+                        if kinds.contains(&LinkCheckKind::File) && !is_ssh_file_target(target) =>
+                    {
                         jobs.push(LinkCheckJob::file(
                             node.uuid.clone(),
                             node.title.clone(),
@@ -163,7 +181,7 @@ impl Graph {
                             target.clone(),
                         ));
                     }
-                    Link::Attachment(target) if include_attachments => {
+                    Link::Attachment(target) if kinds.contains(&LinkCheckKind::Attachment) => {
                         jobs.push(LinkCheckJob::attachment(
                             node.uuid.clone(),
                             node.title.clone(),
