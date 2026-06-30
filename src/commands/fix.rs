@@ -1,7 +1,6 @@
 use crate::cli::FixArgs;
-use crate::config::ResolvedConfig;
+use crate::command_context::CommandContext;
 use crate::discovery;
-use crate::graph::Graph;
 use crate::output::OutputContext;
 use anyhow::Result;
 use regex::Regex;
@@ -107,8 +106,9 @@ impl TryFrom<&FixArgs> for FixOptions {
     }
 }
 
-pub fn run(config: &ResolvedConfig, ctx: &OutputContext, opts: &FixOptions) -> Result<()> {
-    let graph = Graph::load(config)?;
+pub fn run(ctx: &CommandContext<'_>, opts: &FixOptions) -> Result<()> {
+    let config = ctx.config();
+    let graph = ctx.load_graph()?;
     let db_root = config.resolved_db_root();
     let ignore_patterns = config.resolve_ignore_patterns();
 
@@ -140,5 +140,5 @@ pub fn run(config: &ResolvedConfig, ctx: &OutputContext, opts: &FixOptions) -> R
         applied: opts.apply,
     };
 
-    print_fix_output(ctx, &output)
+    print_fix_output(ctx.output(), &output)
 }

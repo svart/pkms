@@ -3,6 +3,7 @@ use crate::cli::OutputFormat;
 use crate::cli::{
     TaskAgendaArgs, TaskCommand, TaskListArgs, TaskOpenArgs, TaskShortcutArgs, TaskTargetArgs,
 };
+use crate::command_context::CommandContext;
 use crate::commands::open::OpenOptions;
 use crate::commands::show::{HeadingTarget, ShowOptions};
 use crate::config::ResolvedConfig;
@@ -33,23 +34,23 @@ use plan::{
     ShortcutKind, TaskListMode, plan_agenda_request, plan_task_list_request, split_task_list_mode,
 };
 
-pub fn run(
-    config: &ResolvedConfig,
-    ctx: &OutputContext,
-    command: &TaskCommand,
-) -> Result<ExitCode> {
+pub fn run(ctx: &CommandContext<'_>, command: &TaskCommand) -> Result<ExitCode> {
+    let config = ctx.config();
+    let output = ctx.output();
     let task_id_snapshot = task_id_snapshot_before_command(config, command);
     let exit_code = match command {
-        TaskCommand::List(args) => success(run_list(config, ctx, args)),
-        TaskCommand::Agenda(args) => success(run_agenda(config, ctx, args)),
-        TaskCommand::Inbox(args) => success(run_shortcut(config, ctx, args, ShortcutKind::Inbox)),
-        TaskCommand::Show(args) => success(run_show(config, ctx, args)),
-        TaskCommand::Open(args) => success(run_open(config, ctx, args)),
-        TaskCommand::State(args) => success(run_state(config, ctx, args)),
-        TaskCommand::Done(args) => success(run_done(config, ctx, args)),
-        TaskCommand::Add(args) => success(run_add(config, ctx, args)),
-        TaskCommand::Postpone(args) => success(run_postpone(config, ctx, args)),
-        TaskCommand::Target(args) => id_command::run(config, ctx, args),
+        TaskCommand::List(args) => success(run_list(config, output, args)),
+        TaskCommand::Agenda(args) => success(run_agenda(config, output, args)),
+        TaskCommand::Inbox(args) => {
+            success(run_shortcut(config, output, args, ShortcutKind::Inbox))
+        }
+        TaskCommand::Show(args) => success(run_show(ctx, args)),
+        TaskCommand::Open(args) => success(run_open(ctx, args)),
+        TaskCommand::State(args) => success(run_state(config, output, args)),
+        TaskCommand::Done(args) => success(run_done(config, output, args)),
+        TaskCommand::Add(args) => success(run_add(config, output, args)),
+        TaskCommand::Postpone(args) => success(run_postpone(config, output, args)),
+        TaskCommand::Target(args) => id_command::run(ctx, args),
     }?;
     maybe_warn_task_ids_changed(config, task_id_snapshot);
     Ok(exit_code)
@@ -152,14 +153,11 @@ fn render_task_agenda(ctx: &OutputContext, output: AgendaExecution) -> Result<()
     )
 }
 
-pub(super) fn run_show(
-    config: &ResolvedConfig,
-    ctx: &OutputContext,
-    args: &TaskTargetArgs,
-) -> Result<()> {
+pub(super) fn run_show(ctx: &CommandContext<'_>, args: &TaskTargetArgs) -> Result<()> {
+    let config = ctx.config();
+    let output = ctx.output();
     match args.id.parse::<TaskId>()? {
         TaskId::Pkms(id) => crate::commands::show::run(
-            config,
             ctx,
             &ShowOptions {
                 targets: vec![HeadingTarget {
@@ -168,19 +166,14 @@ pub(super) fn run_show(
                 }],
             },
         ),
-        TaskId::Todoist(id) => show_todoist_task(config, ctx, &id),
+        TaskId::Todoist(id) => show_todoist_task(config, output, &id),
         TaskId::External { source, .. } => unsupported_task_source(&source),
     }
 }
 
-pub(super) fn run_open(
-    config: &ResolvedConfig,
-    ctx: &OutputContext,
-    args: &TaskOpenArgs,
-) -> Result<()> {
+pub(super) fn run_open(ctx: &CommandContext<'_>, args: &TaskOpenArgs) -> Result<()> {
     match args.id.parse::<TaskId>()? {
         TaskId::Pkms(id) => crate::commands::open::run(
-            config,
             ctx,
             &OpenOptions {
                 targets: vec![id.to_string()],

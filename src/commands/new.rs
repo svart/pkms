@@ -1,7 +1,6 @@
 use crate::cli::NewArgs;
-use crate::config::ResolvedConfig;
+use crate::command_context::CommandContext;
 use crate::input;
-use crate::output::OutputContext;
 use crate::parser::{HEADING_RE, ID_PROPERTY_RE};
 use anyhow::{Context, Result};
 use serde::Serialize;
@@ -66,7 +65,9 @@ impl From<&NewArgs> for NewOptions {
     }
 }
 
-pub fn run(config: &ResolvedConfig, ctx: &OutputContext, opts: &NewOptions) -> Result<()> {
+pub fn run(ctx: &CommandContext<'_>, opts: &NewOptions) -> Result<()> {
+    let config = ctx.config();
+    let output_ctx = ctx.output();
     let db_root = config.resolved_db_root();
     let ignore = config.resolve_ignore_patterns();
     let new_notes_dir = config.resolve_new_notes_dir();
@@ -158,8 +159,8 @@ pub fn run(config: &ResolvedConfig, ctx: &OutputContext, opts: &NewOptions) -> R
         heading: heading_output,
     };
 
-    if ctx.is_structured() {
-        ctx.print_structured(&output)?;
+    if output_ctx.is_structured() {
+        output_ctx.print_structured(&output)?;
     } else {
         println!("New note:");
         println!("  Title:    {}", output.title);

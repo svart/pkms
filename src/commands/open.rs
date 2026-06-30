@@ -1,6 +1,6 @@
+use crate::command_context::CommandContext;
 use crate::config::ResolvedConfig;
 use crate::graph::Graph;
-use crate::output::OutputContext;
 use anyhow::Result;
 
 pub struct OpenOptions {
@@ -81,11 +81,11 @@ pub fn open_target(
     Ok(())
 }
 
-pub fn run(config: &ResolvedConfig, _ctx: &OutputContext, opts: &OpenOptions) -> Result<()> {
-    let graph = Graph::load(config)?;
+pub fn run(ctx: &CommandContext<'_>, opts: &OpenOptions) -> Result<()> {
+    let graph = ctx.load_graph()?;
 
     for target in &opts.targets {
-        open_target(&graph, config, target, &opts.editor, opts.line)?;
+        open_target(&graph, ctx.config(), target, &opts.editor, opts.line)?;
     }
 
     Ok(())

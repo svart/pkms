@@ -1,16 +1,13 @@
 use crate::cli::{
     TaskDoneArgs, TaskModArgs, TaskOpenArgs, TaskPostponeArgs, TaskStateArgs, TaskTargetArgs,
 };
-use crate::config::ResolvedConfig;
-use crate::output::OutputContext;
+use crate::command_context::CommandContext;
 use anyhow::{Context, Result, bail};
 use std::process::ExitCode;
 
-pub(super) fn run(
-    config: &ResolvedConfig,
-    ctx: &OutputContext,
-    args: &[String],
-) -> Result<ExitCode> {
+pub(super) fn run(ctx: &CommandContext<'_>, args: &[String]) -> Result<ExitCode> {
+    let config = ctx.config();
+    let output = ctx.output();
     let Some((id, rest)) = args.split_first() else {
         bail!("Expected task ID and subcommand");
     };
@@ -21,27 +18,27 @@ pub(super) fn run(
     match command.as_str() {
         "show" => {
             let args = parse_show_args(id, command_args)?;
-            super::run_show(config, ctx, &args).map(|()| ExitCode::SUCCESS)
+            super::run_show(ctx, &args).map(|()| ExitCode::SUCCESS)
         }
         "open" => {
             let args = parse_open_args(id, command_args)?;
-            super::run_open(config, ctx, &args).map(|()| ExitCode::SUCCESS)
+            super::run_open(ctx, &args).map(|()| ExitCode::SUCCESS)
         }
         "state" => {
             let args = parse_state_args(id, command_args)?;
-            super::mutations::run_state(config, ctx, &args).map(|()| ExitCode::SUCCESS)
+            super::mutations::run_state(config, output, &args).map(|()| ExitCode::SUCCESS)
         }
         "done" => {
             let args = parse_done_args(id, command_args)?;
-            super::mutations::run_done(config, ctx, &args).map(|()| ExitCode::SUCCESS)
+            super::mutations::run_done(config, output, &args).map(|()| ExitCode::SUCCESS)
         }
         "postpone" => {
             let args = parse_postpone_args(id, command_args)?;
-            super::mutations::run_postpone(config, ctx, &args).map(|()| ExitCode::SUCCESS)
+            super::mutations::run_postpone(config, output, &args).map(|()| ExitCode::SUCCESS)
         }
         "mod" => {
             let args = parse_mod_args(id, command_args)?;
-            super::mutations::run_mod(config, ctx, &args)
+            super::mutations::run_mod(config, output, &args)
         }
         other => bail!(
             "Unknown task subcommand '{other}' after ID. Expected one of: show, open, state, done, postpone, mod"

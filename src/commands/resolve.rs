@@ -1,4 +1,5 @@
 use crate::cli::{OutputFormat, ResolveArgs};
+use crate::command_context::CommandContext;
 use crate::config::ResolvedConfig;
 use crate::discovery;
 use crate::input;
@@ -129,9 +130,9 @@ impl From<&ResolveArgs> for ResolveOptions {
     }
 }
 
-pub fn run(config: &ResolvedConfig, ctx: &OutputContext, opts: &ResolveOptions) -> Result<()> {
-    let output = execute(config, opts)?;
-    render(ctx, &output)
+pub fn run(ctx: &CommandContext<'_>, opts: &ResolveOptions) -> Result<()> {
+    let output = execute(ctx.config(), opts)?;
+    render(ctx.output(), &output)
 }
 
 pub fn execute(config: &ResolvedConfig, opts: &ResolveOptions) -> Result<ResolveCommandOutput> {

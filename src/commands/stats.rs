@@ -1,4 +1,5 @@
 use crate::cli::{OutputFormat, StatsArgs};
+use crate::command_context::CommandContext;
 use crate::config::ResolvedConfig;
 use crate::graph::Graph;
 use crate::output::OutputContext;
@@ -125,9 +126,9 @@ impl From<&StatsArgs> for StatsOptions {
     }
 }
 
-pub fn run(config: &ResolvedConfig, ctx: &OutputContext, opts: &StatsOptions) -> Result<()> {
-    let output = execute(config, opts)?;
-    render(ctx, &output)
+pub fn run(ctx: &CommandContext<'_>, opts: &StatsOptions) -> Result<()> {
+    let output = execute(ctx.config(), opts)?;
+    render(ctx.output(), &output)
 }
 
 pub fn execute(config: &ResolvedConfig, opts: &StatsOptions) -> Result<StatsCommandOutput> {

@@ -1,4 +1,5 @@
 use crate::cli::OutputFormat;
+use crate::command_context::CommandContext;
 use crate::config::ResolvedConfig;
 use crate::graph::{Graph, Node};
 use crate::org_edit::parsed_heading_subtree_end_index;
@@ -319,9 +320,9 @@ fn render_one_text(output: &GetOutput) -> String {
     text
 }
 
-pub fn run(config: &ResolvedConfig, ctx: &OutputContext, opts: &GetOptions) -> Result<()> {
-    let outputs = execute(config, opts)?;
-    render(ctx, &outputs)
+pub fn run(ctx: &CommandContext<'_>, opts: &GetOptions) -> Result<()> {
+    let outputs = execute(ctx.config(), opts)?;
+    render(ctx.output(), &outputs)
 }
 
 #[cfg(test)]

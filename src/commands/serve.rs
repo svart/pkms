@@ -1,6 +1,6 @@
-use crate::config::ResolvedConfig;
+use crate::command_context::CommandContext;
+#[cfg(test)]
 use crate::graph::Graph;
-use crate::output::OutputContext;
 use anyhow::{Context, Result};
 use serde::Serialize;
 use std::io::Write;
@@ -38,8 +38,10 @@ struct ServeStarted {
     uuid: String,
 }
 
-pub fn run(config: &ResolvedConfig, ctx: &OutputContext, opts: &ServeOptions) -> Result<()> {
-    let graph = Graph::load(config)?;
+pub fn run(ctx: &CommandContext<'_>, opts: &ServeOptions) -> Result<()> {
+    let config = ctx.config();
+    let output = ctx.output();
+    let graph = ctx.load_graph()?;
     let initial_uuid = graph.resolve_target(&opts.target)?.uuid.clone();
     let listener = TcpListener::bind((opts.host.as_str(), opts.port))
         .with_context(|| format!("Failed to bind {}:{}", opts.host, opts.port))?;
@@ -52,8 +54,8 @@ pub fn run(config: &ResolvedConfig, ctx: &OutputContext, opts: &ServeOptions) ->
         port: addr.port(),
         uuid: initial_uuid.clone(),
     };
-    if ctx.is_structured() {
-        ctx.print_structured(&started)?;
+    if output.is_structured() {
+        output.print_structured(&started)?;
     } else {
         println!("Serving {}", url);
     }

@@ -1,5 +1,5 @@
+use crate::command_context::CommandContext;
 use crate::config::{ConfigInfo, ResolvedConfig};
-use crate::output::OutputContext;
 use anyhow::Result;
 use serde::Serialize;
 
@@ -46,10 +46,10 @@ pub fn render_text(output: &InfoOutput) -> String {
     lines.join("\n")
 }
 
-pub fn run(config: &ResolvedConfig, ctx: &OutputContext) -> Result<()> {
-    let output = build_output(config);
-    if ctx.is_structured() {
-        ctx.print_structured(&output)?;
+pub fn run(ctx: &CommandContext<'_>) -> Result<()> {
+    let output = build_output(ctx.config());
+    if ctx.output().is_structured() {
+        ctx.output().print_structured(&output)?;
     } else {
         println!("{}", render_text(&output));
     }

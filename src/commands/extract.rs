@@ -1,4 +1,5 @@
 use crate::cli::ExtractArgs;
+use crate::command_context::CommandContext;
 use crate::commands::new::{create_note_file_exclusive, title_to_slug, unique_note_filename};
 use crate::config::ResolvedConfig;
 use crate::graph::{Graph, HeadingLocation};
@@ -43,9 +44,9 @@ pub struct ExtractOutput {
     pub applied: bool,
 }
 
-pub fn run(config: &ResolvedConfig, ctx: &OutputContext, opts: &ExtractOptions) -> Result<()> {
-    let output = execute(config, opts)?;
-    render(ctx, &output)
+pub fn run(ctx: &CommandContext<'_>, opts: &ExtractOptions) -> Result<()> {
+    let output = execute(ctx.config(), opts)?;
+    render(ctx.output(), &output)
 }
 
 fn execute(config: &ResolvedConfig, opts: &ExtractOptions) -> Result<ExtractOutput> {

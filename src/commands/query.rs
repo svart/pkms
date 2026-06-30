@@ -1,4 +1,5 @@
 use crate::cli::{OutputFormat, QueryArgs};
+use crate::command_context::CommandContext;
 use crate::config::ResolvedConfig;
 use crate::graph::Graph;
 use crate::graph::search::SearchFields;
@@ -60,9 +61,9 @@ impl TryFrom<&QueryArgs> for QueryOptions {
     }
 }
 
-pub fn run(config: &ResolvedConfig, ctx: &OutputContext, opts: &QueryOptions) -> Result<()> {
-    let output = execute(config, opts)?;
-    render(ctx, &output)
+pub fn run(ctx: &CommandContext<'_>, opts: &QueryOptions) -> Result<()> {
+    let output = execute(ctx.config(), opts)?;
+    render(ctx.output(), &output)
 }
 
 pub fn execute(config: &ResolvedConfig, opts: &QueryOptions) -> Result<QueryOutput> {

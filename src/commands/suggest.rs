@@ -1,4 +1,5 @@
 use crate::cli::OutputFormat;
+use crate::command_context::CommandContext;
 use crate::config::ResolvedConfig;
 use crate::graph::{Graph, Node};
 use crate::output::OutputContext;
@@ -564,9 +565,9 @@ pub struct SuggestOptions {
     pub exclude_orphans: bool,
 }
 
-pub fn run(config: &ResolvedConfig, ctx: &OutputContext, opts: &SuggestOptions) -> Result<()> {
-    let outputs = execute(config, opts)?;
-    render(ctx, &outputs)
+pub fn run(ctx: &CommandContext<'_>, opts: &SuggestOptions) -> Result<()> {
+    let outputs = execute(ctx.config(), opts)?;
+    render(ctx.output(), &outputs)
 }
 
 pub fn execute(config: &ResolvedConfig, opts: &SuggestOptions) -> Result<Vec<SuggestOutput>> {

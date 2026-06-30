@@ -1,4 +1,5 @@
 use crate::cli::CheckArgs;
+use crate::command_context::CommandContext;
 use crate::config::ResolvedConfig;
 use crate::graph::validation::{GraphValidationIssues, GraphValidationOptions};
 use crate::graph::{DuplicateInfo, Graph, GraphStats, OverlinkEntry, SelfLinkEntry};
@@ -129,9 +130,9 @@ impl From<&CheckArgs> for CheckOptions {
     }
 }
 
-pub fn run(config: &ResolvedConfig, ctx: &OutputContext, opts: &CheckOptions) -> Result<ExitCode> {
-    let output = execute(config, opts)?;
-    render(ctx, &output)
+pub fn run(ctx: &CommandContext<'_>, opts: &CheckOptions) -> Result<ExitCode> {
+    let output = execute(ctx.config(), opts)?;
+    render(ctx.output(), &output)
 }
 
 pub fn execute(config: &ResolvedConfig, opts: &CheckOptions) -> Result<CheckCommandOutput> {

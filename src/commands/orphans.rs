@@ -1,5 +1,6 @@
 use crate::cli::OrphansArgs;
 use crate::cli::OutputFormat;
+use crate::command_context::CommandContext;
 use crate::config::ResolvedConfig;
 use crate::graph::Graph;
 use crate::output::OutputContext;
@@ -107,9 +108,9 @@ pub fn render(ctx: &OutputContext, output: &OrphansOutput) -> Result<()> {
     Ok(())
 }
 
-pub fn run(config: &ResolvedConfig, ctx: &OutputContext, opts: &OrphansOptions) -> Result<()> {
-    let output = execute(config, opts)?;
-    render(ctx, &output)
+pub fn run(ctx: &CommandContext<'_>, opts: &OrphansOptions) -> Result<()> {
+    let output = execute(ctx.config(), opts)?;
+    render(ctx.output(), &output)
 }
 
 #[cfg(test)]

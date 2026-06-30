@@ -1,4 +1,5 @@
 use crate::cli::OutputFormat;
+use crate::command_context::CommandContext;
 use crate::config::ResolvedConfig;
 use crate::graph::Graph;
 use crate::graph::validation::{DuplicateUuidIssueKind, NoteValidationIssue, SelfLinkKind};
@@ -176,9 +177,9 @@ pub struct ValidateOptions {
     pub targets: Vec<String>,
 }
 
-pub fn run(config: &ResolvedConfig, ctx: &OutputContext, opts: &ValidateOptions) -> Result<()> {
-    let outputs = execute(config, opts)?;
-    render(ctx, &outputs)
+pub fn run(ctx: &CommandContext<'_>, opts: &ValidateOptions) -> Result<()> {
+    let outputs = execute(ctx.config(), opts)?;
+    render(ctx.output(), &outputs)
 }
 
 pub fn execute(config: &ResolvedConfig, opts: &ValidateOptions) -> Result<Vec<ValidateOutput>> {

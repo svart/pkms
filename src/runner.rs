@@ -57,39 +57,40 @@ fn command_name(command: &Command) -> &'static str {
 }
 
 fn dispatch(cli: &Cli, command_ctx: &CommandContext<'_>) -> Result<ExitCode> {
-    let cfg = command_ctx.config();
     let ctx = command_ctx.output();
     Ok(match &cli.command {
         Command::Check(args) => {
-            commands::check::run(cfg, ctx, &commands::check::CheckOptions::from(args))?
+            commands::check::run(command_ctx, &commands::check::CheckOptions::from(args))?
         }
         Command::Validate(args) => {
             let targets = input::resolve_targets(&args.target, args.from_stdin)?;
-            commands::validate::run(cfg, ctx, &commands::validate::ValidateOptions { targets })
-                .map(|()| ExitCode::SUCCESS)?
+            commands::validate::run(
+                command_ctx,
+                &commands::validate::ValidateOptions { targets },
+            )
+            .map(|()| ExitCode::SUCCESS)?
         }
         Command::Stats(args) => {
-            commands::stats::run(cfg, ctx, &commands::stats::StatsOptions::from(args))
+            commands::stats::run(command_ctx, &commands::stats::StatsOptions::from(args))
                 .map(|()| ExitCode::SUCCESS)?
         }
         Command::Orphans(args) => {
-            commands::orphans::run(cfg, ctx, &commands::orphans::OrphansOptions::from(args))
+            commands::orphans::run(command_ctx, &commands::orphans::OrphansOptions::from(args))
                 .map(|()| ExitCode::SUCCESS)?
         }
-        Command::Info => commands::info::run(cfg, ctx).map(|()| ExitCode::SUCCESS)?,
+        Command::Info => commands::info::run(command_ctx).map(|()| ExitCode::SUCCESS)?,
         Command::InitConfig(args) => init_config(args.db.as_deref(), ctx)?,
         Command::Resolve(args) => {
-            commands::resolve::run(cfg, ctx, &commands::resolve::ResolveOptions::from(args))
+            commands::resolve::run(command_ctx, &commands::resolve::ResolveOptions::from(args))
                 .map(|()| ExitCode::SUCCESS)?
         }
         Command::Fix(args) => {
-            commands::fix::run(cfg, ctx, &args.try_into()?).map(|()| ExitCode::SUCCESS)?
+            commands::fix::run(command_ctx, &args.try_into()?).map(|()| ExitCode::SUCCESS)?
         }
         Command::Suggest(args) => {
             let targets = input::resolve_targets(&args.target, args.from_stdin)?;
             commands::suggest::run(
-                cfg,
-                ctx,
+                command_ctx,
                 &commands::suggest::SuggestOptions {
                     targets,
                     limit: args.limit,
@@ -98,16 +99,17 @@ fn dispatch(cli: &Cli, command_ctx: &CommandContext<'_>) -> Result<ExitCode> {
             )
             .map(|()| ExitCode::SUCCESS)?
         }
-        Command::New(args) => commands::new::run(cfg, ctx, &commands::new::NewOptions::from(args))
-            .map(|()| ExitCode::SUCCESS)?,
+        Command::New(args) => {
+            commands::new::run(command_ctx, &commands::new::NewOptions::from(args))
+                .map(|()| ExitCode::SUCCESS)?
+        }
         Command::Extract(args) => {
-            commands::extract::run(cfg, ctx, &args.try_into()?).map(|()| ExitCode::SUCCESS)?
+            commands::extract::run(command_ctx, &args.try_into()?).map(|()| ExitCode::SUCCESS)?
         }
         Command::Get(args) => {
             let targets = input::resolve_targets(&args.target, args.from_stdin)?;
             commands::get::run(
-                cfg,
-                ctx,
+                command_ctx,
                 &commands::get::GetOptions {
                     targets,
                     show_links: args.links,
@@ -123,16 +125,15 @@ fn dispatch(cli: &Cli, command_ctx: &CommandContext<'_>) -> Result<ExitCode> {
             .map(|()| ExitCode::SUCCESS)?
         }
         Command::Query(args) => {
-            commands::query::run(cfg, ctx, &args.try_into()?).map(|()| ExitCode::SUCCESS)?
+            commands::query::run(command_ctx, &args.try_into()?).map(|()| ExitCode::SUCCESS)?
         }
-        Command::Task(args) => commands::task::run(cfg, ctx, &args.command)?,
+        Command::Task(args) => commands::task::run(command_ctx, &args.command)?,
         Command::Path(args) => {
             commands::path::run(command_ctx, &args.try_into()?).map(|()| ExitCode::SUCCESS)?
         }
         #[cfg(feature = "web")]
         Command::Serve(args) => commands::serve::run(
-            cfg,
-            ctx,
+            command_ctx,
             &commands::serve::ServeOptions {
                 target: args.target.clone(),
                 host: args.host.clone(),
