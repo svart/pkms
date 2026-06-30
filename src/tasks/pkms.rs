@@ -1,13 +1,12 @@
-use crate::commands::task_index::TaskRecord;
-use crate::commands::task_index::{
-    assign_canonical_ids, collect_agenda_records_on, collect_todo_records_on,
-};
 use crate::config::ResolvedConfig;
 use crate::parser::find_daily_file_date;
 use crate::tasks::clock::TaskClock;
 use crate::tasks::id::TaskId;
 use crate::tasks::model::{TaskDate, TaskItem, TaskSourceKind, TaskStatus};
 use crate::tasks::pkms_edit;
+use crate::tasks::task_index::{
+    TaskRecord, assign_canonical_ids, collect_agenda_records_on, collect_todo_records_on,
+};
 use crate::workspace::Workspace;
 use anyhow::{Context, Result};
 use chrono::NaiveDate;

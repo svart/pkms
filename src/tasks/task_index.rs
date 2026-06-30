@@ -1,7 +1,7 @@
-use crate::commands::task_common::{RowItem, extract_date, is_overdue_on};
 use crate::config::ResolvedConfig;
 use crate::corpus::Corpus;
 use crate::graph::Graph;
+use crate::org_date::parse_org_date;
 use crate::parser::{Heading, find_daily_file_date, strip_org_links};
 use crate::tasks::clock::TaskClock;
 use crate::tasks::filter::{
@@ -53,60 +53,6 @@ impl TaskRecord {
         self.scheduled_date.as_deref() == Some(date)
             || self.deadline_date.as_deref() == Some(date)
             || self.implicit_daily_file_date() == Some(date)
-    }
-}
-
-impl RowItem for TaskRecord {
-    fn id(&self) -> usize {
-        self.id
-    }
-
-    fn todo_state(&self) -> Option<&str> {
-        self.todo_state.as_deref()
-    }
-
-    fn priority(&self) -> Option<char> {
-        self.priority
-    }
-
-    fn title(&self) -> &str {
-        &self.title
-    }
-
-    fn heading_title(&self) -> &str {
-        &self.heading_title
-    }
-
-    fn project(&self) -> Option<&str> {
-        self.project.as_deref()
-    }
-
-    fn filetags(&self) -> &[String] {
-        &self.filetags
-    }
-
-    fn heading_tags(&self) -> &[String] {
-        &self.heading_tags
-    }
-
-    fn scheduled(&self) -> Option<&str> {
-        self.scheduled.as_deref()
-    }
-
-    fn deadline(&self) -> Option<&str> {
-        self.deadline.as_deref()
-    }
-
-    fn daily_file_date(&self) -> Option<&str> {
-        self.daily_file_date.as_deref()
-    }
-
-    fn scheduled_date_str(&self) -> Option<&str> {
-        self.scheduled_date.as_deref()
-    }
-
-    fn deadline_date_str(&self) -> Option<&str> {
-        self.deadline_date.as_deref()
     }
 }
 
@@ -335,4 +281,31 @@ fn combined_tags<'a>(tags: impl Iterator<Item = &'a String>) -> Vec<String> {
         }
     }
     result
+}
+
+fn extract_date(raw: Option<&String>) -> Option<String> {
+    let raw = raw.as_ref()?;
+    let parsed = parse_org_date(raw)?;
+    Some(parsed.base_date.format("%Y-%m-%d").to_string())
+}
+
+fn is_overdue_on(raw: Option<&String>, clock: TaskClock) -> bool {
+    let raw = match raw {
+        Some(r) => r,
+        None => return false,
+    };
+    let parsed = match parse_org_date(raw) {
+        Some(d) => d,
+        None => return false,
+    };
+    let compare_date = parsed.base_date_end.unwrap_or(parsed.base_date);
+    if compare_date < clock.today {
+        return true;
+    }
+    if compare_date == clock.today
+        && let Some(end_time) = parsed.time_end
+    {
+        return clock.now > end_time;
+    }
+    false
 }
