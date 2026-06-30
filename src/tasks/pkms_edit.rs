@@ -1,3 +1,4 @@
+use crate::org_edit::{heading_level, heading_level_at_index, heading_subtree_end_index};
 use crate::parser::HEADING_RE;
 use anyhow::{Context, Result};
 use std::path::Path;
@@ -124,12 +125,7 @@ fn append_child_org_entry_to_content(
     let mut insert_idx = lines.len();
 
     for (idx, line) in lines.iter().enumerate().skip(parent_idx + 1) {
-        let body = line.trim_end();
-        let Some(captures) = HEADING_RE.captures(body) else {
-            continue;
-        };
-        let level = captures.get(1).map_or("", |m| m.as_str()).len();
-        if level <= parent_level {
+        if heading_level(line).is_some_and(|level| level <= parent_level) {
             insert_idx = idx;
             break;
         }
@@ -180,14 +176,14 @@ fn move_org_subtree_between_files(
 
     let source_idx = line_index(source_line_number, "source task")?;
     let source_level = heading_level_in_lines(&source_lines, source_idx, source_line_number)?;
-    let source_end = subtree_end_index(&source_lines, source_idx, source_level);
+    let source_end = heading_subtree_end_index(&source_lines, source_idx, source_level);
     let mut subtree = source_lines[source_idx..source_end].to_vec();
     source_lines.drain(source_idx..source_end);
 
     let target_idx = line_index(target_line_number, "target task")?;
     let target_level = heading_level_in_lines(&target_lines, target_idx, target_line_number)?;
     relevel_subtree_lines(&mut subtree, target_level + 1, source_level)?;
-    let insert_idx = subtree_end_index(&target_lines, target_idx, target_level);
+    let insert_idx = heading_subtree_end_index(&target_lines, target_idx, target_level);
     target_lines.splice(insert_idx..insert_idx, subtree);
 
     std::fs::write(target_path, target_lines.concat())
@@ -223,7 +219,7 @@ fn move_org_subtree_in_lines(
 
     let source_level = heading_level_in_lines(lines, source_idx, source_line_number)?;
     let target_level = heading_level_in_lines(lines, target_idx, target_line_number)?;
-    let source_end = subtree_end_index(lines, source_idx, source_level);
+    let source_end = heading_subtree_end_index(lines, source_idx, source_level);
     if (source_idx..source_end).contains(&target_idx) {
         anyhow::bail!("Cannot move a task under one of its descendants.");
     }
@@ -238,7 +234,7 @@ fn move_org_subtree_in_lines(
     } else {
         target_idx
     };
-    let insert_idx = subtree_end_index(lines, adjusted_target_idx, target_level);
+    let insert_idx = heading_subtree_end_index(lines, adjusted_target_idx, target_level);
     lines.splice(insert_idx..insert_idx, subtree);
     Ok(insert_idx + 1)
 }
@@ -259,17 +255,17 @@ fn remove_org_subtree_dependency_in_lines(
     if source_level <= parent_level {
         anyhow::bail!("Task is not nested under the dependency parent.");
     }
-    let parent_end = subtree_end_index(lines, parent_idx, parent_level);
+    let parent_end = heading_subtree_end_index(lines, parent_idx, parent_level);
     if source_idx >= parent_end {
         anyhow::bail!("Task is not nested under the dependency parent.");
     }
 
-    let source_end = subtree_end_index(lines, source_idx, source_level);
+    let source_end = heading_subtree_end_index(lines, source_idx, source_level);
     let mut subtree = lines[source_idx..source_end].to_vec();
     relevel_subtree_lines(&mut subtree, parent_level, source_level)?;
     lines.drain(source_idx..source_end);
 
-    let insert_idx = subtree_end_index(lines, parent_idx, parent_level);
+    let insert_idx = heading_subtree_end_index(lines, parent_idx, parent_level);
     lines.splice(insert_idx..insert_idx, subtree);
     Ok(insert_idx + 1)
 }
@@ -299,20 +295,6 @@ fn relevel_subtree_lines(
     Ok(())
 }
 
-fn subtree_end_index(lines: &[String], heading_idx: usize, heading_level: usize) -> usize {
-    for (idx, line) in lines.iter().enumerate().skip(heading_idx + 1) {
-        let body = line.trim_end();
-        let Some(captures) = HEADING_RE.captures(body) else {
-            continue;
-        };
-        let level = captures.get(1).map_or("", |m| m.as_str()).len();
-        if level <= heading_level {
-            return idx;
-        }
-    }
-    lines.len()
-}
-
 fn heading_level_in_content(content: &str, line_number: usize) -> Result<usize> {
     let line_idx = line_index(line_number, "task")?;
     let lines = content.lines().map(str::to_string).collect::<Vec<_>>();
@@ -320,13 +302,7 @@ fn heading_level_in_content(content: &str, line_number: usize) -> Result<usize> 
 }
 
 fn heading_level_in_lines(lines: &[String], line_idx: usize, line_number: usize) -> Result<usize> {
-    let line = lines
-        .get(line_idx)
-        .ok_or_else(|| anyhow::anyhow!("Task line {line_number} no longer exists"))?;
-    let captures = HEADING_RE
-        .captures(line)
-        .ok_or_else(|| anyhow::anyhow!("Task line {line_number} is no longer an org heading"))?;
-    Ok(captures.get(1).map_or("", |m| m.as_str()).len())
+    heading_level_at_index(lines, line_idx, line_number, "Task")
 }
 
 fn line_index(line_number: usize, name: &str) -> Result<usize> {
