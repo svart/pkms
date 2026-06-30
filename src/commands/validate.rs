@@ -1,12 +1,10 @@
 use crate::cli::OutputFormat;
 use crate::config::ResolvedConfig;
-use crate::graph::{Graph, resolve_file_link_path};
-use crate::link_check::local_file_link_target_exists;
+use crate::graph::Graph;
+use crate::graph::validation::{DuplicateUuidIssueKind, NoteValidationIssue, SelfLinkKind};
 use crate::output::OutputContext;
-use crate::parser::{ID_PROPERTY_RE, Link, TITLE_RE, UUID_FORMAT_RE, validate_filetags_format};
 use anyhow::Result;
 use serde::Serialize;
-use std::collections::HashMap;
 use std::fmt::Write;
 use std::path::Path;
 
@@ -80,208 +78,75 @@ fn build_validate_output(
     }
 }
 
-fn check_uuid_format(node: &crate::graph::Node, issues: &mut Vec<String>) {
-    let uuid_parts: Vec<&str> = node.uuid.split('-').collect();
-    if uuid_parts.len() != 5 {
-        issues.push(format!("Invalid UUID format: {}", node.uuid));
-    }
-}
-
-fn check_title_presence(content: &str, issues: &mut Vec<String>) {
-    if !TITLE_RE.is_match(content) {
-        issues.push("Missing #+title: property".to_string());
-    }
-}
-
-fn check_filetags_formatting(content: &str, issues: &mut Vec<String>) {
-    for (raw, reason) in validate_filetags_format(content) {
-        issues.push(format!("Invalid filetags format '{}': {}", raw, reason));
-    }
-}
-
-fn check_duplicate_uuids(
-    content: &str,
-    graph: &Graph,
-    node: &crate::graph::Node,
-    issues: &mut Vec<String>,
-) {
-    let all_ids: Vec<String> = ID_PROPERTY_RE
-        .captures_iter(content)
-        .filter_map(|c| c.get(1))
-        .map(|m| m.as_str().to_string())
-        .collect();
-    if all_ids.len() > 1 {
-        let primary = &all_ids[0];
-        let mut seen_heading_ids = std::collections::HashSet::new();
-        let current_path = node.path.display().to_string();
-        for id in all_ids.iter().skip(1) {
-            if id == primary {
-                issues.push(format!(
-                    "Duplicate UUID: heading-level :ID: {} matches the note's primary :ID:",
-                    id
-                ));
-            } else if !seen_heading_ids.insert(id.clone()) {
-                issues.push(format!(
-                    "Duplicate UUID: heading-level :ID: {} is used by multiple headings in this note",
-                    id
-                ));
-            } else if let Some(duplicate) = graph.duplicates.duplicate_uuids.iter().find(|entry| {
-                entry.value == *id && entry.paths.iter().any(|path| path != &current_path)
-            }) {
-                let other_paths = duplicate
-                    .paths
-                    .iter()
-                    .filter(|path| *path != &current_path)
-                    .cloned()
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                issues.push(format!(
-                    "Duplicate UUID: heading-level :ID: {} belongs to another note ({})",
-                    id, other_paths
-                ));
-            }
+fn validation_issue_message(issue: &NoteValidationIssue) -> String {
+    match issue {
+        NoteValidationIssue::InvalidUuidFormat { uuid } => {
+            format!("Invalid UUID format: {uuid}")
         }
-    }
-}
-
-fn check_broken_links(
-    node: &crate::graph::Node,
-    graph: &Graph,
-    db_root: &Path,
-) -> (Vec<String>, Vec<String>) {
-    let mut broken_internal = Vec::new();
-    let mut broken_files = Vec::new();
-    for link in &node.outgoing {
-        match link {
-            Link::Internal(uuid) if !graph.nodes.contains_key(uuid) => {
-                broken_internal.push(uuid.clone());
-            }
-            Link::File(path_str)
-                if !local_file_link_target_exists(path_str, &node.path, db_root) =>
-            {
-                broken_files.push(path_str.clone());
-            }
-            _ => {}
+        NoteValidationIssue::MissingTitle => "Missing #+title: property".to_string(),
+        NoteValidationIssue::InvalidFiletagsFormat { raw, reason } => {
+            format!("Invalid filetags format '{raw}': {reason}")
         }
-    }
-    (broken_internal, broken_files)
-}
-
-fn check_self_links(
-    node: &crate::graph::Node,
-    target: &str,
-    target_is_uuid: bool,
-    is_heading_node: bool,
-    graph: &Graph,
-    db_root: &Path,
-    issues: &mut Vec<String>,
-) {
-    for link in &node.outgoing {
-        match link {
-            Link::Internal(uuid) if uuid == target || (!target_is_uuid && uuid == &node.uuid) => {
-                issues.push(format!("Self-link via id link: {}", uuid));
+        NoteValidationIssue::DuplicateUuid { uuid, kind } => match kind {
+            DuplicateUuidIssueKind::HeadingMatchesPrimary => {
+                format!("Duplicate UUID: heading-level :ID: {uuid} matches the note's primary :ID:")
             }
-            Link::File(path) => {
-                let resolved = resolve_file_link_path(path, &node.path, db_root);
-                if resolved == node.path {
-                    if target == node.uuid || !target_is_uuid || is_heading_node {
-                        issues.push(if is_heading_node {
-                            let primary_uuid = graph
-                                .heading_uuid_to_primary
-                                .get(&node.uuid)
-                                .cloned()
-                                .unwrap_or_else(|| node.uuid.clone());
-                            format!(
-                                "File link to own file; consider using id:{} instead of file:{}",
-                                primary_uuid, path
-                            )
-                        } else {
-                            format!("Self-link via file link to own file: {}", path)
-                        });
-                    } else {
-                        issues.push(format!(
-                            "File link to own file; consider using id:{} instead of file:{}",
-                            node.uuid, path
-                        ));
-                    }
-                }
+            DuplicateUuidIssueKind::HeadingRepeatedInNote => format!(
+                "Duplicate UUID: heading-level :ID: {uuid} is used by multiple headings in this note"
+            ),
+            DuplicateUuidIssueKind::HeadingBelongsToAnotherNote { other_paths } => format!(
+                "Duplicate UUID: heading-level :ID: {uuid} belongs to another note ({})",
+                other_paths.join(", ")
+            ),
+        },
+        NoteValidationIssue::SelfLink {
+            link_type,
+            target,
+            suggested_uuid,
+        } => match (link_type, suggested_uuid) {
+            (SelfLinkKind::Id, _) => format!("Self-link via id link: {target}"),
+            (SelfLinkKind::File, Some(uuid)) => {
+                format!("File link to own file; consider using id:{uuid} instead of file:{target}")
             }
-            _ => {}
-        }
-    }
-}
-
-fn check_overlinking(node: &crate::graph::Node, graph: &Graph, issues: &mut Vec<String>) {
-    let mut target_counts: HashMap<String, usize> = HashMap::new();
-    for link in &node.outgoing {
-        if let Link::Internal(uuid) = link {
-            *target_counts.entry(uuid.clone()).or_default() += 1;
-        }
-    }
-    for (uuid, count) in target_counts {
-        if count >= 2 {
-            let title = graph
-                .nodes
-                .get(&uuid)
-                .map(|n| n.title.as_str())
-                .unwrap_or("<unknown>");
-            issues.push(format!(
-                "Overlinking: {} links to \"{}\" ({}) \u{2014} consider removing duplicate links",
-                count, title, uuid
-            ));
-        }
+            (SelfLinkKind::File, None) => format!("Self-link via file link to own file: {target}"),
+        },
+        NoteValidationIssue::Overlink {
+            target_uuid,
+            target_title,
+            count,
+        } => format!(
+            "Overlinking: {count} links to \"{target_title}\" ({target_uuid}) — consider removing duplicate links"
+        ),
     }
 }
 
 fn validate_one(graph: &Graph, target: &str, db_root: &Path) -> Result<ValidateOutput> {
     let node = graph.resolve_target(target)?.clone();
-    let is_heading_node = graph.heading_uuid_to_primary.contains_key(&node.uuid);
-    let target_is_uuid = UUID_FORMAT_RE.is_match(target);
-    validate_node(
-        graph,
-        &node,
-        target,
-        target_is_uuid,
-        is_heading_node,
-        db_root,
-    )
+    validate_node(graph, &node, target, db_root)
 }
 
 fn validate_node(
     graph: &Graph,
     node: &crate::graph::Node,
     target: &str,
-    target_is_uuid: bool,
-    is_heading_node: bool,
     db_root: &Path,
 ) -> Result<ValidateOutput> {
-    let mut issues = Vec::new();
-
-    let content = graph
-        .results
+    let validation = graph.collect_node_validation_issues(node, target, db_root);
+    let mut issues: Vec<String> = validation
+        .issues
         .iter()
-        .find(|r| r.path == node.path)
-        .and_then(|r| r.raw_content.as_deref())
-        .map(std::string::ToString::to_string)
-        .unwrap_or_default();
-
-    check_uuid_format(node, &mut issues);
-    check_title_presence(&content, &mut issues);
-    check_filetags_formatting(&content, &mut issues);
-    check_duplicate_uuids(&content, graph, node, &mut issues);
-
-    let (broken_internal, broken_files) = check_broken_links(node, graph, db_root);
-
-    check_self_links(
-        node,
-        target,
-        target_is_uuid,
-        is_heading_node,
-        graph,
-        db_root,
-        &mut issues,
-    );
-    check_overlinking(node, graph, &mut issues);
+        .map(validation_issue_message)
+        .collect();
+    let broken_internal: Vec<String> = validation
+        .broken_internal_links
+        .iter()
+        .map(|issue| issue.target_uuid.clone())
+        .collect();
+    let broken_files: Vec<String> = validation
+        .broken_file_links
+        .iter()
+        .map(|issue| issue.target_path.clone())
+        .collect();
 
     let incoming = graph.backlinks.get(&node.uuid).cloned().unwrap_or_default();
 
