@@ -1,6 +1,8 @@
 use crate::tasks::id::TaskId;
 use crate::tasks::model::{TaskDateValue, TaskSourceKind};
-use crate::tasks::modifiers::{TaskModifierSpec, is_clear_value, parse_task_date_arg_on};
+use crate::tasks::modifiers::{
+    TaskDateArg, TaskModifierSpec, is_clear_value, parse_task_date_arg_on,
+};
 use anyhow::{Result, bail};
 use chrono::NaiveDate;
 use std::process::ExitCode;
@@ -57,7 +59,7 @@ pub(in crate::commands::task) fn run_add(
     runtime: TaskRuntime<'_>,
     tokens: &[String],
 ) -> Result<()> {
-    let spec = TaskModifierSpec::parse(tokens)?;
+    let spec = TaskModifierSpec::parse_on(tokens, runtime.clock.today)?;
     match spec.source_or_default() {
         TaskSourceKind::Pkms => pkms::add(runtime.config, runtime.output, &spec, runtime.clock),
         TaskSourceKind::Todoist => {
@@ -91,7 +93,7 @@ pub(in crate::commands::task) fn run_mod(
     id: &str,
     modifiers: &[String],
 ) -> Result<ExitCode> {
-    let spec = TaskModifierSpec::parse_mod(modifiers)?;
+    let spec = TaskModifierSpec::parse_mod_on(modifiers, runtime.clock.today)?;
     match id.parse::<TaskId>()? {
         TaskId::Pkms(canonical_id) => pkms::mod_task(
             runtime.config,
@@ -134,18 +136,8 @@ pub(super) fn mod_optional_text(value: Option<&str>) -> Option<Option<String>> {
     })
 }
 
-pub(super) fn mod_date(
-    name: &str,
-    value: Option<&str>,
-    today: NaiveDate,
-) -> Result<Option<Option<TaskDateValue>>> {
-    let Some(value) = value.map(str::trim) else {
-        return Ok(None);
-    };
-    if is_clear_value(value) {
-        return Ok(Some(None));
-    }
-    Ok(Some(Some(parse_task_date_arg_on(name, value, today)?)))
+pub(super) fn mod_date(value: Option<&TaskDateArg>) -> Option<Option<TaskDateValue>> {
+    value.map(|date| date.as_value().cloned())
 }
 
 pub(super) fn parse_mutation_due_date(value: &str, today: NaiveDate) -> Result<String> {

@@ -3,9 +3,9 @@ use crate::graph::Graph;
 use crate::output::OutputContext;
 use crate::tasks::clock::TaskClock;
 use crate::tasks::id::TaskId;
-use crate::tasks::model::{TaskPriority, TaskProperty, TaskState};
+use crate::tasks::model::{TaskDateValue, TaskPriority, TaskProperty, TaskState};
 use crate::tasks::modifiers::{
-    TaskModifierSpec, TaskPriorityArg, org_date, validate_pkms_task_date_arg_on,
+    TaskDateArg, TaskDependencyArg, TaskModifierSpec, TaskPriorityArg, org_date,
 };
 use crate::tasks::pkms::{self, PkmsInboxTarget};
 use crate::tasks::pkms_mutation;
@@ -34,8 +34,8 @@ pub(super) fn mod_task(
         title,
         priority: mod_pkms_priority(spec)?,
         tags: spec.labels.clone(),
-        scheduled: mod_date("schedule", spec.due.as_deref(), clock.today)?,
-        deadline: mod_date("deadline", spec.deadline.as_deref(), clock.today)?,
+        scheduled: mod_date(spec.due.as_ref()),
+        deadline: mod_date(spec.deadline.as_ref()),
         project: mod_optional_text(spec.project.as_deref()),
         description: spec
             .description
@@ -129,17 +129,14 @@ enum DependencyMod {
 }
 
 fn mod_dependency(spec: &TaskModifierSpec) -> Result<Option<DependencyMod>> {
-    let Some(raw) = spec.dependency.as_deref() else {
-        return Ok(None);
-    };
-    if raw.trim().is_empty() {
-        return Ok(Some(DependencyMod::Clear));
+    match spec.dependency.as_ref() {
+        None => Ok(None),
+        Some(TaskDependencyArg::Clear) => Ok(Some(DependencyMod::Clear)),
+        Some(TaskDependencyArg::Set(TaskId::Pkms(canonical_id))) => {
+            Ok(Some(DependencyMod::Set(*canonical_id)))
+        }
+        Some(TaskDependencyArg::Set(_)) => bail!("dep is available only for PKMS task IDs."),
     }
-    let task_id = raw.parse::<TaskId>()?;
-    let TaskId::Pkms(canonical_id) = task_id else {
-        bail!("dep is available only for PKMS task IDs.");
-    };
-    Ok(Some(DependencyMod::Set(canonical_id)))
 }
 
 fn current_dependency_parent(
@@ -258,10 +255,13 @@ pub(super) fn add(
         bail!("note and dep cannot be used together for PKMS task creation.");
     }
 
-    let (path, line_number) = if let Some(parent_id) = spec.dependency.as_deref() {
-        add_dependency_task(config, spec, clock, parent_id)?
-    } else {
-        add_inbox_task(config, spec, clock)?
+    let (path, line_number) = match spec.dependency.as_ref() {
+        Some(TaskDependencyArg::Set(TaskId::Pkms(parent_id))) => {
+            add_dependency_task(config, spec, *parent_id)?
+        }
+        Some(TaskDependencyArg::Set(_)) => bail!("dep is available only for PKMS task IDs."),
+        Some(TaskDependencyArg::Clear) => bail!("dep requires a PKMS task ID for task creation."),
+        None => add_inbox_task(config, spec, clock)?,
     };
     let item = pkms::find_task_item_on(config, &path, line_number, clock)?.with_context(|| {
         format!(
@@ -285,32 +285,26 @@ fn add_inbox_task(
         PkmsInboxTarget::Note(_) => 1,
         PkmsInboxTarget::Daily { .. } => 2,
     };
-    let entry = format_task_entry(config, spec, clock, heading_level)?;
+    let entry = format_task_entry(config, spec, heading_level)?;
     pkms::append_inbox_entry(&inbox_target, &entry)
 }
 
 fn add_dependency_task(
     config: &ResolvedConfig,
     spec: &TaskModifierSpec,
-    clock: TaskClock,
-    parent_id: &str,
+    canonical_id: usize,
 ) -> Result<(PathBuf, usize)> {
-    let task_id = parent_id.parse::<TaskId>()?;
-    let TaskId::Pkms(canonical_id) = task_id else {
-        bail!("dep is available only for PKMS task IDs.");
-    };
     let graph = Graph::load(config)?;
     let (path, line_number) = graph.resolve_canonical_task_id(config, canonical_id)?;
     let path = PathBuf::from(path);
     let parent_level = pkms::heading_level_at(&path, line_number)?;
-    let entry = format_task_entry(config, spec, clock, parent_level + 1)?;
+    let entry = format_task_entry(config, spec, parent_level + 1)?;
     pkms::append_child_entry(&path, line_number, &entry)
 }
 
 fn format_task_entry(
     config: &ResolvedConfig,
     spec: &TaskModifierSpec,
-    clock: TaskClock,
     heading_level: usize,
 ) -> Result<String> {
     let title = add_title(spec)?;
@@ -332,16 +326,15 @@ fn format_task_entry(
 
     let level = "*".repeat(heading_level);
     let mut entry = format!("{level} {state}{priority} {title}{tags}\n");
-    let due = validate_pkms_task_date_arg_on("due", spec.due.as_deref(), clock.today)?;
-    let deadline =
-        validate_pkms_task_date_arg_on("deadline", spec.deadline.as_deref(), clock.today)?;
+    let due = add_date("due", spec.due.as_ref())?;
+    let deadline = add_date("deadline", spec.deadline.as_ref())?;
     if due.is_some() || deadline.is_some() {
         let mut planning = Vec::new();
         if let Some(due) = due {
-            planning.push(format!("SCHEDULED: {}", org_date(&due)?));
+            planning.push(format!("SCHEDULED: {}", org_date(due)?));
         }
         if let Some(deadline) = deadline {
-            planning.push(format!("DEADLINE: {}", org_date(&deadline)?));
+            planning.push(format!("DEADLINE: {}", org_date(deadline)?));
         }
         entry.push_str(&format!("{}\n", planning.join(" ")));
     }
@@ -357,6 +350,14 @@ fn format_task_entry(
     }
 
     Ok(entry)
+}
+
+fn add_date<'a>(name: &str, value: Option<&'a TaskDateArg>) -> Result<Option<&'a TaskDateValue>> {
+    match value {
+        None => Ok(None),
+        Some(TaskDateArg::Set(date)) => Ok(Some(date)),
+        Some(TaskDateArg::Clear) => bail!("{name} cannot be cleared when creating a task."),
+    }
 }
 
 fn add_title(spec: &TaskModifierSpec) -> Result<&str> {

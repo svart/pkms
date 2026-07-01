@@ -10,7 +10,7 @@ use crate::cli::OutputFormat;
 #[cfg(feature = "todoist")]
 use crate::tasks::model::{TaskPriority, TaskProperty};
 #[cfg(feature = "todoist")]
-use crate::tasks::modifiers::{TaskPriorityArg, org_date, parse_task_date_arg_on};
+use crate::tasks::modifiers::{TaskDateArg, TaskPriorityArg, org_date};
 #[cfg(feature = "todoist")]
 use anyhow::Context;
 #[cfg(feature = "todoist")]
@@ -72,7 +72,7 @@ pub(super) fn add(
     config: &ResolvedConfig,
     ctx: &OutputContext,
     spec: &TaskModifierSpec,
-    clock: TaskClock,
+    _clock: TaskClock,
 ) -> Result<()> {
     if spec.state.is_some() {
         bail!("state is available only for PKMS task creation.");
@@ -84,7 +84,7 @@ pub(super) fn add(
         bail!("note is available only for PKMS task creation.");
     }
     if is_structured_add(spec) {
-        return create_structured_task(config, ctx, spec, clock);
+        return create_structured_task(config, ctx, spec);
     }
     quick_add_task(config, ctx, spec)
 }
@@ -117,7 +117,6 @@ fn create_structured_task(
     config: &ResolvedConfig,
     ctx: &OutputContext,
     spec: &TaskModifierSpec,
-    clock: TaskClock,
 ) -> Result<()> {
     if spec.title.is_some() && spec.text.is_some() {
         bail!("Structured Todoist task creation uses title: or positional text, not both.");
@@ -129,8 +128,8 @@ fn create_structured_task(
         .filter(|title| !title.trim().is_empty())
         .ok_or_else(|| anyhow::anyhow!("Structured Todoist task creation requires title:"))?;
     let description = spec.description.clone();
-    let due_date = validate_date_arg("due", spec.due.as_deref(), clock.today)?;
-    let deadline_date = validate_date_arg("deadline", spec.deadline.as_deref(), clock.today)?;
+    let due_date = add_date("due", spec.due.as_ref())?;
+    let deadline_date = add_date("deadline", spec.deadline.as_ref())?;
     let priority = spec.priority.map(add_priority).transpose()?;
     let token = crate::tasks::todoist::ensure_enabled(config)?;
     let client =
@@ -255,7 +254,7 @@ pub(super) fn mod_task(
         );
         request.insert("priority".to_string(), serde_json::json!(priority));
     }
-    if let Some(date) = mod_date("schedule", spec.due.as_deref(), clock.today)? {
+    if let Some(date) = mod_date(spec.due.as_ref()) {
         if old_item.scheduled_date_str() != date.as_deref() {
             let new_raw = date.as_ref().map(org_date).transpose()?;
             push_change(
@@ -272,7 +271,7 @@ pub(super) fn mod_task(
             }),
         );
     }
-    if let Some(date) = mod_date("deadline", spec.deadline.as_deref(), clock.today)? {
+    if let Some(date) = mod_date(spec.deadline.as_ref()) {
         if old_item.deadline_date_str() != date.as_deref() {
             let new_raw = date.as_ref().map(org_date).transpose()?;
             push_change(
@@ -444,15 +443,12 @@ fn created_task_id(response: &serde_json::Value) -> Result<String> {
 }
 
 #[cfg(feature = "todoist")]
-fn validate_date_arg(
-    name: &str,
-    value: Option<&str>,
-    today: chrono::NaiveDate,
-) -> Result<Option<String>> {
-    value
-        .map(|value| parse_task_date_arg_on(name, value, today))
-        .transpose()
-        .map(|date| date.map(|date| date.to_string()))
+fn add_date(name: &str, value: Option<&TaskDateArg>) -> Result<Option<String>> {
+    match value {
+        None => Ok(None),
+        Some(TaskDateArg::Set(date)) => Ok(Some(date.to_string())),
+        Some(TaskDateArg::Clear) => bail!("{name} cannot be cleared when creating a task."),
+    }
 }
 
 #[cfg(feature = "todoist")]

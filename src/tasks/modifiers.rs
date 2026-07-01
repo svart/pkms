@@ -2,27 +2,29 @@ use anyhow::{Result, bail};
 use chrono::{Datelike, NaiveDate, NaiveDateTime, Weekday};
 
 use crate::tasks::clock::TaskClock;
+use crate::tasks::id::TaskId;
 use crate::tasks::model::{TaskDateValue, TaskPriority, TaskSourceKind, TaskState};
-use std::ops::Deref;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TaskDateArg(String);
-
-impl TaskDateArg {
-    pub fn new(value: impl Into<String>) -> Self {
-        Self(value.into())
-    }
-
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
+pub enum TaskDateArg {
+    Set(TaskDateValue),
+    Clear,
 }
 
-impl Deref for TaskDateArg {
-    type Target = str;
+impl TaskDateArg {
+    fn parse(name: &str, value: &str, today: NaiveDate, allow_clear: bool) -> Result<Self> {
+        let value = value.trim();
+        if allow_clear && is_clear_value(value) {
+            return Ok(TaskDateArg::Clear);
+        }
+        parse_task_date_arg_on(name, value, today).map(TaskDateArg::Set)
+    }
 
-    fn deref(&self) -> &Self::Target {
-        self.as_str()
+    pub fn as_value(&self) -> Option<&TaskDateValue> {
+        match self {
+            TaskDateArg::Set(value) => Some(value),
+            TaskDateArg::Clear => None,
+        }
     }
 }
 
@@ -43,6 +45,42 @@ impl TaskPriorityArg {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TaskDependencyArg {
+    Set(TaskId),
+    Clear,
+}
+
+impl TaskDependencyArg {
+    fn parse(value: &str) -> Result<Self> {
+        let value = value.trim();
+        if value.is_empty() {
+            Ok(TaskDependencyArg::Clear)
+        } else {
+            value.parse().map(TaskDependencyArg::Set)
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TaskModifierMode {
+    Add,
+    Mod,
+}
+
+impl TaskModifierMode {
+    fn due_name(self) -> &'static str {
+        match self {
+            TaskModifierMode::Add => "due",
+            TaskModifierMode::Mod => "schedule",
+        }
+    }
+
+    fn allows_date_clear(self) -> bool {
+        matches!(self, TaskModifierMode::Mod)
+    }
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct TaskModifierSpec {
     pub source: Option<TaskSourceKind>,
@@ -55,40 +93,50 @@ pub struct TaskModifierSpec {
     pub state: Option<TaskState>,
     pub description: Option<String>,
     pub note: Option<String>,
-    pub dependency: Option<String>,
+    pub dependency: Option<TaskDependencyArg>,
     pub text: Option<String>,
 }
 
 impl TaskModifierSpec {
     pub fn parse(tokens: &[String]) -> Result<Self> {
+        Self::parse_on(tokens, TaskClock::now().today)
+    }
+
+    pub fn parse_on(tokens: &[String], today: NaiveDate) -> Result<Self> {
+        Self::parse_with_mode(tokens, today, TaskModifierMode::Add)
+    }
+
+    pub fn parse_mod(tokens: &[String]) -> Result<Self> {
+        Self::parse_mod_on(tokens, TaskClock::now().today)
+    }
+
+    pub fn parse_mod_on(tokens: &[String], today: NaiveDate) -> Result<Self> {
+        Self::parse_with_mode(tokens, today, TaskModifierMode::Mod)
+    }
+
+    fn parse_with_mode(
+        tokens: &[String],
+        today: NaiveDate,
+        mode: TaskModifierMode,
+    ) -> Result<Self> {
         let mut spec = TaskModifierSpec::default();
         let mut text = Vec::new();
 
         for token in tokens {
-            if apply_modifier(&mut spec, token)? {
+            if apply_modifier(&mut spec, token, today, mode)? {
                 continue;
+            }
+            if mode == TaskModifierMode::Mod {
+                bail!(
+                    "Unknown task modifier '{}'. Use title:<text> to change a task title.",
+                    token
+                );
             }
             text.push(token.clone());
         }
 
         if !text.is_empty() {
             set_once(&mut spec.text, "text", text.join(" "))?;
-        }
-
-        Ok(spec)
-    }
-
-    pub fn parse_mod(tokens: &[String]) -> Result<Self> {
-        let mut spec = TaskModifierSpec::default();
-
-        for token in tokens {
-            if apply_modifier(&mut spec, token)? {
-                continue;
-            }
-            bail!(
-                "Unknown task modifier '{}'. Use title:<text> to change a task title.",
-                token
-            );
         }
 
         Ok(spec)
@@ -106,7 +154,12 @@ impl TaskModifierSpec {
     }
 }
 
-fn apply_modifier(spec: &mut TaskModifierSpec, token: &str) -> Result<bool> {
+fn apply_modifier(
+    spec: &mut TaskModifierSpec,
+    token: &str,
+    today: NaiveDate,
+    mode: TaskModifierMode,
+) -> Result<bool> {
     let Some((key, value)) = token.split_once(':') else {
         return Ok(false);
     };
@@ -129,10 +182,18 @@ fn apply_modifier(spec: &mut TaskModifierSpec, token: &str) -> Result<bool> {
                 .extend(split_list(value));
         }
         Some(ModifierKey::Due) => {
-            set_once(&mut spec.due, "schedule", TaskDateArg::new(value))?;
+            set_once(
+                &mut spec.due,
+                "schedule",
+                TaskDateArg::parse(mode.due_name(), value, today, mode.allows_date_clear())?,
+            )?;
         }
         Some(ModifierKey::Deadline) => {
-            set_once(&mut spec.deadline, "deadline", TaskDateArg::new(value))?;
+            set_once(
+                &mut spec.deadline,
+                "deadline",
+                TaskDateArg::parse("deadline", value, today, mode.allows_date_clear())?,
+            )?;
         }
         Some(ModifierKey::Project) => {
             set_once(&mut spec.project, "project", value.to_string())?;
@@ -154,7 +215,11 @@ fn apply_modifier(spec: &mut TaskModifierSpec, token: &str) -> Result<bool> {
             set_once(&mut spec.note, "note", value.to_string())?;
         }
         Some(ModifierKey::Dependency) => {
-            set_once(&mut spec.dependency, "dep", value.to_string())?;
+            set_once(
+                &mut spec.dependency,
+                "dep",
+                TaskDependencyArg::parse(value)?,
+            )?;
         }
         None => return Ok(false),
     }
@@ -401,23 +466,6 @@ fn upcoming_weekday(today: NaiveDate, weekday: Weekday) -> NaiveDate {
     today + chrono::Duration::days(days_until)
 }
 
-pub fn validate_pkms_task_date_arg(
-    name: &str,
-    value: Option<&str>,
-) -> Result<Option<TaskDateValue>> {
-    validate_pkms_task_date_arg_on(name, value, TaskClock::now().today)
-}
-
-pub fn validate_pkms_task_date_arg_on(
-    name: &str,
-    value: Option<&str>,
-    today: NaiveDate,
-) -> Result<Option<TaskDateValue>> {
-    value
-        .map(|value| parse_task_date_arg_on(name, value, today))
-        .transpose()
-}
-
 pub fn org_date(date: &TaskDateValue) -> Result<String> {
     if let Ok(datetime) = NaiveDateTime::parse_from_str(date.as_str(), "%Y-%m-%d %H:%M") {
         return Ok(format!("<{}>", datetime.format("%Y-%m-%d %a %H:%M")));
@@ -432,6 +480,12 @@ mod tests {
 
     fn tokens(values: &[&str]) -> Vec<String> {
         values.iter().map(|value| value.to_string()).collect()
+    }
+
+    fn date_value(value: Option<&TaskDateArg>) -> Option<&str> {
+        value
+            .and_then(TaskDateArg::as_value)
+            .map(TaskDateValue::as_str)
     }
 
     #[test]
@@ -456,13 +510,53 @@ mod tests {
             spec.labels,
             Some(vec!["phone".to_string(), "urgent".to_string()])
         );
-        assert_eq!(spec.due.as_deref(), Some("2026-05-27"));
-        assert_eq!(spec.deadline.as_deref(), Some("2026-05-28"));
+        assert_eq!(date_value(spec.due.as_ref()), Some("2026-05-27"));
+        assert_eq!(date_value(spec.deadline.as_ref()), Some("2026-05-28"));
         assert_eq!(spec.priority, Some(TaskPriorityArg::Set(TaskPriority::A)));
         assert_eq!(spec.project.as_deref(), Some("Inbox"));
         assert_eq!(spec.description.as_deref(), Some("Follow up"));
         assert_eq!(spec.state.as_deref(), Some("waiting"));
-        assert_eq!(spec.dependency.as_deref(), Some("2"));
+        assert_eq!(
+            spec.dependency,
+            Some(TaskDependencyArg::Set(crate::tasks::id::TaskId::Pkms(2)))
+        );
+    }
+
+    #[test]
+    fn parses_add_dates_into_values_against_explicit_today() {
+        let today = NaiveDate::from_ymd_opt(2026, 5, 27).unwrap();
+        let spec =
+            TaskModifierSpec::parse_on(&tokens(&["sch:tom", "dead:2026-05-29"]), today).unwrap();
+
+        assert_eq!(
+            spec.due,
+            Some(TaskDateArg::Set(TaskDateValue::from("2026-05-28")))
+        );
+        assert_eq!(
+            spec.deadline,
+            Some(TaskDateArg::Set(TaskDateValue::from("2026-05-29")))
+        );
+    }
+
+    #[test]
+    fn parses_mod_date_clears_as_typed_values() {
+        let today = NaiveDate::from_ymd_opt(2026, 5, 27).unwrap();
+        let spec = TaskModifierSpec::parse_mod_on(&tokens(&["sch:none", "dead:"]), today).unwrap();
+
+        assert_eq!(spec.due, Some(TaskDateArg::Clear));
+        assert_eq!(spec.deadline, Some(TaskDateArg::Clear));
+    }
+
+    #[test]
+    fn parses_dependency_modifiers_as_typed_values() {
+        let spec = TaskModifierSpec::parse_mod(&tokens(&["dep:p2"])).unwrap();
+        assert_eq!(
+            spec.dependency,
+            Some(TaskDependencyArg::Set(crate::tasks::id::TaskId::Pkms(2)))
+        );
+
+        let spec = TaskModifierSpec::parse_mod(&tokens(&["dep:"])).unwrap();
+        assert_eq!(spec.dependency, Some(TaskDependencyArg::Clear));
     }
 
     #[test]
@@ -486,8 +580,8 @@ mod tests {
             spec.labels,
             Some(vec!["phone".to_string(), "urgent".to_string()])
         );
-        assert_eq!(spec.due.as_deref(), Some("2026-05-27"));
-        assert_eq!(spec.deadline.as_deref(), Some("2026-05-28"));
+        assert_eq!(date_value(spec.due.as_ref()), Some("2026-05-27"));
+        assert_eq!(date_value(spec.deadline.as_ref()), Some("2026-05-28"));
         assert_eq!(spec.project.as_deref(), Some("Inbox"));
         assert_eq!(spec.priority, Some(TaskPriorityArg::Set(TaskPriority::A)));
         assert_eq!(spec.description.as_deref(), Some("Follow up"));
