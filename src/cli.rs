@@ -1,3 +1,4 @@
+use crate::tokens;
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use std::path::PathBuf;
 
@@ -14,6 +15,12 @@ pub enum OutputFormat {
 
 fn parse_delimited_string(value: &str) -> Result<String, String> {
     Ok(value.trim().to_string())
+}
+
+fn parse_encoding(value: &str) -> Result<tokens::Encoding, String> {
+    value
+        .parse()
+        .map_err(|()| format!("unknown token encoding '{value}'"))
 }
 
 #[derive(Parser)]
@@ -304,9 +311,10 @@ pub struct GetArgs {
     #[arg(
         long,
         default_value = "cl100k_base",
+        value_parser = parse_encoding,
         help = "Token encoding: cl100k_base (GPT-4) or o200k_base (GPT-4o)"
     )]
-    pub encoding: String,
+    pub encoding: tokens::Encoding,
 }
 
 #[derive(Debug, Args)]
@@ -403,17 +411,23 @@ mod tests {
     }
 
     #[test]
-    fn get_keeps_encoding_raw_for_structured_command_errors() {
-        let cli = parse(&["pkms", "get", "Note A", "--encoding", "unknown"]);
-        let Command::Get(args) = cli.command else {
-            panic!("expected get command");
-        };
-        assert_eq!(args.encoding, "unknown");
-
+    fn get_parses_encoding_at_cli_boundary() {
         let cli = parse(&["pkms", "get", "Note A"]);
         let Command::Get(args) = cli.command else {
             panic!("expected get command");
         };
-        assert_eq!(args.encoding, "cl100k_base");
+        assert_eq!(args.encoding, tokens::Encoding::Cl100kBase);
+
+        let cli = parse(&["pkms", "get", "Note A", "--encoding", "o200k"]);
+        let Command::Get(args) = cli.command else {
+            panic!("expected get command");
+        };
+        assert_eq!(args.encoding, tokens::Encoding::O200kBase);
+
+        let err = match Cli::try_parse_from(["pkms", "get", "Note A", "--encoding", "unknown"]) {
+            Ok(_) => panic!("expected invalid encoding to fail at CLI boundary"),
+            Err(err) => err,
+        };
+        assert_eq!(err.kind(), clap::error::ErrorKind::ValueValidation);
     }
 }

@@ -159,7 +159,7 @@ fn test_command_error_ndjson_is_single_line() {
 }
 
 #[test]
-fn test_invalid_get_encoding_json_error_uses_command_error_contract() {
+fn test_invalid_get_encoding_is_rejected_at_cli_boundary() {
     let (_dir, root) = setup_db();
     let args = [
         "--db",
@@ -173,13 +173,16 @@ fn test_invalid_get_encoding_json_error_uses_command_error_contract() {
     ];
     let (stdout, stderr, status) = run(&args);
 
-    assert_eq!(status.code(), Some(1));
+    assert_eq!(status.code(), Some(2));
+    assert!(stdout.is_empty(), "unexpected stdout: {stdout}");
     assert!(
-        !stderr.contains("invalid value"),
-        "unexpected clap error: {stderr}"
+        stderr.contains("invalid value 'unknown'"),
+        "stderr: {stderr}"
     );
-    let value = assert_json_error_output(&args, &stdout);
-    assert_eq!(value["error"], "Unknown encoding: unknown");
+    assert!(
+        stderr.contains("unknown token encoding 'unknown'"),
+        "stderr: {stderr}"
+    );
 }
 
 #[test]

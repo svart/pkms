@@ -5,7 +5,6 @@ use crate::commands;
 use crate::config;
 use crate::input;
 use crate::output::OutputContext;
-use crate::tokens;
 use anyhow::Result;
 use std::process::ExitCode;
 
@@ -88,10 +87,7 @@ fn dispatch(cli: &Cli, command_ctx: &CommandContext<'_>) -> Result<ExitCode> {
                     show_headings: args.headings,
                     heading: args.heading.clone(),
                     no_content: args.no_content,
-                    encoding: args
-                        .encoding
-                        .parse::<tokens::Encoding>()
-                        .map_err(|_| anyhow::anyhow!("Unknown encoding: {}", args.encoding))?,
+                    encoding: args.encoding,
                 },
             ))?
         }

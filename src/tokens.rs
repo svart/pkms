@@ -89,7 +89,9 @@ mod tests {
     #[test]
     fn test_encoding_from_str() {
         assert_eq!("cl100k_base".parse::<Encoding>(), Ok(Encoding::Cl100kBase));
+        assert_eq!("cl100k".parse::<Encoding>(), Ok(Encoding::Cl100kBase));
         assert_eq!("CL100K".parse::<Encoding>(), Ok(Encoding::Cl100kBase));
+        assert_eq!("o200k_base".parse::<Encoding>(), Ok(Encoding::O200kBase));
         assert_eq!("o200k".parse::<Encoding>(), Ok(Encoding::O200kBase));
         assert!("invalid".parse::<Encoding>().is_err());
     }
