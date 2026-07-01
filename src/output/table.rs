@@ -18,6 +18,21 @@ const TAG_WEIGHT: f64 = 0.20;
 const NOTE_WEIGHT: f64 = 0.35;
 const HEADING_WEIGHT: f64 = 0.45;
 
+#[derive(Clone, Copy)]
+struct ColumnWidths<'a> {
+    widths: &'a [usize],
+}
+
+impl<'a> ColumnWidths<'a> {
+    fn new(widths: &'a [usize]) -> Self {
+        Self { widths }
+    }
+
+    fn for_column(self, column: Column) -> usize {
+        self.widths[column.index()]
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct TableLayout {
     column_widths: Vec<(Column, usize)>,
@@ -28,11 +43,11 @@ impl TableLayout {
         Self { column_widths }
     }
 
-    fn from_max_widths(enabled_columns: &[Column], max_widths: &[usize]) -> Self {
+    fn from_max_widths(enabled_columns: &[Column], max_widths: ColumnWidths<'_>) -> Self {
         Self::new(
             enabled_columns
                 .iter()
-                .map(|c| (*c, max_widths[*c as usize]))
+                .map(|c| (*c, max_widths.for_column(*c)))
                 .collect(),
         )
     }
@@ -99,6 +114,7 @@ fn compute_layout(
     max_widths: &[usize],
     term_w: usize,
 ) -> Option<TableLayout> {
+    let max_widths = ColumnWidths::new(max_widths);
     let budget = TableLayoutBudget::new(enabled_columns, max_widths, term_w);
     let wrap_cols = wrap_columns(enabled_columns);
 
@@ -130,11 +146,11 @@ struct TableLayoutBudget {
 }
 
 impl TableLayoutBudget {
-    fn new(enabled_columns: &[Column], max_widths: &[usize], term_w: usize) -> Self {
+    fn new(enabled_columns: &[Column], max_widths: ColumnWidths<'_>, term_w: usize) -> Self {
         let fixed_width: usize = enabled_columns
             .iter()
             .filter(|c| is_fixed_column(**c))
-            .map(|c| max_widths[*c as usize])
+            .map(|c| max_widths.for_column(*c))
             .sum();
         let padding = table_padding_width(enabled_columns.len());
 
@@ -154,7 +170,7 @@ fn wrap_columns(enabled_columns: &[Column]) -> Vec<Column> {
 
 fn compute_wrap_widths(
     wrap_cols: &[Column],
-    max_widths: &[usize],
+    max_widths: ColumnWidths<'_>,
     available: usize,
 ) -> Option<Vec<(Column, usize)>> {
     let mut widths = allocate_wrap_widths(wrap_cols, available);
@@ -193,7 +209,7 @@ fn allocate_wrap_widths(wrap_cols: &[Column], available: usize) -> Vec<(Column, 
 
 fn cap_and_redistribute_wrap_widths(
     widths: &mut [(Column, usize)],
-    max_widths: &[usize],
+    max_widths: ColumnWidths<'_>,
     available: usize,
 ) {
     loop {
@@ -213,11 +229,14 @@ fn cap_and_redistribute_wrap_widths(
     }
 }
 
-fn cap_wrap_widths_to_content(widths: &mut [(Column, usize)], max_widths: &[usize]) -> bool {
+fn cap_wrap_widths_to_content(
+    widths: &mut [(Column, usize)],
+    max_widths: ColumnWidths<'_>,
+) -> bool {
     let mut any_capped = false;
 
     for (col, w) in widths.iter_mut() {
-        let max_cw = max_widths[*col as usize];
+        let max_cw = max_widths.for_column(*col);
         if *w > max_cw {
             *w = max_cw;
             any_capped = true;
@@ -229,13 +248,13 @@ fn cap_wrap_widths_to_content(widths: &mut [(Column, usize)], max_widths: &[usiz
 
 fn redistribute_leftover_to_uncapped_wrap_widths(
     widths: &mut [(Column, usize)],
-    max_widths: &[usize],
+    max_widths: ColumnWidths<'_>,
     leftover: usize,
 ) -> bool {
     let uncapped: Vec<usize> = widths
         .iter()
         .enumerate()
-        .filter(|(_, (col, w))| *w < max_widths[*col as usize])
+        .filter(|(_, (col, w))| *w < max_widths.for_column(*col))
         .map(|(i, _)| i)
         .collect();
     let uncapped_weight: f64 = uncapped.iter().map(|&i| wrap_weight(widths[i].0)).sum();
@@ -291,13 +310,13 @@ fn enforce_minimum_wrap_widths(widths: &mut [(Column, usize)], available: usize)
 
 fn project_table_layout(
     enabled_columns: &[Column],
-    max_widths: &[usize],
+    max_widths: ColumnWidths<'_>,
     wrap_widths: &[(Column, usize)],
 ) -> TableLayout {
     let mut column_widths: Vec<(Column, usize)> = Vec::new();
     for &col in enabled_columns {
         if is_fixed_column(col) {
-            column_widths.push((col, max_widths[col as usize]));
+            column_widths.push((col, max_widths.for_column(col)));
         } else if let Some(&(_, w)) = wrap_widths.iter().find(|&&(c, _)| c == col) {
             column_widths.push((col, w));
         }
@@ -378,13 +397,14 @@ mod tests {
         ];
         let max_widths = [3, 10, 5, 5, 4, 36, 0, 42, 70];
         let layout = compute_layout(&cols, &max_widths, 120).unwrap();
+        let column_widths = ColumnWidths::new(&max_widths);
         let widths = layout.column_widths();
 
         assert_eq!(widths.iter().map(|(col, _)| *col).collect::<Vec<_>>(), cols);
         assert!(layout.rendered_width() <= 120);
         for (column, width) in widths {
             assert!(
-                *width <= max_widths[*column as usize],
+                *width <= column_widths.for_column(*column),
                 "{column:?} exceeded its content width"
             );
             if is_wrap_column(*column) {
