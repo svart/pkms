@@ -83,6 +83,30 @@ pub enum Command {
     Serve(ServeArgs),
 }
 
+impl Command {
+    pub fn name(&self) -> &'static str {
+        match self {
+            Command::Check(_) => "check",
+            Command::Validate(_) => "validate",
+            Command::Stats(_) => "stats",
+            Command::Orphans(_) => "orphans",
+            Command::Resolve(_) => "resolve",
+            Command::Fix(_) => "fix",
+            Command::Suggest(_) => "suggest",
+            Command::New(_) => "new",
+            Command::Extract(_) => "extract",
+            Command::Get(_) => "get",
+            Command::Query(_) => "query",
+            Command::Info => "info",
+            Command::InitConfig(_) => "init-config",
+            Command::Task(_) => "task",
+            Command::Path(_) => "path",
+            #[cfg(feature = "web")]
+            Command::Serve(_) => "serve",
+        }
+    }
+}
+
 #[derive(Debug, Args)]
 pub struct CheckArgs {
     #[arg(long, help = "Show database statistics")]

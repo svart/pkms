@@ -10,7 +10,7 @@ use anyhow::Result;
 use std::process::ExitCode;
 
 pub fn run(cli: Cli) -> ExitCode {
-    tracing::debug!(command = command_name(&cli.command), "dispatching command");
+    tracing::debug!(command = cli.command.name(), "dispatching command");
     let app = match App::from_cli(&cli) {
         Ok(app) => app,
         Err(e) => {
@@ -24,35 +24,13 @@ pub fn run(cli: Cli) -> ExitCode {
     let command_ctx = CommandContext::new(&app.config, &app.output);
     match dispatch(&cli, &command_ctx) {
         Ok(code) => {
-            tracing::debug!(command = command_name(&cli.command), "command completed");
+            tracing::debug!(command = cli.command.name(), "command completed");
             code
         }
         Err(e) => {
-            tracing::error!(command = command_name(&cli.command), error = %e, "command failed");
+            tracing::error!(command = cli.command.name(), error = %e, "command failed");
             app::command_error(&app.output, e)
         }
-    }
-}
-
-fn command_name(command: &Command) -> &'static str {
-    match command {
-        Command::Check(_) => "check",
-        Command::Validate(_) => "validate",
-        Command::Stats(_) => "stats",
-        Command::Orphans(_) => "orphans",
-        Command::Resolve(_) => "resolve",
-        Command::Fix(_) => "fix",
-        Command::Suggest(_) => "suggest",
-        Command::New(_) => "new",
-        Command::Extract(_) => "extract",
-        Command::Get(_) => "get",
-        Command::Query(_) => "query",
-        Command::Info => "info",
-        Command::InitConfig(_) => "init-config",
-        Command::Task(_) => "task",
-        Command::Path(_) => "path",
-        #[cfg(feature = "web")]
-        Command::Serve(_) => "serve",
     }
 }
 
