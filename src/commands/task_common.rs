@@ -12,6 +12,64 @@ use tabled::settings::{Modify, Padding, Span, Width};
 pub const TASK_SORT_FIELD_HELP: &str =
     "priority, date, scheduled, deadline, file, source, state, task, title, or project";
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TaskSortField {
+    Priority,
+    Date,
+    Scheduled,
+    Deadline,
+    File,
+    Source,
+    State,
+    Task,
+    Title,
+    Project,
+}
+
+impl TaskSortField {
+    pub fn parse(field: &str) -> Result<Self> {
+        match field {
+            "priority" => Ok(TaskSortField::Priority),
+            "date" => Ok(TaskSortField::Date),
+            "scheduled" => Ok(TaskSortField::Scheduled),
+            "deadline" => Ok(TaskSortField::Deadline),
+            "file" => Ok(TaskSortField::File),
+            "source" => Ok(TaskSortField::Source),
+            "state" => Ok(TaskSortField::State),
+            "task" => Ok(TaskSortField::Task),
+            "title" => Ok(TaskSortField::Title),
+            "project" => Ok(TaskSortField::Project),
+            other => bail!("Unknown task sort field '{other}'. Use {TASK_SORT_FIELD_HELP}."),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TaskGroupField {
+    State,
+    File,
+    Priority,
+}
+
+impl TaskGroupField {
+    pub fn parse(field: &str) -> Result<Self> {
+        match field {
+            "state" => Ok(TaskGroupField::State),
+            "file" => Ok(TaskGroupField::File),
+            "priority" => Ok(TaskGroupField::Priority),
+            other => bail!("Unknown task group field '{other}'. Use state, file, or priority."),
+        }
+    }
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            TaskGroupField::State => "state",
+            TaskGroupField::File => "file",
+            TaskGroupField::Priority => "priority",
+        }
+    }
+}
+
 pub fn combine_tags(filetags: &[String], heading_tags: &[String]) -> String {
     let mut seen = HashSet::new();
     let mut result = Vec::new();
@@ -98,11 +156,11 @@ pub trait RowItem {
             || self.implicit_daily_file_date() == Some(date)
     }
 
-    fn sort_by_field(&self, other: &Self, field: &str) -> std::cmp::Ordering {
+    fn sort_by_field(&self, other: &Self, field: TaskSortField) -> std::cmp::Ordering {
         match field {
-            "state" => self.todo_state().cmp(&other.todo_state()),
-            "file" => self.title().cmp(other.title()),
-            "priority" => {
+            TaskSortField::State => self.todo_state().cmp(&other.todo_state()),
+            TaskSortField::File => self.title().cmp(other.title()),
+            TaskSortField::Priority => {
                 let a_p = self
                     .priority()
                     .map(crate::util::priority_value)
@@ -113,13 +171,14 @@ pub trait RowItem {
                     .unwrap_or(3);
                 a_p.cmp(&b_p)
             }
-            "scheduled" => self.scheduled_date_str().cmp(&other.scheduled_date_str()),
-            "deadline" => self.deadline_date_str().cmp(&other.deadline_date_str()),
-            "date" => self.effective_date().cmp(&other.effective_date()),
-            "source" => std::cmp::Ordering::Equal,
-            "task" | "title" => self.heading_title().cmp(other.heading_title()),
-            "project" => self.project().cmp(&other.project()),
-            _ => std::cmp::Ordering::Equal,
+            TaskSortField::Scheduled => self.scheduled_date_str().cmp(&other.scheduled_date_str()),
+            TaskSortField::Deadline => self.deadline_date_str().cmp(&other.deadline_date_str()),
+            TaskSortField::Date => self.effective_date().cmp(&other.effective_date()),
+            TaskSortField::Source => std::cmp::Ordering::Equal,
+            TaskSortField::Task | TaskSortField::Title => {
+                self.heading_title().cmp(other.heading_title())
+            }
+            TaskSortField::Project => self.project().cmp(&other.project()),
         }
     }
 
@@ -212,9 +271,9 @@ pub fn filter_row(row: &[String; 9], cols: &[Column]) -> Vec<String> {
     cols.iter().map(|c| row[*c as usize].clone()).collect()
 }
 
-pub fn sort_items<T: RowItem>(items: &mut [T], sort_fields: &[&str]) {
+pub fn sort_items<T: RowItem>(items: &mut [T], sort_fields: &[TaskSortField]) {
     items.sort_by(|a, b| {
-        for field in sort_fields {
+        for &field in sort_fields {
             let ord = a.sort_by_field(b, field);
             if ord != std::cmp::Ordering::Equal {
                 return ord;
@@ -281,7 +340,7 @@ fn section_bottom_delimiter(width: usize) -> String {
     format!("╰{}╯", "─".repeat(fill_width))
 }
 
-pub fn parse_task_sort_fields(sort: &str) -> Result<Vec<&str>> {
+pub fn parse_task_sort_fields(sort: &str) -> Result<Vec<TaskSortField>> {
     let fields: Vec<&str> = sort
         .split(',')
         .map(|field| field.trim())
@@ -290,21 +349,11 @@ pub fn parse_task_sort_fields(sort: &str) -> Result<Vec<&str>> {
     if fields.is_empty() {
         bail!("Task sort must include at least one field");
     }
-    for field in &fields {
-        match *field {
-            "priority" | "date" | "scheduled" | "deadline" | "file" | "source" | "state"
-            | "task" | "title" | "project" => {}
-            other => bail!("Unknown task sort field '{other}'. Use {TASK_SORT_FIELD_HELP}."),
-        }
-    }
-    Ok(fields)
+    fields.into_iter().map(TaskSortField::parse).collect()
 }
 
-pub fn validate_task_group_field(group_field: &str) -> Result<()> {
-    match group_field {
-        "state" | "file" | "priority" => Ok(()),
-        other => bail!("Unknown task group field '{other}'. Use state, file, or priority."),
-    }
+pub fn parse_task_group_field(group_field: &str) -> Result<TaskGroupField> {
+    TaskGroupField::parse(group_field)
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

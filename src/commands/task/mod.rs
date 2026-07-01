@@ -6,6 +6,7 @@ use crate::commands::open::OpenOptions;
 use crate::commands::show::{HeadingTarget, ShowOptions};
 #[cfg(feature = "todoist")]
 use crate::commands::task_common::RowSeparatorMode;
+use crate::commands::task_common::TaskSortField;
 use crate::config::ResolvedConfig;
 use crate::output::{OutputContext, terminal_markup};
 use crate::tasks::clock::TaskClock;
@@ -123,7 +124,7 @@ fn run_shortcut(
 ) -> Result<()> {
     let (source, mut items) =
         execution::collect_shortcut_items_on(runtime.config, &args.filters, kind, runtime.clock)?;
-    execution::sort_task_items(&mut items, "priority")?;
+    execution::sort_task_items(&mut items, &[TaskSortField::Priority]);
     let columns = plan::resolve_task_table_columns(
         runtime.config,
         source,

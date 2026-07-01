@@ -1,6 +1,6 @@
 use crate::cli::OutputFormat;
 use crate::commands::task_common::{
-    AgendaWindow, RowItem, RowSeparatorMode, agenda_day_section_label, apply_limit,
+    AgendaWindow, RowItem, RowSeparatorMode, TaskGroupField, agenda_day_section_label, apply_limit,
     print_table_with_empty_message,
 };
 use crate::output::{ALL_COLUMNS, Column, OutputContext, terminal_markup};
@@ -366,7 +366,7 @@ pub(super) fn print_task_items(
 pub(super) fn print_grouped_task_items(
     ctx: &OutputContext,
     source: SourceSelection,
-    group_field: String,
+    group_field: TaskGroupField,
     groups: BTreeMap<String, Vec<TaskItem>>,
     total: usize,
     table: TaskTableRenderOptions<'_>,
@@ -384,7 +384,7 @@ pub(super) fn print_grouped_task_items(
             let shown = groups.values().map(Vec::len).sum();
             ctx.print_json(&GroupedTaskListOutput {
                 total: shown,
-                group_field,
+                group_field: group_field.as_str().to_string(),
                 groups,
             })
         }

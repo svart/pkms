@@ -1,7 +1,7 @@
 use super::{plan, providers, render};
 use crate::commands::task_common::{
-    AgendaWindow, RowSeparatorMode, date_in_agenda_window, parse_task_sort_fields,
-    validate_task_group_field,
+    AgendaWindow, RowSeparatorMode, TaskGroupField, TaskSortField, date_in_agenda_window,
+    parse_task_group_field, parse_task_sort_fields,
 };
 use crate::config::ResolvedConfig;
 use crate::output::Column;
@@ -28,7 +28,7 @@ pub(super) enum TaskListItems {
         limit: Option<usize>,
     },
     Grouped {
-        group_field: String,
+        group_field: TaskGroupField,
         groups: BTreeMap<String, Vec<TaskItem>>,
         total: usize,
     },
@@ -55,14 +55,16 @@ pub(super) fn execute_task_list(
     apply_task_filter_criteria_on(config, &mut items, &criteria, request.clock.today)?;
     let sort = request.sort.as_deref().unwrap_or("date,priority");
     let items = if let Some(group_field) = &request.group {
-        let (groups, total) = group_task_items(items, group_field, sort, request.limit)?;
+        let (group_field, groups, total) =
+            group_task_items(items, group_field, sort, request.limit)?;
         TaskListItems::Grouped {
-            group_field: group_field.clone(),
+            group_field,
             groups,
             total,
         }
     } else {
-        sort_task_items(&mut items, sort)?;
+        let sort_fields = parse_task_sort_fields(sort)?;
+        sort_task_items(&mut items, &sort_fields);
         TaskListItems::Flat {
             items,
             limit: request.limit,
@@ -105,10 +107,9 @@ pub(super) fn execute_task_agenda(
     if let Some(days) = request.window.days() {
         retain_agenda_window_task_items_on(&mut items, days, request.clock.today);
     }
-    sort_task_items(
-        &mut items,
-        request.sort.as_deref().unwrap_or("date,priority"),
-    )?;
+    let sort = request.sort.as_deref().unwrap_or("date,priority");
+    let sort_fields = parse_task_sort_fields(sort)?;
+    sort_task_items(&mut items, &sort_fields);
     Ok(AgendaExecution {
         source: request.filters.source,
         items,
@@ -125,8 +126,8 @@ fn group_task_items(
     group_field: &str,
     sort: &str,
     limit: Option<usize>,
-) -> Result<(BTreeMap<String, Vec<TaskItem>>, usize)> {
-    validate_task_group_field(group_field)?;
+) -> Result<(TaskGroupField, BTreeMap<String, Vec<TaskItem>>, usize)> {
+    let group_field = parse_task_group_field(group_field)?;
     let mut groups: BTreeMap<String, Vec<TaskItem>> = BTreeMap::new();
     for item in items {
         groups
@@ -136,26 +137,30 @@ fn group_task_items(
     }
 
     let total = groups.values().map(Vec::len).sum();
+    let sort_fields = if groups.is_empty() {
+        Vec::new()
+    } else {
+        parse_task_sort_fields(sort)?
+    };
     for group_items in groups.values_mut() {
-        sort_task_items(group_items, sort)?;
+        sort_task_items(group_items, &sort_fields);
         if let Some(limit) = limit {
             group_items.truncate(limit);
         }
     }
-    Ok((groups, total))
+    Ok((group_field, groups, total))
 }
 
-fn task_group_key(item: &TaskItem, group_field: &str) -> String {
+fn task_group_key(item: &TaskItem, group_field: TaskGroupField) -> String {
     match group_field {
-        "state" => item.state.as_deref().unwrap_or("NONE").to_string(),
-        "file" => item.note_title.clone().unwrap_or_default(),
-        "priority" => match item.priority_char() {
+        TaskGroupField::State => item.state.as_deref().unwrap_or("NONE").to_string(),
+        TaskGroupField::File => item.note_title.clone().unwrap_or_default(),
+        TaskGroupField::Priority => match item.priority_char() {
             Some('A') => "Priority A".to_string(),
             Some('B') => "Priority B".to_string(),
             Some('C') => "Priority C".to_string(),
             _ => "No Priority".to_string(),
         },
-        _ => unreachable!("task group field was validated"),
     }
 }
 
@@ -226,21 +231,19 @@ fn retain_agenda_window_task_items_on(items: &mut Vec<TaskItem>, days: i64, toda
     });
 }
 
-pub(super) fn sort_task_items(items: &mut [TaskItem], sort: &str) -> Result<()> {
-    let fields = parse_task_sort_fields(sort)?;
+pub(super) fn sort_task_items(items: &mut [TaskItem], fields: &[TaskSortField]) {
     items.sort_by(|a, b| {
-        for field in &fields {
-            let ord = match *field {
-                "priority" => a.priority_sort_value().cmp(&b.priority_sort_value()),
-                "date" => a.effective_date().cmp(&b.effective_date()),
-                "scheduled" => a.scheduled_date_str().cmp(&b.scheduled_date_str()),
-                "deadline" => a.deadline_date_str().cmp(&b.deadline_date_str()),
-                "file" => a.note_title.cmp(&b.note_title),
-                "source" => render::source_name(a).cmp(render::source_name(b)),
-                "state" => a.state.cmp(&b.state),
-                "task" | "title" => a.title.cmp(&b.title),
-                "project" => a.project.cmp(&b.project),
-                _ => std::cmp::Ordering::Equal,
+        for &field in fields {
+            let ord = match field {
+                TaskSortField::Priority => a.priority_sort_value().cmp(&b.priority_sort_value()),
+                TaskSortField::Date => a.effective_date().cmp(&b.effective_date()),
+                TaskSortField::Scheduled => a.scheduled_date_str().cmp(&b.scheduled_date_str()),
+                TaskSortField::Deadline => a.deadline_date_str().cmp(&b.deadline_date_str()),
+                TaskSortField::File => a.note_title.cmp(&b.note_title),
+                TaskSortField::Source => render::source_name(a).cmp(render::source_name(b)),
+                TaskSortField::State => a.state.cmp(&b.state),
+                TaskSortField::Task | TaskSortField::Title => a.title.cmp(&b.title),
+                TaskSortField::Project => a.project.cmp(&b.project),
             };
             if ord != std::cmp::Ordering::Equal {
                 return ord;
@@ -251,5 +254,4 @@ pub(super) fn sort_task_items(items: &mut [TaskItem], sort: &str) -> Result<()> 
             .then_with(|| a.source_id.cmp(&b.source_id))
             .then_with(|| a.title.cmp(&b.title))
     });
-    Ok(())
 }

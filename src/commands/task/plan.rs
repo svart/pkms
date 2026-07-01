@@ -178,7 +178,7 @@ pub(super) fn plan_agenda_request(
     plan_agenda_request_from_filters(
         config,
         &args.filters,
-        args.sort.clone(),
+        args.sort.as_deref(),
         args.limit,
         args.days,
         &args.table,
@@ -189,7 +189,7 @@ pub(super) fn plan_agenda_request(
 fn plan_agenda_request_from_filters(
     config: &ResolvedConfig,
     raw_filters: &[String],
-    sort: Option<String>,
+    raw_sort: Option<&str>,
     limit: Option<usize>,
     days: Option<i64>,
     table: &TaskTableArgs,
@@ -211,7 +211,7 @@ fn plan_agenda_request_from_filters(
     )?;
     Ok(AgendaRequest {
         filters,
-        sort,
+        sort: raw_sort.map(str::to_string),
         limit,
         window: AgendaWindow::from_days(days),
         row_separators: table.line_sep.into(),

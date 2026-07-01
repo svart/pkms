@@ -373,6 +373,36 @@ fn test_task_list_rejects_unknown_group_field() {
 }
 
 #[test]
+fn test_task_sort_and_group_validation_keeps_missing_db_precedence() {
+    let dir = tempfile::tempdir().unwrap();
+    let missing_root = dir.path().join("definitely-missing-pkms-review");
+    let missing = missing_root.to_str().unwrap();
+
+    for command_args in [
+        vec!["task", "list", "--sort", "unknown"],
+        vec!["task", "list", "--group", "unknown"],
+        vec!["task", "agenda", "--sort", "unknown"],
+    ] {
+        let mut args = vec!["--db", missing, "--output-format", "json"];
+        args.extend(command_args);
+
+        let (stdout, _stderr, status) = run(&args);
+
+        assert!(!status.success(), "Expected failure for {args:?}");
+        let value = assert_json_error_output(&args, &stdout);
+        let error = value["error"].as_str().unwrap();
+        assert!(
+            error.contains("Failed to resolve db root"),
+            "expected missing DB root to take precedence for {args:?}, got: {error}"
+        );
+        assert!(
+            !error.contains("Unknown task"),
+            "expected task validation not to take precedence for {args:?}, got: {error}"
+        );
+    }
+}
+
+#[test]
 fn test_task_list_from_stdin_scopes_to_resolved_note() {
     let (_dir, root) = setup_db();
     let (task_stdout, task_stderr, task_status) = run_pipe(
