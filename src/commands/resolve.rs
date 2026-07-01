@@ -2,7 +2,6 @@ use crate::cli::{OutputFormat, ResolveArgs};
 use crate::command_context::CommandContext;
 use crate::config::ResolvedConfig;
 use crate::discovery;
-use crate::input;
 use crate::output::OutputContext;
 use crate::parser::{ParsedNoteSummary, parse_note_summary};
 use anyhow::Result;
@@ -127,9 +126,9 @@ impl From<&ResolveArgs> for ResolveOptions {
         ResolveOptions {
             uuid: args.uuid.clone(),
             title: args.title.clone(),
-            tags: input::comma_list(args.tags.as_deref()),
+            tags: args.tags.clone(),
             limit: args.limit,
-            fields: input::comma_list(args.fields.as_deref()),
+            fields: args.fields.clone(),
             todos: args.todos,
         }
     }

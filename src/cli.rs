@@ -12,6 +12,10 @@ pub enum OutputFormat {
     Ndjson,
 }
 
+fn parse_delimited_string(value: &str) -> Result<String, String> {
+    Ok(value.trim().to_string())
+}
+
 #[derive(Parser)]
 #[command(
     name = "pkms",
@@ -165,17 +169,25 @@ pub struct ResolveArgs {
     #[arg(
         long,
         help = "Include notes with these filetags (comma-separated)",
+        value_delimiter = ',',
+        num_args = 1,
+        action = clap::ArgAction::Set,
+        value_parser = parse_delimited_string,
         required_unless_present_any = ["uuid", "title"]
     )]
-    pub tags: Option<String>,
+    pub tags: Option<Vec<String>>,
     #[arg(long, help = "Maximum results")]
     pub limit: Option<usize>,
     #[arg(
         long,
         value_name = "FIELDS",
+        value_delimiter = ',',
+        num_args = 1,
+        action = clap::ArgAction::Set,
+        value_parser = parse_delimited_string,
         help = "Comma-separated fields: uuid,title,path,tags,aliases"
     )]
-    pub fields: Option<String>,
+    pub fields: Option<Vec<String>>,
     #[arg(long, help = "Restrict to files with TODO headings")]
     pub todos: bool,
 }
@@ -212,10 +224,24 @@ pub struct NewArgs {
     pub title: String,
     #[arg(long, help = "Actually write the boilerplate file")]
     pub create: bool,
-    #[arg(long, help = "Comma-separated list of filetags")]
-    pub tags: Option<String>,
-    #[arg(long, help = "Comma-separated list of aliases")]
-    pub aliases: Option<String>,
+    #[arg(
+        long,
+        help = "Comma-separated list of filetags",
+        value_delimiter = ',',
+        num_args = 1,
+        action = clap::ArgAction::Set,
+        value_parser = parse_delimited_string
+    )]
+    pub tags: Option<Vec<String>>,
+    #[arg(
+        long,
+        help = "Comma-separated list of aliases",
+        value_delimiter = ',',
+        num_args = 1,
+        action = clap::ArgAction::Set,
+        value_parser = parse_delimited_string
+    )]
+    pub aliases: Option<Vec<String>>,
     #[arg(long, help = "Heading title to generate :ID: for")]
     pub heading: Option<String>,
 }
@@ -302,4 +328,68 @@ pub struct PathArgs {
     pub from: Option<String>,
     #[arg(help = "Target note (UUID, path, or title)")]
     pub to: Option<String>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn parse(args: &[&str]) -> Cli {
+        Cli::try_parse_from(args).unwrap()
+    }
+
+    #[test]
+    fn resolve_parses_delimited_tags_and_fields() {
+        let cli = parse(&[
+            "pkms",
+            "resolve",
+            "--tags",
+            "alpha, beta",
+            "--fields",
+            "uuid, title",
+        ]);
+
+        let Command::Resolve(args) = cli.command else {
+            panic!("expected resolve command");
+        };
+        assert_eq!(args.tags, Some(vec!["alpha".into(), "beta".into()]));
+        assert_eq!(args.fields, Some(vec!["uuid".into(), "title".into()]));
+    }
+
+    #[test]
+    fn new_parses_delimited_tags_and_aliases() {
+        let cli = parse(&[
+            "pkms",
+            "new",
+            "Tagged New",
+            "--tags",
+            "foo, bar",
+            "--aliases",
+            "Alias One, Alias Two",
+        ]);
+
+        let Command::New(args) = cli.command else {
+            panic!("expected new command");
+        };
+        assert_eq!(args.tags, Some(vec!["foo".into(), "bar".into()]));
+        assert_eq!(
+            args.aliases,
+            Some(vec!["Alias One".into(), "Alias Two".into()])
+        );
+    }
+
+    #[test]
+    fn get_keeps_encoding_raw_for_structured_command_errors() {
+        let cli = parse(&["pkms", "get", "Note A", "--encoding", "unknown"]);
+        let Command::Get(args) = cli.command else {
+            panic!("expected get command");
+        };
+        assert_eq!(args.encoding, "unknown");
+
+        let cli = parse(&["pkms", "get", "Note A"]);
+        let Command::Get(args) = cli.command else {
+            panic!("expected get command");
+        };
+        assert_eq!(args.encoding, "cl100k_base");
+    }
 }

@@ -1,6 +1,5 @@
 use crate::cli::NewArgs;
 use crate::command_context::CommandContext;
-use crate::input;
 use crate::parser::{HEADING_RE, ID_PROPERTY_RE};
 use anyhow::{Context, Result};
 use serde::Serialize;
@@ -58,8 +57,8 @@ impl From<&NewArgs> for NewOptions {
         NewOptions {
             title: args.title.clone(),
             create: args.create,
-            tags: input::comma_list(args.tags.as_deref()),
-            aliases: input::comma_list(args.aliases.as_deref()),
+            tags: args.tags.clone(),
+            aliases: args.aliases.clone(),
             heading: args.heading.clone(),
         }
     }

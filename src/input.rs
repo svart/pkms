@@ -5,10 +5,6 @@ use chrono::NaiveDate;
 #[cfg(test)]
 use chrono::NaiveDateTime;
 
-pub fn comma_list(value: Option<&str>) -> Option<Vec<String>> {
-    value.map(|s| s.split(',').map(|s| s.trim().to_string()).collect())
-}
-
 pub fn parse_date(value: Option<&str>) -> Option<NaiveDate> {
     value.and_then(|d| NaiveDate::parse_from_str(d, "%Y-%m-%d").ok())
 }
@@ -152,19 +148,6 @@ fn parse_column_name(name: &str) -> Result<Column> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn comma_list_splits_and_trims_values() {
-        assert_eq!(
-            comma_list(Some("alpha, beta,gamma")),
-            Some(vec![
-                "alpha".to_string(),
-                "beta".to_string(),
-                "gamma".to_string()
-            ])
-        );
-        assert_eq!(comma_list(None), None);
-    }
 
     #[test]
     fn parse_date_accepts_iso_dates_only() {

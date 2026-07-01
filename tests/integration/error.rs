@@ -159,6 +159,30 @@ fn test_command_error_ndjson_is_single_line() {
 }
 
 #[test]
+fn test_invalid_get_encoding_json_error_uses_command_error_contract() {
+    let (_dir, root) = setup_db();
+    let args = [
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "get",
+        "Note A",
+        "--encoding",
+        "unknown",
+    ];
+    let (stdout, stderr, status) = run(&args);
+
+    assert_eq!(status.code(), Some(1));
+    assert!(
+        !stderr.contains("invalid value"),
+        "unexpected clap error: {stderr}"
+    );
+    let value = assert_json_error_output(&args, &stdout);
+    assert_eq!(value["error"], "Unknown encoding: unknown");
+}
+
+#[test]
 fn test_json_error_exit_code() {
     let (_dir, root) = setup_db();
     let db = root.to_str().unwrap().to_string();
