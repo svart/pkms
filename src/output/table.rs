@@ -111,8 +111,8 @@ fn compute_layout(
     }
 
     let wrap_widths =
-        allocate_wrap_widths(&wrap_cols, max_widths, budget.available_for_wrapped_columns)?;
-    let layout = TableLayout::new(layout_widths(enabled_columns, max_widths, &wrap_widths));
+        compute_wrap_widths(&wrap_cols, max_widths, budget.available_for_wrapped_columns)?;
+    let layout = project_table_layout(enabled_columns, max_widths, &wrap_widths);
 
     if layout
         .column_widths()
@@ -152,18 +152,18 @@ fn wrap_columns(enabled_columns: &[Column]) -> Vec<Column> {
         .collect()
 }
 
-fn allocate_wrap_widths(
+fn compute_wrap_widths(
     wrap_cols: &[Column],
     max_widths: &[usize],
     available: usize,
 ) -> Option<Vec<(Column, usize)>> {
-    let mut widths = weighted_initial_widths(wrap_cols, available);
-    cap_to_content_widths(&mut widths, max_widths, available);
-    enforce_minimum_widths(&mut widths, available)?;
+    let mut widths = allocate_wrap_widths(wrap_cols, available);
+    cap_and_redistribute_wrap_widths(&mut widths, max_widths, available);
+    enforce_minimum_wrap_widths(&mut widths, available)?;
     Some(widths)
 }
 
-fn weighted_initial_widths(wrap_cols: &[Column], available: usize) -> Vec<(Column, usize)> {
+fn allocate_wrap_widths(wrap_cols: &[Column], available: usize) -> Vec<(Column, usize)> {
     let total_weight: f64 = wrap_cols.iter().map(|c| wrap_weight(*c)).sum();
 
     let mut widths: Vec<(Column, usize)> = wrap_cols
@@ -191,19 +191,13 @@ fn weighted_initial_widths(wrap_cols: &[Column], available: usize) -> Vec<(Colum
     widths
 }
 
-fn cap_to_content_widths(widths: &mut [(Column, usize)], max_widths: &[usize], available: usize) {
+fn cap_and_redistribute_wrap_widths(
+    widths: &mut [(Column, usize)],
+    max_widths: &[usize],
+    available: usize,
+) {
     loop {
-        let mut any_capped = false;
-
-        for (col, w) in widths.iter_mut() {
-            let max_cw = max_widths[*col as usize];
-            if *w > max_cw {
-                *w = max_cw;
-                any_capped = true;
-            }
-        }
-
-        if !any_capped {
+        if !cap_wrap_widths_to_content(widths, max_widths) {
             break;
         }
 
@@ -213,37 +207,62 @@ fn cap_to_content_widths(widths: &mut [(Column, usize)], max_widths: &[usize], a
             break;
         }
 
-        let uncapped: Vec<usize> = widths
-            .iter()
-            .enumerate()
-            .filter(|(_, (col, w))| *w < max_widths[*col as usize])
-            .map(|(i, _)| i)
-            .collect();
-        let uncapped_weight: f64 = uncapped.iter().map(|&i| wrap_weight(widths[i].0)).sum();
-        if uncapped_weight == 0.0 {
+        if !redistribute_leftover_to_uncapped_wrap_widths(widths, max_widths, leftover) {
             break;
-        }
-
-        let mut added_sum = 0usize;
-        for &i in &uncapped {
-            let add =
-                (leftover as f64 * wrap_weight(widths[i].0) / uncapped_weight).floor() as usize;
-            widths[i].1 += add;
-            added_sum += add;
-        }
-
-        let mut rem = leftover.saturating_sub(added_sum);
-        for &i in uncapped.iter().rev() {
-            if rem == 0 {
-                break;
-            }
-            widths[i].1 += 1;
-            rem -= 1;
         }
     }
 }
 
-fn enforce_minimum_widths(widths: &mut [(Column, usize)], available: usize) -> Option<()> {
+fn cap_wrap_widths_to_content(widths: &mut [(Column, usize)], max_widths: &[usize]) -> bool {
+    let mut any_capped = false;
+
+    for (col, w) in widths.iter_mut() {
+        let max_cw = max_widths[*col as usize];
+        if *w > max_cw {
+            *w = max_cw;
+            any_capped = true;
+        }
+    }
+
+    any_capped
+}
+
+fn redistribute_leftover_to_uncapped_wrap_widths(
+    widths: &mut [(Column, usize)],
+    max_widths: &[usize],
+    leftover: usize,
+) -> bool {
+    let uncapped: Vec<usize> = widths
+        .iter()
+        .enumerate()
+        .filter(|(_, (col, w))| *w < max_widths[*col as usize])
+        .map(|(i, _)| i)
+        .collect();
+    let uncapped_weight: f64 = uncapped.iter().map(|&i| wrap_weight(widths[i].0)).sum();
+    if uncapped_weight == 0.0 {
+        return false;
+    }
+
+    let mut added_sum = 0usize;
+    for &i in &uncapped {
+        let add = (leftover as f64 * wrap_weight(widths[i].0) / uncapped_weight).floor() as usize;
+        widths[i].1 += add;
+        added_sum += add;
+    }
+
+    let mut rem = leftover.saturating_sub(added_sum);
+    for &i in uncapped.iter().rev() {
+        if rem == 0 {
+            break;
+        }
+        widths[i].1 += 1;
+        rem -= 1;
+    }
+
+    true
+}
+
+fn enforce_minimum_wrap_widths(widths: &mut [(Column, usize)], available: usize) -> Option<()> {
     for (_, w) in widths.iter_mut() {
         if *w < MIN_COLUMN_WIDTH {
             *w = MIN_COLUMN_WIDTH;
@@ -270,21 +289,21 @@ fn enforce_minimum_widths(widths: &mut [(Column, usize)], available: usize) -> O
     Some(())
 }
 
-fn layout_widths(
+fn project_table_layout(
     enabled_columns: &[Column],
     max_widths: &[usize],
     wrap_widths: &[(Column, usize)],
-) -> Vec<(Column, usize)> {
-    let mut result: Vec<(Column, usize)> = Vec::new();
+) -> TableLayout {
+    let mut column_widths: Vec<(Column, usize)> = Vec::new();
     for &col in enabled_columns {
         if is_fixed_column(col) {
-            result.push((col, max_widths[col as usize]));
+            column_widths.push((col, max_widths[col as usize]));
         } else if let Some(&(_, w)) = wrap_widths.iter().find(|&&(c, _)| c == col) {
-            result.push((col, w));
+            column_widths.push((col, w));
         }
     }
 
-    result
+    TableLayout::new(column_widths)
 }
 
 #[cfg(test)]
