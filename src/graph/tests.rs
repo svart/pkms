@@ -10,7 +10,7 @@ fn make_note(uuid: &str, title: &str, outgoing: Vec<Link>) -> FileScanResult {
     FileScanResult {
         path: PathBuf::from(format!("{}.org", uuid)),
         parsed: ParsedNote {
-            uuids: vec![uuid.to_string()],
+            uuids: vec![uuid.into()],
             title: Some(title.to_string()),
             filetags: vec![],
             project: None,
@@ -38,7 +38,7 @@ fn make_note_with_headings(
             title: format!("Heading {}", huid),
             todo_state: None,
             tags: vec![],
-            uuid: Some(huid.to_string()),
+            uuid: Some(huid.into()),
             scheduled: None,
             deadline: None,
             priority: None,
@@ -51,7 +51,7 @@ fn make_note_with_headings(
     FileScanResult {
         path: PathBuf::from(format!("{}.org", uuid)),
         parsed: ParsedNote {
-            uuids: vec![uuid.to_string()],
+            uuids: vec![uuid.into()],
             title: Some(title.to_string()),
             filetags: vec![],
             project: None,
@@ -76,7 +76,7 @@ fn make_note_full(
     FileScanResult {
         path: PathBuf::from(format!("{}.org", uuid)),
         parsed: ParsedNote {
-            uuids: vec![uuid.to_string()],
+            uuids: vec![uuid.into()],
             title: Some(title.to_string()),
             filetags,
             project: None,
@@ -103,7 +103,7 @@ fn make_parse_error(_uuid: &str, path: &str) -> FileScanResult {
 #[test]
 fn test_graph_build() {
     let results = vec![
-        make_note("a", "Note A", vec![Link::Internal("b".to_string())]),
+        make_note("a", "Note A", vec![Link::Internal("b".into())]),
         make_note("b", "Note B", vec![]),
     ];
     let graph = Graph::build(results);
@@ -117,7 +117,7 @@ fn test_broken_links() {
     let results = vec![make_note(
         "a",
         "Note A",
-        vec![Link::Internal("nonexistent".to_string())],
+        vec![Link::Internal("nonexistent".into())],
     )];
     let graph = Graph::build(results);
     assert_eq!(graph.broken_links.len(), 1);
@@ -127,7 +127,7 @@ fn test_broken_links() {
 fn test_orphan_detection() {
     let results = vec![
         make_note("a", "Orphan", vec![]),
-        make_note("b", "Connected", vec![Link::Internal("c".to_string())]),
+        make_note("b", "Connected", vec![Link::Internal("c".into())]),
         make_note("c", "Target", vec![]),
     ];
     let graph = Graph::build(results);
@@ -319,8 +319,8 @@ fn collect_validation_issues_returns_graph_level_health_records() {
 #[test]
 fn test_shortest_path() {
     let results = vec![
-        make_note("a", "A", vec![Link::Internal("b".to_string())]),
-        make_note("b", "B", vec![Link::Internal("c".to_string())]),
+        make_note("a", "A", vec![Link::Internal("b".into())]),
+        make_note("b", "B", vec![Link::Internal("c".into())]),
         make_note("c", "C", vec![]),
     ];
     let graph = Graph::build(results);
@@ -335,7 +335,7 @@ fn test_duplicate_uuid_detection() {
         FileScanResult {
             path: PathBuf::from("first.org"),
             parsed: ParsedNote {
-                uuids: vec!["dup-uuid".to_string()],
+                uuids: vec!["dup-uuid".into()],
                 title: Some("First".to_string()),
                 filetags: vec![],
                 project: None,
@@ -351,7 +351,7 @@ fn test_duplicate_uuid_detection() {
         FileScanResult {
             path: PathBuf::from("second.org"),
             parsed: ParsedNote {
-                uuids: vec!["dup-uuid".to_string()],
+                uuids: vec!["dup-uuid".into()],
                 title: Some("Second".to_string()),
                 filetags: vec![],
                 project: None,
@@ -405,7 +405,7 @@ fn test_missing_title() {
     let results = vec![FileScanResult {
         path: PathBuf::from("no-title.org"),
         parsed: ParsedNote {
-            uuids: vec!["uuid-no-title".to_string()],
+            uuids: vec!["uuid-no-title".into()],
             title: None,
             filetags: vec![],
             project: None,
@@ -440,7 +440,7 @@ fn test_self_link_not_broken() {
     let results = vec![make_note(
         "self",
         "Self Link",
-        vec![Link::Internal("self".to_string())],
+        vec![Link::Internal("self".into())],
     )];
     let graph = Graph::build(results);
     assert_eq!(graph.broken_links.len(), 0);
@@ -499,7 +499,7 @@ fn test_heading_uuid_resolves_to_own_node() {
         make_note(
             "other",
             "Other Note",
-            vec![Link::Internal("heading-uuid-1".to_string())],
+            vec![Link::Internal("heading-uuid-1".into())],
         ),
     ];
     let graph = Graph::build(results);
@@ -510,8 +510,11 @@ fn test_heading_uuid_resolves_to_own_node() {
     assert_eq!(node.unwrap().title, "Heading heading-uuid-1");
     // heading UUID should be in heading_uuid_to_primary
     assert_eq!(
-        graph.heading_uuid_to_primary.get("heading-uuid-1"),
-        Some(&"parent-uuid".to_string())
+        graph
+            .heading_uuid_to_primary
+            .get("heading-uuid-1")
+            .map(|uuid| uuid.as_str()),
+        Some("parent-uuid")
     );
     // Link to heading UUID should not be broken
     assert_eq!(graph.broken_links.len(), 0);
@@ -607,8 +610,8 @@ fn test_broken_links_deduplication() {
         "a",
         "Note A",
         vec![
-            Link::Internal("missing".to_string()),
-            Link::Internal("missing".to_string()),
+            Link::Internal("missing".into()),
+            Link::Internal("missing".into()),
         ],
     )];
     let graph = Graph::build(results);
@@ -618,8 +621,8 @@ fn test_broken_links_deduplication() {
 #[test]
 fn test_backlinks_count() {
     let results = vec![
-        make_note("a", "A", vec![Link::Internal("target".to_string())]),
-        make_note("b", "B", vec![Link::Internal("target".to_string())]),
+        make_note("a", "A", vec![Link::Internal("target".into())]),
+        make_note("b", "B", vec![Link::Internal("target".into())]),
         make_note("target", "Target", vec![]),
     ];
     let graph = Graph::build(results);
@@ -632,12 +635,9 @@ fn test_hubs_ordering() {
         make_note(
             "a",
             "Hub A",
-            vec![
-                Link::Internal("x".to_string()),
-                Link::Internal("y".to_string()),
-            ],
+            vec![Link::Internal("x".into()), Link::Internal("y".into())],
         ),
-        make_note("b", "Hub B", vec![Link::Internal("x".to_string())]),
+        make_note("b", "Hub B", vec![Link::Internal("x".into())]),
         make_note("x", "X", vec![]),
         make_note("y", "Y", vec![]),
     ];
@@ -655,8 +655,8 @@ fn test_url_and_file_links_not_counted_as_broken() {
         "a",
         "Note A",
         vec![
-            Link::Url("https://example.com".to_string()),
-            Link::File("/tmp/test".to_string()),
+            Link::Url("https://example.com".into()),
+            Link::File("/tmp/test".into()),
         ],
     )];
     let graph = Graph::build(results);
@@ -806,8 +806,8 @@ fn test_shortest_path_same_node() {
 #[test]
 fn test_shortest_path_max_depth() {
     let results = vec![
-        make_note("a", "A", vec![Link::Internal("b".to_string())]),
-        make_note("b", "B", vec![Link::Internal("c".to_string())]),
+        make_note("a", "A", vec![Link::Internal("b".into())]),
+        make_note("b", "B", vec![Link::Internal("c".into())]),
         make_note("c", "C", vec![]),
     ];
     let graph = Graph::build(results);
@@ -823,7 +823,7 @@ fn test_shortest_path_max_depth() {
 #[test]
 fn test_shortest_path_via_backlinks() {
     let results = vec![
-        make_note("a", "A", vec![Link::Internal("c".to_string())]),
+        make_note("a", "A", vec![Link::Internal("c".into())]),
         make_note("b", "B", vec![]),
         make_note("c", "C", vec![]),
     ];
@@ -865,7 +865,7 @@ fn test_get_neighbors_broken_outgoing() {
     let results = vec![make_note(
         "a",
         "A",
-        vec![Link::Internal("nonexistent".to_string())],
+        vec![Link::Internal("nonexistent".into())],
     )];
     let graph = Graph::build(results);
     let neighbors = graph.get_neighbors("a", 1);
@@ -882,9 +882,9 @@ fn test_get_neighbors_broken_outgoing() {
 #[test]
 fn test_shortest_path_backlink_traversal() {
     let results = vec![
-        make_note("a", "A", vec![Link::Internal("b".to_string())]),
-        make_note("c", "C", vec![Link::Internal("b".to_string())]),
-        make_note("d", "D", vec![Link::Internal("c".to_string())]),
+        make_note("a", "A", vec![Link::Internal("b".into())]),
+        make_note("c", "C", vec![Link::Internal("b".into())]),
+        make_note("d", "D", vec![Link::Internal("c".into())]),
         make_note("b", "B", vec![]),
     ];
     let graph = Graph::build(results);
@@ -903,8 +903,8 @@ fn test_shortest_path_backlink_traversal() {
 #[test]
 fn test_get_neighbors_with_depth() {
     let results = vec![
-        make_note("a", "A", vec![Link::Internal("b".to_string())]),
-        make_note("b", "B", vec![Link::Internal("c".to_string())]),
+        make_note("a", "A", vec![Link::Internal("b".into())]),
+        make_note("b", "B", vec![Link::Internal("c".into())]),
         make_note("c", "C", vec![]),
     ];
     let graph = Graph::build(results);
@@ -996,7 +996,7 @@ This is the content with a unique-searchable-keyword here.
     let results = vec![FileScanResult {
         path: path.clone(),
         parsed: crate::parser::ParsedNote {
-            uuids: vec!["aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa".to_string()],
+            uuids: vec!["aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa".into()],
             title: Some("Content Test".to_string()),
             filetags: vec![],
             project: None,
@@ -1030,8 +1030,8 @@ fn test_detect_overlinks_basic() {
         "uuid1",
         "Note A",
         vec![
-            Link::Internal("target".to_string()),
-            Link::Internal("target".to_string()),
+            Link::Internal("target".into()),
+            Link::Internal("target".into()),
         ],
     )];
     let graph = Graph::build(results);
@@ -1047,7 +1047,7 @@ fn test_detect_overlinks_single_not_reported() {
     let results = vec![make_note(
         "uuid1",
         "Note A",
-        vec![Link::Internal("target".to_string())],
+        vec![Link::Internal("target".into())],
     )];
     let graph = Graph::build(results);
     let overlinks = graph.detect_overlinks();
@@ -1064,7 +1064,7 @@ fn test_detect_overlinks_heading_uuid_not_double_counted() {
     let results = vec![make_note_with_headings(
         "uuid1",
         "Note A",
-        vec![Link::Internal("target".to_string())],
+        vec![Link::Internal("target".into())],
         vec!["heading-uuid"],
     )];
     let graph = Graph::build(results);
@@ -1085,8 +1085,8 @@ fn test_detect_overlinks_heading_uuid_dedup() {
         "uuid1",
         "Note A",
         vec![
-            Link::Internal("target".to_string()),
-            Link::Internal("target".to_string()),
+            Link::Internal("target".into()),
+            Link::Internal("target".into()),
         ],
         vec!["heading-uuid"],
     )];
@@ -1104,11 +1104,11 @@ fn test_detect_overlinks_multiple_targets() {
         "uuid1",
         "Note A",
         vec![
-            Link::Internal("x".to_string()),
-            Link::Internal("x".to_string()),
-            Link::Internal("y".to_string()),
-            Link::Internal("y".to_string()),
-            Link::Internal("y".to_string()),
+            Link::Internal("x".into()),
+            Link::Internal("x".into()),
+            Link::Internal("y".into()),
+            Link::Internal("y".into()),
+            Link::Internal("y".into()),
         ],
     )];
     let graph = Graph::build(results);
@@ -1129,7 +1129,7 @@ proptest::proptest! {
     ) {
         let results: Vec<FileScanResult> = uuids.iter().map(|uuid| {
             let parsed = ParsedNote {
-                uuids: if uuid.is_empty() { vec![] } else { vec![uuid.clone()] },
+                uuids: if uuid.is_empty() { vec![] } else { vec![uuid.clone().into()] },
                 title: Some("test".to_string()),
                 filetags: vec![],
                 project: None,

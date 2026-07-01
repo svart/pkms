@@ -1,5 +1,8 @@
+use crate::domain::NoteId;
 use crate::tasks::id::TaskId;
-use crate::tasks::model::{TaskDate, TaskItem, TaskSourceKind, TaskStatus};
+use crate::tasks::model::{
+    TaskDate, TaskDateValue, TaskItem, TaskPriority, TaskSourceKind, TaskState, TaskStatus,
+};
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -105,11 +108,11 @@ impl TodoistMetadata {
     }
 }
 
-pub fn pkms_note_marker_uuid(description: &str) -> Option<String> {
+pub fn pkms_note_marker_uuid(description: &str) -> Option<NoteId> {
     description.split_whitespace().find_map(|part| {
         part.strip_prefix(PKMS_NOTE_MARKER_PREFIX)
             .filter(|uuid| !uuid.is_empty())
-            .map(str::to_string)
+            .map(NoteId::new)
     })
 }
 
@@ -376,7 +379,7 @@ pub fn task_to_item_with_metadata(
         title: task.content,
         body: non_empty(task.description),
         status: TaskStatus::Open,
-        state: Some("open".to_string()),
+        state: Some(TaskState::new("open")),
         priority: task.priority.and_then(todoist_priority),
         scheduled: task
             .due
@@ -400,11 +403,11 @@ pub fn task_to_item_with_metadata(
     }
 }
 
-fn todoist_priority(priority: u8) -> Option<String> {
+fn todoist_priority(priority: u8) -> Option<TaskPriority> {
     match priority {
-        4 => Some("A".to_string()),
-        3 => Some("B".to_string()),
-        2 => Some("C".to_string()),
+        4 => Some(TaskPriority::A),
+        3 => Some(TaskPriority::B),
+        2 => Some(TaskPriority::C),
         _ => None,
     }
 }
@@ -422,7 +425,7 @@ fn normalized_task_date(date: Option<String>, fallback_raw: Option<String>) -> T
         .unwrap_or_default();
     let date = date
         .as_deref()
-        .map(|date| date.split('T').next().unwrap_or(date).to_string());
+        .map(|date| TaskDateValue::new(date.split('T').next().unwrap_or(date)));
     TaskDate { raw, date }
 }
 

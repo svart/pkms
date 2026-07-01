@@ -338,9 +338,9 @@ fn collect_check_data<'a>(
             .filter(|l| matches!(l, Link::Internal(u) if u == &node_a.uuid))
             .count();
         Some(CrossLinkResult {
-            source_uuid: node_a.uuid.clone(),
+            source_uuid: node_a.uuid.to_string(),
             source_title: node_a.title.clone(),
-            target_uuid: node_b.uuid.clone(),
+            target_uuid: node_b.uuid.to_string(),
             target_title: node_b.title.clone(),
             source_to_target: a_to_b,
             target_to_source: b_to_a,
@@ -480,9 +480,9 @@ fn build_check_output(data: &CheckData, opts: &CheckDisplayOptions) -> CheckOutp
             .broken_internal_links
             .iter()
             .map(|issue| BrokenLinkEntry {
-                source_uuid: issue.source_uuid.clone(),
+                source_uuid: issue.source_uuid.to_string(),
                 source_title: issue.source_title.clone(),
-                target_uuid: issue.target_uuid.clone(),
+                target_uuid: issue.target_uuid.to_string(),
             })
             .collect()
     } else {

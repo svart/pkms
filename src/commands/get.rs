@@ -31,11 +31,11 @@ impl From<&parser::Heading> for HeadingJson {
         HeadingJson {
             level: h.level,
             title: h.title.clone(),
-            todo_state: h.todo_state.clone(),
+            todo_state: h.todo_state.as_ref().map(|state| state.to_string()),
             tags: h.tags.clone(),
             raw: h.raw.clone(),
-            uuid: h.uuid.clone(),
-            priority: h.priority,
+            uuid: h.uuid.as_ref().map(|uuid| uuid.to_string()),
+            priority: h.priority.map(|priority| priority.as_char()),
             scheduled: h.scheduled.clone(),
             deadline: h.deadline.clone(),
         }
@@ -68,7 +68,7 @@ pub struct NodeJson {
 impl NodeJson {
     fn from_node(node: &Node, content: Option<&str>, headings: Option<Vec<HeadingJson>>) -> Self {
         NodeJson {
-            uuid: node.uuid.clone(),
+            uuid: node.uuid.to_string(),
             title: node.title.clone(),
             path: util::path_string(&node.path),
             filetags: node.filetags.clone(),

@@ -46,17 +46,17 @@ fn render_link(
         {
             let preview_uuid = graph
                 .resolve_target(uuid)
-                .map(|node| node.uuid.clone())
+                .map(|node| node.uuid.to_string())
                 .unwrap_or_else(|_| uuid.to_string());
             (
-                location.primary_uuid,
+                location.primary_uuid.to_string(),
                 Some(heading_anchor(location.line_number)),
                 preview_uuid,
             )
         } else {
             let resolved_uuid = graph
                 .resolve_target(uuid)
-                .map(|node| node.uuid.clone())
+                .map(|node| node.uuid.to_string())
                 .unwrap_or_else(|_| uuid.to_string());
             (resolved_uuid.clone(), None, resolved_uuid)
         };
@@ -73,7 +73,7 @@ fn render_link(
     }
     if let Some(path) = target.strip_prefix("file:") {
         let resolved = resolve_file_link_path(path, &node.path, config.resolved_db_root());
-        let href = asset_href(&node.uuid, "file", path);
+        let href = asset_href(&node.uuid, assets::AssetKind::File, path);
         if assets::is_image_path(&resolved) {
             return format!(
                 "<figure><img src=\"{href}\" alt=\"{}\"><figcaption>{}</figcaption></figure>",
@@ -86,7 +86,7 @@ fn render_link(
     if let Some(path) = target.strip_prefix("attachment:") {
         let resolved =
             assets::resolve_existing_attachment(config.resolved_db_root(), &node.uuid, path);
-        let href = asset_href(&node.uuid, "attachment", path);
+        let href = asset_href(&node.uuid, assets::AssetKind::Attachment, path);
         if assets::is_image_path(&resolved) {
             return format!(
                 "<figure><img src=\"{href}\" alt=\"{}\"><figcaption>{}</figcaption></figure>",
@@ -133,7 +133,7 @@ fn render_image_link(
         let resolved = resolve_file_link_path(path, &node.path, config.resolved_db_root());
         if assets::is_image_path(&resolved) {
             return Some(render_image_figure(
-                &asset_href(&node.uuid, "file", path),
+                &asset_href(&node.uuid, assets::AssetKind::File, path),
                 caption.or(desc).unwrap_or(target),
             ));
         }
@@ -143,7 +143,7 @@ fn render_image_link(
             assets::resolve_existing_attachment(config.resolved_db_root(), &node.uuid, path);
         if assets::is_image_path(&resolved) {
             return Some(render_image_figure(
-                &asset_href(&node.uuid, "attachment", path),
+                &asset_href(&node.uuid, assets::AssetKind::Attachment, path),
                 caption.or(desc).unwrap_or(target),
             ));
         }
@@ -159,11 +159,11 @@ fn render_image_figure(href: &str, caption: &str) -> String {
     )
 }
 
-fn asset_href(note_uuid: &str, kind: &str, target: &str) -> String {
+fn asset_href(note_uuid: &str, kind: assets::AssetKind, target: &str) -> String {
     format!(
         "/asset?note={}&amp;kind={}&amp;target={}",
         percent_encode(note_uuid),
-        percent_encode(kind),
+        percent_encode(kind.as_str()),
         percent_encode(target)
     )
 }

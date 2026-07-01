@@ -57,7 +57,7 @@ pub fn execute(config: &ResolvedConfig, opts: &OrphansOptions) -> Result<Orphans
     let entries: Vec<OrphanEntry> = orphans
         .iter()
         .map(|n| OrphanEntry {
-            uuid: n.uuid.clone(),
+            uuid: n.uuid.to_string(),
             title: n.title.clone(),
             path: util::path_string(&n.path),
             filetags: n.filetags.clone(),

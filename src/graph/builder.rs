@@ -1,16 +1,17 @@
 use std::collections::HashMap;
 use std::path::Path;
 
+use crate::domain::NoteId;
 use crate::parser::Link;
 
 use super::{DuplicateEntry, DuplicateInfo, FileScanResult, Graph, Node};
 
-type Backlinks = HashMap<String, Vec<String>>;
-type BrokenLinks = Vec<(String, String)>;
+type Backlinks = HashMap<NoteId, Vec<NoteId>>;
+type BrokenLinks = Vec<(NoteId, NoteId)>;
 
 fn build_links(
-    uuid_to_outgoing: &HashMap<String, Vec<Link>>,
-    nodes: &HashMap<String, Node>,
+    uuid_to_outgoing: &HashMap<NoteId, Vec<Link>>,
+    nodes: &HashMap<NoteId, Node>,
 ) -> (Backlinks, BrokenLinks) {
     let mut backlinks: Backlinks = HashMap::new();
     let mut broken_links = BrokenLinks::new();
@@ -39,7 +40,7 @@ fn build_links(
 impl BuildContext {
     fn process_headings(
         &mut self,
-        primary_uuid: &str,
+        primary_uuid: &NoteId,
         parsed: &crate::parser::ParsedNote,
         path: &Path,
     ) {
@@ -49,7 +50,7 @@ impl BuildContext {
         let aliases = &parsed.aliases;
         let refs = &parsed.roam_refs;
 
-        let mut stack: Vec<(usize, String, Vec<String>)> = Vec::new();
+        let mut stack: Vec<(usize, NoteId, Vec<NoteId>)> = Vec::new();
 
         for (i, heading) in headings.iter().enumerate() {
             while let Some(&(top_idx, _, _)) = stack.last() {
@@ -68,7 +69,7 @@ impl BuildContext {
                 let parent_uuid = stack
                     .last()
                     .map(|(_, u, _)| u.clone())
-                    .unwrap_or_else(|| primary_uuid.to_string());
+                    .unwrap_or_else(|| primary_uuid.clone());
 
                 let mut heading_node = Node {
                     uuid: uuid.clone(),
@@ -106,7 +107,7 @@ impl BuildContext {
                 heading_node.outgoing = self.uuid_to_outgoing[&uuid.clone()].clone();
 
                 self.heading_uuid_to_primary
-                    .insert(uuid.clone(), primary_uuid.to_string());
+                    .insert(uuid.clone(), primary_uuid.clone());
 
                 self.nodes.insert(uuid.clone(), heading_node);
 
@@ -128,20 +129,20 @@ impl BuildContext {
 }
 
 struct BuildContext {
-    nodes: HashMap<String, Node>,
-    path_to_uuid: HashMap<std::path::PathBuf, String>,
-    title_to_uuid: HashMap<String, Vec<String>>,
-    alias_to_uuid: HashMap<String, Vec<String>>,
+    nodes: HashMap<NoteId, Node>,
+    path_to_uuid: HashMap<std::path::PathBuf, NoteId>,
+    title_to_uuid: HashMap<String, Vec<NoteId>>,
+    alias_to_uuid: HashMap<String, Vec<NoteId>>,
     parse_errors: Vec<(std::path::PathBuf, String)>,
     skipped_files: Vec<std::path::PathBuf>,
     missing_titles: Vec<std::path::PathBuf>,
-    seen_uuids: HashMap<String, std::path::PathBuf>,
+    seen_uuids: HashMap<NoteId, std::path::PathBuf>,
     duplicate_uuids: Vec<DuplicateEntry>,
     seen_titles: HashMap<String, std::path::PathBuf>,
     duplicate_titles: Vec<DuplicateEntry>,
-    uuid_to_outgoing: HashMap<String, Vec<Link>>,
-    heading_uuid_to_primary: HashMap<String, String>,
-    all_uuids_seen: HashMap<String, std::path::PathBuf>,
+    uuid_to_outgoing: HashMap<NoteId, Vec<Link>>,
+    heading_uuid_to_primary: HashMap<NoteId, NoteId>,
+    all_uuids_seen: HashMap<NoteId, std::path::PathBuf>,
 }
 
 impl BuildContext {
@@ -185,7 +186,7 @@ impl BuildContext {
             && existing != path
         {
             self.duplicate_uuids.push(DuplicateEntry {
-                value: primary_uuid.clone(),
+                value: primary_uuid.to_string(),
                 paths: vec![
                     self.seen_uuids[primary_uuid.as_str()]
                         .to_string_lossy()
@@ -200,7 +201,7 @@ impl BuildContext {
             && existing != path
         {
             self.duplicate_uuids.push(DuplicateEntry {
-                value: primary_uuid.clone(),
+                value: primary_uuid.to_string(),
                 paths: vec![existing.display().to_string(), path.display().to_string()],
             });
         }
@@ -266,22 +267,22 @@ impl BuildContext {
     fn check_heading_uuids(
         &mut self,
         parsed: &crate::parser::ParsedNote,
-        primary_uuid: &str,
+        primary_uuid: &NoteId,
         path: &std::path::Path,
     ) {
         let mut file_heading_uuids_seen = std::collections::HashSet::new();
-        let heading_uuids_list: Vec<String> = parsed.heading_uuids();
+        let heading_uuids_list = parsed.heading_uuids();
         for heading_uuid in &heading_uuids_list {
             if heading_uuid == primary_uuid {
                 self.duplicate_uuids.push(DuplicateEntry {
-                    value: heading_uuid.clone(),
+                    value: heading_uuid.to_string(),
                     paths: vec![path.display().to_string(), path.display().to_string()],
                 });
                 continue;
             }
             if !file_heading_uuids_seen.insert(heading_uuid.clone()) {
                 self.duplicate_uuids.push(DuplicateEntry {
-                    value: heading_uuid.clone(),
+                    value: heading_uuid.to_string(),
                     paths: vec![path.display().to_string(), path.display().to_string()],
                 });
                 continue;
@@ -290,7 +291,7 @@ impl BuildContext {
                 && existing != path
             {
                 self.duplicate_uuids.push(DuplicateEntry {
-                    value: heading_uuid.clone(),
+                    value: heading_uuid.to_string(),
                     paths: vec![existing.display().to_string(), path.display().to_string()],
                 });
             }

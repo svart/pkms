@@ -73,7 +73,7 @@ pub struct RecentNote {
 impl From<&crate::graph::Node> for RecentNote {
     fn from(n: &crate::graph::Node) -> Self {
         RecentNote {
-            uuid: n.uuid.clone(),
+            uuid: n.uuid.to_string(),
             title: n.title.clone(),
             path: n.path.display().to_string(),
         }
@@ -191,7 +191,7 @@ fn build_hubs_output(graph: &Graph, limit: usize) -> HubsOutput {
             let (outgoing, incoming) = degrees.get(&n.uuid).copied().unwrap_or_default();
             HubEntryDetailed {
                 rank: i + 1,
-                uuid: n.uuid.clone(),
+                uuid: n.uuid.to_string(),
                 title: n.title.clone(),
                 degree: *deg,
                 outgoing,

@@ -5,6 +5,8 @@
 //! SCHEDULED/DEADLINE timestamps, org-mode links (`[[id:...]]`, `[[file:...]]`, `[[url:...]]`),
 //! and headings with their TODO states, priorities, tags, and line numbers.
 
+use crate::domain::{LinkTarget, NoteId};
+use crate::tasks::model::{TaskPriority, TaskState};
 use chrono::NaiveDate;
 use regex::Regex;
 use serde::Serialize;
@@ -12,7 +14,7 @@ use std::sync::LazyLock;
 
 #[derive(Debug, Clone)]
 pub struct ParsedNote {
-    pub uuids: Vec<String>,
+    pub uuids: Vec<NoteId>,
     pub title: Option<String>,
     pub filetags: Vec<String>,
     pub project: Option<String>,
@@ -25,7 +27,7 @@ pub struct ParsedNote {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ParsedNoteSummary {
-    pub uuids: Vec<String>,
+    pub uuids: Vec<NoteId>,
     pub title: String,
     pub filetags: Vec<String>,
     pub categories: Vec<String>,
@@ -48,7 +50,7 @@ impl ParsedNote {
         }
     }
 
-    pub fn heading_uuids(&self) -> Vec<String> {
+    pub fn heading_uuids(&self) -> Vec<NoteId> {
         self.headings
             .iter()
             .filter_map(|h| h.uuid.clone())
@@ -59,29 +61,29 @@ impl ParsedNote {
         self.headings.iter().any(|h| {
             h.todo_state
                 .as_ref()
-                .is_some_and(|s| s.chars().all(|c| c.is_uppercase() || c == '-'))
+                .is_some_and(|s| s.as_str().chars().all(|c| c.is_uppercase() || c == '-'))
         })
     }
 }
 
 #[derive(Debug, Clone, Serialize)]
 pub enum Link {
-    Internal(String),
-    File(String),
-    Url(String),
-    Attachment(String),
+    Internal(NoteId),
+    File(LinkTarget),
+    Url(LinkTarget),
+    Attachment(LinkTarget),
 }
 
 #[derive(Debug, Clone, Serialize)]
 pub struct Heading {
     pub level: usize,
     pub title: String,
-    pub todo_state: Option<String>,
+    pub todo_state: Option<TaskState>,
     pub tags: Vec<String>,
-    pub uuid: Option<String>,
+    pub uuid: Option<NoteId>,
     pub scheduled: Option<String>,
     pub deadline: Option<String>,
-    pub priority: Option<char>,
+    pub priority: Option<TaskPriority>,
     pub project: Option<String>,
     pub line_number: usize,
     pub outgoing: Vec<Link>,
@@ -152,7 +154,7 @@ pub(crate) static UUID_FORMAT_RE: LazyLock<Regex> = LazyLock::new(|| {
 });
 
 struct ParseContext {
-    uuids: Vec<String>,
+    uuids: Vec<NoteId>,
     title: Option<String>,
     filetags: Vec<String>,
     project: Option<String>,
@@ -240,9 +242,9 @@ impl ParseContext {
         match key {
             PropertyKey::Id => {
                 if let Some(idx) = self.current_heading_idx {
-                    self.headings[idx].uuid = Some(value.to_string());
+                    self.headings[idx].uuid = Some(NoteId::new(value));
                 } else {
-                    self.uuids.push(value.to_string());
+                    self.uuids.push(NoteId::new(value));
                 }
             }
             PropertyKey::Category => self.categories.push(value.to_string()),
@@ -317,8 +319,11 @@ impl ParseContext {
             }
         }
 
-        let todo_state = cap.get(2).map(|m| m.as_str().to_string());
-        let priority = cap.get(3).and_then(|m| m.as_str().chars().next());
+        let todo_state = cap.get(2).map(|m| TaskState::new(m.as_str()));
+        let priority = cap
+            .get(3)
+            .and_then(|m| m.as_str().chars().next())
+            .and_then(TaskPriority::from_char);
         let heading_title = cap.get(4).map_or("", |m| m.as_str()).to_string();
         let tags = cap
             .get(5)
@@ -405,7 +410,7 @@ pub fn parse_note_summary(content: &str) -> ParsedNoteSummary {
     let uuids = ID_PROPERTY_RE
         .captures_iter(content)
         .filter_map(|c| c.get(1))
-        .map(|m| m.as_str().to_string())
+        .map(|m| NoteId::new(m.as_str()))
         .collect();
 
     let title = TITLE_RE
@@ -541,19 +546,19 @@ pub fn validate_filetags_format(content: &str) -> Vec<(String, String)> {
 
 fn parse_link(target: &str) -> Option<Link> {
     if let Some(rest) = target.strip_prefix("id:") {
-        return Some(Link::Internal(rest.to_string()));
+        return Some(Link::Internal(NoteId::new(rest)));
     }
     if let Some(rest) = target.strip_prefix("file:") {
-        return Some(Link::File(rest.to_string()));
+        return Some(Link::File(LinkTarget::new(rest)));
     }
     if target.starts_with("org:") {
-        return Some(Link::File(target.to_string()));
+        return Some(Link::File(LinkTarget::new(target)));
     }
     if let Some(rest) = target.strip_prefix("attachment:") {
-        return Some(Link::Attachment(rest.to_string()));
+        return Some(Link::Attachment(LinkTarget::new(rest)));
     }
     if target.starts_with("http://") || target.starts_with("https://") {
-        return Some(Link::Url(target.to_string()));
+        return Some(Link::Url(LinkTarget::new(target)));
     }
     None
 }
@@ -647,7 +652,7 @@ Some content here."#;
 "#;
         let note = parse_note(content);
         assert_eq!(
-            note.uuids.first().map(String::as_str),
+            note.uuids.first().map(NoteId::as_str),
             Some("a1b2c3d4-e5f6-7890-abcd-ef1234567890")
         );
         assert_eq!(note.categories, vec!["example"]);
@@ -863,11 +868,11 @@ Some text
 *** No priority"#;
         let note = parse_note(content);
         assert_eq!(note.headings.len(), 4);
-        assert_eq!(note.headings[0].priority, Some('A'));
+        assert_eq!(note.headings[0].priority, Some(TaskPriority::A));
         assert_eq!(note.headings[0].todo_state.as_deref(), Some("TODO"));
-        assert_eq!(note.headings[1].priority, Some('B'));
+        assert_eq!(note.headings[1].priority, Some(TaskPriority::B));
         assert!(note.headings[1].todo_state.is_none());
-        assert_eq!(note.headings[2].priority, Some('C'));
+        assert_eq!(note.headings[2].priority, Some(TaskPriority::C));
         assert!(note.headings[3].priority.is_none());
     }
 

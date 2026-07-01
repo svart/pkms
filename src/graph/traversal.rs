@@ -1,16 +1,18 @@
 use std::collections::{HashMap, HashSet, VecDeque};
 
+use crate::domain::NoteId;
 use crate::parser::Link;
 
 use super::{Graph, NeighborSet};
 
 impl Graph {
     pub fn get_neighbors(&self, uuid: &str, max_depth: u32) -> HashMap<u32, NeighborSet> {
+        let start = NoteId::new(uuid);
         let mut result = HashMap::new();
         let mut visited = HashSet::new();
-        visited.insert(uuid.to_string());
+        visited.insert(start.clone());
 
-        let mut current = vec![uuid.to_string()];
+        let mut current = vec![start];
         for depth in 1..=max_depth {
             let mut neighbors = NeighborSet::default();
             let mut next = Vec::new();
@@ -31,10 +33,7 @@ impl Graph {
                     }
                 }
 
-                let primary = self
-                    .nodes
-                    .get(uid)
-                    .map_or(uid.as_str(), |n| n.uuid.as_str());
+                let primary = self.nodes.get(uid).map_or(uid, |n| &n.uuid);
                 if let Some(backlinks) = self.backlinks.get(primary) {
                     for buid in backlinks {
                         if visited.insert(buid.clone()) {
@@ -72,7 +71,7 @@ impl Graph {
         let to_uuid = self.find_node(to)?.uuid.clone();
 
         if from_uuid == to_uuid {
-            return Some(vec![from_uuid]);
+            return Some(vec![from_uuid.to_string()]);
         }
 
         let mut visited = HashSet::new();
@@ -91,7 +90,7 @@ impl Graph {
                         if next == &to_uuid {
                             let mut full = path.clone();
                             full.push(next.clone());
-                            return Some(full);
+                            return Some(note_path_to_strings(full));
                         }
                         if visited.insert(next.clone()) {
                             let mut new_path = path.clone();
@@ -102,16 +101,13 @@ impl Graph {
                 }
             }
 
-            let primary = self
-                .nodes
-                .get(&current)
-                .map_or(current.as_str(), |n| n.uuid.as_str());
+            let primary = self.nodes.get(&current).map_or(&current, |n| &n.uuid);
             if let Some(backlinks) = self.backlinks.get(primary) {
                 for prev in backlinks {
                     if prev == &to_uuid {
                         let mut full = path.clone();
                         full.push(prev.clone());
-                        return Some(full);
+                        return Some(note_path_to_strings(full));
                     }
                     if visited.insert(prev.clone()) {
                         let mut new_path = path.clone();
@@ -124,4 +120,8 @@ impl Graph {
 
         None
     }
+}
+
+fn note_path_to_strings(path: Vec<NoteId>) -> Vec<String> {
+    path.into_iter().map(String::from).collect()
 }

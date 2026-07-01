@@ -133,7 +133,7 @@ pub fn run(ctx: &CommandContext<'_>, opts: &FixOptions) -> Result<()> {
 
     let output = FixOutput {
         broken_uuid: opts.broken_uuid.clone(),
-        replacement_uuid: replacement_uuid.clone(),
+        replacement_uuid: replacement_uuid.to_string(),
         replacement_title,
         files_affected: files_affected.clone(),
         total_replacements,

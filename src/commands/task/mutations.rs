@@ -4,8 +4,9 @@ use crate::config::ResolvedConfig;
 use crate::output::OutputContext;
 use crate::tasks::clock::TaskClock;
 use crate::tasks::id::TaskId;
+use crate::tasks::model::{TaskDateValue, TaskPriority, TaskProperty, TaskSourceKind, TaskState};
 use crate::tasks::modifiers::{
-    TaskModifierSpec, is_clear_value, org_date, parse_task_date_arg_on, pkms_priority,
+    TaskModifierSpec, TaskPriorityArg, is_clear_value, org_date, parse_task_date_arg_on,
     validate_pkms_task_date_arg_on,
 };
 use crate::tasks::pkms::{self, PkmsInboxTarget};
@@ -60,16 +61,12 @@ pub(in crate::commands::task) fn run_add(
     tokens: &[String],
 ) -> Result<()> {
     let spec = TaskModifierSpec::parse(tokens)?;
-    if spec.source_or_default().eq_ignore_ascii_case("pkms") {
-        return add_pkms_task(runtime.config, runtime.output, &spec, runtime.clock);
+    match spec.source_or_default() {
+        TaskSourceKind::Pkms => add_pkms_task(runtime.config, runtime.output, &spec, runtime.clock),
+        TaskSourceKind::Todoist => {
+            add_todoist_task(runtime.config, runtime.output, &spec, runtime.clock)
+        }
     }
-    if spec.source_or_default().eq_ignore_ascii_case("todoist") {
-        return add_todoist_task(runtime.config, runtime.output, &spec, runtime.clock);
-    }
-    bail!(
-        "Unknown task source '{}'. Use pkms or todoist.",
-        spec.source_or_default()
-    )
 }
 
 pub(in crate::commands::task) fn run_postpone(
@@ -163,7 +160,7 @@ fn mod_pkms_task(
                     target_line_number,
                 )?;
                 changes.push(render::TaskModChange {
-                    property: "Dependency",
+                    property: TaskProperty::Dependency,
                     old: None,
                     new: Some(TaskId::Pkms(target_id).display_id()),
                 });
@@ -175,7 +172,7 @@ fn mod_pkms_task(
                     (path, line_number) =
                         pkms::remove_subtree_dependency(&path, line_number, parent_line_number)?;
                     changes.push(render::TaskModChange {
-                        property: "Dependency",
+                        property: TaskProperty::Dependency,
                         old: Some(TaskId::Pkms(parent_id).display_id()),
                         new: None,
                     });
@@ -275,8 +272,8 @@ fn current_dependency_parent(
 }
 
 fn validate_mod_source(spec: &TaskModifierSpec, expected: &str) -> Result<()> {
-    if let Some(source) = spec.source.as_deref()
-        && !source.eq_ignore_ascii_case(expected)
+    if let Some(source) = spec.source
+        && !source.as_str().eq_ignore_ascii_case(expected)
     {
         bail!("Task source cannot be changed by task mod.");
     }
@@ -292,17 +289,17 @@ fn mod_title(spec: &TaskModifierSpec) -> Result<Option<String>> {
         .map(str::to_string))
 }
 
-fn mod_pkms_priority(spec: &TaskModifierSpec) -> Result<Option<Option<char>>> {
-    let Some(priority) = spec.priority.as_deref() else {
+fn mod_pkms_priority(spec: &TaskModifierSpec) -> Result<Option<Option<TaskPriority>>> {
+    let Some(priority) = spec.priority else {
         return Ok(None);
     };
-    Ok(Some(match priority.trim() {
-        value if is_clear_value(value) => None,
-        value => Some(pkms_priority(value)?),
+    Ok(Some(match priority {
+        TaskPriorityArg::Clear => None,
+        TaskPriorityArg::Set(priority) => Some(priority),
     }))
 }
 
-fn mod_state(config: &ResolvedConfig, spec: &TaskModifierSpec) -> Result<Option<String>> {
+fn mod_state(config: &ResolvedConfig, spec: &TaskModifierSpec) -> Result<Option<TaskState>> {
     spec.state
         .as_deref()
         .map(|state| canonical_state(config, state))
@@ -316,7 +313,11 @@ fn mod_optional_text(value: Option<&str>) -> Option<Option<String>> {
     })
 }
 
-fn mod_date(name: &str, value: Option<&str>, today: NaiveDate) -> Result<Option<Option<String>>> {
+fn mod_date(
+    name: &str,
+    value: Option<&str>,
+    today: NaiveDate,
+) -> Result<Option<Option<TaskDateValue>>> {
     let Some(value) = value.map(str::trim) else {
         return Ok(None);
     };
@@ -425,12 +426,12 @@ fn set_todoist_task_state(
     bail!("Todoist support is not available in this build. Rebuild with --features todoist.")
 }
 
-fn canonical_state(config: &ResolvedConfig, requested_state: &str) -> Result<String> {
+fn canonical_state(config: &ResolvedConfig, requested_state: &str) -> Result<TaskState> {
     let states = config.todo_states();
     states
         .iter()
         .find(|state| state.eq_ignore_ascii_case(requested_state))
-        .cloned()
+        .map(|state| TaskState::new(state.clone()))
         .ok_or_else(|| {
             anyhow::anyhow!(
                 "Unknown TODO state '{}'. Valid states: {}",
@@ -507,20 +508,14 @@ fn format_pkms_task_entry(
 ) -> Result<String> {
     let title = pkms_add_title(spec)?;
     let state = match spec.state.as_deref() {
-        Some(state) => canonical_state(config, state)?,
+        Some(state) => canonical_state(config, state)?.to_string(),
         None => config
             .open_todo_states()
             .first()
             .cloned()
             .unwrap_or_else(|| "TODO".to_string()),
     };
-    let priority = spec
-        .priority
-        .as_deref()
-        .map(pkms_priority)
-        .transpose()?
-        .map(|priority| format!(" [#{priority}]"))
-        .unwrap_or_default();
+    let priority = pkms_add_priority(spec)?;
     let labels = spec.labels();
     let tags = if labels.is_empty() {
         String::new()
@@ -564,6 +559,14 @@ fn pkms_add_title(spec: &TaskModifierSpec) -> Result<&str> {
         .map(str::trim)
         .filter(|title| !title.is_empty())
         .ok_or_else(|| anyhow::anyhow!("PKMS task creation requires task text or title:"))
+}
+
+fn pkms_add_priority(spec: &TaskModifierSpec) -> Result<String> {
+    match spec.priority {
+        None => Ok(String::new()),
+        Some(TaskPriorityArg::Set(priority)) => Ok(format!(" [#{priority}]")),
+        Some(TaskPriorityArg::Clear) => bail!("Invalid priority 'none'. Use A, B, or C."),
+    }
 }
 
 fn postpone_pkms_recurring_task(
@@ -648,11 +651,7 @@ fn create_structured_todoist_task(
     let description = spec.description.clone();
     let due_date = validate_date_arg("due", spec.due.as_deref(), clock.today)?;
     let deadline_date = validate_date_arg("deadline", spec.deadline.as_deref(), clock.today)?;
-    let priority = spec
-        .priority
-        .as_deref()
-        .map(todoist_create_priority)
-        .transpose()?;
+    let priority = spec.priority.map(todoist_add_priority).transpose()?;
     let token = crate::tasks::todoist::ensure_enabled(config)?;
     let client =
         crate::tasks::todoist::TodoistClient::with_base_url(config.todoist_api_base_url(), token);
@@ -741,7 +740,7 @@ fn mod_todoist_task(
     if let Some(title) = mod_title(spec)? {
         push_todoist_change(
             &mut changes,
-            "Title",
+            TaskProperty::Title,
             Some(old_item.title.clone()),
             Some(title.clone()),
         );
@@ -751,7 +750,7 @@ fn mod_todoist_task(
         let new = description.trim().to_string();
         push_todoist_change(
             &mut changes,
-            "Description",
+            TaskProperty::Description,
             old_item.body.clone(),
             (!new.is_empty()).then_some(new.clone()),
         );
@@ -760,50 +759,54 @@ fn mod_todoist_task(
     if let Some(labels) = &spec.labels {
         let old = (!old_item.tags.is_empty()).then(|| old_item.tags.join(", "));
         let new = (!labels.is_empty()).then(|| labels.join(", "));
-        push_todoist_change(&mut changes, "Tags", old, new);
+        push_todoist_change(&mut changes, TaskProperty::Tags, old, new);
         request.insert("labels".to_string(), serde_json::json!(labels));
     }
-    if let Some(priority) = spec.priority.as_deref() {
-        let priority = match priority.trim() {
-            value if is_clear_value(value) => 1,
-            value => todoist_create_priority(value)?,
+    if let Some(priority) = spec.priority {
+        let priority = match priority {
+            TaskPriorityArg::Clear => 1,
+            TaskPriorityArg::Set(priority) => todoist_priority_value(priority),
         };
         push_todoist_change(
             &mut changes,
-            "Priority",
-            old_item.priority.clone(),
+            TaskProperty::Priority,
+            old_item.priority.map(|priority| priority.to_string()),
             todoist_priority_label(priority),
         );
         request.insert("priority".to_string(), serde_json::json!(priority));
     }
     if let Some(date) = mod_date("schedule", spec.due.as_deref(), clock.today)? {
         if old_item.scheduled_date_str() != date.as_deref() {
-            let new_raw = date.as_deref().map(org_date).transpose()?;
+            let new_raw = date.as_ref().map(org_date).transpose()?;
             push_todoist_change(
                 &mut changes,
-                "Scheduled",
+                TaskProperty::Scheduled,
                 old_item.scheduled.as_ref().map(|date| date.raw.clone()),
                 new_raw,
             );
         }
         request.insert(
             "due_date".to_string(),
-            date.map_or(serde_json::Value::Null, serde_json::Value::String),
+            date.map_or(serde_json::Value::Null, |date| {
+                serde_json::Value::String(date.to_string())
+            }),
         );
     }
     if let Some(date) = mod_date("deadline", spec.deadline.as_deref(), clock.today)? {
         if old_item.deadline_date_str() != date.as_deref() {
-            let new_raw = date.as_deref().map(org_date).transpose()?;
+            let new_raw = date.as_ref().map(org_date).transpose()?;
             push_todoist_change(
                 &mut changes,
-                "Deadline",
+                TaskProperty::Deadline,
                 old_item.deadline.as_ref().map(|date| date.raw.clone()),
                 new_raw,
             );
         }
         request.insert(
             "deadline_date".to_string(),
-            date.map_or(serde_json::Value::Null, serde_json::Value::String),
+            date.map_or(serde_json::Value::Null, |date| {
+                serde_json::Value::String(date.to_string())
+            }),
         );
     }
     if let Some(project) = mod_optional_text(spec.project.as_deref()) {
@@ -823,7 +826,7 @@ fn mod_todoist_task(
         };
         push_todoist_change(
             &mut changes,
-            "Project",
+            TaskProperty::Project,
             old_item.project.clone(),
             project_name,
         );
@@ -864,7 +867,7 @@ fn mod_todoist_task(
 #[cfg(feature = "todoist")]
 fn push_todoist_change(
     changes: &mut Vec<render::TaskModChange>,
-    property: &'static str,
+    property: TaskProperty,
     old: Option<String>,
     new: Option<String>,
 ) {
@@ -965,19 +968,27 @@ fn validate_date_arg(name: &str, value: Option<&str>, today: NaiveDate) -> Resul
     value
         .map(|value| parse_task_date_arg_on(name, value, today))
         .transpose()
+        .map(|date| date.map(|date| date.to_string()))
 }
 
 fn parse_mutation_due_date(value: &str, today: NaiveDate) -> Result<String> {
-    parse_task_date_arg_on("due", value, today)
+    Ok(parse_task_date_arg_on("due", value, today)?.to_string())
 }
 
 #[cfg(feature = "todoist")]
-fn todoist_create_priority(value: &str) -> Result<u8> {
-    match value.to_ascii_uppercase().as_str() {
-        "A" => Ok(4),
-        "B" => Ok(3),
-        "C" => Ok(2),
-        _ => bail!("Invalid priority '{value}'. Use A, B, or C."),
+fn todoist_add_priority(priority: TaskPriorityArg) -> Result<u8> {
+    match priority {
+        TaskPriorityArg::Set(priority) => Ok(todoist_priority_value(priority)),
+        TaskPriorityArg::Clear => bail!("Invalid priority 'none'. Use A, B, or C."),
+    }
+}
+
+#[cfg(feature = "todoist")]
+fn todoist_priority_value(priority: TaskPriority) -> u8 {
+    match priority {
+        TaskPriority::A => 4,
+        TaskPriority::B => 3,
+        TaskPriority::C => 2,
     }
 }
 
@@ -1047,6 +1058,9 @@ fn quick_add_text(text: &str, project: Option<&str>) -> String {
     }
 }
 
-pub(in crate::commands::task) fn unsupported_task_source(source: &str) -> Result<()> {
-    bail!("Task source '{source}' is not configured in this build.")
+pub(in crate::commands::task) fn unsupported_task_source(source: impl AsRef<str>) -> Result<()> {
+    bail!(
+        "Task source '{}' is not configured in this build.",
+        source.as_ref()
+    )
 }

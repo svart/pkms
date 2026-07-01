@@ -1,54 +1,117 @@
 use crate::util;
+use std::fmt;
 use std::path::{Path, PathBuf};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum ContentType {
+    Html,
+    PlainText,
+    Css,
+    Svg,
+    FontTtf,
+    ImagePng,
+    ImageJpeg,
+    ImageGif,
+    ImageWebp,
+    Pdf,
+    OctetStream,
+}
+
+impl ContentType {
+    pub(super) fn as_str(self) -> &'static str {
+        match self {
+            ContentType::Html => "text/html; charset=utf-8",
+            ContentType::PlainText => "text/plain; charset=utf-8",
+            ContentType::Css => "text/css; charset=utf-8",
+            ContentType::Svg => "image/svg+xml",
+            ContentType::FontTtf => "font/ttf",
+            ContentType::ImagePng => "image/png",
+            ContentType::ImageJpeg => "image/jpeg",
+            ContentType::ImageGif => "image/gif",
+            ContentType::ImageWebp => "image/webp",
+            ContentType::Pdf => "application/pdf",
+            ContentType::OctetStream => "application/octet-stream",
+        }
+    }
+}
+
+impl fmt::Display for ContentType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum AssetKind {
+    File,
+    Attachment,
+}
+
+impl AssetKind {
+    pub(super) fn parse(value: &str) -> Option<Self> {
+        match value {
+            "file" => Some(AssetKind::File),
+            "attachment" => Some(AssetKind::Attachment),
+            _ => None,
+        }
+    }
+
+    pub(super) fn as_str(self) -> &'static str {
+        match self {
+            AssetKind::File => "file",
+            AssetKind::Attachment => "attachment",
+        }
+    }
+}
 
 struct ServedFont {
     name: &'static str,
     bytes: &'static [u8],
-    content_type: &'static str,
+    content_type: ContentType,
 }
 
 static SERVED_FONTS: &[ServedFont] = &[
     ServedFont {
         name: "Alegreya.ttf",
         bytes: include_bytes!("../serve_fonts/Alegreya.ttf"),
-        content_type: "font/ttf",
+        content_type: ContentType::FontTtf,
     },
     ServedFont {
         name: "Alegreya-Italic.ttf",
         bytes: include_bytes!("../serve_fonts/Alegreya-Italic.ttf"),
-        content_type: "font/ttf",
+        content_type: ContentType::FontTtf,
     },
     ServedFont {
         name: "AlegreyaSans-Regular.ttf",
         bytes: include_bytes!("../serve_fonts/AlegreyaSans-Regular.ttf"),
-        content_type: "font/ttf",
+        content_type: ContentType::FontTtf,
     },
     ServedFont {
         name: "AlegreyaSans-Italic.ttf",
         bytes: include_bytes!("../serve_fonts/AlegreyaSans-Italic.ttf"),
-        content_type: "font/ttf",
+        content_type: ContentType::FontTtf,
     },
     ServedFont {
         name: "AlegreyaSans-Bold.ttf",
         bytes: include_bytes!("../serve_fonts/AlegreyaSans-Bold.ttf"),
-        content_type: "font/ttf",
+        content_type: ContentType::FontTtf,
     },
     ServedFont {
         name: "AlegreyaSans-BoldItalic.ttf",
         bytes: include_bytes!("../serve_fonts/AlegreyaSans-BoldItalic.ttf"),
-        content_type: "font/ttf",
+        content_type: ContentType::FontTtf,
     },
     ServedFont {
         name: "FiraCode.ttf",
         bytes: include_bytes!("../serve_fonts/FiraCode.ttf"),
-        content_type: "font/ttf",
+        content_type: ContentType::FontTtf,
     },
 ];
 
 pub(super) fn favicon_response() -> super::HttpResponse {
     super::HttpResponse {
         status: 200,
-        content_type: "image/svg+xml",
+        content_type: ContentType::Svg,
         body: include_str!("favicon.svg").as_bytes().to_vec(),
     }
 }
@@ -111,7 +174,7 @@ pub(super) fn is_image_path(path: &Path) -> bool {
     )
 }
 
-pub(super) fn mime_type(path: &Path) -> &'static str {
+pub(super) fn mime_type(path: &Path) -> ContentType {
     match path
         .extension()
         .and_then(|e| e.to_str())
@@ -119,15 +182,15 @@ pub(super) fn mime_type(path: &Path) -> &'static str {
         .to_ascii_lowercase()
         .as_str()
     {
-        "png" => "image/png",
-        "jpg" | "jpeg" => "image/jpeg",
-        "gif" => "image/gif",
-        "webp" => "image/webp",
-        "svg" => "image/svg+xml",
-        "pdf" => "application/pdf",
-        "txt" => "text/plain; charset=utf-8",
-        "html" => "text/html; charset=utf-8",
-        "css" => "text/css; charset=utf-8",
-        _ => "application/octet-stream",
+        "png" => ContentType::ImagePng,
+        "jpg" | "jpeg" => ContentType::ImageJpeg,
+        "gif" => ContentType::ImageGif,
+        "webp" => ContentType::ImageWebp,
+        "svg" => ContentType::Svg,
+        "pdf" => ContentType::Pdf,
+        "txt" => ContentType::PlainText,
+        "html" => ContentType::Html,
+        "css" => ContentType::Css,
+        _ => ContentType::OctetStream,
     }
 }

@@ -2,17 +2,57 @@ use anyhow::{Result, bail};
 use chrono::{Datelike, NaiveDate, NaiveDateTime, Weekday};
 
 use crate::tasks::clock::TaskClock;
+use crate::tasks::model::{TaskDateValue, TaskPriority, TaskSourceKind, TaskState};
+use std::ops::Deref;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TaskDateArg(String);
+
+impl TaskDateArg {
+    pub fn new(value: impl Into<String>) -> Self {
+        Self(value.into())
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl Deref for TaskDateArg {
+    type Target = str;
+
+    fn deref(&self) -> &Self::Target {
+        self.as_str()
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TaskPriorityArg {
+    Set(TaskPriority),
+    Clear,
+}
+
+impl TaskPriorityArg {
+    fn parse(value: &str) -> Result<Self> {
+        let value = value.trim();
+        if is_clear_value(value) {
+            Ok(TaskPriorityArg::Clear)
+        } else {
+            TaskPriority::parse(value).map(TaskPriorityArg::Set)
+        }
+    }
+}
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct TaskModifierSpec {
-    pub source: Option<String>,
+    pub source: Option<TaskSourceKind>,
     pub project: Option<String>,
     pub title: Option<String>,
-    pub due: Option<String>,
-    pub deadline: Option<String>,
+    pub due: Option<TaskDateArg>,
+    pub deadline: Option<TaskDateArg>,
     pub labels: Option<Vec<String>>,
-    pub priority: Option<String>,
-    pub state: Option<String>,
+    pub priority: Option<TaskPriorityArg>,
+    pub state: Option<TaskState>,
     pub description: Option<String>,
     pub note: Option<String>,
     pub dependency: Option<String>,
@@ -54,8 +94,8 @@ impl TaskModifierSpec {
         Ok(spec)
     }
 
-    pub fn source_or_default(&self) -> &str {
-        self.source.as_deref().unwrap_or("pkms")
+    pub fn source_or_default(&self) -> TaskSourceKind {
+        self.source.unwrap_or(TaskSourceKind::Pkms)
     }
 
     pub fn labels(&self) -> &[String] {
@@ -78,7 +118,7 @@ fn apply_modifier(spec: &mut TaskModifierSpec, token: &str) -> Result<bool> {
 
     match resolve_modifier_key(&key)? {
         Some(ModifierKey::Source) => {
-            spec.source = Some(value.to_string());
+            set_once(&mut spec.source, "source", value.parse()?)?;
         }
         Some(ModifierKey::Title) => {
             set_once(&mut spec.title, "title", value.to_string())?;
@@ -89,19 +129,23 @@ fn apply_modifier(spec: &mut TaskModifierSpec, token: &str) -> Result<bool> {
                 .extend(split_list(value));
         }
         Some(ModifierKey::Due) => {
-            set_once(&mut spec.due, "schedule", value.to_string())?;
+            set_once(&mut spec.due, "schedule", TaskDateArg::new(value))?;
         }
         Some(ModifierKey::Deadline) => {
-            set_once(&mut spec.deadline, "deadline", value.to_string())?;
+            set_once(&mut spec.deadline, "deadline", TaskDateArg::new(value))?;
         }
         Some(ModifierKey::Project) => {
             set_once(&mut spec.project, "project", value.to_string())?;
         }
         Some(ModifierKey::Priority) => {
-            set_once(&mut spec.priority, "priority", value.to_string())?;
+            set_once(
+                &mut spec.priority,
+                "priority",
+                TaskPriorityArg::parse(value)?,
+            )?;
         }
         Some(ModifierKey::State) => {
-            set_once(&mut spec.state, "state", value.to_string())?;
+            set_once(&mut spec.state, "state", TaskState::new(value))?;
         }
         Some(ModifierKey::Description) => {
             set_once(&mut spec.description, "description", value.to_string())?;
@@ -233,26 +277,25 @@ pub fn is_clear_value(value: &str) -> bool {
     value.is_empty() || value.eq_ignore_ascii_case("none")
 }
 
-pub fn pkms_priority(value: &str) -> Result<char> {
-    match value.to_ascii_uppercase().as_str() {
-        "A" | "B" | "C" => Ok(value.to_ascii_uppercase().chars().next().unwrap()),
-        _ => bail!("Invalid priority '{value}'. Use A, B, or C."),
-    }
+pub fn pkms_priority(value: &str) -> Result<TaskPriority> {
+    TaskPriority::parse(value)
 }
 
-pub fn parse_task_date_arg(name: &str, value: &str) -> Result<String> {
+pub fn parse_task_date_arg(name: &str, value: &str) -> Result<TaskDateValue> {
     parse_task_date_arg_on(name, value, TaskClock::now().today)
 }
 
-pub fn parse_task_date_arg_on(name: &str, value: &str, today: NaiveDate) -> Result<String> {
+pub fn parse_task_date_arg_on(name: &str, value: &str, today: NaiveDate) -> Result<TaskDateValue> {
     if let Some(date) = parse_word_date(name, value, today)? {
-        return Ok(date.format("%Y-%m-%d").to_string());
+        return Ok(TaskDateValue::new(date.format("%Y-%m-%d").to_string()));
     }
     if let Some(date) = crate::input::parse_date(Some(value)) {
-        return Ok(date.format("%Y-%m-%d").to_string());
+        return Ok(TaskDateValue::new(date.format("%Y-%m-%d").to_string()));
     }
     if let Ok(datetime) = NaiveDateTime::parse_from_str(value, "%Y-%m-%d %H:%M") {
-        return Ok(datetime.format("%Y-%m-%d %H:%M").to_string());
+        return Ok(TaskDateValue::new(
+            datetime.format("%Y-%m-%d %H:%M").to_string(),
+        ));
     }
     Err(anyhow::anyhow!(
         "Invalid {name} date '{value}'. Use an unambiguous prefix of today, tomorrow, or a weekday; YYYY-MM-DD; or YYYY-MM-DD HH:MM."
@@ -358,7 +401,10 @@ fn upcoming_weekday(today: NaiveDate, weekday: Weekday) -> NaiveDate {
     today + chrono::Duration::days(days_until)
 }
 
-pub fn validate_pkms_task_date_arg(name: &str, value: Option<&str>) -> Result<Option<String>> {
+pub fn validate_pkms_task_date_arg(
+    name: &str,
+    value: Option<&str>,
+) -> Result<Option<TaskDateValue>> {
     validate_pkms_task_date_arg_on(name, value, TaskClock::now().today)
 }
 
@@ -366,17 +412,17 @@ pub fn validate_pkms_task_date_arg_on(
     name: &str,
     value: Option<&str>,
     today: NaiveDate,
-) -> Result<Option<String>> {
+) -> Result<Option<TaskDateValue>> {
     value
         .map(|value| parse_task_date_arg_on(name, value, today))
         .transpose()
 }
 
-pub fn org_date(date: &str) -> Result<String> {
-    if let Ok(datetime) = NaiveDateTime::parse_from_str(date, "%Y-%m-%d %H:%M") {
+pub fn org_date(date: &TaskDateValue) -> Result<String> {
+    if let Ok(datetime) = NaiveDateTime::parse_from_str(date.as_str(), "%Y-%m-%d %H:%M") {
         return Ok(format!("<{}>", datetime.format("%Y-%m-%d %a %H:%M")));
     }
-    let date = NaiveDate::parse_from_str(date, "%Y-%m-%d")?;
+    let date = NaiveDate::parse_from_str(date.as_str(), "%Y-%m-%d")?;
     Ok(format!("<{}>", date.format("%Y-%m-%d %a")))
 }
 
@@ -404,7 +450,7 @@ mod tests {
         ]))
         .unwrap();
 
-        assert_eq!(spec.source.as_deref(), Some("todoist"));
+        assert_eq!(spec.source.map(|source| source.as_str()), Some("todoist"));
         assert_eq!(spec.title.as_deref(), Some("Call Alice"));
         assert_eq!(
             spec.labels,
@@ -412,7 +458,7 @@ mod tests {
         );
         assert_eq!(spec.due.as_deref(), Some("2026-05-27"));
         assert_eq!(spec.deadline.as_deref(), Some("2026-05-28"));
-        assert_eq!(spec.priority.as_deref(), Some("A"));
+        assert_eq!(spec.priority, Some(TaskPriorityArg::Set(TaskPriority::A)));
         assert_eq!(spec.project.as_deref(), Some("Inbox"));
         assert_eq!(spec.description.as_deref(), Some("Follow up"));
         assert_eq!(spec.state.as_deref(), Some("waiting"));
@@ -434,7 +480,7 @@ mod tests {
         ]))
         .unwrap();
 
-        assert_eq!(spec.source.as_deref(), Some("todoist"));
+        assert_eq!(spec.source.map(|source| source.as_str()), Some("todoist"));
         assert_eq!(spec.title.as_deref(), Some("Call Alice"));
         assert_eq!(
             spec.labels,
@@ -443,7 +489,7 @@ mod tests {
         assert_eq!(spec.due.as_deref(), Some("2026-05-27"));
         assert_eq!(spec.deadline.as_deref(), Some("2026-05-28"));
         assert_eq!(spec.project.as_deref(), Some("Inbox"));
-        assert_eq!(spec.priority.as_deref(), Some("A"));
+        assert_eq!(spec.priority, Some(TaskPriorityArg::Set(TaskPriority::A)));
         assert_eq!(spec.description.as_deref(), Some("Follow up"));
         assert_eq!(spec.note.as_deref(), Some("Project Note"));
     }
@@ -460,7 +506,7 @@ mod tests {
     #[test]
     fn keeps_plain_words_as_task_text() {
         let spec = TaskModifierSpec::parse(&tokens(&["Call", "Alice", "tag:phone"])).unwrap();
-        assert_eq!(spec.source_or_default(), "pkms");
+        assert_eq!(spec.source_or_default(), TaskSourceKind::Pkms);
         assert_eq!(spec.text.as_deref(), Some("Call Alice"));
         assert_eq!(spec.labels, Some(vec!["phone".to_string()]));
     }
@@ -505,9 +551,12 @@ mod tests {
 
     #[test]
     fn formats_org_dates() {
-        assert_eq!(org_date("2026-05-27").unwrap(), "<2026-05-27 Wed>");
         assert_eq!(
-            org_date("2026-05-27 09:30").unwrap(),
+            org_date(&TaskDateValue::from("2026-05-27")).unwrap(),
+            "<2026-05-27 Wed>"
+        );
+        assert_eq!(
+            org_date(&TaskDateValue::from("2026-05-27 09:30")).unwrap(),
             "<2026-05-27 Wed 09:30>"
         );
     }

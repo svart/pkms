@@ -68,8 +68,8 @@ fn scan_files(
             notes.push(resolved_note_from_parsed(
                 path,
                 &summary,
-                primary_uuid,
-                matched_heading,
+                primary_uuid.to_string(),
+                matched_heading.map(|uuid| uuid.to_string()),
             ));
         } else {
             let header: Vec<&str> = content.lines().take(100).collect();
@@ -78,7 +78,12 @@ fn scan_files(
             let Some(uuid) = summary.uuids.first().cloned() else {
                 continue;
             };
-            notes.push(resolved_note_from_parsed(path, &summary, uuid, None));
+            notes.push(resolved_note_from_parsed(
+                path,
+                &summary,
+                uuid.to_string(),
+                None,
+            ));
         }
     }
 

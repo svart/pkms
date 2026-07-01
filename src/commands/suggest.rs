@@ -101,7 +101,7 @@ fn neighbor_relevance(
     target_node: &Node,
     ctx: &SuggestionContext,
 ) -> f64 {
-    if neighbor_uuid == target_node.uuid {
+    if target_node.uuid == neighbor_uuid {
         return 0.0;
     }
     let neighbor = match graph.nodes.get(neighbor_uuid) {
@@ -278,7 +278,7 @@ fn score_backlink_overlap(
     let other_backlinks: HashSet<&str> = graph
         .backlinks
         .get(&other.uuid)
-        .map(|v| v.iter().map(std::string::String::as_str).collect())
+        .map(|v| v.iter().map(|uuid| uuid.as_str()).collect())
         .unwrap_or_default();
     let shared: usize = ctx.target_backlinks.intersection(&other_backlinks).count();
     if shared > 0 {
@@ -499,7 +499,7 @@ fn compute_suggestions_for_node(
     let target_backlinks: HashSet<&str> = graph
         .backlinks
         .get(&node.uuid)
-        .map(|v| v.iter().map(std::string::String::as_str).collect())
+        .map(|v| v.iter().map(|uuid| uuid.as_str()).collect())
         .unwrap_or_default();
     let target_outgoing: HashSet<&str> = node
         .outgoing
@@ -540,7 +540,7 @@ fn compute_suggestions_for_node(
     let suggestions: Vec<Suggestion> = scored
         .iter()
         .map(|(n, s, r, fs)| Suggestion {
-            uuid: n.uuid.clone(),
+            uuid: n.uuid.to_string(),
             title: n.title.clone(),
             path: n.path.display().to_string(),
             score: *s,
@@ -585,7 +585,7 @@ pub fn execute(config: &ResolvedConfig, opts: &SuggestOptions) -> Result<Vec<Sug
             )?;
             Ok(SuggestOutput {
                 target: node.title.clone(),
-                target_uuid: node.uuid.clone(),
+                target_uuid: node.uuid.to_string(),
                 total,
                 showed,
                 suggestions,

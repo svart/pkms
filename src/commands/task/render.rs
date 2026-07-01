@@ -5,7 +5,7 @@ use crate::commands::task_common::{
 };
 use crate::output::{ALL_COLUMNS, Column, OutputContext, terminal_markup};
 use crate::tasks::filter::SourceSelection;
-use crate::tasks::model::{TaskItem, TaskSourceKind};
+use crate::tasks::model::{TaskItem, TaskPriority, TaskProperty, TaskSourceKind};
 use crate::tasks::provider::TaskMetadataRow;
 use anyhow::Result;
 use chrono::{NaiveDate, NaiveDateTime};
@@ -29,7 +29,7 @@ pub(super) struct TaskStateChangeOutput {
 
 #[derive(Debug, Serialize)]
 pub(super) struct TaskModChange {
-    pub property: &'static str,
+    pub property: TaskProperty,
     pub old: Option<String>,
     pub new: Option<String>,
 }
@@ -276,11 +276,11 @@ fn print_task_title(title: &str) {
     println!("Task: {title}");
 }
 
-fn display_mod_value(property: &str, value: Option<&str>, today: NaiveDate) -> String {
+fn display_mod_value(property: TaskProperty, value: Option<&str>, today: NaiveDate) -> String {
     let Some(value) = value.filter(|value| !value.trim().is_empty()) else {
         return "None".to_string();
     };
-    if matches!(property, "Scheduled" | "Deadline")
+    if matches!(property, TaskProperty::Scheduled | TaskProperty::Deadline)
         && let Some(parsed) = crate::org_date::parse_org_date(value)
     {
         let date = parsed.base_date.format("%Y-%m-%d").to_string();
@@ -302,8 +302,8 @@ fn display_mod_value(property: &str, value: Option<&str>, today: NaiveDate) -> S
     value.replace('\n', "\\n")
 }
 
-fn format_mod_value(property: &str, value: &str) -> String {
-    if property == "Title" {
+fn format_mod_value(property: TaskProperty, value: &str) -> String {
+    if property == TaskProperty::Title {
         terminal_markup::format_if_terminal_supported(value)
     } else {
         value.to_string()
@@ -315,7 +315,7 @@ fn print_created_task(item: &TaskItem) {
     if let Some(date) = item.effective_date() {
         details.push(format!("date {date}"));
     }
-    if let Some(priority) = item.priority.as_deref() {
+    if let Some(priority) = item.priority.map(TaskPriority::as_char) {
         details.push(format!("priority {priority}"));
     }
     if let Some(project) = item.project.as_deref() {

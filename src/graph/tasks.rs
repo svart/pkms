@@ -145,8 +145,10 @@ fn parse_timestamped_filename(path: &Path, filename: &str) -> Option<(NaiveDateT
 mod tests {
     use crate::config::ResolvedConfig;
     use crate::corpus::FileScanResult;
+    use crate::domain::NoteId;
     use crate::graph::{DuplicateInfo, Graph};
     use crate::parser::{Heading, ParsedNote};
+    use crate::tasks::model::{TaskPriority, TaskState};
     use std::collections::HashMap;
     use std::path::PathBuf;
 
@@ -178,7 +180,7 @@ mod tests {
         FileScanResult {
             path: PathBuf::from(path),
             parsed: ParsedNote {
-                uuids: vec![format!("{path}-uuid")],
+                uuids: vec![NoteId::new(format!("{path}-uuid"))],
                 title: Some(path.to_string()),
                 filetags: Vec::new(),
                 project: None,
@@ -204,12 +206,12 @@ mod tests {
         Heading {
             level: 1,
             title: format!("Task {line_number}"),
-            todo_state: Some(state.to_string()),
+            todo_state: Some(TaskState::new(state)),
             tags: tags.into_iter().map(str::to_string).collect(),
             uuid: None,
             scheduled: scheduled.map(str::to_string),
             deadline: deadline.map(str::to_string),
-            priority,
+            priority: priority.and_then(TaskPriority::from_char),
             project: None,
             line_number,
             outgoing: Vec::new(),

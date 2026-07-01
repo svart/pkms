@@ -16,6 +16,7 @@ pub mod validation;
 use crate::config::ResolvedConfig;
 use crate::corpus::Corpus;
 pub use crate::corpus::FileScanResult;
+use crate::domain::{LinkTarget, NoteId};
 use crate::parser::{Link, ParsedNote};
 use serde::Serialize;
 use std::collections::HashMap;
@@ -23,7 +24,7 @@ use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, Serialize)]
 pub struct Node {
-    pub uuid: String,
+    pub uuid: NoteId,
     pub title: String,
     pub path: PathBuf,
     pub filetags: Vec<String>,
@@ -32,12 +33,12 @@ pub struct Node {
     pub refs: Vec<String>,
     pub outgoing: Vec<Link>,
     pub headings_count: usize,
-    pub heading_uuids: Vec<String>,
+    pub heading_uuids: Vec<NoteId>,
     pub has_todos: bool,
 }
 
 impl Node {
-    pub fn from_parsed(uuid: String, title: String, path: PathBuf, parsed: &ParsedNote) -> Self {
+    pub fn from_parsed(uuid: NoteId, title: String, path: PathBuf, parsed: &ParsedNote) -> Self {
         Node {
             uuid,
             title,
@@ -69,40 +70,40 @@ pub struct DuplicateEntry {
 
 #[derive(Debug)]
 pub struct Graph {
-    pub(crate) nodes: HashMap<String, Node>,
-    pub(crate) path_to_uuid: HashMap<PathBuf, String>,
-    pub(crate) title_to_uuid: HashMap<String, Vec<String>>,
-    pub(crate) alias_to_uuid: HashMap<String, Vec<String>>,
-    pub(crate) backlinks: HashMap<String, Vec<String>>,
-    pub(crate) broken_links: Vec<(String, String)>,
+    pub(crate) nodes: HashMap<NoteId, Node>,
+    pub(crate) path_to_uuid: HashMap<PathBuf, NoteId>,
+    pub(crate) title_to_uuid: HashMap<String, Vec<NoteId>>,
+    pub(crate) alias_to_uuid: HashMap<String, Vec<NoteId>>,
+    pub(crate) backlinks: HashMap<NoteId, Vec<NoteId>>,
+    pub(crate) broken_links: Vec<(NoteId, NoteId)>,
     pub(crate) parse_errors: Vec<(PathBuf, String)>,
     pub(crate) skipped_files: Vec<PathBuf>,
     pub(crate) duplicates: DuplicateInfo,
-    pub(crate) heading_uuid_to_primary: HashMap<String, String>,
+    pub(crate) heading_uuid_to_primary: HashMap<NoteId, NoteId>,
     pub(crate) results: Vec<FileScanResult>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct HeadingLocation {
-    pub(crate) primary_uuid: String,
+    pub(crate) primary_uuid: NoteId,
     pub(crate) line_number: usize,
 }
 
 #[derive(Debug, Clone, Serialize)]
 pub struct SelfLinkEntry {
-    pub source_uuid: String,
+    pub source_uuid: NoteId,
     pub source_title: String,
     pub link_type: String,
-    pub target: String,
+    pub target: LinkTarget,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub suggestion: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
 pub struct OverlinkEntry {
-    pub source_uuid: String,
+    pub source_uuid: NoteId,
     pub source_title: String,
-    pub target_uuid: String,
+    pub target_uuid: NoteId,
     pub target_title: String,
     pub count: usize,
 }
@@ -212,7 +213,8 @@ impl Graph {
     }
 
     pub fn find_node(&self, target: &str) -> Option<&Node> {
-        if let Some(node) = self.nodes.get(target) {
+        let target_id = NoteId::new(target);
+        if let Some(node) = self.nodes.get(&target_id) {
             return Some(node);
         }
         if let Some(uuid) = self.path_to_uuid.get(&PathBuf::from(target)) {
@@ -233,7 +235,7 @@ impl Graph {
         {
             return self.nodes.get(uuid);
         }
-        if let Some(primary) = self.heading_uuid_to_primary.get(target) {
+        if let Some(primary) = self.heading_uuid_to_primary.get(&target_id) {
             return self.nodes.get(primary);
         }
         None
@@ -245,9 +247,10 @@ impl Graph {
     }
 
     pub(crate) fn primary_uuid_for_heading(&self, heading_uuid: &str) -> Option<&str> {
+        let heading_uuid = NoteId::new(heading_uuid);
         self.heading_uuid_to_primary
-            .get(heading_uuid)
-            .map(String::as_str)
+            .get(&heading_uuid)
+            .map(NoteId::as_str)
     }
 
     pub(crate) fn heading_location(&self, heading_uuid: &str) -> Option<HeadingLocation> {
@@ -260,10 +263,15 @@ impl Graph {
             .parsed
             .headings
             .iter()
-            .find(|heading| heading.uuid.as_deref() == Some(heading_uuid))?;
+            .find(|heading| {
+                heading
+                    .uuid
+                    .as_ref()
+                    .is_some_and(|uuid| uuid.as_str() == heading_uuid)
+            })?;
 
         Some(HeadingLocation {
-            primary_uuid: primary_uuid.to_string(),
+            primary_uuid: NoteId::new(primary_uuid),
             line_number: heading.line_number,
         })
     }

@@ -372,7 +372,7 @@ pub fn record_to_task_item(config: &ResolvedConfig, record: TaskRecord) -> TaskI
         body: None,
         status,
         state: record.todo_state,
-        priority: record.priority.map(|p| p.to_string()),
+        priority: record.priority,
         scheduled: record.scheduled.map(|raw| TaskDate {
             raw,
             date: record.scheduled_date,
@@ -441,6 +441,8 @@ fn item_date(item: &TaskRecord) -> Option<NaiveDate> {
 mod tests {
     use super::*;
     use crate::config::Config;
+    use crate::domain::NoteId;
+    use crate::tasks::model::{TaskDateValue, TaskPriority, TaskState};
 
     fn config() -> ResolvedConfig {
         Config {
@@ -464,7 +466,7 @@ mod tests {
     fn record() -> TaskRecord {
         TaskRecord {
             id: 7,
-            uuid: "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa".to_string(),
+            uuid: NoteId::new("aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa"),
             title: "Note A".to_string(),
             path: "/tmp/a.org".to_string(),
             filetags: vec!["agenda".to_string(), "work".to_string()],
@@ -474,11 +476,11 @@ mod tests {
             heading_title: "Call supplier".to_string(),
             heading_level: 1,
             line_number: 12,
-            todo_state: Some("todo".to_string()),
-            priority: Some('A'),
+            todo_state: Some(TaskState::new("todo")),
+            priority: Some(TaskPriority::A),
             project: Some("Work".to_string()),
             scheduled: Some("<2026-05-23 Sat>".to_string()),
-            scheduled_date: Some("2026-05-23".to_string()),
+            scheduled_date: Some(TaskDateValue::new("2026-05-23")),
             deadline: None,
             deadline_date: None,
             is_overdue: false,
@@ -507,7 +509,7 @@ mod tests {
     #[test]
     fn closed_state_maps_to_done_case_insensitively() {
         let mut record = record();
-        record.todo_state = Some("done".to_string());
+        record.todo_state = Some(TaskState::new("done"));
         let item = record_to_task_item(&config(), record);
         assert_eq!(item.status, TaskStatus::Done);
     }

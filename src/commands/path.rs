@@ -66,7 +66,7 @@ fn build_output(graph: &Graph, opts: &PathOptions) -> Result<PathOutput> {
                         .iter()
                         .filter_map(|uuid| {
                             graph.nodes.get(uuid).map(|n| PathNode {
-                                uuid: n.uuid.clone(),
+                                uuid: n.uuid.to_string(),
                                 title: n.title.clone(),
                             })
                         })

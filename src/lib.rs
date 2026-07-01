@@ -5,6 +5,7 @@ pub mod commands;
 pub mod config;
 pub mod corpus;
 pub mod discovery;
+pub mod domain;
 pub mod graph;
 pub mod input;
 pub mod link_check;

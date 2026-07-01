@@ -39,7 +39,7 @@ pub struct BacklinkEntry {
 impl From<&crate::graph::Node> for BacklinkEntry {
     fn from(n: &crate::graph::Node) -> Self {
         BacklinkEntry {
-            uuid: n.uuid.clone(),
+            uuid: n.uuid.to_string(),
             title: n.title.clone(),
         }
     }
@@ -47,7 +47,7 @@ impl From<&crate::graph::Node> for BacklinkEntry {
 
 fn build_validate_output(
     node: &crate::graph::Node,
-    incoming: &[String],
+    incoming_len: usize,
     broken_internal: Vec<String>,
     broken_files: Vec<String>,
     backlink_entries: Vec<BacklinkEntry>,
@@ -55,7 +55,7 @@ fn build_validate_output(
 ) -> ValidateOutput {
     let healthy = issues.is_empty();
     ValidateOutput {
-        uuid: node.uuid.clone(),
+        uuid: node.uuid.to_string(),
         title: node.title.clone(),
         path: node.path.display().to_string(),
         filetags: node.filetags.clone(),
@@ -63,9 +63,13 @@ fn build_validate_output(
         aliases: node.aliases.clone(),
         refs: node.refs.clone(),
         headings: node.headings_count,
-        heading_uuids: node.heading_uuids.clone(),
+        heading_uuids: node
+            .heading_uuids
+            .iter()
+            .map(|uuid| uuid.to_string())
+            .collect(),
         outgoing: node.outgoing.len(),
-        incoming: incoming.len(),
+        incoming: incoming_len,
         outgoing_internal: node
             .outgoing
             .iter()
@@ -141,12 +145,12 @@ fn validate_node(
     let broken_internal: Vec<String> = validation
         .broken_internal_links
         .iter()
-        .map(|issue| issue.target_uuid.clone())
+        .map(|issue| issue.target_uuid.to_string())
         .collect();
     let broken_files: Vec<String> = validation
         .broken_file_links
         .iter()
-        .map(|issue| issue.target_path.clone())
+        .map(|issue| issue.target_path.to_string())
         .collect();
 
     let incoming = graph.backlinks.get(&node.uuid).cloned().unwrap_or_default();
@@ -165,7 +169,7 @@ fn validate_node(
 
     Ok(build_validate_output(
         node,
-        &incoming,
+        incoming.len(),
         broken_internal,
         broken_files,
         backlink_entries,

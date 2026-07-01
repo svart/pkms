@@ -1,5 +1,6 @@
 use crate::org_edit;
 use crate::parser::{DEADLINE_RE, HEADING_RE, SCHEDULED_RE};
+use crate::tasks::model::{TaskDateValue, TaskPriority, TaskProperty, TaskState};
 use anyhow::{Result, bail};
 use chrono::{NaiveDate, NaiveDateTime};
 
@@ -20,19 +21,19 @@ pub struct TaskStateChange {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HeadingMod {
-    pub state: Option<String>,
+    pub state: Option<TaskState>,
     pub title: Option<String>,
-    pub priority: Option<Option<char>>,
+    pub priority: Option<Option<TaskPriority>>,
     pub tags: Option<Vec<String>>,
-    pub scheduled: Option<Option<String>>,
-    pub deadline: Option<Option<String>>,
+    pub scheduled: Option<Option<TaskDateValue>>,
+    pub deadline: Option<Option<TaskDateValue>>,
     pub project: Option<Option<String>>,
     pub description: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TaskPropertyChange {
-    pub property: &'static str,
+    pub property: TaskProperty,
     pub old: Option<String>,
     pub new: Option<String>,
 }
@@ -115,52 +116,52 @@ pub fn update_heading_properties(
     let old_tags = heading_tags(captures.get(5).map(|m| m.as_str()));
 
     let old_state = state;
-    let new_state = modifier.state.as_ref().or(old_state.as_ref());
+    let new_state = modifier.state.as_deref().or(old_state.as_deref());
     let new_title = modifier.title.as_ref().unwrap_or(&old_title);
+    let old_priority = old_priority.and_then(TaskPriority::from_char);
     let new_priority = modifier.priority.unwrap_or(old_priority);
     let new_tags = modifier.tags.as_ref().unwrap_or(&old_tags);
 
-    if modifier.state.is_some() && old_state.as_ref() != new_state {
+    if modifier.state.is_some() && old_state.as_deref() != new_state {
         changes.push(TaskPropertyChange {
-            property: "Status",
+            property: TaskProperty::Status,
             old: old_state.clone(),
-            new: new_state.cloned(),
+            new: new_state.map(str::to_string),
         });
     }
     if modifier.title.is_some() && old_title != *new_title {
         changes.push(TaskPropertyChange {
-            property: "Title",
+            property: TaskProperty::Title,
             old: Some(old_title.clone()),
             new: Some(new_title.clone()),
         });
     }
     if modifier.priority.is_some() && old_priority != new_priority {
         changes.push(TaskPropertyChange {
-            property: "Priority",
+            property: TaskProperty::Priority,
             old: old_priority.map(|p| p.to_string()),
             new: new_priority.map(|p| p.to_string()),
         });
     }
     if modifier.tags.is_some() && old_tags != *new_tags {
         changes.push(TaskPropertyChange {
-            property: "Tags",
+            property: TaskProperty::Tags,
             old: non_empty_tags(&old_tags),
             new: non_empty_tags(new_tags),
         });
     }
-    if changes
-        .iter()
-        .any(|change| matches!(change.property, "Status" | "Title" | "Priority" | "Tags"))
-    {
+    if changes.iter().any(|change| {
+        matches!(
+            change.property,
+            TaskProperty::Status
+                | TaskProperty::Title
+                | TaskProperty::Priority
+                | TaskProperty::Tags
+        )
+    }) {
         lines[heading_idx] = format!(
             "{}{}",
-            format_heading(
-                level,
-                new_state.map(String::as_str),
-                new_priority,
-                new_title,
-                new_tags
-            ),
+            format_heading(level, new_state, new_priority, new_title, new_tags),
             heading_newline
         );
     }
@@ -256,7 +257,7 @@ fn non_empty_tags(tags: &[String]) -> Option<String> {
 fn format_heading(
     level: &str,
     state: Option<&str>,
-    priority: Option<char>,
+    priority: Option<TaskPriority>,
     title: &str,
     tags: &[String],
 ) -> String {
@@ -282,14 +283,14 @@ fn apply_planning_change(
     lines: &mut Vec<String>,
     heading_idx: usize,
     kind: PlanningKind,
-    requested: Option<&Option<String>>,
+    requested: Option<&Option<TaskDateValue>>,
     changes: &mut Vec<TaskPropertyChange>,
 ) -> Result<()> {
     let Some(requested) = requested else {
         return Ok(());
     };
     let old = current_planning_value(lines, heading_idx, kind);
-    let new = requested.as_deref().map(org_date).transpose()?;
+    let new = requested.as_ref().map(org_date).transpose()?;
     if old == new {
         return Ok(());
     }
@@ -339,10 +340,10 @@ fn current_planning_value(
         .map(|m| m.as_str().to_string())
 }
 
-fn planning_display_label(kind: PlanningKind) -> &'static str {
+fn planning_display_label(kind: PlanningKind) -> TaskProperty {
     match kind {
-        PlanningKind::Scheduled => "Scheduled",
-        PlanningKind::Deadline => "Deadline",
+        PlanningKind::Scheduled => TaskProperty::Scheduled,
+        PlanningKind::Deadline => TaskProperty::Deadline,
     }
 }
 
@@ -362,7 +363,7 @@ fn apply_project_change(
 
     set_heading_project(lines, heading_idx, requested.as_deref());
     changes.push(TaskPropertyChange {
-        property: "Project",
+        property: TaskProperty::Project,
         old,
         new: requested.clone(),
     });
@@ -478,7 +479,7 @@ fn apply_description_change(
         }
     }
     changes.push(TaskPropertyChange {
-        property: "Description",
+        property: TaskProperty::Description,
         old,
         new,
     });
@@ -623,7 +624,8 @@ fn replace_planning_token(line: &str, kind: PlanningKind, value: Option<&str>) -
     format!("{}{}", updated.trim(), newline)
 }
 
-fn org_date(date: &str) -> Result<String> {
+fn org_date(date: impl AsRef<str>) -> Result<String> {
+    let date = date.as_ref();
     if let Ok(datetime) = NaiveDateTime::parse_from_str(date, "%Y-%m-%d %H:%M") {
         return Ok(format!("<{}>", datetime.format("%Y-%m-%d %a %H:%M")));
     }

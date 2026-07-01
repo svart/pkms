@@ -3,12 +3,44 @@ use serde::Serialize;
 use std::fmt;
 use std::str::FromStr;
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize)]
+#[serde(transparent)]
+pub struct TaskSourceName(String);
+
+impl TaskSourceName {
+    pub fn new(value: impl Into<String>) -> Self {
+        Self(value.into())
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Display for TaskSourceName {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl AsRef<str> for TaskSourceName {
+    fn as_ref(&self) -> &str {
+        self.as_str()
+    }
+}
+
+impl From<String> for TaskSourceName {
+    fn from(value: String) -> Self {
+        Self::new(value)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(tag = "source", content = "id", rename_all = "lowercase")]
 pub enum TaskId {
     Pkms(usize),
     Todoist(String),
-    External { source: String, id: String },
+    External { source: TaskSourceName, id: String },
 }
 
 impl TaskId {
@@ -67,7 +99,7 @@ impl FromStr for TaskId {
             validate_external_part("source", source)?;
             validate_external_part("id", id)?;
             return Ok(TaskId::External {
-                source: source.to_ascii_lowercase(),
+                source: TaskSourceName::new(source.to_ascii_lowercase()),
                 id: id.to_string(),
             });
         }
@@ -125,7 +157,7 @@ mod tests {
         assert_eq!(
             "linear:ABC-123".parse::<TaskId>().unwrap(),
             TaskId::External {
-                source: "linear".to_string(),
+                source: TaskSourceName::new("linear"),
                 id: "ABC-123".to_string()
             }
         );

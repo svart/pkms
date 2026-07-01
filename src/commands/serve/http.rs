@@ -1,6 +1,7 @@
 use super::{assets, inline::percent_decode, render_note_html, render_preview_html};
 use crate::commands::open;
 use crate::config::ResolvedConfig;
+use crate::domain::NoteId;
 use crate::graph::{Graph, resolve_file_link_path};
 use crate::parser::{Link, parse_note};
 use anyhow::{Context, Result};
@@ -11,7 +12,17 @@ use std::path::Path;
 pub(super) struct ServeState<'a> {
     pub(super) config: &'a ResolvedConfig,
     pub(super) graph: Graph,
-    pub(super) initial_uuid: String,
+    pub(super) initial_uuid: NoteId,
+}
+
+enum Route<'a> {
+    Root,
+    Preview,
+    Asset,
+    Favicon,
+    Open,
+    Font(&'a str),
+    NotFound,
 }
 
 pub(super) fn log_request_error(err: &anyhow::Error) {
@@ -59,27 +70,27 @@ pub(super) fn handle_connection(mut stream: TcpStream, state: &ServeState<'_>) -
         return write_response(
             &mut stream,
             405,
-            "text/plain; charset=utf-8",
+            assets::ContentType::PlainText,
             b"Method not allowed",
         );
     }
 
     let (path, query) = split_target(target);
+    let route = route_for_path(path);
     let response = if method == "POST" {
-        match path {
-            "/open" => open_response(state, query, open::DEFAULT_EDITOR),
+        match route {
+            Route::Open => open_response(state, query, open::DEFAULT_EDITOR),
             _ => Ok(HttpResponse::method_not_allowed("Method not allowed")),
         }
-    } else if let Some(font_name) = path.strip_prefix("/font/") {
-        Ok(assets::font_response(font_name))
     } else {
-        match path {
-            "/" => render_response(state, query),
-            "/preview" => preview_response(state, query),
-            "/asset" => asset_response(state, query),
-            "/favicon.svg" => Ok(assets::favicon_response()),
-            "/open" => Ok(HttpResponse::method_not_allowed("Method not allowed")),
-            _ => Ok(HttpResponse::not_found("Not found")),
+        match route {
+            Route::Root => render_response(state, query),
+            Route::Preview => preview_response(state, query),
+            Route::Asset => asset_response(state, query),
+            Route::Favicon => Ok(assets::favicon_response()),
+            Route::Open => Ok(HttpResponse::method_not_allowed("Method not allowed")),
+            Route::Font(font_name) => Ok(assets::font_response(font_name)),
+            Route::NotFound => Ok(HttpResponse::not_found("Not found")),
         }
     }?;
 
@@ -109,7 +120,7 @@ fn drain_headers(reader: &mut BufReader<TcpStream>) -> Result<()> {
 
 pub(super) struct HttpResponse {
     pub(super) status: u16,
-    pub(super) content_type: &'static str,
+    pub(super) content_type: assets::ContentType,
     pub(super) body: Vec<u8>,
 }
 
@@ -117,7 +128,7 @@ impl HttpResponse {
     fn html(body: String) -> Self {
         Self {
             status: 200,
-            content_type: "text/html; charset=utf-8",
+            content_type: assets::ContentType::Html,
             body: body.into_bytes(),
         }
     }
@@ -125,7 +136,7 @@ impl HttpResponse {
     pub(super) fn not_found(message: &str) -> Self {
         Self {
             status: 404,
-            content_type: "text/plain; charset=utf-8",
+            content_type: assets::ContentType::PlainText,
             body: message.as_bytes().to_vec(),
         }
     }
@@ -133,7 +144,7 @@ impl HttpResponse {
     fn method_not_allowed(message: &str) -> Self {
         Self {
             status: 405,
-            content_type: "text/plain; charset=utf-8",
+            content_type: assets::ContentType::PlainText,
             body: message.as_bytes().to_vec(),
         }
     }
@@ -141,14 +152,14 @@ impl HttpResponse {
     fn text(message: String) -> Self {
         Self {
             status: 200,
-            content_type: "text/plain; charset=utf-8",
+            content_type: assets::ContentType::PlainText,
             body: message.into_bytes(),
         }
     }
 }
 
 fn render_response(state: &ServeState<'_>, query: Option<&str>) -> Result<HttpResponse> {
-    let requested = query_param(query, "id").unwrap_or_else(|| state.initial_uuid.clone());
+    let requested = query_param(query, "id").unwrap_or_else(|| state.initial_uuid.to_string());
     let node = state.graph.resolve_target(&requested)?;
     let node = if let Some(primary_uuid) = state.graph.primary_uuid_for_heading(&node.uuid) {
         state.graph.resolve_target(primary_uuid)?
@@ -190,17 +201,20 @@ fn asset_response(state: &ServeState<'_>, query: Option<&str>) -> Result<HttpRes
     let Some(target) = query_param(query, "target") else {
         return Ok(HttpResponse::not_found("Missing target"));
     };
+    let Some(kind) = assets::AssetKind::parse(&kind) else {
+        return Ok(HttpResponse::not_found("Unknown asset kind"));
+    };
     let note = state.graph.resolve_target(&note_uuid)?;
-    if !note_declares_asset_link(&note.path, &kind, &target)? {
+    if !note_declares_asset_link(&note.path, kind, &target)? {
         return Ok(HttpResponse::not_found("Asset not found"));
     }
-    let (path, allowed) = match kind.as_str() {
-        "file" => {
+    let (path, allowed) = match kind {
+        assets::AssetKind::File => {
             let path = resolve_file_link_path(&target, &note.path, state.config.resolved_db_root());
             let allowed = assets::is_db_asset_allowed(&path, state.config.resolved_db_root());
             (path, allowed)
         }
-        "attachment" => {
+        assets::AssetKind::Attachment => {
             let path = assets::resolve_existing_attachment(
                 state.config.resolved_db_root(),
                 &note.uuid,
@@ -213,7 +227,6 @@ fn asset_response(state: &ServeState<'_>, query: Option<&str>) -> Result<HttpRes
             );
             (path, allowed)
         }
-        _ => return Ok(HttpResponse::not_found("Unknown asset kind")),
     };
     if !allowed || !path.is_file() {
         return Ok(HttpResponse::not_found("Asset not found"));
@@ -226,7 +239,11 @@ fn asset_response(state: &ServeState<'_>, query: Option<&str>) -> Result<HttpRes
     })
 }
 
-fn note_declares_asset_link(note_path: &Path, kind: &str, target: &str) -> Result<bool> {
+fn note_declares_asset_link(
+    note_path: &Path,
+    kind: assets::AssetKind,
+    target: &str,
+) -> Result<bool> {
     let content = std::fs::read_to_string(note_path)
         .with_context(|| format!("Failed to read {}", note_path.display()))?;
     let parsed = parse_note(&content);
@@ -240,8 +257,10 @@ fn note_declares_asset_link(note_path: &Path, kind: &str, target: &str) -> Resul
                 .flat_map(|heading| heading.outgoing.iter()),
         )
         .any(|link| match (kind, link) {
-            ("file", Link::File(link_target)) => link_target == target,
-            ("attachment", Link::Attachment(link_target)) => link_target == target,
+            (assets::AssetKind::File, Link::File(link_target)) => link_target.as_str() == target,
+            (assets::AssetKind::Attachment, Link::Attachment(link_target)) => {
+                link_target.as_str() == target
+            }
             _ => false,
         }))
 }
@@ -266,6 +285,20 @@ fn split_target(target: &str) -> (&str, Option<&str>) {
     }
 }
 
+fn route_for_path(path: &str) -> Route<'_> {
+    if let Some(font_name) = path.strip_prefix("/font/") {
+        return Route::Font(font_name);
+    }
+    match path {
+        "/" => Route::Root,
+        "/preview" => Route::Preview,
+        "/asset" => Route::Asset,
+        "/favicon.svg" => Route::Favicon,
+        "/open" => Route::Open,
+        _ => Route::NotFound,
+    }
+}
+
 fn query_param(query: Option<&str>, key: &str) -> Option<String> {
     query?.split('&').find_map(|part| {
         let (k, v) = part.split_once('=')?;
@@ -276,7 +309,7 @@ fn query_param(query: Option<&str>, key: &str) -> Option<String> {
 fn write_response(
     stream: &mut TcpStream,
     status: u16,
-    content_type: &'static str,
+    content_type: assets::ContentType,
     body: &[u8],
 ) -> Result<()> {
     write_headers(stream, status, content_type, body.len())?;
@@ -287,7 +320,7 @@ fn write_response(
 fn write_headers(
     stream: &mut TcpStream,
     status: u16,
-    content_type: &'static str,
+    content_type: assets::ContentType,
     content_len: usize,
 ) -> Result<()> {
     let reason = match status {

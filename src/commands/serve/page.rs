@@ -255,7 +255,7 @@ fn render_backlinks_panel(graph: &Graph, node: &Node) -> String {
         for uuid in backlink_uuids {
             if let Some(source) = graph.nodes.get(uuid) {
                 incoming.insert(
-                    (source.title.to_ascii_lowercase(), source.uuid.clone()),
+                    (source.title.to_ascii_lowercase(), source.uuid.to_string()),
                     source,
                 );
             }

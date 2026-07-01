@@ -399,7 +399,7 @@ fn command_may_change_pkms_task_ids(command: &TaskCommand) -> bool {
 
 fn add_may_write_pkms_task(args: &crate::cli::TaskAddArgs) -> bool {
     TaskModifierSpec::parse(&args.text)
-        .is_ok_and(|spec| spec.source_or_default().eq_ignore_ascii_case("pkms"))
+        .is_ok_and(|spec| matches!(spec.source_or_default(), TaskSourceKind::Pkms))
 }
 
 fn target_may_write_pkms_task(args: &[String]) -> bool {

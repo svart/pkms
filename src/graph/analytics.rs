@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::time::SystemTime;
 
+use crate::domain::NoteId;
 use crate::parser::Link;
 use crate::parser::find_daily_file_date;
 
@@ -132,8 +133,8 @@ impl Graph {
         }
     }
 
-    pub(crate) fn authored_internal_degrees(&self) -> HashMap<String, (usize, usize)> {
-        let mut degrees: HashMap<String, (usize, usize)> = self
+    pub(crate) fn authored_internal_degrees(&self) -> HashMap<NoteId, (usize, usize)> {
+        let mut degrees: HashMap<NoteId, (usize, usize)> = self
             .primary_nodes()
             .into_iter()
             .map(|node| (node.uuid.clone(), (0, 0)))
@@ -154,7 +155,7 @@ impl Graph {
 
                 degrees.entry(source_uuid.clone()).or_default().0 += 1;
                 if let Some(target_primary) = self.primary_uuid_for_node_uuid(target_uuid) {
-                    degrees.entry(target_primary.to_string()).or_default().1 += 1;
+                    degrees.entry(target_primary).or_default().1 += 1;
                 }
             }
         }
@@ -162,14 +163,14 @@ impl Graph {
         degrees
     }
 
-    fn primary_uuid_for_node_uuid<'a>(&'a self, uuid: &'a str) -> Option<&'a str> {
+    fn primary_uuid_for_node_uuid(&self, uuid: &NoteId) -> Option<NoteId> {
         if let Some(primary) = self.heading_uuid_to_primary.get(uuid) {
-            return Some(primary.as_str());
+            return Some(primary.clone());
         }
         self.nodes
             .contains_key(uuid)
-            .then_some(uuid)
-            .filter(|uuid| !self.heading_uuid_to_primary.contains_key(*uuid))
+            .then_some(uuid.clone())
+            .filter(|uuid| !self.heading_uuid_to_primary.contains_key(uuid))
     }
 }
 

@@ -430,6 +430,7 @@ fn parse_single_date_filter(value: &str, today: NaiveDate) -> Result<TaskDateFil
 fn parse_modifier_style_filter_date(value: &str, today: NaiveDate) -> Result<NaiveDate> {
     let parsed = parse_task_date_arg_on("task filter", value, today)?;
     let date = parsed
+        .as_str()
         .split_whitespace()
         .next()
         .ok_or_else(|| anyhow::anyhow!("Invalid task filter date '{value}'."))?;
@@ -438,8 +439,8 @@ fn parse_modifier_style_filter_date(value: &str, today: NaiveDate) -> Result<Nai
 
 fn parse_datetime_filter(name: &str, value: &str, today: NaiveDate) -> Result<NaiveDateTime> {
     let parsed = parse_task_date_arg_on(name, value, today)?;
-    NaiveDateTime::parse_from_str(&parsed, "%Y-%m-%d %H:%M")
-        .or_else(|_| parse_date(&parsed).map(|date| date.and_hms_opt(0, 0, 0).unwrap()))
+    NaiveDateTime::parse_from_str(parsed.as_str(), "%Y-%m-%d %H:%M")
+        .or_else(|_| parse_date(parsed.as_str()).map(|date| date.and_hms_opt(0, 0, 0).unwrap()))
         .map_err(|_| anyhow::anyhow!("Invalid date/time '{value}'."))
 }
 

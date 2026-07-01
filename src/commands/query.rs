@@ -158,7 +158,7 @@ fn search_by_text(
         let title_results = graph.search(terms, &fields);
         for (node, score, matches) in title_results {
             combined.push(QueryResultEntry {
-                uuid: node.uuid.clone(),
+                uuid: node.uuid.to_string(),
                 title: node.title.clone(),
                 path: node.path.display().to_string(),
                 filetags: node.filetags.clone(),
@@ -183,11 +183,14 @@ fn search_by_text(
                     }
                 })
                 .collect();
-            if let Some(existing) = combined.iter_mut().find(|r| r.uuid == result.node.uuid) {
+            if let Some(existing) = combined
+                .iter_mut()
+                .find(|r| r.uuid == result.node.uuid.as_str())
+            {
                 existing.content_matches = ctx_lines;
             } else {
                 combined.push(QueryResultEntry {
-                    uuid: result.node.uuid.clone(),
+                    uuid: result.node.uuid.to_string(),
                     title: result.node.title.clone(),
                     path: result.node.path.display().to_string(),
                     filetags: result.node.filetags.clone(),

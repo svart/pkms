@@ -52,7 +52,7 @@ pub fn run(ctx: &CommandContext<'_>, opts: &ServeOptions) -> Result<()> {
         url: url.clone(),
         host: addr.ip().to_string(),
         port: addr.port(),
-        uuid: initial_uuid.clone(),
+        uuid: initial_uuid.to_string(),
     };
     if output.is_structured() {
         output.print_structured(&started)?;
@@ -342,13 +342,13 @@ mod tests {
         let response = assets::font_response("Alegreya.ttf");
 
         assert_eq!(response.status, 200);
-        assert_eq!(response.content_type, "font/ttf");
+        assert_eq!(response.content_type.as_str(), "font/ttf");
         assert!(response.body.len() > 100_000);
 
         let missing = assets::font_response("../serve.rs");
 
         assert_eq!(missing.status, 404);
-        assert_eq!(missing.content_type, "text/plain; charset=utf-8");
+        assert_eq!(missing.content_type.as_str(), "text/plain; charset=utf-8");
     }
 
     #[test]
@@ -508,7 +508,7 @@ Body.
         let state = ServeState {
             config: &config,
             graph,
-            initial_uuid: "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa".to_string(),
+            initial_uuid: "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa".into(),
         };
 
         let response = open_response(
@@ -520,7 +520,7 @@ Body.
         let missing = open_response(&state, None, "true").unwrap();
 
         assert_eq!(response.status, 200);
-        assert_eq!(response.content_type, "text/plain; charset=utf-8");
+        assert_eq!(response.content_type.as_str(), "text/plain; charset=utf-8");
         assert_eq!(String::from_utf8(response.body).unwrap(), "Opened Alpha");
         assert_eq!(missing.status, 404);
     }

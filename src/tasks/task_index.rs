@@ -1,5 +1,6 @@
 use crate::config::ResolvedConfig;
 use crate::corpus::Corpus;
+use crate::domain::NoteId;
 use crate::graph::Graph;
 use crate::org_date::parse_org_date;
 use crate::parser::{Heading, find_daily_file_date, strip_org_links};
@@ -7,28 +8,29 @@ use crate::tasks::clock::TaskClock;
 use crate::tasks::filter::{
     TextFilter, matches_tag_filters, matches_text_filters, matches_type_filters,
 };
+use crate::tasks::model::{TaskDateValue, TaskPriority, TaskState};
 use chrono::NaiveDate;
 
 #[derive(Debug, Clone)]
 pub struct TaskRecord {
     pub id: usize,
-    pub uuid: String,
+    pub uuid: NoteId,
     pub title: String,
     pub path: String,
     pub filetags: Vec<String>,
     pub has_agenda_tag: bool,
     pub is_daily_file: bool,
-    pub daily_file_date: Option<String>,
+    pub daily_file_date: Option<TaskDateValue>,
     pub heading_title: String,
     pub heading_level: usize,
     pub line_number: usize,
-    pub todo_state: Option<String>,
-    pub priority: Option<char>,
+    pub todo_state: Option<TaskState>,
+    pub priority: Option<TaskPriority>,
     pub project: Option<String>,
     pub scheduled: Option<String>,
-    pub scheduled_date: Option<String>,
+    pub scheduled_date: Option<TaskDateValue>,
     pub deadline: Option<String>,
-    pub deadline_date: Option<String>,
+    pub deadline_date: Option<TaskDateValue>,
     pub is_overdue: bool,
     pub heading_tags: Vec<String>,
 }
@@ -36,7 +38,7 @@ pub struct TaskRecord {
 impl TaskRecord {
     pub fn implicit_daily_file_date(&self) -> Option<&str> {
         if self.scheduled.is_none() && self.deadline.is_none() {
-            self.daily_file_date.as_deref()
+            self.daily_file_date.as_ref().map(TaskDateValue::as_str)
         } else {
             None
         }
@@ -44,14 +46,15 @@ impl TaskRecord {
 
     pub fn effective_date(&self) -> Option<&str> {
         self.scheduled_date
-            .as_deref()
-            .or(self.deadline_date.as_deref())
+            .as_ref()
+            .map(TaskDateValue::as_str)
+            .or_else(|| self.deadline_date.as_ref().map(TaskDateValue::as_str))
             .or_else(|| self.implicit_daily_file_date())
     }
 
     pub fn has_effective_date(&self, date: &str) -> bool {
-        self.scheduled_date.as_deref() == Some(date)
-            || self.deadline_date.as_deref() == Some(date)
+        self.scheduled_date.as_ref().map(TaskDateValue::as_str) == Some(date)
+            || self.deadline_date.as_ref().map(TaskDateValue::as_str) == Some(date)
             || self.implicit_daily_file_date() == Some(date)
     }
 }
@@ -166,11 +169,11 @@ pub fn collect_agenda_records_on(
     .into_iter()
     .map(|mut record| {
         if record.is_daily_file && record.scheduled.is_none() && record.deadline.is_none() {
-            record.is_overdue = record.daily_file_date.as_deref().is_some_and(|d| {
-                NaiveDate::parse_from_str(d, "%Y-%m-%d")
-                    .ok()
-                    .is_some_and(|dt| dt < clock.today)
-            });
+            record.is_overdue = record
+                .daily_file_date
+                .as_ref()
+                .and_then(TaskDateValue::parse_naive_date)
+                .is_some_and(|date| date < clock.today);
         }
         record
     })
@@ -230,7 +233,7 @@ fn collect_records(
                 filetags: parsed.filetags.clone(),
                 has_agenda_tag: has_agenda,
                 is_daily_file: is_daily,
-                daily_file_date: daily_date.clone(),
+                daily_file_date: daily_date.clone().map(TaskDateValue::new),
                 heading_title: strip_org_links(&heading.title),
                 heading_level: heading.level,
                 line_number: heading.line_number,
@@ -283,10 +286,12 @@ fn combined_tags<'a>(tags: impl Iterator<Item = &'a String>) -> Vec<String> {
     result
 }
 
-fn extract_date(raw: Option<&String>) -> Option<String> {
+fn extract_date(raw: Option<&String>) -> Option<TaskDateValue> {
     let raw = raw.as_ref()?;
     let parsed = parse_org_date(raw)?;
-    Some(parsed.base_date.format("%Y-%m-%d").to_string())
+    Some(TaskDateValue::new(
+        parsed.base_date.format("%Y-%m-%d").to_string(),
+    ))
 }
 
 fn is_overdue_on(raw: Option<&String>, clock: TaskClock) -> bool {

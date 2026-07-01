@@ -122,8 +122,8 @@ fn related_task_heading(id: usize, heading: &crate::parser::Heading) -> RelatedT
     RelatedTaskHeading {
         id,
         title: heading.title.clone(),
-        todo_state: heading.todo_state.clone(),
-        priority: heading.priority,
+        todo_state: heading.todo_state.as_ref().map(|state| state.to_string()),
+        priority: heading.priority.map(|priority| priority.as_char()),
         line_number: heading.line_number,
         level: heading.level,
     }
@@ -134,10 +134,10 @@ fn extract_outgoing(links: &[Link]) -> Vec<OutgoingLink> {
         .iter()
         .map(|link| {
             let (link_type, target) = match link {
-                Link::Internal(u) => ("id".to_string(), u.clone()),
-                Link::File(f) => ("file".to_string(), f.clone()),
-                Link::Url(u) => ("url".to_string(), u.clone()),
-                Link::Attachment(a) => ("attachment".to_string(), a.clone()),
+                Link::Internal(u) => ("id".to_string(), u.to_string()),
+                Link::File(f) => ("file".to_string(), f.to_string()),
+                Link::Url(u) => ("url".to_string(), u.to_string()),
+                Link::Attachment(a) => ("attachment".to_string(), a.to_string()),
             };
             OutgoingLink {
                 link_type,
@@ -217,8 +217,8 @@ fn show_heading_by_line(ctx: HeadingShowContext<'_>, line_number: usize) -> Resu
         heading_title: heading.title.clone(),
         line_number: heading.line_number,
         end_line,
-        todo_state: heading.todo_state.clone(),
-        priority: heading.priority,
+        todo_state: heading.todo_state.as_ref().map(|state| state.to_string()),
+        priority: heading.priority.map(|priority| priority.as_char()),
         tags: all_tags,
         filetags: ctx.filetags.to_vec(),
         scheduled: heading.scheduled.clone(),
@@ -226,7 +226,7 @@ fn show_heading_by_line(ctx: HeadingShowContext<'_>, line_number: usize) -> Resu
         path: ctx.path.display().to_string(),
         note_title: ctx.note_title.to_string(),
         note_uuid: ctx.note_uuid.to_string(),
-        heading_uuid: heading.uuid.clone(),
+        heading_uuid: heading.uuid.as_ref().map(|uuid| uuid.to_string()),
         parents,
         children,
         outgoing,

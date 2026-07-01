@@ -1,4 +1,5 @@
 use super::{DuplicateInfo, Graph, Node, OverlinkEntry, SelfLinkEntry, resolve_file_link_path};
+use crate::domain::{LinkTarget, NoteId};
 use crate::link_check::{
     LinkCheckJob, LinkCheckKind, is_ssh_file_target, local_file_link_target_exists,
     sort_link_check_jobs,
@@ -51,16 +52,16 @@ pub struct NodeValidationIssues {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BrokenInternalLinkIssue {
-    pub source_uuid: String,
+    pub source_uuid: NoteId,
     pub source_title: String,
-    pub target_uuid: String,
+    pub target_uuid: NoteId,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BrokenFileLinkIssue {
-    pub source_uuid: String,
+    pub source_uuid: NoteId,
     pub source_title: String,
-    pub target_path: String,
+    pub target_path: LinkTarget,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -74,7 +75,7 @@ pub struct FiletagsValidationIssue {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum NoteValidationIssue {
     InvalidUuidFormat {
-        uuid: String,
+        uuid: NoteId,
     },
     MissingTitle,
     InvalidFiletagsFormat {
@@ -82,16 +83,16 @@ pub enum NoteValidationIssue {
         reason: String,
     },
     DuplicateUuid {
-        uuid: String,
+        uuid: NoteId,
         kind: DuplicateUuidIssueKind,
     },
     SelfLink {
         link_type: SelfLinkKind,
         target: String,
-        suggested_uuid: Option<String>,
+        suggested_uuid: Option<NoteId>,
     },
     Overlink {
-        target_uuid: String,
+        target_uuid: NoteId,
         target_title: String,
         count: usize,
     },
@@ -299,7 +300,7 @@ impl Graph {
                                 source_uuid: node.uuid.clone(),
                                 source_title: node.title.clone(),
                                 link_type: "id".to_string(),
-                                target: uuid.clone(),
+                                target: LinkTarget::new(uuid.as_str()),
                                 suggestion: None,
                             });
                         }
@@ -335,7 +336,7 @@ impl Graph {
     pub fn detect_overlinks(&self) -> Vec<OverlinkEntry> {
         let mut results = Vec::new();
         for node in self.nodes.values() {
-            let mut counts: HashMap<String, usize> = HashMap::new();
+            let mut counts: HashMap<NoteId, usize> = HashMap::new();
             for link in &node.outgoing {
                 if let Link::Internal(target) = link {
                     *counts.entry(target.clone()).or_default() += 1;
@@ -391,10 +392,10 @@ fn collect_duplicate_uuid_issues(
     node: &Node,
     issues: &mut Vec<NoteValidationIssue>,
 ) {
-    let all_ids: Vec<String> = ID_PROPERTY_RE
+    let all_ids: Vec<NoteId> = ID_PROPERTY_RE
         .captures_iter(content)
         .filter_map(|captures| captures.get(1))
-        .map(|matched| matched.as_str().to_string())
+        .map(|matched| NoteId::new(matched.as_str()))
         .collect();
     if all_ids.len() <= 1 {
         return;
@@ -415,7 +416,7 @@ fn collect_duplicate_uuid_issues(
                 kind: DuplicateUuidIssueKind::HeadingRepeatedInNote,
             });
         } else if let Some(duplicate) = graph.duplicates.duplicate_uuids.iter().find(|entry| {
-            entry.value == *id && entry.paths.iter().any(|path| path != &current_path)
+            entry.value == id.as_str() && entry.paths.iter().any(|path| path != &current_path)
         }) {
             let other_paths = duplicate
                 .paths
@@ -461,10 +462,12 @@ fn collect_node_self_link_issues(
 
     for link in &node.outgoing {
         match link {
-            Link::Internal(uuid) if uuid == target || (!target_is_uuid && uuid == &node.uuid) => {
+            Link::Internal(uuid)
+                if uuid.as_str() == target || (!target_is_uuid && uuid == &node.uuid) =>
+            {
                 issues.push(NoteValidationIssue::SelfLink {
                     link_type: SelfLinkKind::Id,
-                    target: uuid.clone(),
+                    target: uuid.to_string(),
                     suggested_uuid: None,
                 });
             }
@@ -479,14 +482,14 @@ fn collect_node_self_link_issues(
                                 .cloned()
                                 .unwrap_or_else(|| node.uuid.clone()),
                         )
-                    } else if target != node.uuid && target_is_uuid {
+                    } else if node.uuid.as_str() != target && target_is_uuid {
                         Some(node.uuid.clone())
                     } else {
                         None
                     };
                     issues.push(NoteValidationIssue::SelfLink {
                         link_type: SelfLinkKind::File,
-                        target: path.clone(),
+                        target: path.to_string(),
                         suggested_uuid,
                     });
                 }
@@ -497,7 +500,7 @@ fn collect_node_self_link_issues(
 }
 
 fn collect_node_overlink_issues(graph: &Graph, node: &Node, issues: &mut Vec<NoteValidationIssue>) {
-    let mut target_counts: HashMap<String, usize> = HashMap::new();
+    let mut target_counts: HashMap<NoteId, usize> = HashMap::new();
     for link in &node.outgoing {
         if let Link::Internal(uuid) = link {
             *target_counts.entry(uuid.clone()).or_default() += 1;
