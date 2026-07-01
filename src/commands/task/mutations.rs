@@ -1,11 +1,14 @@
 use crate::tasks::id::TaskId;
-use crate::tasks::model::{TaskDateValue, TaskSourceKind};
-use crate::tasks::modifiers::{
-    TaskDateArg, TaskModifierSpec, is_clear_value, parse_task_date_arg_on,
-};
+use crate::tasks::model::TaskSourceKind;
+use crate::tasks::modifiers::{TaskModifierSpec, parse_task_date_arg_on};
 use anyhow::{Result, bail};
 use chrono::NaiveDate;
 use std::process::ExitCode;
+
+#[cfg(feature = "todoist")]
+use crate::tasks::model::TaskDateValue;
+#[cfg(feature = "todoist")]
+use crate::tasks::modifiers::{TaskDateArg, is_clear_value};
 
 use super::TaskRuntime;
 
@@ -129,6 +132,7 @@ pub(super) fn mod_title(spec: &TaskModifierSpec) -> Result<Option<String>> {
         .map(str::to_string))
 }
 
+#[cfg(feature = "todoist")]
 pub(super) fn mod_optional_text(value: Option<&str>) -> Option<Option<String>> {
     value.map(|value| {
         let value = value.trim();
@@ -136,6 +140,7 @@ pub(super) fn mod_optional_text(value: Option<&str>) -> Option<Option<String>> {
     })
 }
 
+#[cfg(feature = "todoist")]
 pub(super) fn mod_date(value: Option<&TaskDateArg>) -> Option<Option<TaskDateValue>> {
     value.map(|date| date.as_value().cloned())
 }

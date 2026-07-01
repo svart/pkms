@@ -5,16 +5,16 @@ use crate::tasks::clock::TaskClock;
 use crate::tasks::id::TaskId;
 use crate::tasks::model::{TaskDateValue, TaskPriority, TaskProperty, TaskState};
 use crate::tasks::modifiers::{
-    TaskDateArg, TaskDependencyArg, TaskModifierSpec, TaskPriorityArg, org_date,
+    TaskDateArg, TaskDependencyArg, TaskModifierSpec, TaskPriorityArg, is_clear_value, org_date,
 };
 use crate::tasks::pkms::{self, PkmsInboxTarget};
-use crate::tasks::pkms_mutation;
+use crate::tasks::pkms_mutation::{self, Change};
 use anyhow::{Context, Result, bail};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use super::super::render;
-use super::{mod_date, mod_optional_text, mod_title, parse_mutation_due_date, validate_mod_source};
+use super::{mod_title, parse_mutation_due_date, validate_mod_source};
 
 pub(super) fn mod_task(
     config: &ResolvedConfig,
@@ -34,9 +34,9 @@ pub(super) fn mod_task(
         title,
         priority: mod_pkms_priority(spec)?,
         tags: spec.labels.clone(),
-        scheduled: mod_date(spec.due.as_ref()),
-        deadline: mod_date(spec.deadline.as_ref()),
-        project: mod_optional_text(spec.project.as_deref()),
+        scheduled: mod_pkms_date(spec.due.as_ref()),
+        deadline: mod_pkms_date(spec.deadline.as_ref()),
+        project: mod_pkms_optional_text(spec.project.as_deref()),
         description: spec
             .description
             .as_deref()
@@ -173,14 +173,34 @@ fn current_dependency_parent(
         .map(|entry| (entry.id, entry.line_number))
 }
 
-fn mod_pkms_priority(spec: &TaskModifierSpec) -> Result<Option<Option<TaskPriority>>> {
+fn mod_pkms_priority(spec: &TaskModifierSpec) -> Result<Change<TaskPriority>> {
     let Some(priority) = spec.priority else {
-        return Ok(None);
+        return Ok(Change::Unchanged);
     };
-    Ok(Some(match priority {
-        TaskPriorityArg::Clear => None,
-        TaskPriorityArg::Set(priority) => Some(priority),
-    }))
+    Ok(match priority {
+        TaskPriorityArg::Clear => Change::Clear,
+        TaskPriorityArg::Set(priority) => Change::Set(priority),
+    })
+}
+
+fn mod_pkms_date(value: Option<&TaskDateArg>) -> Change<TaskDateValue> {
+    match value {
+        None => Change::Unchanged,
+        Some(TaskDateArg::Clear) => Change::Clear,
+        Some(TaskDateArg::Set(date)) => Change::Set(date.clone()),
+    }
+}
+
+fn mod_pkms_optional_text(value: Option<&str>) -> Change<String> {
+    let Some(value) = value else {
+        return Change::Unchanged;
+    };
+    let value = value.trim();
+    if is_clear_value(value) {
+        Change::Clear
+    } else {
+        Change::Set(value.to_string())
+    }
 }
 
 fn mod_state(config: &ResolvedConfig, spec: &TaskModifierSpec) -> Result<Option<TaskState>> {

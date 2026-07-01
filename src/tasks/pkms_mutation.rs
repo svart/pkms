@@ -19,15 +19,22 @@ pub struct TaskStateChange {
     pub dry_run: bool,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Change<T> {
+    Unchanged,
+    Set(T),
+    Clear,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HeadingMod {
     pub state: Option<TaskState>,
     pub title: Option<String>,
-    pub priority: Option<Option<TaskPriority>>,
+    pub priority: Change<TaskPriority>,
     pub tags: Option<Vec<String>>,
-    pub scheduled: Option<Option<TaskDateValue>>,
-    pub deadline: Option<Option<TaskDateValue>>,
-    pub project: Option<Option<String>>,
+    pub scheduled: Change<TaskDateValue>,
+    pub deadline: Change<TaskDateValue>,
+    pub project: Change<String>,
     pub description: Option<String>,
 }
 
@@ -119,7 +126,11 @@ pub fn update_heading_properties(
     let new_state = modifier.state.as_deref().or(old_state.as_deref());
     let new_title = modifier.title.as_ref().unwrap_or(&old_title);
     let old_priority = old_priority.and_then(TaskPriority::from_char);
-    let new_priority = modifier.priority.unwrap_or(old_priority);
+    let new_priority = match modifier.priority {
+        Change::Unchanged => old_priority,
+        Change::Set(priority) => Some(priority),
+        Change::Clear => None,
+    };
     let new_tags = modifier.tags.as_ref().unwrap_or(&old_tags);
 
     if modifier.state.is_some() && old_state.as_deref() != new_state {
@@ -136,7 +147,7 @@ pub fn update_heading_properties(
             new: Some(new_title.clone()),
         });
     }
-    if modifier.priority.is_some() && old_priority != new_priority {
+    if !matches!(modifier.priority, Change::Unchanged) && old_priority != new_priority {
         changes.push(TaskPropertyChange {
             property: TaskProperty::Priority,
             old: old_priority.map(|p| p.to_string()),
@@ -170,22 +181,17 @@ pub fn update_heading_properties(
         &mut lines,
         heading_idx,
         PlanningKind::Scheduled,
-        modifier.scheduled.as_ref(),
+        &modifier.scheduled,
         &mut changes,
     )?;
     apply_planning_change(
         &mut lines,
         heading_idx,
         PlanningKind::Deadline,
-        modifier.deadline.as_ref(),
+        &modifier.deadline,
         &mut changes,
     )?;
-    apply_project_change(
-        &mut lines,
-        heading_idx,
-        modifier.project.as_ref(),
-        &mut changes,
-    );
+    apply_project_change(&mut lines, heading_idx, &modifier.project, &mut changes);
     apply_description_change(
         &mut lines,
         heading_idx,
@@ -283,14 +289,15 @@ fn apply_planning_change(
     lines: &mut Vec<String>,
     heading_idx: usize,
     kind: PlanningKind,
-    requested: Option<&Option<TaskDateValue>>,
+    requested: &Change<TaskDateValue>,
     changes: &mut Vec<TaskPropertyChange>,
 ) -> Result<()> {
-    let Some(requested) = requested else {
-        return Ok(());
+    let new = match requested {
+        Change::Unchanged => return Ok(()),
+        Change::Set(date) => Some(org_date(date)?),
+        Change::Clear => None,
     };
     let old = current_planning_value(lines, heading_idx, kind);
-    let new = requested.as_ref().map(org_date).transpose()?;
     if old == new {
         return Ok(());
     }
@@ -350,22 +357,24 @@ fn planning_display_label(kind: PlanningKind) -> TaskProperty {
 fn apply_project_change(
     lines: &mut Vec<String>,
     heading_idx: usize,
-    requested: Option<&Option<String>>,
+    requested: &Change<String>,
     changes: &mut Vec<TaskPropertyChange>,
 ) {
-    let Some(requested) = requested else {
-        return;
+    let requested = match requested {
+        Change::Unchanged => return,
+        Change::Set(value) => Some(value.as_str()),
+        Change::Clear => None,
     };
     let old = current_heading_project(lines, heading_idx);
-    if old.as_ref() == requested.as_ref() {
+    if old.as_deref() == requested {
         return;
     }
 
-    set_heading_project(lines, heading_idx, requested.as_deref());
+    set_heading_project(lines, heading_idx, requested);
     changes.push(TaskPropertyChange {
         property: TaskProperty::Project,
         old,
-        new: requested.clone(),
+        new: requested.map(str::to_string),
     });
 }
 
