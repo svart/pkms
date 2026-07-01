@@ -13,7 +13,7 @@ pub enum OutputFormat {
     Ndjson,
 }
 
-fn parse_delimited_string(value: &str) -> Result<String, String> {
+fn trim_delimited_value(value: &str) -> Result<String, String> {
     Ok(value.trim().to_string())
 }
 
@@ -203,7 +203,7 @@ pub struct ResolveArgs {
         value_delimiter = ',',
         num_args = 1,
         action = clap::ArgAction::Set,
-        value_parser = parse_delimited_string,
+        value_parser = trim_delimited_value,
         required_unless_present_any = ["uuid", "title"]
     )]
     pub tags: Option<Vec<String>>,
@@ -215,7 +215,7 @@ pub struct ResolveArgs {
         value_delimiter = ',',
         num_args = 1,
         action = clap::ArgAction::Set,
-        value_parser = parse_delimited_string,
+        value_parser = trim_delimited_value,
         help = "Comma-separated fields: uuid,title,path,tags,aliases"
     )]
     pub fields: Option<Vec<String>>,
@@ -261,7 +261,7 @@ pub struct NewArgs {
         value_delimiter = ',',
         num_args = 1,
         action = clap::ArgAction::Set,
-        value_parser = parse_delimited_string
+        value_parser = trim_delimited_value
     )]
     pub tags: Option<Vec<String>>,
     #[arg(
@@ -270,7 +270,7 @@ pub struct NewArgs {
         value_delimiter = ',',
         num_args = 1,
         action = clap::ArgAction::Set,
-        value_parser = parse_delimited_string
+        value_parser = trim_delimited_value
     )]
     pub aliases: Option<Vec<String>>,
     #[arg(long, help = "Heading title to generate :ID: for")]
