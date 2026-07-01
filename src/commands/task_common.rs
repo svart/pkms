@@ -269,7 +269,7 @@ pub trait RowItem {
 }
 
 pub fn filter_row(row: &[String; 9], cols: &[Column]) -> Vec<String> {
-    cols.iter().map(|c| row[*c as usize].clone()).collect()
+    cols.iter().map(|c| row[c.index()].clone()).collect()
 }
 
 pub fn sort_items<T: RowItem>(items: &mut [T], sort_fields: &[TaskSortField]) {
@@ -322,7 +322,7 @@ fn rendered_section_width(
 
     let content_width = cols
         .iter()
-        .map(|col| max_widths[*col as usize])
+        .map(|col| max_widths[col.index()])
         .sum::<usize>();
     content_width + table_padding_width(cols.len())
 }

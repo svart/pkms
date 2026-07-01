@@ -52,6 +52,20 @@ impl FromStr for Column {
 }
 
 impl Column {
+    pub fn index(self) -> usize {
+        match self {
+            Column::Id => 0,
+            Column::Date => 1,
+            Column::State => 2,
+            Column::Type => 3,
+            Column::Prio => 4,
+            Column::Tags => 5,
+            Column::Project => 6,
+            Column::Note => 7,
+            Column::Heading => 8,
+        }
+    }
+
     pub fn name(&self) -> &'static str {
         match self {
             Column::Id => "Id",
@@ -146,6 +160,13 @@ mod tests {
         assert_eq!(Column::Date.name(), "Date");
         assert_eq!(Column::Project.name(), "Project");
         assert_eq!(Column::Heading.name(), "Heading");
+    }
+
+    #[test]
+    fn test_column_index_matches_all_columns_order() {
+        for (index, column) in ALL_COLUMNS.iter().enumerate() {
+            assert_eq!(column.index(), index);
+        }
     }
 
     #[test]
