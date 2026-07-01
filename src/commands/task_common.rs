@@ -1,5 +1,6 @@
 use crate::org_date::parse_org_date;
-use crate::output::{ALL_COLUMNS, Column, adaptive_column_widths, terminal_markup};
+use crate::output::table::{TableLayout, adaptive_table_layout, table_padding_width};
+use crate::output::{ALL_COLUMNS, Column, terminal_markup};
 use crate::tasks::clock::TaskClock;
 use anyhow::{Result, bail};
 use chrono::{NaiveDate, Timelike};
@@ -313,20 +314,17 @@ pub fn agenda_day_section_label(today: NaiveDate, date: NaiveDate) -> String {
 fn rendered_section_width(
     cols: &[Column],
     max_widths: &[usize; 9],
-    wrap: Option<&[(Column, usize)]>,
+    adaptive_layout: Option<&TableLayout>,
 ) -> usize {
+    if let Some(layout) = adaptive_layout {
+        return layout.rendered_width();
+    }
+
     let content_width = cols
         .iter()
-        .map(|col| {
-            wrap.and_then(|widths| {
-                widths
-                    .iter()
-                    .find_map(|(wrapped_col, width)| (*wrapped_col == *col).then_some(*width))
-            })
-            .unwrap_or(max_widths[*col as usize])
-        })
+        .map(|col| max_widths[*col as usize])
         .sum::<usize>();
-    content_width + cols.len().saturating_sub(1) + 2 * cols.len()
+    content_width + table_padding_width(cols.len())
 }
 
 fn section_top_delimiter(label: &str, width: usize) -> String {
@@ -419,6 +417,41 @@ pub fn print_table_with_empty_message<T: RowItem>(
         return;
     }
 
+    let layout = TaskTableLayout::calculate(sections, cols);
+    let records = build_task_table_records(sections, cols, &layout);
+    let rendered = render_task_table(records, cols, row_separators, &layout);
+    println!(
+        "{}",
+        terminal_markup::format_if_terminal_supported(&rendered)
+    );
+    println!();
+    println!("{footer}");
+}
+
+struct TaskTableLayout {
+    adaptive_layout: Option<TableLayout>,
+    section_width: usize,
+    uses_section_boxes: bool,
+}
+
+impl TaskTableLayout {
+    fn calculate<T: RowItem>(sections: &[(&str, &[T])], cols: &[Column]) -> Self {
+        let max_widths = max_task_table_widths(sections);
+        let adaptive_layout = adaptive_table_layout(cols, &max_widths);
+        let section_width = rendered_section_width(cols, &max_widths, adaptive_layout.as_ref());
+        let uses_section_boxes = sections
+            .iter()
+            .any(|(label, items)| !label.trim().is_empty() && !items.is_empty());
+
+        Self {
+            adaptive_layout,
+            section_width,
+            uses_section_boxes,
+        }
+    }
+}
+
+fn max_task_table_widths<T: RowItem>(sections: &[(&str, &[T])]) -> [usize; 9] {
     let mut max_widths: [usize; 9] = ALL_COLUMNS.map(|c| c.name().len());
     for (_, items) in sections {
         for item in *items {
@@ -430,12 +463,22 @@ pub fn print_table_with_empty_message<T: RowItem>(
             }
         }
     }
-    let wrap = adaptive_column_widths(cols, &max_widths);
-    let section_width = rendered_section_width(cols, &max_widths, wrap.as_deref());
-    let uses_section_boxes = sections
-        .iter()
-        .any(|(label, items)| !label.trim().is_empty() && !items.is_empty());
 
+    max_widths
+}
+
+struct TaskTableRecords {
+    builder: Builder,
+    section_rows: Vec<usize>,
+    no_border_rows: Vec<usize>,
+    row_end: usize,
+}
+
+fn build_task_table_records<T: RowItem>(
+    sections: &[(&str, &[T])],
+    cols: &[Column],
+    layout: &TaskTableLayout,
+) -> TaskTableRecords {
     let mut builder = Builder::new();
     let headers: Vec<String> = cols.iter().map(|c| c.name().to_string()).collect();
     builder.push_record(headers);
@@ -451,14 +494,15 @@ pub fn print_table_with_empty_message<T: RowItem>(
         if items.is_empty() {
             continue;
         }
-        if need_sep && !uses_section_boxes {
+        let has_label = !label.trim().is_empty();
+        if need_sep && !layout.uses_section_boxes {
             builder.push_record(empty_row.clone());
             no_border_rows.push(row_idx);
             row_idx += 1;
         }
-        if !label.trim().is_empty() {
+        if has_label {
             let mut label_row: Vec<String> = std::iter::repeat_n(String::new(), n_cols).collect();
-            label_row[0] = section_top_delimiter(label, section_width);
+            label_row[0] = section_top_delimiter(label, layout.section_width);
             builder.push_record(label_row);
             section_rows.push(row_idx);
             no_border_rows.push(row_idx);
@@ -474,9 +518,9 @@ pub fn print_table_with_empty_message<T: RowItem>(
                 row_idx += 1;
             }
         }
-        if !label.trim().is_empty() {
+        if has_label {
             let mut label_row: Vec<String> = std::iter::repeat_n(String::new(), n_cols).collect();
-            label_row[0] = section_bottom_delimiter(section_width);
+            label_row[0] = section_bottom_delimiter(layout.section_width);
             builder.push_record(label_row);
             section_rows.push(row_idx);
             no_border_rows.push(row_idx);
@@ -485,23 +529,37 @@ pub fn print_table_with_empty_message<T: RowItem>(
         need_sep = true;
     }
 
-    let mut table = builder.build();
+    TaskTableRecords {
+        builder,
+        section_rows,
+        no_border_rows,
+        row_end: row_idx,
+    }
+}
+
+fn render_task_table(
+    records: TaskTableRecords,
+    cols: &[Column],
+    row_separators: RowSeparatorMode,
+    layout: &TaskTableLayout,
+) -> String {
+    let mut table = records.builder.build();
     table.with(Style::blank());
-    if !section_rows.contains(&1) {
+    if !records.section_rows.contains(&1) {
         table.with(Modify::new(Rows::one(1)).with(Border::new().top('─')));
     }
-    if row_separators.is_enabled() && row_idx > 2 {
-        for i in 2..row_idx {
-            if !no_border_rows.contains(&i) {
+    if row_separators.is_enabled() && records.row_end > 2 {
+        for i in 2..records.row_end {
+            if !records.no_border_rows.contains(&i) {
                 table.with(Modify::new(Rows::one(i)).with(Border::new().top('─')));
             }
         }
     }
-    if let Some(widths) = wrap {
-        for (col, w) in &widths {
+    if let Some(adaptive_layout) = &layout.adaptive_layout {
+        for (col, w) in adaptive_layout.column_widths() {
             let idx = cols.iter().position(|c| c == col).unwrap();
             let mut prev = 1;
-            for &sec in &section_rows {
+            for &sec in &records.section_rows {
                 if prev < sec {
                     table.with(
                         Modify::new(Rows::new(prev..sec).intersect(Columns::new(idx..idx + 1)))
@@ -510,25 +568,22 @@ pub fn print_table_with_empty_message<T: RowItem>(
                 }
                 prev = sec + 1;
             }
-            if prev < row_idx {
+            if prev < records.row_end {
                 table.with(
-                    Modify::new(Rows::new(prev..row_idx).intersect(Columns::new(idx..idx + 1)))
-                        .with(Width::wrap(*w).keep_words(true)),
+                    Modify::new(
+                        Rows::new(prev..records.row_end).intersect(Columns::new(idx..idx + 1)),
+                    )
+                    .with(Width::wrap(*w).keep_words(true)),
                 );
             }
         }
     }
-    for &sec_row in &section_rows {
-        table.with(Modify::new((sec_row, 0)).with(Span::column(n_cols as isize)));
+    for &sec_row in &records.section_rows {
+        table.with(Modify::new((sec_row, 0)).with(Span::column(cols.len() as isize)));
         table.with(Modify::new(Rows::one(sec_row)).with(Padding::zero()));
     }
-    let rendered = table.to_string();
-    println!(
-        "{}",
-        terminal_markup::format_if_terminal_supported(&rendered)
-    );
-    println!();
-    println!("{footer}");
+
+    table.to_string()
 }
 
 pub fn format_display_datetime(raw: &str) -> String {
