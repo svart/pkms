@@ -19,7 +19,13 @@ const DIRECTORY_PROXIMITY_WEIGHT: f64 = 5.0;
 const NEIGHBOR_BOOST_DENOM: f64 = 100.0;
 const MAX_CONTENT_KEYWORDS: usize = 50;
 
-type SuggestResult = (Node, Vec<Suggestion>, usize, Option<usize>, Option<String>);
+struct SuggestResult {
+    node: Node,
+    suggestions: Vec<Suggestion>,
+    total: usize,
+    showed: Option<usize>,
+    heading_context: Option<String>,
+}
 
 fn find_heading_title_for_uuid(content: &str, heading_uuid: &str) -> Option<String> {
     let lines: Vec<&str> = content.lines().collect();
@@ -49,12 +55,12 @@ fn find_heading_title_for_uuid(content: &str, heading_uuid: &str) -> Option<Stri
     None
 }
 
-type ScoredItem<'a> = (
-    &'a crate::graph::Node,
-    f64,
-    Vec<String>,
-    HashMap<String, f64>,
-);
+struct ScoredItem<'a> {
+    node: &'a crate::graph::Node,
+    score: f64,
+    reasons: Vec<String>,
+    factor_scores: HashMap<String, f64>,
+}
 
 #[derive(Serialize)]
 pub struct SuggestOutput {
@@ -430,7 +436,12 @@ fn compute_scores<'a>(
         }
 
         if score > 0.0 {
-            scored.push((other, score, reasons, factor_scores));
+            scored.push(ScoredItem {
+                node: other,
+                score,
+                reasons,
+                factor_scores,
+            });
         }
     }
 
@@ -529,7 +540,11 @@ fn compute_suggestions_for_node(
         target_outgoing: &target_outgoing,
     };
     let mut scored = compute_scores(&node, graph, &suggest_ctx, exclude_orphans);
-    scored.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+    scored.sort_by(|a, b| {
+        b.score
+            .partial_cmp(&a.score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
     let total = scored.len();
     let showed = limit.map(|l| {
         let shown = scored.len().min(l);
@@ -539,20 +554,26 @@ fn compute_suggestions_for_node(
 
     let suggestions: Vec<Suggestion> = scored
         .iter()
-        .map(|(n, s, r, fs)| Suggestion {
-            uuid: n.uuid.to_string(),
-            title: n.title.clone(),
-            path: n.path.display().to_string(),
-            score: *s,
-            reasons: r.clone(),
-            filetags: n.filetags.clone(),
-            scores: fs.clone(),
+        .map(|item| Suggestion {
+            uuid: item.node.uuid.to_string(),
+            title: item.node.title.clone(),
+            path: item.node.path.display().to_string(),
+            score: item.score,
+            reasons: item.reasons.clone(),
+            filetags: item.node.filetags.clone(),
+            scores: item.factor_scores.clone(),
             target_uuid: target_uuid.clone(),
             heading_context: heading_context.clone(),
         })
         .collect();
 
-    Ok((node, suggestions, total, showed, heading_context))
+    Ok(SuggestResult {
+        node,
+        suggestions,
+        total,
+        showed,
+        heading_context,
+    })
 }
 
 fn node_content<'a>(graph: &'a Graph, node: &Node) -> Option<&'a str> {
@@ -576,7 +597,7 @@ pub fn execute(config: &ResolvedConfig, opts: &SuggestOptions) -> Result<Vec<Sug
     opts.targets
         .iter()
         .map(|target| {
-            let (node, suggestions, total, showed, heading_ctx) = compute_suggestions_for_node(
+            let result = compute_suggestions_for_node(
                 &graph,
                 target,
                 opts.exclude_orphans,
@@ -584,12 +605,12 @@ pub fn execute(config: &ResolvedConfig, opts: &SuggestOptions) -> Result<Vec<Sug
                 None,
             )?;
             Ok(SuggestOutput {
-                target: node.title.clone(),
-                target_uuid: node.uuid.to_string(),
-                total,
-                showed,
-                suggestions,
-                target_heading_context: heading_ctx,
+                target: result.node.title.clone(),
+                target_uuid: result.node.uuid.to_string(),
+                total: result.total,
+                showed: result.showed,
+                suggestions: result.suggestions,
+                target_heading_context: result.heading_context,
                 ndjson_target_uuid: Some(target.clone()),
                 score_precision: 1,
             })

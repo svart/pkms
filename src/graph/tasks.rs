@@ -20,13 +20,30 @@ struct FileTaskOrder {
     path: String,
 }
 
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct CanonicalTaskEntry {
+    pub id: usize,
+    pub path: String,
+    pub line_number: usize,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct TaskLocation {
+    pub path: String,
+    pub line_number: usize,
+}
+
 impl Graph {
-    pub fn all_task_entries(&self, config: &ResolvedConfig) -> Vec<(usize, String, usize)> {
+    pub fn all_task_entries(&self, config: &ResolvedConfig) -> Vec<CanonicalTaskEntry> {
         let entries = self.sorted_task_entries(config);
         entries
             .into_iter()
             .enumerate()
-            .map(|(i, entry)| (i + 1, entry.path, entry.line_number))
+            .map(|(i, entry)| CanonicalTaskEntry {
+                id: i + 1,
+                path: entry.path,
+                line_number: entry.line_number,
+            })
             .collect()
     }
 
@@ -34,7 +51,7 @@ impl Graph {
         &self,
         config: &ResolvedConfig,
         id: usize,
-    ) -> anyhow::Result<(String, usize)> {
+    ) -> anyhow::Result<TaskLocation> {
         let entries = self.sorted_task_entries(config);
         if id == 0 || id > entries.len() {
             anyhow::bail!(
@@ -44,7 +61,10 @@ impl Graph {
             );
         }
         let entry = &entries[id - 1];
-        Ok((entry.path.clone(), entry.line_number))
+        Ok(TaskLocation {
+            path: entry.path.clone(),
+            line_number: entry.line_number,
+        })
     }
 
     fn sorted_task_entries(&self, config: &ResolvedConfig) -> Vec<TaskEntry> {
@@ -258,7 +278,7 @@ mod tests {
         let entries: Vec<_> = graph
             .all_task_entries(&test_config())
             .into_iter()
-            .map(|(_, path, line)| (path, line))
+            .map(|entry| (entry.path, entry.line_number))
             .collect();
 
         assert_eq!(
@@ -275,6 +295,19 @@ mod tests {
                 ("roam/common/20260524090000-zeta.org".to_string(), 30),
             ]
         );
+    }
+
+    #[test]
+    fn resolves_canonical_task_id_to_task_location() {
+        let graph = graph_with_results(vec![note(
+            "roam/common/20260524090000-alpha.org",
+            vec![task(10, "TODO", None, None, None, Vec::new())],
+        )]);
+
+        let location = graph.resolve_canonical_task_id(&test_config(), 1).unwrap();
+
+        assert_eq!(location.path, "roam/common/20260524090000-alpha.org");
+        assert_eq!(location.line_number, 10);
     }
 
     #[test]
@@ -300,7 +333,7 @@ mod tests {
         let entries: Vec<_> = graph
             .all_task_entries(&test_config())
             .into_iter()
-            .map(|(_, path, line)| (path, line))
+            .map(|entry| (entry.path, entry.line_number))
             .collect();
 
         assert_eq!(

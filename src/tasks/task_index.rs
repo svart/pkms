@@ -184,7 +184,7 @@ pub fn assign_canonical_ids(config: &ResolvedConfig, graph: &Graph, records: &mu
     let global_ids: std::collections::HashMap<(String, usize), usize> = graph
         .all_task_entries(config)
         .into_iter()
-        .map(|(id, path, line)| ((path, line), id))
+        .map(|entry| ((entry.path, entry.line_number), entry.id))
         .collect();
     for record in records {
         record.id = global_ids

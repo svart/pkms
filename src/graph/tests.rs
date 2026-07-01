@@ -704,14 +704,14 @@ fn test_search_title_alias_equal_score() {
     assert_eq!(title_results.len(), 2, "both notes should match");
     let note_a = title_results
         .iter()
-        .find(|(n, _, _)| n.uuid == "a")
+        .find(|result| result.node.uuid == "a")
         .unwrap();
     let note_b = title_results
         .iter()
-        .find(|(n, _, _)| n.uuid == "b")
+        .find(|result| result.node.uuid == "b")
         .unwrap();
     assert_eq!(
-        note_a.1, note_b.1,
+        note_a.score, note_b.score,
         "title match and alias match should score identically"
     );
 }
@@ -729,14 +729,14 @@ fn test_search_title_outranks_ref() {
     let title_results = graph.search("Quantum", &Default::default());
     let note_a = title_results
         .iter()
-        .find(|(n, _, _)| n.uuid == "a")
+        .find(|result| result.node.uuid == "a")
         .unwrap();
     let note_b = title_results
         .iter()
-        .find(|(n, _, _)| n.uuid == "b")
+        .find(|result| result.node.uuid == "b")
         .unwrap();
     assert!(
-        note_a.1 > note_b.1,
+        note_a.score > note_b.score,
         "title score should be higher than ref score"
     );
 }
@@ -751,14 +751,14 @@ fn test_search_title_outranks_tag() {
     let title_results = graph.search("Quantum", &Default::default());
     let note_a = title_results
         .iter()
-        .find(|(n, _, _)| n.uuid == "a")
+        .find(|result| result.node.uuid == "a")
         .unwrap();
     let note_b = title_results
         .iter()
-        .find(|(n, _, _)| n.uuid == "b")
+        .find(|result| result.node.uuid == "b")
         .unwrap();
     assert!(
-        note_a.1 > note_b.1,
+        note_a.score > note_b.score,
         "title score should be higher than tag score"
     );
 }
@@ -782,14 +782,14 @@ fn test_search_ref_outranks_tag() {
     let title_results = graph.search("quantum", &Default::default());
     let note_a = title_results
         .iter()
-        .find(|(n, _, _)| n.uuid == "a")
+        .find(|result| result.node.uuid == "a")
         .unwrap();
     let note_b = title_results
         .iter()
-        .find(|(n, _, _)| n.uuid == "b")
+        .find(|result| result.node.uuid == "b")
         .unwrap();
     assert!(
-        note_a.1 > note_b.1,
+        note_a.score > note_b.score,
         "ref score (6) should be higher than tag score (5)"
     );
 }
@@ -937,7 +937,7 @@ fn test_search_by_tag_only() {
     };
     let results = graph.search("quantum", &fields);
     assert_eq!(results.len(), 1);
-    assert_eq!(results[0].0.uuid, "a");
+    assert_eq!(results[0].node.uuid, "a");
 }
 
 #[test]
@@ -974,7 +974,7 @@ fn test_search_by_category() {
     };
     let results = graph.search("example-category", &fields);
     assert_eq!(results.len(), 1);
-    assert_eq!(results[0].0.uuid, "a");
+    assert_eq!(results[0].node.uuid, "a");
 }
 
 #[test]

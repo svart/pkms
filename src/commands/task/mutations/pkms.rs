@@ -44,9 +44,9 @@ pub(super) fn mod_task(
     };
 
     let graph = Graph::load(config)?;
-    let (path, line_number) = graph.resolve_canonical_task_id(config, canonical_id)?;
-    let mut path = PathBuf::from(path);
-    let mut line_number = line_number;
+    let location = graph.resolve_canonical_task_id(config, canonical_id)?;
+    let mut path = PathBuf::from(location.path);
+    let mut line_number = location.line_number;
     let mut changes = Vec::new();
 
     if let Some(dependency) = mod_dependency(spec)? {
@@ -55,13 +55,12 @@ pub(super) fn mod_task(
                 if target_id == canonical_id {
                     bail!("Cannot make a task depend on itself.");
                 }
-                let (target_path, target_line_number) =
-                    graph.resolve_canonical_task_id(config, target_id)?;
+                let target_location = graph.resolve_canonical_task_id(config, target_id)?;
                 (path, line_number) = pkms::move_subtree_to_dependency(
                     &path,
                     line_number,
-                    Path::new(&target_path),
-                    target_line_number,
+                    Path::new(&target_location.path),
+                    target_location.line_number,
                 )?;
                 changes.push(render::TaskModChange {
                     property: TaskProperty::Dependency,
@@ -168,8 +167,10 @@ fn current_dependency_parent(
     graph
         .all_task_entries(config)
         .into_iter()
-        .find(|(_, task_path, task_line)| task_path == &path && *task_line == parent.line_number)
-        .map(|(id, _, line)| (id, line))
+        .find(|entry| {
+            entry.path.as_str() == path.as_str() && entry.line_number == parent.line_number
+        })
+        .map(|entry| (entry.id, entry.line_number))
 }
 
 fn mod_pkms_priority(spec: &TaskModifierSpec) -> Result<Option<Option<TaskPriority>>> {
@@ -198,11 +199,20 @@ pub(super) fn set_state(
 ) -> Result<()> {
     let new_state = canonical_state(config, requested_state)?;
     let graph = Graph::load(config)?;
-    let (path, line_number) = graph.resolve_canonical_task_id(config, canonical_id)?;
-    let title = task_title_in_graph(&graph, &path, line_number).with_context(|| {
-        format!("Resolved task but could not find title at {path}:{line_number}")
-    })?;
-    let output = pkms_mutation::replace_heading_state(&path, line_number, &new_state, dry_run)?;
+    let location = graph.resolve_canonical_task_id(config, canonical_id)?;
+    let title =
+        task_title_in_graph(&graph, &location.path, location.line_number).with_context(|| {
+            format!(
+                "Resolved task but could not find title at {}:{}",
+                location.path, location.line_number
+            )
+        })?;
+    let output = pkms_mutation::replace_heading_state(
+        &location.path,
+        location.line_number,
+        &new_state,
+        dry_run,
+    )?;
     render::print_state_change(
         ctx,
         &render::TaskStateChangeOutput {
@@ -295,8 +305,9 @@ fn add_dependency_task(
     canonical_id: usize,
 ) -> Result<(PathBuf, usize)> {
     let graph = Graph::load(config)?;
-    let (path, line_number) = graph.resolve_canonical_task_id(config, canonical_id)?;
-    let path = PathBuf::from(path);
+    let location = graph.resolve_canonical_task_id(config, canonical_id)?;
+    let path = PathBuf::from(location.path);
+    let line_number = location.line_number;
     let parent_level = pkms::heading_level_at(&path, line_number)?;
     let entry = format_task_entry(config, spec, parent_level + 1)?;
     pkms::append_child_entry(&path, line_number, &entry)
@@ -386,11 +397,19 @@ pub(super) fn postpone(
 ) -> Result<()> {
     let date = parse_mutation_due_date(to, clock.today)?;
     let graph = Graph::load(config)?;
-    let (path, line_number) = graph.resolve_canonical_task_id(config, canonical_id)?;
-    pkms_mutation::update_recurring_planning_date(&path, line_number, &date)?;
-    let item = pkms::find_task_item_on(config, Path::new(&path), line_number, clock)?
-        .with_context(|| {
-            format!("Changed task but could not reload it from {path}:{line_number}")
-        })?;
+    let location = graph.resolve_canonical_task_id(config, canonical_id)?;
+    pkms_mutation::update_recurring_planning_date(&location.path, location.line_number, &date)?;
+    let item = pkms::find_task_item_on(
+        config,
+        Path::new(&location.path),
+        location.line_number,
+        clock,
+    )?
+    .with_context(|| {
+        format!(
+            "Changed task but could not reload it from {}:{}",
+            location.path, location.line_number
+        )
+    })?;
     render::print_mutation_output(ctx, "postpone", item)
 }

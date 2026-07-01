@@ -1,6 +1,7 @@
 use crate::command_context::CommandContext;
 use crate::config::ResolvedConfig;
 use crate::graph::Graph;
+use crate::graph::tasks::TaskLocation;
 use anyhow::Result;
 
 pub struct OpenOptions {
@@ -33,18 +34,18 @@ pub fn open_target(
     editor: &str,
     line: Option<usize>,
 ) -> Result<()> {
-    let (path, line_number) = if let Ok(id) = target.parse::<usize>() {
+    let location = if let Ok(id) = target.parse::<usize>() {
         graph.resolve_canonical_task_id(config, id)?
     } else {
         let node = graph.resolve_target(target)?;
         let path = node.path.display().to_string();
-        let line = line.unwrap_or_else(|| find_line_for_node(graph, &node.path));
-        (path, line)
+        let line_number = line.unwrap_or_else(|| find_line_for_node(graph, &node.path));
+        TaskLocation { path, line_number }
     };
 
-    let actual_line = line.unwrap_or(line_number);
+    let actual_line = line.unwrap_or(location.line_number);
 
-    let path_ref = std::path::Path::new(&path);
+    let path_ref = std::path::Path::new(&location.path);
     let title = graph
         .results
         .iter()
@@ -69,7 +70,7 @@ pub fn open_target(
         cmd.args(rest);
     }
     cmd.arg(format!("+{actual_line}"));
-    cmd.arg(&path);
+    cmd.arg(&location.path);
 
     let status = cmd.status();
     match status {

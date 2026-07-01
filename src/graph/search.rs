@@ -19,6 +19,12 @@ pub struct ContentSearchResult<'a> {
     pub lines: Vec<String>,
 }
 
+pub struct SearchResult<'a> {
+    pub node: &'a super::Node,
+    pub score: f64,
+    pub matches: Vec<String>,
+}
+
 impl Default for SearchFields {
     fn default() -> Self {
         Self {
@@ -33,14 +39,10 @@ impl Default for SearchFields {
 
 impl Graph {
     #[allow(clippy::cast_precision_loss)]
-    pub fn search(
-        &self,
-        terms: &str,
-        fields: &SearchFields,
-    ) -> Vec<(&super::Node, f64, Vec<String>)> {
+    pub fn search(&self, terms: &str, fields: &SearchFields) -> Vec<SearchResult<'_>> {
         let query = terms.to_lowercase();
         let words: Vec<&str> = query.split_whitespace().collect();
-        let mut results: Vec<(&super::Node, f64, Vec<String>)> = Vec::new();
+        let mut results = Vec::new();
 
         for node in self.nodes.values() {
             let mut score = 0.0;
@@ -99,11 +101,19 @@ impl Graph {
             if score > 0.0 {
                 let mut matches: Vec<String> = sources.into_iter().map(String::from).collect();
                 matches.sort();
-                results.push((node, score, matches));
+                results.push(SearchResult {
+                    node,
+                    score,
+                    matches,
+                });
             }
         }
 
-        results.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+        results.sort_by(|a, b| {
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
         results
     }
 

@@ -240,7 +240,7 @@ fn process_one_show(
     target: &HeadingTarget,
     task_ids: &TaskIdMap,
 ) -> Result<ShowOutput> {
-    let (path, line_number) = if let Some(cid) = target.canonical_id {
+    let location = if let Some(cid) = target.canonical_id {
         graph.resolve_canonical_task_id(config, cid)?
     } else {
         // Try graph node lookup first
@@ -342,13 +342,13 @@ fn process_one_show(
     };
 
     // Show heading by resolved path + line_number
-    let content = std::fs::read_to_string(&path)?;
-    let path_ref = std::path::Path::new(&path);
+    let content = std::fs::read_to_string(&location.path)?;
+    let path_ref = std::path::Path::new(&location.path);
 
     let result = graph.results.iter().find(|r| r.path == *path_ref);
     let parsed = match result {
         Some(r) => &r.parsed,
-        None => anyhow::bail!("No parsed data for path: {}", path),
+        None => anyhow::bail!("No parsed data for path: {}", location.path),
     };
 
     let note_title = strip_org_links(&parsed.title.clone().unwrap_or_else(|| {
@@ -370,7 +370,7 @@ fn process_one_show(
             path: path_ref,
             task_ids,
         },
-        line_number,
+        location.line_number,
     )
 }
 
@@ -387,7 +387,7 @@ pub fn execute(config: &ResolvedConfig, opts: &ShowOptions) -> Result<Vec<ShowOu
     let task_ids: TaskIdMap = graph
         .all_task_entries(config)
         .into_iter()
-        .map(|(id, path, line_number)| ((path, line_number), id))
+        .map(|entry| ((entry.path, entry.line_number), entry.id))
         .collect();
     opts.targets
         .iter()

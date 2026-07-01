@@ -156,14 +156,14 @@ fn search_by_text(
             category: search_tags,
         };
         let title_results = graph.search(terms, &fields);
-        for (node, score, matches) in title_results {
+        for result in title_results {
             combined.push(QueryResultEntry {
-                uuid: node.uuid.to_string(),
-                title: node.title.clone(),
-                path: node.path.display().to_string(),
-                filetags: node.filetags.clone(),
-                score,
-                matches,
+                uuid: result.node.uuid.to_string(),
+                title: result.node.title.clone(),
+                path: result.node.path.display().to_string(),
+                filetags: result.node.filetags.clone(),
+                score: result.score,
+                matches: result.matches,
                 content_matches: vec![],
             });
         }

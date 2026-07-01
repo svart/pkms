@@ -8,6 +8,7 @@ use crate::commands::show::{HeadingTarget, ShowOptions};
 use crate::commands::task_common::RowSeparatorMode;
 use crate::commands::task_common::TaskSortField;
 use crate::config::ResolvedConfig;
+use crate::graph::tasks::CanonicalTaskEntry;
 use crate::output::{OutputContext, terminal_markup};
 use crate::tasks::clock::TaskClock;
 #[cfg(feature = "todoist")]
@@ -304,10 +305,14 @@ impl TaskIdSnapshot {
         let entries = graph.all_task_entries(config);
         let identities = task_identities_by_location(&entries);
         let mut ordered = Vec::new();
-        for (_, path, line_number) in entries {
-            let key = (path.clone(), line_number);
+        for entry in entries {
+            let key = (entry.path.clone(), entry.line_number);
             let identity = identities.get(&key).ok_or_else(|| {
-                anyhow!("Task ID snapshot missing task identity for {path}:{line_number}")
+                anyhow!(
+                    "Task ID snapshot missing task identity for {}:{}",
+                    entry.path,
+                    entry.line_number
+                )
             })?;
             ordered.push(identity.clone());
         }
@@ -316,14 +321,14 @@ impl TaskIdSnapshot {
 }
 
 fn task_identities_by_location(
-    entries: &[(usize, String, usize)],
+    entries: &[CanonicalTaskEntry],
 ) -> HashMap<(String, usize), TaskIdentity> {
     let mut line_numbers_by_path: HashMap<&str, Vec<usize>> = HashMap::new();
-    for (_, path, line_number) in entries {
+    for entry in entries {
         line_numbers_by_path
-            .entry(path.as_str())
+            .entry(entry.path.as_str())
             .or_default()
-            .push(*line_number);
+            .push(entry.line_number);
     }
 
     let mut identities = HashMap::new();
