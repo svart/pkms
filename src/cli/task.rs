@@ -1,5 +1,15 @@
 use clap::{Args, Subcommand};
 
+const TASK_ID_ACTION_HELP: &str = "ID-first actions:\n  pkms task <ID> show\n  pkms task <ID> open [--editor <COMMAND>] [--line <LINE>]\n  pkms task <ID> state <STATE> [--dry-run]\n  pkms task <ID> done [--dry-run]\n  pkms task <ID> postpone --to <DATE>\n  pkms task <ID> mod <MODIFIER>...\n  pkms task <ID> mod dep:<PARENT-ID>";
+
+const TASK_FILTER_HELP_WITH_DATES: &str = "Filters:\n  source:pkms|todoist|all, src:pkms|todoist|all\n  state:TODO|opened|closed, tags:tag,!other, type:SCHED,DEADL, prio:A[,B,C], project:Name\n  date:today|week|overdue|upcoming|YYYY-MM-DD|tom|fri[,value...], after:YYYY-MM-DD[ HH:MM]|tom|fri, before:YYYY-MM-DD[ HH:MM]|tom|fri\n  todoist.filter:<query> (requires source:todoist or source:all)";
+
+const TASK_SIMPLE_FILTER_HELP: &str = "Filters:\n  source:pkms|todoist|all, src:pkms|todoist|all\n  state:TODO|opened|closed, tags:tag,!other, type:SCHED,DEADL, prio:A, project:Name\n  todoist.filter:<query> (requires source:todoist or source:all)";
+
+const TASK_SHARED_MODIFIER_HELP: &str = "  state:<state>             PKMS TODO state from configured agenda states\n  tag:<label>, tags:<a,b>   Labels/tags; repeat or comma-separate\n  schedule:<date>, sch:<date>, due:<date>\n  deadline:<date>, dead:<date>, dl:<date>\n  project:<name-or-id>, proj:<name-or-id>, prio:A|B|C, desc:<text>, source:pkms|todoist\n";
+
+const TASK_DATE_MODIFIER_HELP: &str = "Date shortcuts for schedule/deadline: unambiguous prefixes of today, tomorrow, or weekdays; YYYY-MM-DD; or YYYY-MM-DD HH:MM.";
+
 #[derive(Debug, Args)]
 pub struct TaskTableArgs {
     #[arg(long, help = "Add line separators between rows")]
@@ -14,7 +24,15 @@ pub struct TaskTableArgs {
 
 #[derive(Debug, Args)]
 #[command(
-    after_help = "ID-first actions:\n  pkms task <ID> show\n  pkms task <ID> open [--editor <COMMAND>] [--line <LINE>]\n  pkms task <ID> state <STATE> [--dry-run]\n  pkms task <ID> done [--dry-run]\n  pkms task <ID> postpone --to <DATE>\n  pkms task <ID> mod <MODIFIER>...\n  pkms task <ID> mod dep:<PARENT-ID>\n\nTask modifiers apply to `task add` and `task <ID> mod`.\n  title:<text>              Task title; non-modifier words are task text for add only\n  state:<state>             PKMS TODO state from configured agenda states\n  tag:<label>, tags:<a,b>   Labels/tags; repeat or comma-separate\n  schedule:<date>, sch:<date>, due:<date>\n  deadline:<date>, dead:<date>, dl:<date>\n  project:<name-or-id>, proj:<name-or-id>, prio:A|B|C, desc:<text>, source:pkms|todoist\n  note:<uuid-title-or-path> PKMS add only; choose the note to append into\n  dep:<task-id>, depend:<task-id> PKMS add/mod; add as child or move under parent"
+    after_help = [
+        TASK_ID_ACTION_HELP,
+        "\n\nTask modifiers apply to `task add` and `task <ID> mod`.\n",
+        "  title:<text>              Task title; non-modifier words are task text for add only\n",
+        TASK_SHARED_MODIFIER_HELP,
+        "  note:<uuid-title-or-path> PKMS add only; choose the note to append into\n",
+        "  dep:<task-id>, depend:<task-id> PKMS add/mod; add as child or move under parent",
+    ]
+    .concat()
 )]
 pub struct TaskArgs {
     #[command(subcommand)]
@@ -47,7 +65,11 @@ pub enum TaskCommand {
 
 #[derive(Debug, Args)]
 #[command(
-    after_help = "Filters:\n  source:pkms|todoist|all, src:pkms|todoist|all\n  state:TODO|opened|closed, tags:tag,!other, type:SCHED,DEADL, prio:A[,B,C], project:Name\n  date:today|week|overdue|upcoming|YYYY-MM-DD|tom|fri[,value...], after:YYYY-MM-DD[ HH:MM]|tom|fri, before:YYYY-MM-DD[ HH:MM]|tom|fri\n  todoist.filter:<query> (requires source:todoist or source:all)\n\nExamples:\n  pkms task list source:todoist tag:phone prio:A\n  pkms task list state:opened,!waiting prio:A,B,C\n  pkms task list source:all date:today,overdue project:Inbox"
+    after_help = [
+        TASK_FILTER_HELP_WITH_DATES,
+        "\n\nExamples:\n  pkms task list source:todoist tag:phone prio:A\n  pkms task list state:opened,!waiting prio:A,B,C\n  pkms task list source:all date:today,overdue project:Inbox",
+    ]
+    .concat()
 )]
 pub struct TaskListArgs {
     #[arg(value_name = "MODE_OR_FILTER")]
@@ -69,7 +91,11 @@ pub struct TaskListArgs {
 
 #[derive(Debug, Args)]
 #[command(
-    after_help = "Filters:\n  source:pkms|todoist|all, src:pkms|todoist|all\n  state:TODO|opened|closed, tags:tag,!other, type:SCHED,DEADL, prio:A[,B,C], project:Name\n  date:today|week|overdue|upcoming|YYYY-MM-DD|tom|fri[,value...], after:YYYY-MM-DD[ HH:MM]|tom|fri, before:YYYY-MM-DD[ HH:MM]|tom|fri\n  todoist.filter:<query> (requires source:todoist or source:all)\n\nExamples:\n  pkms task agenda source:todoist\n  pkms task agenda --days 7\n  pkms task agenda source:all date:today,overdue tag:waiting\n  pkms task agenda state:opened,!waiting prio:A,B,C\n  pkms task agenda today source:todoist"
+    after_help = [
+        TASK_FILTER_HELP_WITH_DATES,
+        "\n\nExamples:\n  pkms task agenda source:todoist\n  pkms task agenda --days 7\n  pkms task agenda source:all date:today,overdue tag:waiting\n  pkms task agenda state:opened,!waiting prio:A,B,C\n  pkms task agenda today source:todoist",
+    ]
+    .concat()
 )]
 pub struct TaskAgendaArgs {
     #[command(subcommand)]
@@ -100,7 +126,11 @@ pub enum TaskAgendaCommand {
 
 #[derive(Debug, Args)]
 #[command(
-    after_help = "Filters:\n  source:pkms|todoist|all, src:pkms|todoist|all\n  state:TODO|opened|closed, tags:tag,!other, type:SCHED,DEADL, prio:A, project:Name\n  todoist.filter:<query> (requires source:todoist or source:all)\n\nExamples:\n  pkms task agenda today source:todoist\n  pkms task inbox source:all state:!closed project:Inbox"
+    after_help = [
+        TASK_SIMPLE_FILTER_HELP,
+        "\n\nExamples:\n  pkms task agenda today source:todoist\n  pkms task inbox source:all state:!closed project:Inbox",
+    ]
+    .concat()
 )]
 pub struct TaskShortcutArgs {
     #[arg(value_name = "FILTER")]
@@ -113,7 +143,11 @@ pub struct TaskShortcutArgs {
 
 #[derive(Debug, Args)]
 #[command(
-    after_help = "Filters:\n  source:pkms|todoist|all, src:pkms|todoist|all\n  state:TODO|opened|closed, tags:tag,!other, type:SCHED,DEADL, prio:A, project:Name\n  todoist.filter:<query> (requires source:todoist or source:all)\n\nExamples:\n  pkms task agenda upcoming --days 14 source:all tag:phone\n  pkms task agenda upcoming source:todoist state:opened prio:B"
+    after_help = [
+        TASK_SIMPLE_FILTER_HELP,
+        "\n\nExamples:\n  pkms task agenda upcoming --days 14 source:all tag:phone\n  pkms task agenda upcoming source:todoist state:opened prio:B",
+    ]
+    .concat()
 )]
 pub struct TaskUpcomingArgs {
     #[arg(value_name = "FILTER")]
@@ -166,7 +200,16 @@ pub struct TaskDoneArgs {
 
 #[derive(Debug, Args)]
 #[command(
-    after_help = "Add modifiers:\n  title:<text>              Task title; non-modifier words are task text\n  state:<state>             PKMS TODO state from configured agenda states\n  tag:<label>, tags:<a,b>   Labels/tags; repeat or comma-separate\n  schedule:<date>, sch:<date>, due:<date>\n  deadline:<date>, dead:<date>, dl:<date>\n  project:<name-or-id>, proj:<name-or-id>, prio:A|B|C, desc:<text>, source:pkms|todoist\n  note:<uuid-title-or-path> PKMS only; choose the note to append into\n  dep:<task-id>, depend:<task-id> PKMS only; add as child of a task\n\nDate shortcuts for schedule/deadline: unambiguous prefixes of today, tomorrow, or weekdays; YYYY-MM-DD; or YYYY-MM-DD HH:MM.\n\nExamples:\n  pkms task add title:\"This is title\" sch:mon dead:to prio:a tag:phone\n  pkms task add dep:2 title:\"Follow up\"\n  pkms task add source:todoist title:\"Call Alice\" proj:Inbox tag:phone prio:b\n  pkms task add note:\"Project Alpha\" title:\"Follow up\""
+    after_help = [
+        "Add modifiers:\n",
+        "  title:<text>              Task title; non-modifier words are task text\n",
+        TASK_SHARED_MODIFIER_HELP,
+        "  note:<uuid-title-or-path> PKMS only; choose the note to append into\n",
+        "  dep:<task-id>, depend:<task-id> PKMS only; add as child of a task\n\n",
+        TASK_DATE_MODIFIER_HELP,
+        "\n\nExamples:\n  pkms task add title:\"This is title\" sch:mon dead:to prio:a tag:phone\n  pkms task add dep:2 title:\"Follow up\"\n  pkms task add source:todoist title:\"Call Alice\" proj:Inbox tag:phone prio:b\n  pkms task add note:\"Project Alpha\" title:\"Follow up\"",
+    ]
+    .concat()
 )]
 pub struct TaskAddArgs {
     #[arg(
