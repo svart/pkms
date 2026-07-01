@@ -64,51 +64,45 @@ fn dispatch(cli: &Cli, command_ctx: &CommandContext<'_>) -> Result<ExitCode> {
         }
         Command::Validate(args) => {
             let targets = input::resolve_targets(&args.target, args.from_stdin)?;
-            commands::validate::run(
+            success(commands::validate::run(
                 command_ctx,
                 &commands::validate::ValidateOptions { targets },
-            )
-            .map(|()| ExitCode::SUCCESS)?
+            ))?
         }
-        Command::Stats(args) => {
-            commands::stats::run(command_ctx, &commands::stats::StatsOptions::from(args))
-                .map(|()| ExitCode::SUCCESS)?
-        }
-        Command::Orphans(args) => {
-            commands::orphans::run(command_ctx, &commands::orphans::OrphansOptions::from(args))
-                .map(|()| ExitCode::SUCCESS)?
-        }
-        Command::Info => commands::info::run(command_ctx).map(|()| ExitCode::SUCCESS)?,
-        Command::InitConfig(args) => init_config(args.db.as_deref(), ctx)?,
-        Command::Resolve(args) => {
-            commands::resolve::run(command_ctx, &commands::resolve::ResolveOptions::from(args))
-                .map(|()| ExitCode::SUCCESS)?
-        }
-        Command::Fix(args) => {
-            commands::fix::run(command_ctx, &args.try_into()?).map(|()| ExitCode::SUCCESS)?
-        }
+        Command::Stats(args) => success(commands::stats::run(
+            command_ctx,
+            &commands::stats::StatsOptions::from(args),
+        ))?,
+        Command::Orphans(args) => success(commands::orphans::run(
+            command_ctx,
+            &commands::orphans::OrphansOptions::from(args),
+        ))?,
+        Command::Info => success(commands::info::run(command_ctx))?,
+        Command::InitConfig(args) => success(init_config(args.db.as_deref(), ctx))?,
+        Command::Resolve(args) => success(commands::resolve::run(
+            command_ctx,
+            &commands::resolve::ResolveOptions::from(args),
+        ))?,
+        Command::Fix(args) => success(commands::fix::run(command_ctx, &args.try_into()?))?,
         Command::Suggest(args) => {
             let targets = input::resolve_targets(&args.target, args.from_stdin)?;
-            commands::suggest::run(
+            success(commands::suggest::run(
                 command_ctx,
                 &commands::suggest::SuggestOptions {
                     targets,
                     limit: args.limit,
                     exclude_orphans: args.exclude_orphans,
                 },
-            )
-            .map(|()| ExitCode::SUCCESS)?
+            ))?
         }
-        Command::New(args) => {
-            commands::new::run(command_ctx, &commands::new::NewOptions::from(args))
-                .map(|()| ExitCode::SUCCESS)?
-        }
-        Command::Extract(args) => {
-            commands::extract::run(command_ctx, &args.try_into()?).map(|()| ExitCode::SUCCESS)?
-        }
+        Command::New(args) => success(commands::new::run(
+            command_ctx,
+            &commands::new::NewOptions::from(args),
+        ))?,
+        Command::Extract(args) => success(commands::extract::run(command_ctx, &args.try_into()?))?,
         Command::Get(args) => {
             let targets = input::resolve_targets(&args.target, args.from_stdin)?;
-            commands::get::run(
+            success(commands::get::run(
                 command_ctx,
                 &commands::get::GetOptions {
                     targets,
@@ -121,30 +115,28 @@ fn dispatch(cli: &Cli, command_ctx: &CommandContext<'_>) -> Result<ExitCode> {
                         .parse::<tokens::Encoding>()
                         .map_err(|_| anyhow::anyhow!("Unknown encoding: {}", args.encoding))?,
                 },
-            )
-            .map(|()| ExitCode::SUCCESS)?
+            ))?
         }
-        Command::Query(args) => {
-            commands::query::run(command_ctx, &args.try_into()?).map(|()| ExitCode::SUCCESS)?
-        }
+        Command::Query(args) => success(commands::query::run(command_ctx, &args.try_into()?))?,
         Command::Task(args) => commands::task::run(command_ctx, &args.command)?,
-        Command::Path(args) => {
-            commands::path::run(command_ctx, &args.try_into()?).map(|()| ExitCode::SUCCESS)?
-        }
+        Command::Path(args) => success(commands::path::run(command_ctx, &args.try_into()?))?,
         #[cfg(feature = "web")]
-        Command::Serve(args) => commands::serve::run(
+        Command::Serve(args) => success(commands::serve::run(
             command_ctx,
             &commands::serve::ServeOptions {
                 target: args.target.clone(),
                 host: args.host.clone(),
                 port: args.port,
             },
-        )
-        .map(|()| ExitCode::SUCCESS)?,
+        ))?,
     })
 }
 
-fn init_config(db: Option<&std::path::Path>, ctx: &OutputContext) -> Result<ExitCode> {
+fn success(result: Result<()>) -> Result<ExitCode> {
+    result.map(|()| ExitCode::SUCCESS)
+}
+
+fn init_config(db: Option<&std::path::Path>, ctx: &OutputContext) -> Result<()> {
     let config_path = dirs::config_dir()
         .ok_or_else(|| anyhow::anyhow!("Could not find XDG config directory"))?
         .join("pkms.toml");
@@ -159,5 +151,5 @@ fn init_config(db: Option<&std::path::Path>, ctx: &OutputContext) -> Result<Exit
     } else {
         println!("Created config at {}", config_path.display());
     }
-    Ok(ExitCode::SUCCESS)
+    Ok(())
 }
