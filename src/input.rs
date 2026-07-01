@@ -42,59 +42,65 @@ pub fn resolve_columns(
     if let Some(raw_cli_cols) = cli_cols
         && !columns_has_adjustment(raw_cli_cols)
     {
-        let tokens = split_column_tokens(raw_cli_cols)?;
-        return parse_column_names(tokens.iter().copied());
+        return match ColumnSelection::parse(raw_cli_cols)? {
+            ColumnSelection::Replace(columns) => Ok(columns),
+            ColumnSelection::Adjust(_) => {
+                unreachable!("non-adjustment column selection parsed as adjustment")
+            }
+        };
     }
 
-    let base = match config_cols {
-        Some(names) => parse_column_names(names.iter().map(String::as_str))?,
-        None => ALL_COLUMNS.to_vec(),
-    };
+    let base = resolve_base_columns(config_cols)?;
 
     let Some(raw_cli_cols) = cli_cols else {
         return Ok(base);
     };
 
-    let tokens = split_column_tokens(raw_cli_cols)?;
-    if tokens.is_empty() {
-        bail!("--columns must specify at least one column");
+    match ColumnSelection::parse(raw_cli_cols)? {
+        ColumnSelection::Replace(_) => {
+            unreachable!("replacement column selection was handled before config")
+        }
+        ColumnSelection::Adjust(adjustments) => apply_column_adjustments(base, adjustments),
     }
+}
 
-    if tokens
-        .iter()
-        .any(|token| !(token.starts_with('+') || token.starts_with('-')))
-    {
-        bail!("--columns cannot mix replacement columns with + or - adjustments");
+enum ColumnSelection {
+    Replace(Vec<Column>),
+    Adjust(Vec<ColumnAdjustment>),
+}
+
+impl ColumnSelection {
+    fn parse(raw: &str) -> Result<Self> {
+        let tokens = split_column_tokens(raw)?;
+        if tokens
+            .iter()
+            .any(|token| token.starts_with('+') || token.starts_with('-'))
+        {
+            parse_column_adjustments(tokens).map(ColumnSelection::Adjust)
+        } else {
+            parse_column_names(tokens.iter().copied()).map(ColumnSelection::Replace)
+        }
     }
+}
 
-    let mut columns = base;
-    for token in tokens {
+enum ColumnAdjustment {
+    Enable(Column),
+    Disable(Column),
+}
+
+impl ColumnAdjustment {
+    fn parse(token: &str) -> Result<Self> {
         let (op, name) = token.split_at(1);
         if name.trim().is_empty() {
             bail!("--columns adjustment '{token}' is missing a column name");
         }
         let column = parse_column_name(name)?;
         match op {
-            "+" => {
-                if columns.contains(&column) {
-                    bail!("Column '{}' is already enabled", column.name());
-                }
-                columns.push(column);
-            }
-            "-" => {
-                let Some(index) = columns.iter().position(|existing| *existing == column) else {
-                    bail!("Column '{}' is not enabled", column.name());
-                };
-                columns.remove(index);
-            }
+            "+" => Ok(ColumnAdjustment::Enable(column)),
+            "-" => Ok(ColumnAdjustment::Disable(column)),
             _ => unreachable!("adjustment operator was validated above"),
         }
     }
-
-    if columns.is_empty() {
-        bail!("--columns removed all columns");
-    }
-    Ok(columns)
 }
 
 pub fn columns_has_adjustment(raw: &str) -> bool {
@@ -113,6 +119,51 @@ fn split_column_tokens(raw: &str) -> Result<Vec<&str>> {
         bail!("--columns must specify at least one column");
     }
     Ok(tokens)
+}
+
+fn resolve_base_columns(config_cols: Option<&[String]>) -> Result<Vec<Column>> {
+    match config_cols {
+        Some(names) => parse_column_names(names.iter().map(String::as_str)),
+        None => Ok(ALL_COLUMNS.to_vec()),
+    }
+}
+
+fn parse_column_adjustments(tokens: Vec<&str>) -> Result<Vec<ColumnAdjustment>> {
+    if tokens
+        .iter()
+        .any(|token| !(token.starts_with('+') || token.starts_with('-')))
+    {
+        bail!("--columns cannot mix replacement columns with + or - adjustments");
+    }
+
+    tokens.into_iter().map(ColumnAdjustment::parse).collect()
+}
+
+fn apply_column_adjustments(
+    mut columns: Vec<Column>,
+    adjustments: Vec<ColumnAdjustment>,
+) -> Result<Vec<Column>> {
+    for adjustment in adjustments {
+        match adjustment {
+            ColumnAdjustment::Enable(column) => {
+                if columns.contains(&column) {
+                    bail!("Column '{}' is already enabled", column.name());
+                }
+                columns.push(column);
+            }
+            ColumnAdjustment::Disable(column) => {
+                let Some(index) = columns.iter().position(|existing| *existing == column) else {
+                    bail!("Column '{}' is not enabled", column.name());
+                };
+                columns.remove(index);
+            }
+        }
+    }
+
+    if columns.is_empty() {
+        bail!("--columns removed all columns");
+    }
+    Ok(columns)
 }
 
 fn parse_column_names<'a>(names: impl Iterator<Item = &'a str>) -> Result<Vec<Column>> {
