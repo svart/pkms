@@ -1,28 +1,6 @@
 use clap::{Args, Subcommand};
 
 #[derive(Debug, Args)]
-pub struct TaskFilterArgs {
-    #[arg(
-        long,
-        value_name = "STATE",
-        help = "Filter by TODO states (comma-separated, ! for negation, applied as AND)"
-    )]
-    pub state: Option<String>,
-    #[arg(
-        long,
-        value_name = "TAGS",
-        help = "Filter by tags (comma-separated, ! for negation, applied as AND)"
-    )]
-    pub tags: Option<String>,
-    #[arg(
-        long = "type",
-        value_name = "TYPE",
-        help = "Filter by type: SCHED/DEADL (comma-separated, ! for negation, applied as AND)"
-    )]
-    pub kind: Option<String>,
-}
-
-#[derive(Debug, Args)]
 pub struct TaskTableArgs {
     #[arg(long, help = "Add line separators between rows")]
     pub line_sep: bool,
@@ -195,16 +173,6 @@ pub struct TaskAddArgs {
         help = "Task text and add modifiers such as title:, state:, tag:, sch:, dead:, prio:, project:/proj:, note:, dep:"
     )]
     pub text: Vec<String>,
-}
-
-#[derive(Debug, Args)]
-pub struct TaskModArgs {
-    #[arg(help = "Task ID: 12, p12, pkms:12, or todoist:<remote-id>")]
-    pub id: String,
-    #[arg(
-        help = "Task modifiers such as title:, state:, tag:, sch:, dead:, prio:, project:/proj:, desc:, dep:"
-    )]
-    pub modifiers: Vec<String>,
 }
 
 #[derive(Debug, Args)]
