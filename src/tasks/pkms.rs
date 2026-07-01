@@ -19,6 +19,15 @@ pub enum PkmsInboxTarget {
     Daily { path: PathBuf },
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AgendaView {
+    All,
+    Today,
+    Week,
+    Overdue,
+    Upcoming,
+}
+
 pub fn list_items(config: &ResolvedConfig) -> Result<Vec<TaskItem>> {
     list_items_on(config, TaskClock::now())
 }
@@ -274,50 +283,24 @@ pub fn find_task_item_on(
 }
 
 pub fn agenda_items(config: &ResolvedConfig) -> Result<Vec<TaskItem>> {
-    agenda_items_for(config, false, false, false, false)
+    agenda_items_for(config, AgendaView::All)
 }
 
-pub fn agenda_items_for(
-    config: &ResolvedConfig,
-    today_only: bool,
-    week: bool,
-    overdue: bool,
-    upcoming: bool,
-) -> Result<Vec<TaskItem>> {
-    agenda_items_for_on(
-        config,
-        today_only,
-        week,
-        overdue,
-        upcoming,
-        TaskClock::now().today,
-    )
+pub fn agenda_items_for(config: &ResolvedConfig, view: AgendaView) -> Result<Vec<TaskItem>> {
+    agenda_items_for_on(config, view, TaskClock::now().today)
 }
 
 pub fn agenda_items_for_on(
     config: &ResolvedConfig,
-    today_only: bool,
-    week: bool,
-    overdue: bool,
-    upcoming: bool,
+    view: AgendaView,
     today: NaiveDate,
 ) -> Result<Vec<TaskItem>> {
-    agenda_items_for_clock(
-        config,
-        today_only,
-        week,
-        overdue,
-        upcoming,
-        TaskClock::at_start_of_day(today),
-    )
+    agenda_items_for_clock(config, view, TaskClock::at_start_of_day(today))
 }
 
 pub fn agenda_items_for_clock(
     config: &ResolvedConfig,
-    today_only: bool,
-    week: bool,
-    overdue: bool,
-    upcoming: bool,
+    view: AgendaView,
     clock: TaskClock,
 ) -> Result<Vec<TaskItem>> {
     let workspace = Workspace::load(config)?;
@@ -334,28 +317,34 @@ pub fn agenda_items_for_clock(
         &no_filters,
     );
 
-    if week {
-        let cutoff = clock.today + chrono::Duration::days(7);
-        records.retain(|item| item_date(item).is_some_and(|date| date <= cutoff));
-    } else if today_only {
-        records.retain(|item| item_date(item).is_some_and(|date| date == clock.today));
-    }
-
-    if overdue {
-        records.retain(|item| item.is_overdue);
-    }
-
-    if upcoming {
-        records.retain(|item| {
-            !item.is_overdue && item_date(item).is_some_and(|date| date > clock.today)
-        });
-    }
+    retain_agenda_view_records(&mut records, view, clock.today);
 
     assign_canonical_ids(config, &workspace.graph, &mut records);
     Ok(records
         .into_iter()
         .map(|record| record_to_task_item(config, record))
         .collect())
+}
+
+fn retain_agenda_view_records(records: &mut Vec<TaskRecord>, view: AgendaView, today: NaiveDate) {
+    match view {
+        AgendaView::All => {}
+        AgendaView::Week => {
+            let cutoff = today + chrono::Duration::days(7);
+            records.retain(|item| item_date(item).is_some_and(|date| date <= cutoff));
+        }
+        AgendaView::Today => {
+            records.retain(|item| item_date(item).is_some_and(|date| date == today));
+        }
+        AgendaView::Overdue => {
+            records.retain(|item| item.is_overdue);
+        }
+        AgendaView::Upcoming => {
+            records.retain(|item| {
+                !item.is_overdue && item_date(item).is_some_and(|date| date > today)
+            });
+        }
+    }
 }
 
 pub fn record_to_task_item(config: &ResolvedConfig, record: TaskRecord) -> TaskItem {
@@ -485,6 +474,55 @@ mod tests {
             deadline_date: None,
             is_overdue: false,
             heading_tags: vec!["work".to_string(), "phone".to_string()],
+        }
+    }
+
+    fn record_with_date(title: &str, date: Option<&str>, is_overdue: bool) -> TaskRecord {
+        let mut record = record();
+        record.heading_title = title.to_string();
+        record.is_overdue = is_overdue;
+        if let Some(date) = date {
+            record.scheduled = Some(format!("<{date}>"));
+            record.scheduled_date = Some(TaskDateValue::new(date));
+        } else {
+            record.scheduled = None;
+            record.scheduled_date = None;
+        }
+        record
+    }
+
+    fn agenda_view_records() -> Vec<TaskRecord> {
+        vec![
+            record_with_date("overdue", Some("2026-05-22"), true),
+            record_with_date("today", Some("2026-05-23"), false),
+            record_with_date("this week", Some("2026-05-29"), false),
+            record_with_date("future", Some("2026-06-02"), false),
+            record_with_date("undated", None, false),
+        ]
+    }
+
+    #[test]
+    fn agenda_view_filters_records_by_mode() {
+        let today = chrono::NaiveDate::from_ymd_opt(2026, 5, 23).unwrap();
+
+        for (view, expected_titles) in [
+            (
+                AgendaView::All,
+                vec!["overdue", "today", "this week", "future", "undated"],
+            ),
+            (AgendaView::Today, vec!["today"]),
+            (AgendaView::Week, vec!["overdue", "today", "this week"]),
+            (AgendaView::Overdue, vec!["overdue"]),
+            (AgendaView::Upcoming, vec!["this week", "future"]),
+        ] {
+            let mut records = agenda_view_records();
+            retain_agenda_view_records(&mut records, view, today);
+            let titles: Vec<_> = records
+                .iter()
+                .map(|record| record.heading_title.as_str())
+                .collect();
+
+            assert_eq!(titles, expected_titles, "{view:?}");
         }
     }
 

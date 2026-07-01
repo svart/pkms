@@ -122,43 +122,28 @@ impl TaskProvider for PkmsTaskProvider<'_> {
             TaskListView::All => pkms::list_items_on(self.context.config, query.clock),
             TaskListView::Agenda => pkms::agenda_items_for_clock(
                 self.context.config,
-                false,
-                false,
-                false,
-                false,
+                pkms::AgendaView::All,
                 query.clock,
             ),
             TaskListView::Today => pkms::agenda_items_for_clock(
                 self.context.config,
-                true,
-                false,
-                false,
-                false,
+                pkms::AgendaView::Today,
                 query.clock,
             ),
             TaskListView::Week => pkms::agenda_items_for_clock(
                 self.context.config,
-                false,
-                true,
-                false,
-                false,
+                pkms::AgendaView::Week,
                 query.clock,
             ),
             TaskListView::Overdue => pkms::agenda_items_for_clock(
                 self.context.config,
-                false,
-                false,
-                true,
-                false,
+                pkms::AgendaView::Overdue,
                 query.clock,
             ),
             TaskListView::Upcoming { days } => {
                 let mut items = pkms::agenda_items_for_clock(
                     self.context.config,
-                    false,
-                    false,
-                    false,
-                    true,
+                    pkms::AgendaView::Upcoming,
                     query.clock,
                 )?;
                 super::execution::retain_upcoming_task_items_on(
