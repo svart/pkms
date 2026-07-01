@@ -357,9 +357,9 @@ pub struct InitConfigArgs {
 #[derive(Debug, Args)]
 pub struct PathArgs {
     #[arg(help = "Source note (UUID, path, or title)")]
-    pub from: Option<String>,
+    pub from: String,
     #[arg(help = "Target note (UUID, path, or title)")]
-    pub to: Option<String>,
+    pub to: String,
 }
 
 #[cfg(test)]
@@ -429,5 +429,18 @@ mod tests {
             Err(err) => err,
         };
         assert_eq!(err.kind(), clap::error::ErrorKind::ValueValidation);
+    }
+
+    #[test]
+    fn path_requires_source_and_target_at_parse_time() {
+        assert!(Cli::try_parse_from(["pkms", "path"]).is_err());
+        assert!(Cli::try_parse_from(["pkms", "path", "Note A"]).is_err());
+
+        let cli = parse(&["pkms", "path", "Note A", "Note C"]);
+        let Command::Path(args) = cli.command else {
+            panic!("expected path command");
+        };
+        assert_eq!(args.from, "Note A");
+        assert_eq!(args.to, "Note C");
     }
 }

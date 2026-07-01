@@ -25,19 +25,12 @@ pub struct PathOptions {
     pub to: String,
 }
 
-impl TryFrom<&PathArgs> for PathOptions {
-    type Error = anyhow::Error;
-
-    fn try_from(args: &PathArgs) -> Result<Self> {
-        let from = args
-            .from
-            .clone()
-            .ok_or_else(|| anyhow::anyhow!("No source specified. Provide --from"))?;
-        let to = args
-            .to
-            .clone()
-            .ok_or_else(|| anyhow::anyhow!("No target specified. Provide --to"))?;
-        Ok(PathOptions { from, to })
+impl From<&PathArgs> for PathOptions {
+    fn from(args: &PathArgs) -> Self {
+        PathOptions {
+            from: args.from.clone(),
+            to: args.to.clone(),
+        }
     }
 }
 
