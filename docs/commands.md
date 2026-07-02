@@ -129,8 +129,11 @@ pkms new "My Note" --create --aliases "Alias1,Alias2"
 pkms new "Existing Note" --create --heading "Heading"
 pkms extract <heading-uuid>
 pkms extract <heading-uuid> "New Note Title" --apply
-pkms fix <broken-uuid> <replacement-uuid>
-pkms fix <broken-uuid> <replacement-uuid> --apply
+pkms fix uuid <broken-uuid> <replacement-uuid>
+pkms fix uuid <broken-uuid> <replacement-uuid> --apply
+pkms fix attach
+pkms fix attach --apply
+pkms fix attach --apply --copy
 ```
 
 `extract` is a dry run unless `--apply` is present. It accepts a heading-level
@@ -139,7 +142,11 @@ the old subtree with an `id:` link heading. The optional new title changes only
 the new note `#+title`; the replacement link label uses the original heading
 title.
 
-`fix` is a dry run unless `--apply` is present.
+`fix uuid` replaces broken `id:` link UUIDs and is a dry run unless `--apply`
+is present. `fix attach` repairs missing heading-scoped `attachment:` targets by
+finding exactly one matching file under supported `.attach` roots and moving it
+to the org-attach path expected for that heading. It also dry-runs by default;
+pass `--copy` with `--apply` to copy instead of move.
 
 ## Suggestions
 

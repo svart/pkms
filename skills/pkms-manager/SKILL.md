@@ -87,11 +87,11 @@ understand the intended target.
 1. Run `pkms check --id-links`.
 2. Open or inspect the source note and find the `[[id:...][description]]`.
 3. Resolve the intended target from the description with `resolve`/`query`.
-4. Dry-run `pkms fix <broken-full-uuid> <replacement-full-uuid>`.
+4. Dry-run `pkms fix uuid <broken-full-uuid> <replacement-full-uuid>`.
 5. Apply only when the mapping is unambiguous.
 6. Verify with `pkms check --self-links --id-links`.
 
-`fix` requires full UUIDs for both arguments.
+`fix uuid` requires full UUIDs for both arguments.
 
 ### Work With Tasks
 

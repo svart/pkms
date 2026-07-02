@@ -60,7 +60,7 @@ fn dispatch(cli: &Cli, command_ctx: &CommandContext<'_>) -> Result<ExitCode> {
             command_ctx,
             &commands::resolve::ResolveOptions::from(args),
         ))?,
-        Command::Fix(args) => success(commands::fix::run(command_ctx, &args.try_into()?))?,
+        Command::Fix(args) => success(commands::fix::run(command_ctx, args))?,
         Command::Suggest(args) => {
             let targets = input::resolve_targets(&args.target, args.from_stdin)?;
             success(commands::suggest::run(

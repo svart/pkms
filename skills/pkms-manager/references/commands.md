@@ -66,15 +66,20 @@ pkms new "Title" --create --tags "tag1,tag2"
 pkms new "Existing Note" --create --heading "Heading"
 pkms extract <heading-full-uuid>
 pkms extract <heading-full-uuid> "New Note Title" --apply
-pkms fix <broken-full-uuid> <replacement-full-uuid>
-pkms fix <broken-full-uuid> <replacement-full-uuid> --apply
+pkms fix uuid <broken-full-uuid> <replacement-full-uuid>
+pkms fix uuid <broken-full-uuid> <replacement-full-uuid> --apply
+pkms fix attach
+pkms fix attach --apply
+pkms fix attach --apply --copy
 ```
 
 `extract` requires a heading UUID. It is a dry run unless `--apply` is present.
 The optional title changes only the new note `#+title`; the old subtree is
 replaced by a heading link whose label is the original heading title.
 
-`fix` requires full UUIDs for both arguments.
+`fix uuid` requires full UUIDs for both arguments. `fix attach` repairs
+heading-scoped `attachment:` files when exactly one matching file exists under
+the supported `.attach` roots, without rewriting Org link text.
 
 ## Tasks
 

@@ -63,7 +63,7 @@ pub enum Command {
     Orphans(OrphansArgs),
     #[command(about = "Fast UUID/title resolution without full graph load")]
     Resolve(ResolveArgs),
-    #[command(about = "Fix broken links by replacing UUIDs across the database")]
+    #[command(about = "Repair broken UUID links or misplaced attachments")]
     Fix(FixArgs),
     #[command(about = "Suggest related notes by multi-factor scoring (takes UUID only)")]
     Suggest(SuggestArgs),
@@ -225,6 +225,20 @@ pub struct ResolveArgs {
 
 #[derive(Debug, Args)]
 pub struct FixArgs {
+    #[command(subcommand)]
+    pub command: FixCommand,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum FixCommand {
+    #[command(about = "Fix broken links by replacing UUIDs across the database")]
+    Uuid(FixUuidArgs),
+    #[command(about = "Move or copy misplaced org-attach files to expected roots")]
+    Attach(FixAttachArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct FixUuidArgs {
     #[arg(help = "Broken UUID (full UUID format with dashes)")]
     pub broken_uuid: String,
     #[arg(help = "Replacement UUID (full UUID format with dashes)")]
@@ -235,6 +249,18 @@ pub struct FixArgs {
         help = "Actually apply the fix (dry-run without this flag)"
     )]
     pub apply: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct FixAttachArgs {
+    #[arg(
+        short,
+        long,
+        help = "Actually repair attachments (dry-run without this flag)"
+    )]
+    pub apply: bool,
+    #[arg(long, help = "Copy matched files instead of moving them")]
+    pub copy: bool,
 }
 
 #[derive(Debug, Args)]

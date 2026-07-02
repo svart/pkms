@@ -1,15 +1,64 @@
 {
   "$schema": "https://json-schema.org/draft-07/schema#",
   "title": "FixOutput",
-  "type": "object",
-  "additionalProperties": true,
-  "properties": {
-    "broken_uuid": { "type": "string" },
-    "replacement_uuid": { "type": "string" },
-    "replacement_title": { "type": "string" },
-    "files_affected": { "type": "array", "items": { "type": "string" } },
-    "total_replacements": { "type": "integer" },
-    "applied": { "type": "boolean" }
-  },
-  "required": ["broken_uuid", "replacement_uuid", "replacement_title", "files_affected", "total_replacements", "applied"]
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "broken_uuid": { "type": "string" },
+        "replacement_uuid": { "type": "string" },
+        "replacement_title": { "type": "string" },
+        "files_affected": { "type": "array", "items": { "type": "string" } },
+        "total_replacements": { "type": "integer" },
+        "applied": { "type": "boolean" }
+      },
+      "required": ["broken_uuid", "replacement_uuid", "replacement_title", "files_affected", "total_replacements", "applied"]
+    },
+    {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "applied": { "type": "boolean" },
+        "mode": { "type": "string", "enum": ["move", "copy"] },
+        "total_repaired": { "type": "integer" },
+        "total_skipped": { "type": "integer" },
+        "repairs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": true,
+            "properties": {
+              "source_uuid": { "type": "string" },
+              "source_title": { "type": "string" },
+              "source_path": { "type": "string" },
+              "target_path": { "type": "string" },
+              "found_path": { "type": "string" },
+              "expected_path": { "type": "string" },
+              "applied": { "type": "boolean" }
+            },
+            "required": ["source_uuid", "source_title", "source_path", "target_path", "found_path", "expected_path", "applied"]
+          }
+        },
+        "skipped": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": true,
+            "properties": {
+              "source_uuid": { "type": "string" },
+              "source_title": { "type": "string" },
+              "source_path": { "type": "string" },
+              "target_path": { "type": "string" },
+              "expected_path": { "type": "string" },
+              "reason": { "type": "string" },
+              "matches": { "type": "array", "items": { "type": "string" } }
+            },
+            "required": ["source_uuid", "source_title", "source_path", "target_path", "expected_path", "reason"]
+          }
+        }
+      },
+      "required": ["applied", "mode", "total_repaired", "total_skipped", "repairs", "skipped"]
+    }
+  ]
 }

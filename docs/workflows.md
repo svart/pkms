@@ -15,13 +15,27 @@ database health.
 ```bash
 pkms check --id-links
 pkms resolve --title "intended target"
-pkms fix <broken-uuid> <replacement-uuid>
-pkms fix <broken-uuid> <replacement-uuid> --apply
+pkms fix uuid <broken-uuid> <replacement-uuid>
+pkms fix uuid <broken-uuid> <replacement-uuid> --apply
 pkms check --self-links --id-links
 ```
 
 Before applying `fix`, inspect the source link text. The same broken UUID can
 appear in different contexts and may not always map to the same replacement.
+
+## Fix Misplaced Attachments
+
+```bash
+pkms check --attachment-links
+pkms fix attach
+pkms fix attach --apply
+pkms fix attach --apply --copy
+pkms check --attachment-links
+```
+
+`fix attach` only repairs heading-scoped `attachment:` links whose expected
+org-attach target is missing and exactly one matching file exists under the
+supported `.attach` roots. It does not rewrite Org link text.
 
 ## Check Link Quality
 
