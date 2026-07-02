@@ -5,7 +5,7 @@ use crate::tasks::id::TaskId;
 use crate::tasks::model::{TaskDate, TaskItem, TaskSourceKind, TaskStatus};
 use crate::tasks::pkms_edit;
 use crate::tasks::task_index::{
-    TaskRecord, assign_canonical_ids, collect_agenda_records_on, collect_todo_records_on,
+    TaskRecord, TaskRecordQuery, assign_canonical_ids, collect_agenda_records, collect_todo_records,
 };
 use crate::workspace::Workspace;
 use anyhow::{Context, Result};
@@ -35,14 +35,9 @@ pub fn list_items(config: &ResolvedConfig) -> Result<Vec<TaskItem>> {
 pub fn list_items_on(config: &ResolvedConfig, clock: TaskClock) -> Result<Vec<TaskItem>> {
     let workspace = Workspace::load(config)?;
     let valid_states = config.todo_states();
-    let no_filters = Vec::new();
-    let mut records = collect_todo_records_on(
+    let mut records = collect_todo_records(
         &workspace.corpus,
-        &valid_states,
-        &no_filters,
-        &no_filters,
-        &no_filters,
-        clock,
+        TaskRecordQuery::todo(&valid_states, clock),
     );
     assign_canonical_ids(config, &workspace.graph, &mut records);
     Ok(records
@@ -60,8 +55,10 @@ pub fn collect_inbox_items_on(config: &ResolvedConfig, clock: TaskClock) -> Resu
     let workspace = Workspace::load(config)?;
     let graph = &workspace.graph;
     let valid_states = config.todo_states();
-    let mut records =
-        collect_todo_records_on(&workspace.corpus, &valid_states, &[], &[], &[], clock);
+    let mut records = collect_todo_records(
+        &workspace.corpus,
+        TaskRecordQuery::todo(&valid_states, clock),
+    );
     assign_canonical_ids(config, graph, &mut records);
 
     let records: Vec<_> = match target {
@@ -271,8 +268,10 @@ pub fn find_task_item_on(
     let workspace = Workspace::load(config)?;
     let graph = &workspace.graph;
     let valid_states = config.todo_states();
-    let mut records =
-        collect_todo_records_on(&workspace.corpus, &valid_states, &[], &[], &[], clock);
+    let mut records = collect_todo_records(
+        &workspace.corpus,
+        TaskRecordQuery::todo(&valid_states, clock),
+    );
     assign_canonical_ids(config, graph, &mut records);
     Ok(records
         .into_iter()
@@ -306,15 +305,9 @@ pub fn agenda_items_for_clock(
     let workspace = Workspace::load(config)?;
     let valid_states = config.todo_states();
     let closed_states = config.closed_todo_states();
-    let no_filters = Vec::new();
-    let mut records = collect_agenda_records_on(
+    let mut records = collect_agenda_records(
         &workspace.corpus,
-        &valid_states,
-        &closed_states,
-        clock,
-        &no_filters,
-        &no_filters,
-        &no_filters,
+        TaskRecordQuery::agenda(&valid_states, &closed_states, clock),
     );
 
     retain_agenda_view_records(&mut records, view, clock.today);

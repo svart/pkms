@@ -9,7 +9,6 @@ use crate::tasks::filter::{
     TextFilter, matches_tag_filters, matches_text_filters, matches_type_filters,
 };
 use crate::tasks::model::{TaskDateValue, TaskPriority, TaskState};
-use chrono::NaiveDate;
 
 #[derive(Debug, Clone)]
 pub struct TaskRecord {
@@ -59,31 +58,58 @@ impl TaskRecord {
     }
 }
 
-pub fn collect_todo_records(
-    corpus: &Corpus,
-    valid_states: &[String],
-    state_filters: &[TextFilter],
-    tags_filters: &[TextFilter],
-    type_filters: &[TextFilter],
-) -> Vec<TaskRecord> {
-    collect_todo_records_on(
-        corpus,
-        valid_states,
-        state_filters,
-        tags_filters,
-        type_filters,
-        TaskClock::now(),
-    )
+#[derive(Debug, Clone, Copy, Default)]
+pub struct RecordFilters<'a> {
+    pub state_filters: &'a [TextFilter],
+    pub tags_filters: &'a [TextFilter],
+    pub type_filters: &'a [TextFilter],
 }
 
-pub fn collect_todo_records_on(
-    corpus: &Corpus,
-    valid_states: &[String],
-    state_filters: &[TextFilter],
-    tags_filters: &[TextFilter],
-    type_filters: &[TextFilter],
-    clock: TaskClock,
-) -> Vec<TaskRecord> {
+#[derive(Debug, Clone, Copy)]
+pub struct TaskRecordQuery<'a> {
+    pub valid_states: &'a [String],
+    pub closed_states: &'a [String],
+    pub filters: RecordFilters<'a>,
+    pub clock: TaskClock,
+}
+
+impl<'a> TaskRecordQuery<'a> {
+    pub fn todo(valid_states: &'a [String], clock: TaskClock) -> Self {
+        Self {
+            valid_states,
+            closed_states: &[],
+            filters: RecordFilters::default(),
+            clock,
+        }
+    }
+
+    pub fn agenda(
+        valid_states: &'a [String],
+        closed_states: &'a [String],
+        clock: TaskClock,
+    ) -> Self {
+        Self {
+            valid_states,
+            closed_states,
+            filters: RecordFilters::default(),
+            clock,
+        }
+    }
+
+    pub fn with_filters(mut self, filters: RecordFilters<'a>) -> Self {
+        self.filters = filters;
+        self
+    }
+}
+
+pub fn collect_todo_records(corpus: &Corpus, query: TaskRecordQuery<'_>) -> Vec<TaskRecord> {
+    let TaskRecordQuery {
+        valid_states,
+        filters,
+        clock,
+        ..
+    } = query;
+
     collect_records(
         corpus,
         |parsed, heading, _is_daily| {
@@ -94,44 +120,21 @@ pub fn collect_todo_records_on(
                 && apply_common_filters(
                     parsed.filetags.iter().chain(heading.tags.iter()),
                     heading,
-                    state_filters,
-                    tags_filters,
-                    type_filters,
+                    filters,
                 )
         },
         clock,
     )
 }
 
-pub fn collect_agenda_records(
-    corpus: &Corpus,
-    valid_states: &[String],
-    closed_states: &[String],
-    today: NaiveDate,
-    state_filters: &[TextFilter],
-    tags_filters: &[TextFilter],
-    type_filters: &[TextFilter],
-) -> Vec<TaskRecord> {
-    collect_agenda_records_on(
-        corpus,
+pub fn collect_agenda_records(corpus: &Corpus, query: TaskRecordQuery<'_>) -> Vec<TaskRecord> {
+    let TaskRecordQuery {
         valid_states,
         closed_states,
-        TaskClock::at_start_of_day(today),
-        state_filters,
-        tags_filters,
-        type_filters,
-    )
-}
+        filters,
+        clock,
+    } = query;
 
-pub fn collect_agenda_records_on(
-    corpus: &Corpus,
-    valid_states: &[String],
-    closed_states: &[String],
-    clock: TaskClock,
-    state_filters: &[TextFilter],
-    tags_filters: &[TextFilter],
-    type_filters: &[TextFilter],
-) -> Vec<TaskRecord> {
     collect_records(
         corpus,
         |parsed, heading, is_daily| {
@@ -159,9 +162,7 @@ pub fn collect_agenda_records_on(
             apply_common_filters(
                 parsed.filetags.iter().chain(heading.tags.iter()),
                 heading,
-                state_filters,
-                tags_filters,
-                type_filters,
+                filters,
             )
         },
         clock,
@@ -255,23 +256,21 @@ fn collect_records(
 fn apply_common_filters<'a>(
     tags: impl Iterator<Item = &'a String>,
     heading: &Heading,
-    state_filters: &[TextFilter],
-    tags_filters: &[TextFilter],
-    type_filters: &[TextFilter],
+    filters: RecordFilters<'_>,
 ) -> bool {
-    if !matches_text_filters(heading.todo_state.as_deref(), state_filters) {
+    if !matches_text_filters(heading.todo_state.as_deref(), filters.state_filters) {
         return false;
     }
 
     let combined_tags = combined_tags(tags);
-    if !matches_tag_filters(&combined_tags, tags_filters) {
+    if !matches_tag_filters(&combined_tags, filters.tags_filters) {
         return false;
     }
 
     matches_type_filters(
         heading.scheduled.is_some(),
         heading.deadline.is_some(),
-        type_filters,
+        filters.type_filters,
     )
 }
 
