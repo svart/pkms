@@ -66,13 +66,12 @@ pub fn heading_subtree_end_index(lines: &[String], heading_idx: usize, root_leve
 
 pub fn parsed_heading_subtree_end_index(
     headings: &[Heading],
-    target_line_number: usize,
-    target_level: usize,
+    target: &Heading,
     total_lines: usize,
 ) -> usize {
     headings
         .iter()
-        .find(|heading| heading.line_number > target_line_number && heading.level <= target_level)
+        .find(|heading| heading.line_number > target.line_number && heading.level <= target.level)
         .map_or(total_lines, |heading| heading.line_number.saturating_sub(1))
 }
 

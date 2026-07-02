@@ -1,10 +1,9 @@
 use chrono::{NaiveDate, NaiveTime};
-use serde::Serialize;
+use serde::{Serialize, Serializer, ser::SerializeStruct};
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone)]
 pub struct OrgDate {
     pub base_date: NaiveDate,
-    pub has_time: bool,
     pub time: Option<NaiveTime>,
     pub time_end: Option<NaiveTime>,
     pub base_date_end: Option<NaiveDate>,
@@ -14,31 +13,56 @@ pub struct OrgDate {
     pub raw: String,
 }
 
-const MAX_PARSE_DEPTH: u32 = 32;
-
-pub fn parse_org_date(raw: &str) -> Option<OrgDate> {
-    parse_org_date_depth(raw, 0)
+impl OrgDate {
+    pub fn has_time(&self) -> bool {
+        self.time.is_some()
+    }
 }
 
-fn parse_org_date_depth(raw: &str, depth: u32) -> Option<OrgDate> {
-    if depth > MAX_PARSE_DEPTH {
-        return None;
+impl Serialize for OrgDate {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut state = serializer.serialize_struct("OrgDate", 9)?;
+        state.serialize_field("base_date", &self.base_date)?;
+        state.serialize_field("has_time", &self.has_time())?;
+        state.serialize_field("time", &self.time)?;
+        state.serialize_field("time_end", &self.time_end)?;
+        state.serialize_field("base_date_end", &self.base_date_end)?;
+        state.serialize_field("inactive", &self.inactive)?;
+        state.serialize_field("repeater", &self.repeater)?;
+        state.serialize_field("warning", &self.warning)?;
+        state.serialize_field("raw", &self.raw)?;
+        state.end()
     }
+}
+
+pub fn parse_org_date(raw: &str) -> Option<OrgDate> {
     let trimmed = raw.trim();
 
-    if let Some(pos) = trimmed.find(">--<") {
-        let first_raw = &trimmed[..pos + 1];
-        let second_raw = &trimmed[pos + 3..];
-        let mut first = parse_org_date_depth(first_raw, depth + 1)?;
-        if let Some(second) = parse_org_date_depth(second_raw, depth + 1) {
+    if let Some((first, second)) = trimmed.split_once(">--<") {
+        let first_raw = format!("{first}>");
+        let second_raw = match second.split_once(">--<") {
+            Some((second_start, _)) => format!("<{second_start}>"),
+            None => format!("<{second}"),
+        };
+        let mut first = parse_single_org_date(&first_raw)?;
+        if let Some(second) = parse_single_org_date(&second_raw) {
             first.base_date_end = Some(second.base_date);
-            if second.has_time {
+            if second.has_time() {
                 first.time_end = second.time;
             }
             first.raw = raw.to_string();
         }
         return Some(first);
     }
+
+    parse_single_org_date(raw)
+}
+
+fn parse_single_org_date(raw: &str) -> Option<OrgDate> {
+    let trimmed = raw.trim();
 
     let (inactive, inner) = if trimmed.starts_with('<') && trimmed.ends_with('>') {
         (false, &trimmed[1..trimmed.len() - 1])
@@ -60,7 +84,6 @@ fn parse_org_date_depth(raw: &str, depth: u32) -> Option<OrgDate> {
     let tokens: Vec<&str> = inner.split_whitespace().collect();
     let base_date = NaiveDate::parse_from_str(tokens[0], "%Y-%m-%d").ok()?;
 
-    let mut has_time = false;
     let mut time = None;
     let mut time_end = None;
     let mut repeater = None;
@@ -71,7 +94,6 @@ fn parse_org_date_depth(raw: &str, depth: u32) -> Option<OrgDate> {
             continue;
         }
         if token.contains(':') {
-            has_time = true;
             if let Some(pos) = token.find('-') {
                 let start = NaiveTime::parse_from_str(&token[..pos], "%H:%M").ok()?;
                 let end = NaiveTime::parse_from_str(&token[pos + 1..], "%H:%M").ok()?;
@@ -95,7 +117,6 @@ fn parse_org_date_depth(raw: &str, depth: u32) -> Option<OrgDate> {
 
     Some(OrgDate {
         base_date,
-        has_time,
         time,
         time_end,
         base_date_end: None,
@@ -146,7 +167,7 @@ mod tests {
     fn test_simple_date() {
         let d = parse_org_date("<2026-05-10 Sun>").unwrap();
         assert_eq!(d.base_date, NaiveDate::from_ymd_opt(2026, 5, 10).unwrap());
-        assert!(!d.has_time);
+        assert!(!d.has_time());
         assert!(d.time.is_none());
         assert!(d.time_end.is_none());
         assert!(!d.inactive);
@@ -158,7 +179,7 @@ mod tests {
     fn test_date_without_dayname() {
         let d = parse_org_date("<2026-05-10>").unwrap();
         assert_eq!(d.base_date, NaiveDate::from_ymd_opt(2026, 5, 10).unwrap());
-        assert!(!d.has_time);
+        assert!(!d.has_time());
         assert!(!d.inactive);
     }
 
@@ -166,16 +187,24 @@ mod tests {
     fn test_date_with_time() {
         let d = parse_org_date("<2026-05-10 Sun 14:00>").unwrap();
         assert_eq!(d.base_date, NaiveDate::from_ymd_opt(2026, 5, 10).unwrap());
-        assert!(d.has_time);
+        assert!(d.has_time());
         assert_eq!(d.time.unwrap(), NaiveTime::from_hms_opt(14, 0, 0).unwrap());
         assert!(d.time_end.is_none());
+    }
+
+    #[test]
+    fn test_serializes_derived_has_time() {
+        let d = parse_org_date("<2026-05-10 Sun 14:00>").unwrap();
+        let value = serde_json::to_value(d).unwrap();
+
+        assert_eq!(value["has_time"], serde_json::json!(true));
     }
 
     #[test]
     fn test_time_range() {
         let d = parse_org_date("<2026-05-10 Sun 10:00-12:00>").unwrap();
         assert_eq!(d.base_date, NaiveDate::from_ymd_opt(2026, 5, 10).unwrap());
-        assert!(d.has_time);
+        assert!(d.has_time());
         assert_eq!(d.time.unwrap(), NaiveTime::from_hms_opt(10, 0, 0).unwrap());
         assert_eq!(
             d.time_end.unwrap(),
@@ -188,7 +217,7 @@ mod tests {
         let d = parse_org_date("[2006-11-01 Wed]").unwrap();
         assert_eq!(d.base_date, NaiveDate::from_ymd_opt(2006, 11, 1).unwrap());
         assert!(d.inactive);
-        assert!(!d.has_time);
+        assert!(!d.has_time());
     }
 
     #[test]
@@ -196,7 +225,7 @@ mod tests {
         let d = parse_org_date("[2006-11-01 Wed 19:15]").unwrap();
         assert_eq!(d.base_date, NaiveDate::from_ymd_opt(2006, 11, 1).unwrap());
         assert!(d.inactive);
-        assert!(d.has_time);
+        assert!(d.has_time());
         assert_eq!(d.time.unwrap(), NaiveTime::from_hms_opt(19, 15, 0).unwrap());
     }
 
@@ -216,7 +245,7 @@ mod tests {
     fn test_hourly_repeater() {
         let d = parse_org_date("<2026-05-10 Sun 12:30 +1h>").unwrap();
         assert_eq!(d.repeater, Some("+1h".to_string()));
-        assert!(d.has_time);
+        assert!(d.has_time());
         assert_eq!(d.time.unwrap(), NaiveTime::from_hms_opt(12, 30, 0).unwrap());
     }
 
@@ -236,7 +265,7 @@ mod tests {
     fn test_combined() {
         let d = parse_org_date("<2026-05-10 Sun 14:00 +1w -3d>").unwrap();
         assert_eq!(d.base_date, NaiveDate::from_ymd_opt(2026, 5, 10).unwrap());
-        assert!(d.has_time);
+        assert!(d.has_time());
         assert_eq!(d.time.unwrap(), NaiveTime::from_hms_opt(14, 0, 0).unwrap());
         assert_eq!(d.repeater, Some("+1w".to_string()));
         assert_eq!(d.warning, Some("-3d".to_string()));
@@ -255,7 +284,7 @@ mod tests {
     fn test_russian_day_name() {
         let d = parse_org_date("<2026-05-13 Ср 11:00>").unwrap();
         assert_eq!(d.base_date, NaiveDate::from_ymd_opt(2026, 5, 13).unwrap());
-        assert!(d.has_time);
+        assert!(d.has_time());
         assert_eq!(d.time.unwrap(), NaiveTime::from_hms_opt(11, 0, 0).unwrap());
     }
 
@@ -263,7 +292,7 @@ mod tests {
     fn test_russian_day_name_with_repeater_and_warning() {
         let d = parse_org_date("<2026-05-11 Пн ++1w -0d>").unwrap();
         assert_eq!(d.base_date, NaiveDate::from_ymd_opt(2026, 5, 11).unwrap());
-        assert!(!d.has_time);
+        assert!(!d.has_time());
         assert_eq!(d.repeater, Some("++1w".to_string()));
         assert_eq!(d.warning, Some("-0d".to_string()));
     }
@@ -309,7 +338,7 @@ mod tests {
             d.base_date_end,
             Some(NaiveDate::from_ymd_opt(2026, 5, 15).unwrap())
         );
-        assert!(!d.has_time);
+        assert!(!d.has_time());
         assert!(d.time.is_none());
         assert!(d.time_end.is_none());
     }
@@ -322,7 +351,7 @@ mod tests {
             d.base_date_end,
             Some(NaiveDate::from_ymd_opt(2026, 5, 15).unwrap())
         );
-        assert!(d.has_time);
+        assert!(d.has_time());
         assert_eq!(d.time.unwrap(), NaiveTime::from_hms_opt(12, 0, 0).unwrap());
         assert_eq!(
             d.time_end.unwrap(),
@@ -338,7 +367,7 @@ mod tests {
             d.base_date_end,
             Some(NaiveDate::from_ymd_opt(2026, 5, 15).unwrap())
         );
-        assert!(d.has_time);
+        assert!(d.has_time());
         assert_eq!(d.time.unwrap(), NaiveTime::from_hms_opt(12, 0, 0).unwrap());
         assert!(d.time_end.is_none());
     }

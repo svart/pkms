@@ -185,12 +185,7 @@ fn show_heading_by_line(ctx: HeadingShowContext<'_>, line_number: usize) -> Resu
     let heading = &ctx.headings[heading_idx];
 
     let content_lines: Vec<&str> = ctx.content.lines().collect();
-    let end_idx = parsed_heading_subtree_end_index(
-        ctx.headings,
-        heading.line_number,
-        heading.level,
-        content_lines.len(),
-    );
+    let end_idx = parsed_heading_subtree_end_index(ctx.headings, heading, content_lines.len());
     let end_line = if end_idx >= content_lines.len() {
         content_lines.len()
     } else {

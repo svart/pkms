@@ -165,7 +165,6 @@ struct ParseContext {
     headings: Vec<Heading>,
     in_properties: bool,
     in_src_block: bool,
-    current_heading_idx: Option<usize>,
     just_saw_heading: bool,
     heading_stack: Vec<usize>,
 }
@@ -184,7 +183,6 @@ impl ParseContext {
             headings: Vec::new(),
             in_properties: false,
             in_src_block: false,
-            current_heading_idx: None,
             just_saw_heading: false,
             heading_stack: Vec::new(),
         }
@@ -241,7 +239,7 @@ impl ParseContext {
         };
         match key {
             PropertyKey::Id => {
-                if let Some(idx) = self.current_heading_idx {
+                if let Some(&idx) = self.heading_stack.last() {
                     self.headings[idx].uuid = Some(NoteId::new(value));
                 } else {
                     self.uuids.push(NoteId::new(value));
@@ -249,7 +247,7 @@ impl ParseContext {
             }
             PropertyKey::Category => self.categories.push(value.to_string()),
             PropertyKey::Project => {
-                if let Some(idx) = self.current_heading_idx {
+                if let Some(&idx) = self.heading_stack.last() {
                     self.headings[idx].project = Some(value.to_string());
                 } else {
                     self.project = Some(value.to_string());
@@ -277,7 +275,7 @@ impl ParseContext {
         }
 
         self.try_parse_scheduled_deadline(trimmed);
-        self.extract_links(line);
+        self.push_links_from_line(line);
     }
 
     fn try_extract_title(&mut self, line: &str) {
@@ -350,19 +348,8 @@ impl ParseContext {
             raw: line.to_string(),
         });
         self.heading_stack.push(self.headings.len() - 1);
-        self.current_heading_idx = Some(self.headings.len() - 1);
         self.just_saw_heading = true;
-
-        for cap in LINK_RE.captures_iter(line) {
-            let link_target = cap[1].to_string();
-            if let Some(link) = parse_link(&link_target) {
-                if let Some(&idx) = self.heading_stack.last() {
-                    self.headings[idx].outgoing.push(link);
-                } else {
-                    self.outgoing.push(link);
-                }
-            }
-        }
+        self.push_links_from_line(line);
 
         true
     }
@@ -372,22 +359,21 @@ impl ParseContext {
             return;
         }
         if let Some(cap) = SCHEDULED_RE.captures(trimmed)
-            && let Some(idx) = self.current_heading_idx
+            && let Some(&idx) = self.heading_stack.last()
         {
             self.headings[idx].scheduled = cap.get(1).map(|m| m.as_str().to_string());
         }
         if let Some(cap) = DEADLINE_RE.captures(trimmed)
-            && let Some(idx) = self.current_heading_idx
+            && let Some(&idx) = self.heading_stack.last()
         {
             self.headings[idx].deadline = cap.get(1).map(|m| m.as_str().to_string());
         }
         self.just_saw_heading = false;
     }
 
-    fn extract_links(&mut self, line: &str) {
+    fn push_links_from_line(&mut self, line: &str) {
         for cap in LINK_RE.captures_iter(line) {
-            let link_target = cap[1].to_string();
-            if let Some(link) = parse_link(&link_target) {
+            if let Some(link) = parse_link(&cap[1]) {
                 if let Some(&idx) = self.heading_stack.last() {
                     self.headings[idx].outgoing.push(link);
                 } else {
@@ -448,8 +434,51 @@ pub fn parse_note_summary(content: &str) -> ParsedNoteSummary {
         filetags,
         categories,
         aliases,
-        has_todos: parse_note(content).has_todo_headings(),
+        has_todos: note_has_todo_headings(content),
     }
+}
+
+fn note_has_todo_headings(content: &str) -> bool {
+    let mut in_src_block = false;
+    let mut in_properties = false;
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if in_src_block {
+            if trimmed.eq_ignore_ascii_case("#+end_src") {
+                in_src_block = false;
+            }
+            continue;
+        }
+        if starts_with_ignore_ascii_case(trimmed, "#+begin_src") {
+            in_src_block = true;
+            continue;
+        }
+        if trimmed.eq_ignore_ascii_case(":PROPERTIES:") {
+            in_properties = true;
+            continue;
+        }
+        if trimmed.eq_ignore_ascii_case(":END:") {
+            in_properties = false;
+            continue;
+        }
+        if in_properties {
+            continue;
+        }
+
+        let Some(cap) = HEADING_RE.captures(line) else {
+            continue;
+        };
+        if cap[1].len() <= 1 && cap.get(4).is_none_or(|m| m.as_str().is_empty()) {
+            continue;
+        }
+        if cap
+            .get(2)
+            .is_some_and(|m| m.as_str().chars().all(|c| c.is_uppercase() || c == '-'))
+        {
+            return true;
+        }
+    }
+    false
 }
 
 pub fn strip_org_links(text: &str) -> String {
@@ -958,6 +987,7 @@ SCHEDULED: <2026-05-10 Sun>"#;
 * Plain heading"#;
         let note = parse_note(content);
         assert!(note.has_todo_headings());
+        assert!(parse_note_summary(content).has_todos);
 
         let content2 = r#":PROPERTIES:
 :ID:       a1b2c3d4-e5f6-7890-abcd-ef1234567890
@@ -968,6 +998,31 @@ SCHEDULED: <2026-05-10 Sun>"#;
 ** Another one"#;
         let note2 = parse_note(content2);
         assert!(!note2.has_todo_headings());
+        assert!(!parse_note_summary(content2).has_todos);
+    }
+
+    #[test]
+    fn test_parse_note_summary_ignores_todos_in_source_blocks() {
+        let content = r#"#+title: source block todo
+
+#+BEGIN_SRC org
+* TODO Not a task
+#+END_SRC
+"#;
+
+        assert!(!parse_note_summary(content).has_todos);
+    }
+
+    #[test]
+    fn test_parse_note_summary_ignores_todos_in_property_drawers() {
+        let content = r#":PROPERTIES:
+:ID:       a1b2c3d4-e5f6-7890-abcd-ef1234567890
+* TODO Not a task
+:END:
+#+title: property drawer todo
+"#;
+
+        assert!(!parse_note_summary(content).has_todos);
     }
 
     #[test]

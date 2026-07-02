@@ -82,8 +82,7 @@ fn execute(config: &ResolvedConfig, opts: &ExtractOptions) -> Result<ExtractOutp
     ensure_heading_line(&source_lines, start_idx, heading.line_number)?;
     let end_idx = parsed_heading_subtree_end_index(
         &source_result.parsed.headings,
-        heading.line_number,
-        heading.level,
+        heading,
         source_lines.len(),
     );
     let subtree = source_lines[start_idx..end_idx].to_vec();
@@ -322,12 +321,7 @@ Sibling body
         let target = &parsed.headings[1];
 
         assert_eq!(
-            parsed_heading_subtree_end_index(
-                &parsed.headings,
-                target.line_number,
-                target.level,
-                13
-            ),
+            parsed_heading_subtree_end_index(&parsed.headings, target, 13),
             11
         );
     }

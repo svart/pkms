@@ -132,12 +132,7 @@ fn heading_block_from_content(content: &str, heading_title: &str) -> Option<Stri
     let heading = &parsed.headings[heading_idx];
     let start = heading.line_number.saturating_sub(1);
     let lines: Vec<&str> = content.lines().collect();
-    let end = parsed_heading_subtree_end_index(
-        &parsed.headings,
-        heading.line_number,
-        heading.level,
-        lines.len(),
-    );
+    let end = parsed_heading_subtree_end_index(&parsed.headings, heading, lines.len());
 
     Some(lines[start..end].join("\n"))
 }
