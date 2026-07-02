@@ -1235,6 +1235,15 @@ mod tests {
             ),
             db_root,
         );
+        let line_number_ok = check_local_link_job(
+            LinkCheckJob::new(
+                LinkCheckKind::File,
+                LinkCheckBackend::Local,
+                LinkSource::new("source", "Source", source_path.clone()),
+                "target.org::2",
+            ),
+            db_root,
+        );
         let broken = check_local_link_job(
             LinkCheckJob::new(
                 LinkCheckKind::File,
@@ -1246,6 +1255,7 @@ mod tests {
         );
 
         assert_eq!(ok, LinkCheckOutcome::Ok);
+        assert_eq!(line_number_ok, LinkCheckOutcome::Ok);
         assert_eq!(
             broken,
             LinkCheckOutcome::Broken(LinkCheckBrokenTarget {

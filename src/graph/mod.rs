@@ -175,11 +175,20 @@ pub fn file_link_target_exists(target: &str, source_path: &Path, db_root: &Path)
         if line_spec.is_empty() {
             return true;
         }
-        std::fs::read_to_string(&resolved)
-            .is_ok_and(|content| content.lines().any(|l| l.contains(line_spec)))
+        file_link_line_spec_exists(&resolved, line_spec)
     } else {
         true
     }
+}
+
+fn file_link_line_spec_exists(path: &Path, line_spec: &str) -> bool {
+    let Ok(content) = std::fs::read_to_string(path) else {
+        return false;
+    };
+    if let Ok(line_number) = line_spec.parse::<usize>() {
+        return line_number > 0 && content.lines().nth(line_number - 1).is_some();
+    }
+    content.lines().any(|line| line.contains(line_spec))
 }
 
 impl Graph {

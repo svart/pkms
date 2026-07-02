@@ -611,7 +611,17 @@ fn parse_link(target: &str) -> Option<Link> {
     if target.starts_with("http://") || target.starts_with("https://") {
         return Some(Link::Url(LinkTarget::new(target)));
     }
+    if is_implicit_file_link_target(target) {
+        return Some(Link::File(LinkTarget::new(target)));
+    }
     None
+}
+
+fn is_implicit_file_link_target(target: &str) -> bool {
+    target.starts_with('/')
+        || target.starts_with("~/")
+        || target.starts_with("./")
+        || target.starts_with("../")
 }
 
 fn parse_plain_file_uri(target: &str) -> Option<LinkTarget> {
@@ -679,6 +689,23 @@ file:///mnt/unreasonable_link
         assert_eq!(note.outgoing.len(), 1);
         match &note.outgoing[0] {
             Link::File(target) => assert_eq!(target.as_str(), "/mnt/unreasonable_link"),
+            other => panic!("expected file link, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_parse_with_implicit_complete_file_link() {
+        let content = r#":PROPERTIES:
+:ID:       a1b2c3d4-e5f6-7890-abcd-ef1234567890
+:END:
+#+title: implicit file note
+
+[[~/docs/manual.pdf::40][manual]]
+"#;
+        let note = parse_note(content);
+        assert_eq!(note.outgoing.len(), 1);
+        match &note.outgoing[0] {
+            Link::File(target) => assert_eq!(target.as_str(), "~/docs/manual.pdf::40"),
             other => panic!("expected file link, got {other:?}"),
         }
     }

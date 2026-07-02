@@ -420,6 +420,41 @@ file://{}
 }
 
 #[test]
+fn test_check_file_links_accepts_line_numbers_and_implicit_file_prefix() {
+    let (_dir, root) = setup_clean_db();
+    let target = root.join("target.txt");
+    fs::write(&target, b"first\nsecond\n").unwrap();
+    db_write(
+        &root,
+        "line-number-file-links.org",
+        &format!(
+            r#":PROPERTIES:
+:ID:       aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa
+:END:
+#+title: Line Number File Links
+
+[[file:{}::2][explicit file link]]
+[[{}::2][implicit file link]]
+"#,
+            target.display(),
+            target.display()
+        ),
+    );
+
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "check",
+        "--file-links",
+    ]);
+
+    assert!(status.success(), "line-number file links should pass: {v}");
+    assert!(v["broken_file_links"].as_array().unwrap().is_empty());
+}
+
+#[test]
 fn test_check_file_links_deterministic_order() {
     let (_dir, root) = setup_clean_db();
     db_write(
