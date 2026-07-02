@@ -24,15 +24,15 @@ pub struct TaskFilters {
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct TaskFilterCriteria {
-    pub state: Option<String>,
-    pub tags: Option<String>,
-    pub kind: Option<String>,
-    pub prio: Option<String>,
+    pub state: Option<TextFilterCriteria>,
+    pub tags: Option<TextFilterCriteria>,
+    pub kind: Option<TextFilterCriteria>,
+    pub prio: Option<PriorityFilter>,
     pub date: Option<TaskDateFilter>,
     pub after: Option<NaiveDateTime>,
     pub before: Option<NaiveDateTime>,
     pub scope: Vec<String>,
-    pub project: Option<String>,
+    pub project: Option<TextFilterCriteria>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -90,15 +90,17 @@ pub fn parse_task_filters_on(filters: &[String], today: NaiveDate) -> Result<Tas
         if let Some((key, value)) = filter.split_once(':') {
             let value = unquote(value).to_string();
             match key {
-                "state" => criteria.state = Some(value),
-                "tags" | "tag" => criteria.tags = Some(value),
-                "type" | "kind" => criteria.kind = Some(value.to_ascii_uppercase()),
+                "state" => criteria.state = Some(TextFilterCriteria::parse(&value)),
+                "tags" | "tag" => criteria.tags = Some(TextFilterCriteria::parse(&value)),
+                "type" | "kind" => {
+                    criteria.kind = Some(TextFilterCriteria::parse(&value.to_ascii_uppercase()))
+                }
                 "prio" | "priority" => criteria.prio = Some(parse_priority_filter(&value)),
                 "date" => criteria.date = Some(parse_date_filter(&value, today)?),
                 "after" => criteria.after = Some(parse_datetime_filter("after", &value, today)?),
                 "before" => criteria.before = Some(parse_datetime_filter("before", &value, today)?),
                 "scope" => criteria.scope.push(value),
-                "project" => criteria.project = Some(value),
+                "project" => criteria.project = Some(TextFilterCriteria::parse(&value)),
                 _ => bail!("Task filter '{filter}' is not implemented yet"),
             }
             continue;
@@ -149,12 +151,12 @@ impl TaskFilterCriteria {
     pub fn matches_item(&self, item: &TaskItem, context: &TaskFilterContext<'_>) -> bool {
         matches_state_filter(
             item.state.as_deref(),
-            self.state.as_deref(),
+            self.state.as_ref(),
             context.open_todo_states,
             context.closed_todo_states,
-        ) && matches_tags_filter(self.tags.as_deref(), &item.tags)
-            && matches_type_filter(self.kind.as_deref(), item)
-            && matches_priority_filter(self.prio.as_deref(), item)
+        ) && matches_tags_filter(self.tags.as_ref(), &item.tags)
+            && matches_type_filter(self.kind.as_ref(), item)
+            && matches_priority_filter(self.prio.as_ref(), item)
             && self
                 .date
                 .as_ref()
@@ -165,7 +167,7 @@ impl TaskFilterCriteria {
             && self
                 .before
                 .is_none_or(|before| item.datetimes().iter().any(|dt| dt <= &before))
-            && matches_project_filter(self.project.as_deref(), item)
+            && matches_project_filter(self.project.as_ref(), item)
             && matches_scope_filter(&self.scope, item, context.scope)
     }
 }
@@ -202,6 +204,29 @@ impl TaskDateFilter {
 pub enum TextFilter {
     Include(String),
     Exclude(String),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TextFilterCriteria {
+    filters: Vec<TextFilter>,
+}
+
+impl TextFilterCriteria {
+    pub fn parse(value: &str) -> Self {
+        Self {
+            filters: parse_text_filters(Some(value)),
+        }
+    }
+
+    pub fn filters(&self) -> &[TextFilter] {
+        &self.filters
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PriorityFilter {
+    NoPriority,
+    Targets(Vec<char>),
 }
 
 pub fn parse_text_filters(value: Option<&str>) -> Vec<TextFilter> {
@@ -258,11 +283,13 @@ pub fn matches_type_filters(
 
 fn matches_state_filter(
     value: Option<&str>,
-    filters: Option<&str>,
+    filters: Option<&TextFilterCriteria>,
     open_todo_states: &[String],
     closed_todo_states: &[String],
 ) -> bool {
-    parse_text_filters(filters)
+    filters
+        .map(TextFilterCriteria::filters)
+        .unwrap_or_default()
         .iter()
         .all(|filter| match filter {
             TextFilter::Include(target) => {
@@ -294,27 +321,28 @@ fn state_in_configured_set(value: &str, states: &[String]) -> bool {
     states.iter().any(|state| state.eq_ignore_ascii_case(value))
 }
 
-fn matches_tags_filter(filters: Option<&str>, tags: &[String]) -> bool {
-    matches_tag_filters(tags, &parse_text_filters(filters))
+fn matches_tags_filter(filters: Option<&TextFilterCriteria>, tags: &[String]) -> bool {
+    filters.is_none_or(|filters| matches_tag_filters(tags, filters.filters()))
 }
 
-fn matches_type_filter(filters: Option<&str>, item: &TaskItem) -> bool {
-    matches_type_filters(
-        item.scheduled.is_some(),
-        item.deadline.is_some(),
-        &parse_text_filters(filters),
-    )
+fn matches_type_filter(filters: Option<&TextFilterCriteria>, item: &TaskItem) -> bool {
+    filters.is_none_or(|filters| {
+        matches_type_filters(
+            item.scheduled.is_some(),
+            item.deadline.is_some(),
+            filters.filters(),
+        )
+    })
 }
 
-fn matches_priority_filter(filter: Option<&str>, item: &TaskItem) -> bool {
+fn matches_priority_filter(filter: Option<&PriorityFilter>, item: &TaskItem) -> bool {
     let Some(filter) = filter else {
         return true;
     };
-    if filter.is_empty() {
-        return item.priority.is_none();
+    match filter {
+        PriorityFilter::NoPriority => item.priority.is_none(),
+        PriorityFilter::Targets(targets) => priority_matches_target(item.priority_char(), targets),
     }
-    let targets = priority_filter_targets(filter);
-    priority_matches_target(item.priority_char(), &targets)
 }
 
 pub fn priority_filter_targets(prio: &str) -> Vec<char> {
@@ -328,13 +356,13 @@ pub fn priority_matches_target(priority: Option<char>, targets: &[char]) -> bool
     priority.is_some_and(|priority| targets.contains(&priority.to_ascii_uppercase()))
 }
 
-fn matches_project_filter(filters: Option<&str>, item: &TaskItem) -> bool {
-    parse_text_filters(filters)
-        .iter()
-        .all(|filter| match filter {
+fn matches_project_filter(filters: Option<&TextFilterCriteria>, item: &TaskItem) -> bool {
+    filters.is_none_or(|filters| {
+        filters.filters().iter().all(|filter| match filter {
             TextFilter::Include(target) => task_item_project_matches(item, target),
             TextFilter::Exclude(target) => !task_item_project_matches(item, target),
         })
+    })
 }
 
 fn task_item_project_matches(item: &TaskItem, value: &str) -> bool {
@@ -385,17 +413,16 @@ fn unquote(value: &str) -> &str {
         .unwrap_or(value)
 }
 
-fn parse_priority_filter(value: &str) -> String {
+fn parse_priority_filter(value: &str) -> PriorityFilter {
     if value.eq_ignore_ascii_case("none") {
-        String::new()
+        PriorityFilter::NoPriority
     } else {
-        value
-            .split(',')
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-            .map(str::to_ascii_uppercase)
-            .collect::<Vec<_>>()
-            .join(",")
+        let targets = priority_filter_targets(value);
+        if targets.is_empty() {
+            PriorityFilter::NoPriority
+        } else {
+            PriorityFilter::Targets(targets)
+        }
     }
 }
 
@@ -453,6 +480,23 @@ fn parse_date(value: &str) -> Result<NaiveDate> {
 mod tests {
     use super::*;
 
+    fn assert_text_filters(criteria: &Option<TextFilterCriteria>, expected: &[TextFilter]) {
+        assert_eq!(
+            criteria.as_ref().map(TextFilterCriteria::filters),
+            Some(expected)
+        );
+    }
+
+    fn matches_state_filter_value(
+        value: Option<&str>,
+        filters: &str,
+        open_todo_states: &[String],
+        closed_todo_states: &[String],
+    ) -> bool {
+        let filters = TextFilterCriteria::parse(filters);
+        matches_state_filter(value, Some(&filters), open_todo_states, closed_todo_states)
+    }
+
     #[test]
     fn defaults_to_pkms_source() {
         assert_eq!(parse_source_selection(&[]).unwrap(), SourceSelection::Pkms);
@@ -499,21 +543,42 @@ mod tests {
             "project:Alpha".to_string(),
         ])
         .unwrap();
-        assert_eq!(filters.criteria.state.as_deref(), Some("TODO,!WAITING"));
-        assert_eq!(filters.criteria.tags.as_deref(), Some("!tag1,tag2"));
-        assert_eq!(filters.criteria.kind.as_deref(), Some("SCHED"));
-        assert_eq!(filters.criteria.prio.as_deref(), Some(""));
+        assert_text_filters(
+            &filters.criteria.state,
+            &[
+                TextFilter::Include("TODO".to_string()),
+                TextFilter::Exclude("WAITING".to_string()),
+            ],
+        );
+        assert_text_filters(
+            &filters.criteria.tags,
+            &[
+                TextFilter::Exclude("tag1".to_string()),
+                TextFilter::Include("tag2".to_string()),
+            ],
+        );
+        assert_text_filters(
+            &filters.criteria.kind,
+            &[TextFilter::Include("SCHED".to_string())],
+        );
+        assert_eq!(filters.criteria.prio, Some(PriorityFilter::NoPriority));
         assert_eq!(filters.criteria.date, Some(TaskDateFilter::Week));
         assert!(filters.criteria.after.is_some());
         assert!(filters.criteria.before.is_some());
         assert_eq!(filters.criteria.scope, vec!["Project Note"]);
-        assert_eq!(filters.criteria.project.as_deref(), Some("Alpha"));
+        assert_text_filters(
+            &filters.criteria.project,
+            &[TextFilter::Include("Alpha".to_string())],
+        );
     }
 
     #[test]
     fn parses_comma_separated_priority_filters() {
         let filters = parse_task_filters(&["prio:a,b,c".to_string()]).unwrap();
-        assert_eq!(filters.criteria.prio.as_deref(), Some("A,B,C"));
+        assert_eq!(
+            filters.criteria.prio,
+            Some(PriorityFilter::Targets(vec!['A', 'B', 'C']))
+        );
     }
 
     #[test]
@@ -521,39 +586,39 @@ mod tests {
         let open_states = vec!["TODO".to_string(), "WAITING".to_string()];
         let closed_states = vec!["DONE".to_string(), "CANCELED".to_string()];
 
-        assert!(matches_state_filter(
+        assert!(matches_state_filter_value(
             Some("TODO"),
-            Some("opened"),
+            "opened",
             &open_states,
             &closed_states
         ));
-        assert!(matches_state_filter(
+        assert!(matches_state_filter_value(
             Some("DONE"),
-            Some("closed"),
+            "closed",
             &open_states,
             &closed_states
         ));
-        assert!(matches_state_filter(
+        assert!(matches_state_filter_value(
             Some("TODO"),
-            Some("!closed"),
+            "!closed",
             &open_states,
             &closed_states
         ));
-        assert!(matches_state_filter(
+        assert!(matches_state_filter_value(
             Some("TODO"),
-            Some("opened,!waiting"),
+            "opened,!waiting",
             &open_states,
             &closed_states
         ));
-        assert!(!matches_state_filter(
+        assert!(!matches_state_filter_value(
             Some("WAITING"),
-            Some("opened,!waiting"),
+            "opened,!waiting",
             &open_states,
             &closed_states
         ));
-        assert!(!matches_state_filter(
+        assert!(!matches_state_filter_value(
             Some("DONE"),
-            Some("opened"),
+            "opened",
             &open_states,
             &closed_states
         ));
