@@ -19,7 +19,7 @@ const DIRECTORY_PROXIMITY_WEIGHT: f64 = 5.0;
 const NEIGHBOR_BOOST_DENOM: f64 = 100.0;
 const MAX_CONTENT_KEYWORDS: usize = 50;
 
-struct SuggestResult {
+struct SuggestComputation {
     node: Node,
     suggestions: Vec<Suggestion>,
     total: usize,
@@ -60,6 +60,61 @@ struct ScoredItem<'a> {
     score: f64,
     reasons: Vec<String>,
     factor_scores: HashMap<String, f64>,
+}
+
+#[derive(Clone, Copy)]
+enum ScoreFactor {
+    Title,
+    Content,
+    Tags,
+    Backlinks,
+    Outgoing,
+    Directory,
+    Neighborhood,
+}
+
+impl ScoreFactor {
+    fn key(self) -> &'static str {
+        match self {
+            Self::Title => "title",
+            Self::Content => "content",
+            Self::Tags => "tags",
+            Self::Backlinks => "backlinks",
+            Self::Outgoing => "outgoing",
+            Self::Directory => "directory",
+            Self::Neighborhood => "neighborhood",
+        }
+    }
+}
+
+#[derive(Default)]
+struct ScoreAccumulator {
+    score: f64,
+    factor_scores: HashMap<String, f64>,
+}
+
+impl ScoreAccumulator {
+    fn add_positive(&mut self, factor: ScoreFactor, score: f64) {
+        if score > 0.0 {
+            self.score += score;
+            *self
+                .factor_scores
+                .entry(factor.key().to_string())
+                .or_insert(0.0) += score;
+        }
+    }
+
+    fn apply_neighborhood_boost(&mut self, boost: f64) {
+        if boost != 0.0 {
+            self.factor_scores
+                .insert(ScoreFactor::Neighborhood.key().to_string(), boost);
+            self.score *= 1.0 + boost;
+        }
+    }
+
+    fn into_parts(self) -> (f64, HashMap<String, f64>) {
+        (self.score, self.factor_scores)
+    }
 }
 
 #[derive(Serialize)]
@@ -389,51 +444,31 @@ fn compute_scores<'a>(
             continue;
         }
 
-        let mut score = 0.0;
         let mut reasons = Vec::new();
-        let mut factor_scores: HashMap<String, f64> = HashMap::new();
+        let mut scores = ScoreAccumulator::default();
 
         let title_s = score_title_overlap(other, ctx, &mut reasons);
-        if title_s > 0.0 {
-            score += title_s;
-            factor_scores.insert("title".to_string(), title_s);
-        }
+        scores.add_positive(ScoreFactor::Title, title_s);
 
         let content_s = score_content_match(other, graph, ctx, title_s > 0.0, &mut reasons);
-        if content_s > 0.0 {
-            score += content_s;
-            *factor_scores.entry("content".to_string()).or_insert(0.0) += content_s;
-        }
+        scores.add_positive(ScoreFactor::Content, content_s);
 
         let tag_s = score_tag_overlap(other, ctx, &mut reasons);
-        if tag_s > 0.0 {
-            score += tag_s;
-            factor_scores.insert("tags".to_string(), tag_s);
-        }
+        scores.add_positive(ScoreFactor::Tags, tag_s);
 
         let backlink_s = score_backlink_overlap(other, graph, ctx, &mut reasons);
-        if backlink_s > 0.0 {
-            score += backlink_s;
-            *factor_scores.entry("backlinks".to_string()).or_insert(0.0) += backlink_s;
-        }
+        scores.add_positive(ScoreFactor::Backlinks, backlink_s);
 
         let outgoing_s = score_outgoing_overlap(other, ctx, &mut reasons);
-        if outgoing_s > 0.0 {
-            score += outgoing_s;
-            *factor_scores.entry("outgoing".to_string()).or_insert(0.0) += outgoing_s;
-        }
+        scores.add_positive(ScoreFactor::Outgoing, outgoing_s);
 
         let dir_s = score_directory_proximity(node, other);
-        if dir_s > 0.0 {
-            score += dir_s;
-            *factor_scores.entry("directory".to_string()).or_insert(0.0) += dir_s;
-        }
+        scores.add_positive(ScoreFactor::Directory, dir_s);
 
         let neighborhood_boost = score_neighborhood(other, graph, node, ctx, &mut reasons);
-        if neighborhood_boost != 0.0 {
-            factor_scores.insert("neighborhood".to_string(), neighborhood_boost);
-            score *= 1.0 + neighborhood_boost;
-        }
+        scores.apply_neighborhood_boost(neighborhood_boost);
+
+        let (score, factor_scores) = scores.into_parts();
 
         if score > 0.0 {
             scored.push(ScoredItem {
@@ -454,7 +489,7 @@ fn compute_suggestions_for_node(
     exclude_orphans: bool,
     limit: Option<usize>,
     target_uuid: Option<String>,
-) -> Result<SuggestResult> {
+) -> Result<SuggestComputation> {
     let node = graph
         .nodes
         .get(target)
@@ -567,7 +602,7 @@ fn compute_suggestions_for_node(
         })
         .collect();
 
-    Ok(SuggestResult {
+    Ok(SuggestComputation {
         node,
         suggestions,
         total,
