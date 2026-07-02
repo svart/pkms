@@ -1,5 +1,7 @@
 use crate::cli::NewArgs;
 use crate::command_context::CommandContext;
+use crate::config::ResolvedConfig;
+use crate::output::OutputContext;
 use crate::parser::{HEADING_RE, ID_PROPERTY_RE};
 use anyhow::{Context, Result};
 use serde::Serialize;
@@ -65,8 +67,11 @@ impl From<&NewArgs> for NewOptions {
 }
 
 pub fn run(ctx: &CommandContext<'_>, opts: &NewOptions) -> Result<()> {
-    let config = ctx.config();
-    let output_ctx = ctx.output();
+    let output = execute(ctx.config(), opts)?;
+    render(ctx.output(), &output)
+}
+
+fn execute(config: &ResolvedConfig, opts: &NewOptions) -> Result<NewOutput> {
     let db_root = config.resolved_db_root();
     let ignore = config.resolve_ignore_patterns();
     let new_notes_dir = config.resolve_new_notes_dir();
@@ -149,34 +154,44 @@ pub fn run(ctx: &CommandContext<'_>, opts: &NewOptions) -> Result<()> {
         created = true;
     }
 
-    let output = NewOutput {
+    Ok(NewOutput {
         uuid,
         filename,
         path: path.clone(),
         title: opts.title.clone(),
         created,
         heading: heading_output,
-    };
+    })
+}
 
-    if output_ctx.is_structured() {
-        output_ctx.print_structured(&output)?;
+fn render(ctx: &OutputContext, output: &NewOutput) -> Result<()> {
+    if ctx.is_structured() {
+        ctx.print_structured(output)?;
     } else {
-        println!("New note:");
-        println!("  Title:    {}", output.title);
-        println!("  UUID:     {}", output.uuid);
-        println!("  Filename: {}", output.filename);
-        println!("  Path:     {}", output.path.display());
-        if let Some(ref h) = output.heading {
-            println!("  Heading UUID: {} ({})", h.uuid, h.title);
-        }
-        if opts.create {
-            println!("  Status:   created");
-        } else {
-            println!("  Status:   dry-run (use --create to write)");
-        }
+        print!("{}", render_text(output));
     }
 
     Ok(())
+}
+
+fn render_text(output: &NewOutput) -> String {
+    let mut text = String::new();
+
+    let _ = writeln!(text, "New note:");
+    let _ = writeln!(text, "  Title:    {}", output.title);
+    let _ = writeln!(text, "  UUID:     {}", output.uuid);
+    let _ = writeln!(text, "  Filename: {}", output.filename);
+    let _ = writeln!(text, "  Path:     {}", output.path.display());
+    if let Some(ref h) = output.heading {
+        let _ = writeln!(text, "  Heading UUID: {} ({})", h.uuid, h.title);
+    }
+    if output.created {
+        let _ = writeln!(text, "  Status:   created");
+    } else {
+        let _ = writeln!(text, "  Status:   dry-run (use --create to write)");
+    }
+
+    text
 }
 
 pub(crate) fn unique_note_filename(timestamp: &str, slug: &str, attempt: usize) -> String {
@@ -350,6 +365,26 @@ mod tests {
         assert_eq!(
             format_roam_aliases(&aliases),
             r#""Alias One" "Alias \"Two\"" "Alias\\Three""#
+        );
+    }
+
+    #[test]
+    fn render_text_preserves_new_note_ordering_and_created_status() {
+        let output = NewOutput {
+            uuid: "11111111-1111-4111-8111-111111111111".to_string(),
+            filename: "20260702120000-test-note.org".to_string(),
+            path: PathBuf::from("/tmp/db/roam/common/20260702120000-test-note.org"),
+            title: "Test Note".to_string(),
+            created: true,
+            heading: Some(HeadingId {
+                title: "Section".to_string(),
+                uuid: "22222222-2222-4222-8222-222222222222".to_string(),
+            }),
+        };
+
+        assert_eq!(
+            render_text(&output),
+            "New note:\n  Title:    Test Note\n  UUID:     11111111-1111-4111-8111-111111111111\n  Filename: 20260702120000-test-note.org\n  Path:     /tmp/db/roam/common/20260702120000-test-note.org\n  Heading UUID: 22222222-2222-4222-8222-222222222222 (Section)\n  Status:   created\n"
         );
     }
 }
