@@ -45,25 +45,22 @@ impl Corpus {
         let files = discover_files(db_root, ignore)?;
         let results: Vec<FileScanResult> = files
             .into_par_iter()
-            .map(|entry| {
-                let path = entry.path.clone();
-                match std::fs::read_to_string(&path) {
-                    Ok(content) => {
-                        let parsed = parse_note(&content);
-                        FileScanResult {
-                            path,
-                            parsed,
-                            raw_content: Some(content),
-                            parse_error: None,
-                        }
-                    }
-                    Err(e) => FileScanResult {
+            .map(|path| match std::fs::read_to_string(&path) {
+                Ok(content) => {
+                    let parsed = parse_note(&content);
+                    FileScanResult {
                         path,
-                        parsed: ParsedNote::empty(),
-                        raw_content: None,
-                        parse_error: Some(format!("IO error: {e}")),
-                    },
+                        parsed,
+                        raw_content: Some(content),
+                        parse_error: None,
+                    }
                 }
+                Err(e) => FileScanResult {
+                    path,
+                    parsed: ParsedNote::empty(),
+                    raw_content: None,
+                    parse_error: Some(format!("IO error: {e}")),
+                },
             })
             .collect();
 

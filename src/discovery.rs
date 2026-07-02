@@ -2,11 +2,6 @@ use anyhow::Result;
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
-#[derive(Debug, Clone)]
-pub struct FileEntry {
-    pub path: PathBuf,
-}
-
 pub fn walk_org_files(root: &Path, ignore_patterns: &[String]) -> Result<Vec<PathBuf>> {
     let compiled_patterns: Vec<glob::Pattern> = ignore_patterns
         .iter()
@@ -44,14 +39,13 @@ pub fn walk_org_files(root: &Path, ignore_patterns: &[String]) -> Result<Vec<Pat
     Ok(files)
 }
 
-pub fn discover_files(root: &Path, ignore_patterns: &[String]) -> Result<Vec<FileEntry>> {
+pub fn discover_files(root: &Path, ignore_patterns: &[String]) -> Result<Vec<PathBuf>> {
     let root = root
         .canonicalize()
         .map_err(|e| anyhow::anyhow!("Failed to resolve db root '{}': {}", root.display(), e))?;
 
     tracing::debug!(root = %root.display(), "starting file discovery");
-    let files = walk_org_files(&root, ignore_patterns)?;
-    Ok(files.into_iter().map(|path| FileEntry { path }).collect())
+    walk_org_files(&root, ignore_patterns)
 }
 
 pub(crate) fn is_ignored(entry: &walkdir::DirEntry, ignore_patterns: &[glob::Pattern]) -> bool {
@@ -81,17 +75,17 @@ mod tests {
         fs::create_dir(&hidden).unwrap();
         fs::write(hidden.join("secret.org"), "test").unwrap();
 
-        let entries = discover_files(dir.path(), &["*.bak".to_string()]).unwrap();
+        let paths = discover_files(dir.path(), &["*.bak".to_string()]).unwrap();
         assert_eq!(
-            entries.len(),
+            paths.len(),
             1,
             "expected 1 org file, got {}: {:?}",
-            entries.len(),
-            entries
+            paths.len(),
+            paths
                 .iter()
-                .map(|e| e.path.display().to_string())
+                .map(|path| path.display().to_string())
                 .collect::<Vec<_>>()
         );
-        assert!(entries[0].path.ends_with("note.org"));
+        assert!(paths[0].ends_with("note.org"));
     }
 }
