@@ -224,7 +224,6 @@ Body
 }
 
 #[test]
-#[cfg(feature = "ssh")]
 fn stats_count_ssh_file_links_separately() {
     let results = vec![make_note(
         "a",

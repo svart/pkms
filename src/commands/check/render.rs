@@ -49,7 +49,6 @@ fn render_summary(text: &mut String, output: &CheckOutput) {
         let _ = writeln!(text, "    internal: {}", stats.total_internal_links);
         let _ = writeln!(text, "    url: {}", stats.total_url_links);
         let _ = writeln!(text, "    file: {}", stats.total_file_links);
-        #[cfg(feature = "ssh")]
         let _ = writeln!(text, "    ssh: {}", stats.total_ssh_links);
         let _ = writeln!(text, "  Orphans:        {}", stats.orphan_notes);
         let _ = writeln!(text, "  Broken links:   {}", stats.broken_link_count);
