@@ -1,8 +1,8 @@
 use super::{DuplicateInfo, Graph, Node, OverlinkEntry, SelfLinkEntry, resolve_file_link_path};
 use crate::domain::{LinkTarget, NoteId};
 use crate::link_check::{
-    LinkCheckJob, LinkCheckKind, is_ssh_file_target, local_file_link_target_exists,
-    sort_link_check_jobs,
+    LinkCheckBackend, LinkCheckJob, LinkCheckKind, LinkSource, is_ssh_file_target,
+    local_file_link_target_exists, sort_link_check_jobs,
 };
 use crate::parser::{ID_PROPERTY_RE, Link, TITLE_RE, UUID_FORMAT_RE, validate_filetags_format};
 use std::collections::{HashMap, HashSet};
@@ -201,18 +201,26 @@ impl Graph {
                     Link::File(target)
                         if kinds.contains(&LinkCheckKind::File) && !is_ssh_file_target(target) =>
                     {
-                        jobs.push(LinkCheckJob::file(
-                            node.uuid.clone(),
-                            node.title.clone(),
-                            node.path.clone(),
+                        jobs.push(LinkCheckJob::new(
+                            LinkCheckKind::File,
+                            LinkCheckBackend::Local,
+                            LinkSource::new(
+                                node.uuid.clone(),
+                                node.title.clone(),
+                                node.path.clone(),
+                            ),
                             target.clone(),
                         ));
                     }
                     Link::Attachment(target) if kinds.contains(&LinkCheckKind::Attachment) => {
-                        jobs.push(LinkCheckJob::attachment(
-                            node.uuid.clone(),
-                            node.title.clone(),
-                            node.path.clone(),
+                        jobs.push(LinkCheckJob::new(
+                            LinkCheckKind::Attachment,
+                            LinkCheckBackend::Local,
+                            LinkSource::new(
+                                node.uuid.clone(),
+                                node.title.clone(),
+                                node.path.clone(),
+                            ),
                             target.clone(),
                         ));
                     }
@@ -231,10 +239,10 @@ impl Graph {
                 if let Link::File(target) = link
                     && is_ssh_file_target(target)
                 {
-                    jobs.push(LinkCheckJob::ssh_file(
-                        node.uuid.clone(),
-                        node.title.clone(),
-                        node.path.clone(),
+                    jobs.push(LinkCheckJob::new(
+                        LinkCheckKind::File,
+                        LinkCheckBackend::Ssh,
+                        LinkSource::new(node.uuid.clone(), node.title.clone(), node.path.clone()),
                         target.clone(),
                     ));
                 }

@@ -15,16 +15,6 @@ const DEFAULT_SSH_CONNECT_TIMEOUT_MS: u64 = 5_000;
 const DEFAULT_SSH_OPERATION_TIMEOUT_MS: u32 = 5_000;
 const DEFAULT_SSH_MAX_CONNECTIONS: usize = 4;
 
-#[cfg(feature = "ssh")]
-const SSH_ERROR_AUTH: &str = "auth";
-#[cfg(feature = "ssh")]
-const SSH_ERROR_HOSTKEY: &str = "hostkey";
-#[cfg(feature = "ssh")]
-const SSH_ERROR_NETWORK: &str = "network";
-#[cfg(feature = "ssh")]
-const SSH_ERROR_TIMEOUT: &str = "timeout";
-const SSH_ERROR_UNSUPPORTED: &str = "unsupported";
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum LinkCheckKind {
     File,
@@ -43,6 +33,48 @@ impl LinkCheckBackend {
             LinkCheckBackend::Local => "local",
             LinkCheckBackend::Ssh => "ssh",
         }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SshErrorKind {
+    Auth,
+    HostKey,
+    Network,
+    Timeout,
+}
+
+impl SshErrorKind {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            SshErrorKind::Auth => "auth",
+            SshErrorKind::HostKey => "hostkey",
+            SshErrorKind::Network => "network",
+            SshErrorKind::Timeout => "timeout",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LinkCheckErrorKind {
+    Ssh(SshErrorKind),
+    Unsupported,
+    UnsupportedBackend,
+}
+
+impl LinkCheckErrorKind {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            LinkCheckErrorKind::Ssh(kind) => kind.as_str(),
+            LinkCheckErrorKind::Unsupported => "unsupported",
+            LinkCheckErrorKind::UnsupportedBackend => "unsupported_backend",
+        }
+    }
+}
+
+impl From<SshErrorKind> for LinkCheckErrorKind {
+    fn from(kind: SshErrorKind) -> Self {
+        LinkCheckErrorKind::Ssh(kind)
     }
 }
 
@@ -123,13 +155,50 @@ pub struct SshFileTargetParseError {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct LinkCheckJob {
+pub struct LinkSource {
+    pub uuid: String,
+    pub title: String,
+    pub path: PathBuf,
+}
+
+impl LinkSource {
+    pub fn new(
+        uuid: impl Into<String>,
+        title: impl Into<String>,
+        path: impl Into<PathBuf>,
+    ) -> Self {
+        Self {
+            uuid: uuid.into(),
+            title: title.into(),
+            path: path.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LinkCheckTarget {
     pub kind: LinkCheckKind,
+    pub path: String,
+}
+
+impl LinkCheckTarget {
+    pub fn new(kind: LinkCheckKind, path: impl Into<String>) -> Self {
+        Self {
+            kind,
+            path: path.into(),
+        }
+    }
+
+    pub fn as_str(&self) -> &str {
+        self.path.as_str()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LinkCheckJob {
     pub backend: LinkCheckBackend,
-    pub source_uuid: String,
-    pub source_title: String,
-    pub source_path: PathBuf,
-    pub target: String,
+    pub source: LinkSource,
+    pub target: LinkCheckTarget,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -141,22 +210,16 @@ pub enum LinkCheckOutcome {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LinkCheckBrokenTarget {
-    pub kind: LinkCheckKind,
-    pub source_uuid: String,
-    pub source_title: String,
-    pub source_path: PathBuf,
-    pub target: String,
+    pub source: LinkSource,
+    pub target: LinkCheckTarget,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LinkCheckErrorTarget {
-    pub kind: LinkCheckKind,
     pub backend: LinkCheckBackend,
-    pub source_uuid: String,
-    pub source_title: String,
-    pub source_path: PathBuf,
-    pub target: String,
-    pub error_kind: String,
+    pub source: LinkSource,
+    pub target: LinkCheckTarget,
+    pub error_kind: LinkCheckErrorKind,
     pub message: String,
 }
 
@@ -180,51 +243,16 @@ impl LinkCheckResults {
 }
 
 impl LinkCheckJob {
-    pub fn file(
-        source_uuid: impl Into<String>,
-        source_title: impl Into<String>,
-        source_path: impl Into<PathBuf>,
+    pub fn new(
+        kind: LinkCheckKind,
+        backend: LinkCheckBackend,
+        source: LinkSource,
         target: impl Into<String>,
     ) -> Self {
         Self {
-            kind: LinkCheckKind::File,
-            backend: LinkCheckBackend::Local,
-            source_uuid: source_uuid.into(),
-            source_title: source_title.into(),
-            source_path: source_path.into(),
-            target: target.into(),
-        }
-    }
-
-    pub fn attachment(
-        source_uuid: impl Into<String>,
-        source_title: impl Into<String>,
-        source_path: impl Into<PathBuf>,
-        target: impl Into<String>,
-    ) -> Self {
-        Self {
-            kind: LinkCheckKind::Attachment,
-            backend: LinkCheckBackend::Local,
-            source_uuid: source_uuid.into(),
-            source_title: source_title.into(),
-            source_path: source_path.into(),
-            target: target.into(),
-        }
-    }
-
-    pub fn ssh_file(
-        source_uuid: impl Into<String>,
-        source_title: impl Into<String>,
-        source_path: impl Into<PathBuf>,
-        target: impl Into<String>,
-    ) -> Self {
-        Self {
-            kind: LinkCheckKind::File,
-            backend: LinkCheckBackend::Ssh,
-            source_uuid: source_uuid.into(),
-            source_title: source_title.into(),
-            source_path: source_path.into(),
-            target: target.into(),
+            backend,
+            source,
+            target: LinkCheckTarget::new(kind, target),
         }
     }
 }
@@ -328,38 +356,27 @@ pub fn local_file_link_target_exists(target: &str, source_path: &Path, db_root: 
 
 pub fn check_local_link_job(job: LinkCheckJob, db_root: &Path) -> LinkCheckOutcome {
     let exists = match job.backend {
-        LinkCheckBackend::Local => match job.kind {
+        LinkCheckBackend::Local => match job.target.kind {
             LinkCheckKind::File => {
-                local_file_link_target_exists(&job.target, &job.source_path, db_root)
+                local_file_link_target_exists(job.target.as_str(), &job.source.path, db_root)
             }
             LinkCheckKind::Attachment => {
-                attachment_target_exists(db_root, &job.source_uuid, &job.target)
+                attachment_target_exists(db_root, &job.source.uuid, job.target.as_str())
             }
         },
         LinkCheckBackend::Ssh => {
-            return LinkCheckOutcome::Error(LinkCheckErrorTarget {
-                kind: job.kind,
-                backend: job.backend,
-                source_uuid: job.source_uuid,
-                source_title: job.source_title,
-                source_path: job.source_path,
-                target: job.target,
-                error_kind: "unsupported_backend".to_string(),
-                message: "SSH link jobs cannot be checked by the local checker".to_string(),
-            });
+            return LinkCheckOutcome::Error(link_check_error(
+                job,
+                LinkCheckErrorKind::UnsupportedBackend,
+                "SSH link jobs cannot be checked by the local checker",
+            ));
         }
     };
 
     if exists {
         LinkCheckOutcome::Ok
     } else {
-        LinkCheckOutcome::Broken(LinkCheckBrokenTarget {
-            kind: job.kind,
-            source_uuid: job.source_uuid,
-            source_title: job.source_title,
-            source_path: job.source_path,
-            target: job.target,
-        })
+        LinkCheckOutcome::Broken(link_check_broken(job))
     }
 }
 
@@ -392,7 +409,7 @@ pub fn run_ssh_link_checks(
             .map(|job| {
                 link_check_error(
                     job,
-                    SSH_ERROR_UNSUPPORTED,
+                    LinkCheckErrorKind::Unsupported,
                     "SSH file-link checks are not available in this build. Rebuild with --features ssh.",
                 )
             })
@@ -411,21 +428,21 @@ pub fn run_ssh_link_checks(
     let mut grouped: BTreeMap<SshConnectionKey, Vec<SshParsedJob>> = BTreeMap::new();
 
     for job in jobs {
-        match parse_ssh_file_target(&job.target, &options.default_user) {
+        match parse_ssh_file_target(job.target.as_str(), &options.default_user) {
             Ok(Some(target)) => grouped
                 .entry(target.connection.clone())
                 .or_default()
                 .push(SshParsedJob { job, target }),
             Ok(None) => results.errors.push(link_check_error(
                 job,
-                SSH_ERROR_UNSUPPORTED,
+                LinkCheckErrorKind::Unsupported,
                 "remote file-link check received a non-SSH file target",
             )),
-            Err(error) => {
-                results
-                    .errors
-                    .push(link_check_error(job, SSH_ERROR_UNSUPPORTED, error.message))
-            }
+            Err(error) => results.errors.push(link_check_error(
+                job,
+                LinkCheckErrorKind::Unsupported,
+                error.message,
+            )),
         }
     }
 
@@ -451,28 +468,28 @@ fn compare_error_targets(a: &LinkCheckErrorTarget, b: &LinkCheckErrorTarget) -> 
 
 fn job_sort_key(job: &LinkCheckJob) -> (LinkCheckKind, &str, &str, &Path, &str) {
     (
-        job.kind,
-        job.source_uuid.as_str(),
-        job.source_title.as_str(),
-        job.source_path.as_path(),
+        job.target.kind,
+        job.source.uuid.as_str(),
+        job.source.title.as_str(),
+        job.source.path.as_path(),
         job.target.as_str(),
     )
 }
 
 fn broken_target_sort_key(
-    target: &LinkCheckBrokenTarget,
+    broken: &LinkCheckBrokenTarget,
 ) -> (LinkCheckKind, &str, &str, &Path, &str) {
     (
-        target.kind,
-        target.source_uuid.as_str(),
-        target.source_title.as_str(),
-        target.source_path.as_path(),
-        target.target.as_str(),
+        broken.target.kind,
+        broken.source.uuid.as_str(),
+        broken.source.title.as_str(),
+        broken.source.path.as_path(),
+        broken.target.as_str(),
     )
 }
 
 fn error_target_sort_key(
-    target: &LinkCheckErrorTarget,
+    error: &LinkCheckErrorTarget,
 ) -> (
     LinkCheckKind,
     LinkCheckBackend,
@@ -483,40 +500,33 @@ fn error_target_sort_key(
     &str,
 ) {
     (
-        target.kind,
-        target.backend,
-        target.source_uuid.as_str(),
-        target.source_title.as_str(),
-        target.source_path.as_path(),
-        target.target.as_str(),
-        target.error_kind.as_str(),
+        error.target.kind,
+        error.backend,
+        error.source.uuid.as_str(),
+        error.source.title.as_str(),
+        error.source.path.as_path(),
+        error.target.as_str(),
+        error.error_kind.as_str(),
     )
 }
 
 fn link_check_error(
     job: LinkCheckJob,
-    error_kind: impl Into<String>,
+    error_kind: impl Into<LinkCheckErrorKind>,
     message: impl Into<String>,
 ) -> LinkCheckErrorTarget {
     LinkCheckErrorTarget {
-        kind: job.kind,
         backend: job.backend,
-        source_uuid: job.source_uuid,
-        source_title: job.source_title,
-        source_path: job.source_path,
+        source: job.source,
         target: job.target,
         error_kind: error_kind.into(),
         message: message.into(),
     }
 }
 
-#[cfg(feature = "ssh")]
 fn link_check_broken(job: LinkCheckJob) -> LinkCheckBrokenTarget {
     LinkCheckBrokenTarget {
-        kind: job.kind,
-        source_uuid: job.source_uuid,
-        source_title: job.source_title,
-        source_path: job.source_path,
+        source: job.source,
         target: job.target,
     }
 }
@@ -531,15 +541,15 @@ struct SshParsedJob {
 #[cfg(feature = "ssh")]
 #[derive(Debug, Clone)]
 struct SshCheckFailure {
-    kind: &'static str,
+    kind: LinkCheckErrorKind,
     message: String,
 }
 
 #[cfg(feature = "ssh")]
 impl SshCheckFailure {
-    fn new(kind: &'static str, message: impl Into<String>) -> Self {
+    fn new(kind: impl Into<LinkCheckErrorKind>, message: impl Into<String>) -> Self {
         Self {
-            kind,
+            kind: kind.into(),
             message: message.into(),
         }
     }
@@ -589,7 +599,7 @@ fn check_ssh_group(
         Err(error) => ssh_error_results(
             jobs,
             SshCheckFailure::new(
-                SSH_ERROR_NETWORK,
+                SshErrorKind::Network,
                 format!("failed to initialize SSH runtime: {error}"),
             ),
         ),
@@ -682,7 +692,7 @@ impl russh::client::Handler for KnownHostsHandler {
         ) {
             Ok(true) => Ok(true),
             Ok(false) => Err(KnownHostCheckError::Failure(SshCheckFailure::new(
-                SSH_ERROR_HOSTKEY,
+                SshErrorKind::HostKey,
                 format!(
                     "host {}:{} is not present in {}",
                     self.host,
@@ -691,7 +701,7 @@ impl russh::client::Handler for KnownHostsHandler {
                 ),
             ))),
             Err(error) => Err(KnownHostCheckError::Failure(SshCheckFailure::new(
-                SSH_ERROR_HOSTKEY,
+                SshErrorKind::HostKey,
                 format!(
                     "failed to check known host entry for {}:{} in {}: {error}",
                     self.host,
@@ -760,45 +770,91 @@ async fn authenticate_ssh_client(
         })?
         .flatten();
 
-    if let Some(identity_file) = &options.identity_file {
-        match russh::keys::load_secret_key(identity_file, None) {
-            Ok(key_pair) => {
-                let key = russh::keys::PrivateKeyWithHashAlg::new(Arc::new(key_pair), hash_alg);
-                match tokio::time::timeout(
-                    operation_timeout(options),
-                    session.authenticate_publickey(connection.user.clone(), key),
-                )
-                .await
-                {
-                    Err(_) => failures.push(format!(
-                        "identity file {} timed out",
-                        identity_file.display()
-                    )),
-                    Ok(Ok(result)) if result.success() => return Ok(()),
-                    Ok(Ok(_)) => failures.push(format!(
-                        "identity file {} did not authenticate",
-                        identity_file.display()
-                    )),
-                    Ok(Err(error)) => failures.push(format!(
-                        "identity file {} failed: {error}",
-                        identity_file.display()
-                    )),
-                }
-            }
-            Err(error) => failures.push(format!(
+    match authenticate_with_identity_file(session, connection, options, hash_alg).await {
+        SshAuthAttempt::Success => return Ok(()),
+        SshAuthAttempt::Failure(message) => failures.push(message),
+        SshAuthAttempt::Skipped => {}
+    }
+
+    match authenticate_with_agent_if_enabled(session, connection, options, hash_alg).await {
+        SshAuthAttempt::Success => return Ok(()),
+        SshAuthAttempt::Failure(message) => failures.push(message),
+        SshAuthAttempt::Skipped => {}
+    }
+
+    Err(ssh_auth_failure(failures))
+}
+
+#[cfg(feature = "ssh")]
+enum SshAuthAttempt {
+    Success,
+    Failure(String),
+    Skipped,
+}
+
+#[cfg(feature = "ssh")]
+async fn authenticate_with_identity_file(
+    session: &mut russh::client::Handle<KnownHostsHandler>,
+    connection: &SshConnectionKey,
+    options: &SshFileCheckOptions,
+    hash_alg: Option<russh::keys::HashAlg>,
+) -> SshAuthAttempt {
+    let Some(identity_file) = &options.identity_file else {
+        return SshAuthAttempt::Skipped;
+    };
+
+    let key_pair = match russh::keys::load_secret_key(identity_file, None) {
+        Ok(key_pair) => key_pair,
+        Err(error) => {
+            return SshAuthAttempt::Failure(format!(
                 "identity file {} failed: {error}",
                 identity_file.display()
-            )),
+            ));
         }
+    };
+
+    let key = russh::keys::PrivateKeyWithHashAlg::new(Arc::new(key_pair), hash_alg);
+    match tokio::time::timeout(
+        operation_timeout(options),
+        session.authenticate_publickey(connection.user.clone(), key),
+    )
+    .await
+    {
+        Err(_) => SshAuthAttempt::Failure(format!(
+            "identity file {} timed out",
+            identity_file.display()
+        )),
+        Ok(Ok(result)) if result.success() => SshAuthAttempt::Success,
+        Ok(Ok(_)) => SshAuthAttempt::Failure(format!(
+            "identity file {} did not authenticate",
+            identity_file.display()
+        )),
+        Ok(Err(error)) => SshAuthAttempt::Failure(format!(
+            "identity file {} failed: {error}",
+            identity_file.display()
+        )),
+    }
+}
+
+#[cfg(feature = "ssh")]
+async fn authenticate_with_agent_if_enabled(
+    session: &mut russh::client::Handle<KnownHostsHandler>,
+    connection: &SshConnectionKey,
+    options: &SshFileCheckOptions,
+    hash_alg: Option<russh::keys::HashAlg>,
+) -> SshAuthAttempt {
+    if !options.agent {
+        return SshAuthAttempt::Skipped;
     }
 
-    if options.agent {
-        match authenticate_with_agent(session, connection, options, hash_alg).await {
-            Ok(()) => return Ok(()),
-            Err(failure) => failures.push(failure.message),
-        };
+    match authenticate_with_agent(session, connection, options, hash_alg).await {
+        Ok(()) => SshAuthAttempt::Success,
+        Err(failure) => SshAuthAttempt::Failure(failure.message),
     }
+}
 
+#[cfg(feature = "ssh")]
+fn ssh_auth_failure(mut failures: Vec<String>) -> SshCheckFailure {
     if failures.is_empty() {
         failures.push(
             "no SSH authentication method configured; set [ssh].identity_file or agent = true"
@@ -806,7 +862,7 @@ async fn authenticate_ssh_client(
         );
     }
 
-    Err(SshCheckFailure::new(SSH_ERROR_AUTH, failures.join("; ")))
+    SshCheckFailure::new(SshErrorKind::Auth, failures.join("; "))
 }
 
 #[cfg(feature = "ssh")]
@@ -820,15 +876,15 @@ async fn authenticate_with_agent(
     let mut agent = russh::keys::agent::client::AgentClient::connect_env()
         .await
         .map_err(|error| {
-            SshCheckFailure::new(SSH_ERROR_AUTH, format!("SSH agent failed: {error}"))
+            SshCheckFailure::new(SshErrorKind::Auth, format!("SSH agent failed: {error}"))
         })?;
     let identities = agent.request_identities().await.map_err(|error| {
-        SshCheckFailure::new(SSH_ERROR_AUTH, format!("SSH agent failed: {error}"))
+        SshCheckFailure::new(SshErrorKind::Auth, format!("SSH agent failed: {error}"))
     })?;
 
     if identities.is_empty() {
         return Err(SshCheckFailure::new(
-            SSH_ERROR_AUTH,
+            SshErrorKind::Auth,
             "SSH agent had no identities",
         ));
     }
@@ -849,7 +905,7 @@ async fn authenticate_with_agent(
             .await
             .map_err(|_| timeout_failure("SSH agent authentication timed out"))?
             .map_err(|error| {
-                SshCheckFailure::new(SSH_ERROR_AUTH, format!("SSH agent failed: {error}"))
+                SshCheckFailure::new(SshErrorKind::Auth, format!("SSH agent failed: {error}"))
             })?,
             russh::keys::agent::AgentIdentity::Certificate { certificate, .. } => {
                 tokio::time::timeout(
@@ -864,7 +920,7 @@ async fn authenticate_with_agent(
                 .await
                 .map_err(|_| timeout_failure("SSH agent authentication timed out"))?
                 .map_err(|error| {
-                    SshCheckFailure::new(SSH_ERROR_AUTH, format!("SSH agent failed: {error}"))
+                    SshCheckFailure::new(SshErrorKind::Auth, format!("SSH agent failed: {error}"))
                 })?
             }
         };
@@ -878,7 +934,10 @@ async fn authenticate_with_agent(
         }
     }
 
-    Err(SshCheckFailure::new(SSH_ERROR_AUTH, failures.join("; ")))
+    Err(SshCheckFailure::new(
+        SshErrorKind::Auth,
+        failures.join("; "),
+    ))
 }
 
 #[cfg(feature = "ssh")]
@@ -890,7 +949,7 @@ async fn authenticate_with_agent(
     _hash_alg: Option<russh::keys::HashAlg>,
 ) -> Result<(), SshCheckFailure> {
     Err(SshCheckFailure::new(
-        SSH_ERROR_AUTH,
+        SshErrorKind::Auth,
         "SSH agent authentication is not supported on this platform",
     ))
 }
@@ -974,7 +1033,7 @@ async fn check_ssh_file_target(
         };
     let content = std::str::from_utf8(&bytes).map_err(|error| {
         SshCheckFailure::new(
-            SSH_ERROR_UNSUPPORTED,
+            LinkCheckErrorKind::Unsupported,
             format!("failed to read remote file as UTF-8: {error}"),
         )
     })?;
@@ -1005,15 +1064,15 @@ fn operation_timeout_secs(options: &SshFileCheckOptions) -> u64 {
 
 #[cfg(feature = "ssh")]
 fn timeout_failure(message: impl Into<String>) -> SshCheckFailure {
-    SshCheckFailure::new(SSH_ERROR_TIMEOUT, message)
+    SshCheckFailure::new(SshErrorKind::Timeout, message)
 }
 
 #[cfg(feature = "ssh")]
 fn russh_auth_failure(context: impl AsRef<str>, error: russh::Error) -> SshCheckFailure {
     let kind = if is_russh_timeout(&error) {
-        SSH_ERROR_TIMEOUT
+        SshErrorKind::Timeout
     } else {
-        SSH_ERROR_AUTH
+        SshErrorKind::Auth
     };
     SshCheckFailure::new(kind, format!("{}: {error}", context.as_ref()))
 }
@@ -1021,11 +1080,11 @@ fn russh_auth_failure(context: impl AsRef<str>, error: russh::Error) -> SshCheck
 #[cfg(feature = "ssh")]
 fn russh_operational_failure(context: impl AsRef<str>, error: russh::Error) -> SshCheckFailure {
     let kind = if is_russh_timeout(&error) {
-        SSH_ERROR_TIMEOUT
+        SshErrorKind::Timeout
     } else if is_russh_hostkey_error(&error) {
-        SSH_ERROR_HOSTKEY
+        SshErrorKind::HostKey
     } else {
-        SSH_ERROR_NETWORK
+        SshErrorKind::Network
     };
     SshCheckFailure::new(kind, format!("{}: {error}", context.as_ref()))
 }
@@ -1058,9 +1117,9 @@ fn sftp_operational_failure(
     error: russh_sftp::client::error::Error,
 ) -> SshCheckFailure {
     let kind = if matches!(error, russh_sftp::client::error::Error::Timeout) {
-        SSH_ERROR_TIMEOUT
+        SshErrorKind::Timeout
     } else {
-        SSH_ERROR_NETWORK
+        SshErrorKind::Network
     };
     SshCheckFailure::new(kind, format!("{}: {error}", context.as_ref()))
 }
@@ -1137,6 +1196,28 @@ mod tests {
     use super::*;
 
     #[test]
+    fn link_check_error_kind_strings_match_output_contract() {
+        assert_eq!(LinkCheckErrorKind::Ssh(SshErrorKind::Auth).as_str(), "auth");
+        assert_eq!(
+            LinkCheckErrorKind::Ssh(SshErrorKind::HostKey).as_str(),
+            "hostkey"
+        );
+        assert_eq!(
+            LinkCheckErrorKind::Ssh(SshErrorKind::Network).as_str(),
+            "network"
+        );
+        assert_eq!(
+            LinkCheckErrorKind::Ssh(SshErrorKind::Timeout).as_str(),
+            "timeout"
+        );
+        assert_eq!(LinkCheckErrorKind::Unsupported.as_str(), "unsupported");
+        assert_eq!(
+            LinkCheckErrorKind::UnsupportedBackend.as_str(),
+            "unsupported_backend"
+        );
+    }
+
+    #[test]
     fn file_jobs_use_existing_line_spec_semantics() {
         let dir = tempfile::tempdir().unwrap();
         let db_root = dir.path();
@@ -1146,11 +1227,21 @@ mod tests {
         std::fs::write(&target_path, "first line\nneedle line\n").unwrap();
 
         let ok = check_local_link_job(
-            LinkCheckJob::file("source", "Source", &source_path, "target.org::needle"),
+            LinkCheckJob::new(
+                LinkCheckKind::File,
+                LinkCheckBackend::Local,
+                LinkSource::new("source", "Source", source_path.clone()),
+                "target.org::needle",
+            ),
             db_root,
         );
         let broken = check_local_link_job(
-            LinkCheckJob::file("source", "Source", &source_path, "target.org::missing"),
+            LinkCheckJob::new(
+                LinkCheckKind::File,
+                LinkCheckBackend::Local,
+                LinkSource::new("source", "Source", source_path.clone()),
+                "target.org::missing",
+            ),
             db_root,
         );
 
@@ -1158,11 +1249,8 @@ mod tests {
         assert_eq!(
             broken,
             LinkCheckOutcome::Broken(LinkCheckBrokenTarget {
-                kind: LinkCheckKind::File,
-                source_uuid: "source".to_string(),
-                source_title: "Source".to_string(),
-                source_path,
-                target: "target.org::missing".to_string(),
+                source: LinkSource::new("source", "Source", source_path),
+                target: LinkCheckTarget::new(LinkCheckKind::File, "target.org::missing"),
             })
         );
     }
@@ -1178,11 +1266,21 @@ mod tests {
         std::fs::write(attach_dir.join("image.png"), b"image").unwrap();
 
         let ok = check_local_link_job(
-            LinkCheckJob::attachment(uuid, "Source", &source_path, "image.png"),
+            LinkCheckJob::new(
+                LinkCheckKind::Attachment,
+                LinkCheckBackend::Local,
+                LinkSource::new(uuid, "Source", source_path.clone()),
+                "image.png",
+            ),
             db_root,
         );
         let broken = check_local_link_job(
-            LinkCheckJob::attachment(uuid, "Source", &source_path, "missing.png"),
+            LinkCheckJob::new(
+                LinkCheckKind::Attachment,
+                LinkCheckBackend::Local,
+                LinkSource::new(uuid, "Source", source_path.clone()),
+                "missing.png",
+            ),
             db_root,
         );
 
@@ -1190,11 +1288,8 @@ mod tests {
         assert_eq!(
             broken,
             LinkCheckOutcome::Broken(LinkCheckBrokenTarget {
-                kind: LinkCheckKind::Attachment,
-                source_uuid: uuid.to_string(),
-                source_title: "Source".to_string(),
-                source_path,
-                target: "missing.png".to_string(),
+                source: LinkSource::new(uuid, "Source", source_path),
+                target: LinkCheckTarget::new(LinkCheckKind::Attachment, "missing.png"),
             })
         );
     }

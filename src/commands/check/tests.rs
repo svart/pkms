@@ -154,9 +154,9 @@ fn collects_only_requested_local_link_check_jobs_in_stable_order() {
         .iter()
         .map(|job| {
             (
-                job.kind,
-                job.source_uuid.as_str(),
-                job.source_title.as_str(),
+                job.target.kind,
+                job.source.uuid.as_str(),
+                job.source.title.as_str(),
                 job.target.as_str(),
             )
         })
@@ -193,13 +193,17 @@ fn collects_only_requested_local_link_check_jobs_in_stable_order() {
 
     let file_jobs = graph.collect_local_link_check_jobs(&[LinkCheckKind::File]);
     assert_eq!(file_jobs.len(), 2);
-    assert!(file_jobs.iter().all(|job| job.kind == LinkCheckKind::File));
+    assert!(
+        file_jobs
+            .iter()
+            .all(|job| job.target.kind == LinkCheckKind::File)
+    );
 
     let attachment_jobs = graph.collect_local_link_check_jobs(&[LinkCheckKind::Attachment]);
     assert_eq!(attachment_jobs.len(), 2);
     assert!(
         attachment_jobs
             .iter()
-            .all(|job| job.kind == LinkCheckKind::Attachment)
+            .all(|job| job.target.kind == LinkCheckKind::Attachment)
     );
 }

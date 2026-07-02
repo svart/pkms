@@ -173,23 +173,23 @@ fn split_link_check_results(
     let mut file_link_errors = Vec::new();
     let mut broken_attachment = Vec::new();
 
-    for target in results.broken {
-        match target.kind {
+    for broken in results.broken {
+        match broken.target.kind {
             LinkCheckKind::File => broken_file.push(BrokenFileLinkEntry {
-                source_uuid: target.source_uuid,
-                source_title: target.source_title,
-                target_path: target.target,
+                source_uuid: broken.source.uuid,
+                source_title: broken.source.title,
+                target_path: broken.target.path,
             }),
             LinkCheckKind::Attachment => broken_attachment.push(BrokenAttachmentLinkEntry {
-                source_uuid: target.source_uuid,
-                source_title: target.source_title,
-                target_path: target.target,
+                source_uuid: broken.source.uuid,
+                source_title: broken.source.title,
+                target_path: broken.target.path,
             }),
         }
     }
 
     for error in results.errors {
-        if error.kind == LinkCheckKind::File {
+        if error.target.kind == LinkCheckKind::File {
             file_link_errors.push(file_link_error_entry(error));
         }
     }
@@ -199,11 +199,11 @@ fn split_link_check_results(
 
 fn file_link_error_entry(error: LinkCheckErrorTarget) -> FileLinkErrorEntry {
     FileLinkErrorEntry {
-        source_uuid: error.source_uuid,
-        source_title: error.source_title,
-        target_path: error.target,
+        source_uuid: error.source.uuid,
+        source_title: error.source.title,
+        target_path: error.target.path,
         backend: error.backend.as_str().to_string(),
-        error_kind: error.error_kind,
+        error_kind: error.error_kind.as_str().to_string(),
         message: error.message,
     }
 }
