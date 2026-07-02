@@ -16,22 +16,32 @@ pub(super) fn render(ctx: &OutputContext, output: &CheckCommandOutput) -> Result
 
 pub fn render_text(output: &CheckOutput) -> String {
     let mut text = String::new();
+    let has_sections = output.has_sections();
 
-    let has_any_output = output.stats.is_some()
-        || output.broken_file_links.is_some()
-        || output.file_link_errors.is_some()
-        || output.broken_attachment_links.is_some()
-        || output.filetags_issues.is_some()
-        || output.duplicates.is_some()
-        || output.broken_links.is_some()
-        || output.failed_files.is_some()
-        || output.self_links.is_some()
-        || output.overlinks.is_some()
-        || output.cross_links.is_some();
-
-    if has_any_output {
-        let _ = writeln!(text, "Database: {}", output.db_root);
+    if has_sections {
+        render_summary(&mut text, output);
     }
+
+    render_duplicate_sections(&mut text, output);
+    render_broken_links_section(&mut text, output);
+    render_broken_file_links_section(&mut text, output);
+    render_file_link_errors_section(&mut text, output);
+    render_broken_attachment_links_section(&mut text, output);
+    render_filetags_section(&mut text, output);
+    render_self_links_section(&mut text, output);
+    render_overlinks_section(&mut text, output);
+    render_cross_links_section(&mut text, output);
+
+    if has_sections {
+        text.push('\n');
+    }
+    render_status(&mut text, output.healthy);
+
+    text
+}
+
+fn render_summary(text: &mut String, output: &CheckOutput) {
+    let _ = writeln!(text, "Database: {}", output.db_root);
 
     if let Some(stats) = &output.stats {
         let _ = writeln!(text, "  Notes:          {}", stats.total_notes);
@@ -67,7 +77,9 @@ pub fn render_text(output: &CheckOutput) -> String {
     if let Some(overlinks) = &output.overlinks {
         let _ = writeln!(text, "  Overlinks:      {}", overlinks.len());
     }
+}
 
+fn render_duplicate_sections(text: &mut String, output: &CheckOutput) {
     if let Some(duplicates) = &output.duplicates {
         if !duplicates.duplicate_uuids.is_empty() {
             text.push('\n');
@@ -109,7 +121,9 @@ pub fn render_text(output: &CheckOutput) -> String {
             }
         }
     }
+}
 
+fn render_broken_links_section(text: &mut String, output: &CheckOutput) {
     if let Some(broken_links) = &output.broken_links
         && !broken_links.is_empty()
     {
@@ -124,7 +138,9 @@ pub fn render_text(output: &CheckOutput) -> String {
             let _ = writeln!(text, "  {title} -> {}", entry.target_uuid);
         }
     }
+}
 
+fn render_broken_file_links_section(text: &mut String, output: &CheckOutput) {
     if let Some(broken_file) = &output.broken_file_links
         && !broken_file.is_empty()
     {
@@ -134,7 +150,9 @@ pub fn render_text(output: &CheckOutput) -> String {
             let _ = writeln!(text, "  {} -> {}", entry.source_title, entry.target_path);
         }
     }
+}
 
+fn render_file_link_errors_section(text: &mut String, output: &CheckOutput) {
     if let Some(file_link_errors) = &output.file_link_errors
         && !file_link_errors.is_empty()
     {
@@ -152,7 +170,9 @@ pub fn render_text(output: &CheckOutput) -> String {
             );
         }
     }
+}
 
+fn render_broken_attachment_links_section(text: &mut String, output: &CheckOutput) {
     if let Some(broken_attachment) = &output.broken_attachment_links
         && !broken_attachment.is_empty()
     {
@@ -166,7 +186,9 @@ pub fn render_text(output: &CheckOutput) -> String {
             let _ = writeln!(text, "  {} -> {}", entry.source_title, entry.target_path);
         }
     }
+}
 
+fn render_filetags_section(text: &mut String, output: &CheckOutput) {
     if let Some(filetags_issues) = &output.filetags_issues
         && !filetags_issues.is_empty()
     {
@@ -176,7 +198,9 @@ pub fn render_text(output: &CheckOutput) -> String {
             let _ = writeln!(text, "  {} ({}): {}", entry.title, entry.path, entry.issue);
         }
     }
+}
 
+fn render_self_links_section(text: &mut String, output: &CheckOutput) {
     if let Some(self_links) = &output.self_links
         && !self_links.is_empty()
     {
@@ -201,7 +225,9 @@ pub fn render_text(output: &CheckOutput) -> String {
             }
         }
     }
+}
 
+fn render_overlinks_section(text: &mut String, output: &CheckOutput) {
     if let Some(overlinks) = &output.overlinks
         && !overlinks.is_empty()
     {
@@ -219,7 +245,9 @@ pub fn render_text(output: &CheckOutput) -> String {
             );
         }
     }
+}
 
+fn render_cross_links_section(text: &mut String, output: &CheckOutput) {
     if let Some(cr) = &output.cross_links {
         text.push('\n');
         let _ = writeln!(
@@ -238,15 +266,28 @@ pub fn render_text(output: &CheckOutput) -> String {
             cr.target_title, cr.source_title, cr.target_to_source
         );
     }
+}
 
-    if has_any_output {
-        text.push('\n');
-    }
-    if output.healthy {
+fn render_status(text: &mut String, healthy: bool) {
+    if healthy {
         text.push_str("Status: healthy\n");
     } else {
         text.push_str("Status: issues found\n");
     }
+}
 
-    text
+impl CheckOutput {
+    fn has_sections(&self) -> bool {
+        self.stats.is_some()
+            || self.broken_file_links.is_some()
+            || self.file_link_errors.is_some()
+            || self.broken_attachment_links.is_some()
+            || self.filetags_issues.is_some()
+            || self.duplicates.is_some()
+            || self.broken_links.is_some()
+            || self.failed_files.is_some()
+            || self.self_links.is_some()
+            || self.overlinks.is_some()
+            || self.cross_links.is_some()
+    }
 }
