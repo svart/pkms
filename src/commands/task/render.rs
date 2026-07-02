@@ -416,6 +416,20 @@ pub(super) struct AgendaTaskRenderOptions<'a> {
     pub(super) window: AgendaWindow,
 }
 
+struct AgendaSection {
+    label: String,
+    items: Vec<TaskItem>,
+}
+
+impl AgendaSection {
+    fn new(label: impl Into<String>, items: Vec<TaskItem>) -> Self {
+        Self {
+            label: label.into(),
+            items,
+        }
+    }
+}
+
 pub(super) fn print_agenda_task_items(
     ctx: &OutputContext,
     source: SourceSelection,
@@ -499,37 +513,20 @@ fn print_agenda_task_table(
     window: AgendaWindow,
     table: TaskTableRenderOptions<'_>,
 ) -> Result<()> {
-    if let AgendaWindow::Days(days) = window {
-        return print_windowed_agenda_task_table(items, total, source, today, days, table);
-    }
-
-    let mut overdue = Vec::new();
-    let mut today_items = Vec::new();
-    let mut upcoming = Vec::new();
-
-    for item in items {
-        if item.is_overdue_on(today) {
-            overdue.push(item.clone());
-        } else if item.is_today_on(today) {
-            today_items.push(item.clone());
-        } else if item.effective_date().is_some() {
-            upcoming.push(item.clone());
-        }
-    }
-
-    overdue.sort_by(|a, b| a.effective_date().cmp(&b.effective_date()));
-    today_items.sort_by(|a, b| a.effective_date().cmp(&b.effective_date()));
-    upcoming.sort_by(|a, b| a.effective_date().cmp(&b.effective_date()));
-
-    let overdue_rows = task_rows(&overdue, source);
-    let today_rows = task_rows(&today_items, source);
-    let upcoming_rows = task_rows(&upcoming, source);
-    let sections = [
-        ("Overdue", overdue_rows.as_slice()),
-        ("Today", today_rows.as_slice()),
-        ("Upcoming", upcoming_rows.as_slice()),
-    ];
-    let item_count = overdue_rows.len() + today_rows.len() + upcoming_rows.len();
+    let agenda_sections = build_agenda_sections(items, today, window);
+    let rows: Vec<Vec<TaskRow<'_>>> = agenda_sections
+        .iter()
+        .map(|section| task_rows(&section.items, source))
+        .collect();
+    let sections: Vec<(&str, &[TaskRow<'_>])> = agenda_sections
+        .iter()
+        .zip(rows.iter())
+        .map(|(section, rows)| (section.label.as_str(), rows.as_slice()))
+        .collect();
+    let item_count = agenda_sections
+        .iter()
+        .map(|section| section.items.len())
+        .sum::<usize>();
     let footer = format!("Shown: {}, Total: {} task(s)", item_count, total);
     print_table_with_empty_message(
         &sections,
@@ -541,59 +538,71 @@ fn print_agenda_task_table(
     Ok(())
 }
 
-fn print_windowed_agenda_task_table(
+fn build_agenda_sections(
     items: &[TaskItem],
-    total: usize,
-    source: SourceSelection,
     today: NaiveDate,
-    days: i64,
-    table: TaskTableRenderOptions<'_>,
-) -> Result<()> {
-    let mut overdue = Vec::new();
-    let mut daily_items: BTreeMap<i64, Vec<TaskItem>> = BTreeMap::new();
+    window: AgendaWindow,
+) -> Vec<AgendaSection> {
+    match window {
+        AgendaWindow::Sections => {
+            let mut overdue = Vec::new();
+            let mut today_items = Vec::new();
+            let mut upcoming = Vec::new();
 
-    for item in items {
-        if item.is_overdue_on(today) {
-            overdue.push(item.clone());
-        } else {
-            for date in item.dates() {
-                let offset = (date - today).num_days();
-                if (0..days).contains(&offset) {
-                    daily_items.entry(offset).or_default().push(item.clone());
-                    break;
+            for item in items {
+                if item.is_overdue_on(today) {
+                    overdue.push(item.clone());
+                } else if item.is_today_on(today) {
+                    today_items.push(item.clone());
+                } else if item.effective_date().is_some() {
+                    upcoming.push(item.clone());
                 }
             }
+
+            overdue.sort_by(|a, b| a.effective_date().cmp(&b.effective_date()));
+            today_items.sort_by(|a, b| a.effective_date().cmp(&b.effective_date()));
+            upcoming.sort_by(|a, b| a.effective_date().cmp(&b.effective_date()));
+
+            vec![
+                AgendaSection::new("Overdue", overdue),
+                AgendaSection::new("Today", today_items),
+                AgendaSection::new("Upcoming", upcoming),
+            ]
+        }
+        AgendaWindow::Days(days) => {
+            let mut overdue = Vec::new();
+            let mut daily_items: BTreeMap<i64, Vec<TaskItem>> = BTreeMap::new();
+
+            for item in items {
+                if item.is_overdue_on(today) {
+                    overdue.push(item.clone());
+                } else {
+                    for date in item.dates() {
+                        let offset = (date - today).num_days();
+                        if (0..days).contains(&offset) {
+                            daily_items.entry(offset).or_default().push(item.clone());
+                            break;
+                        }
+                    }
+                }
+            }
+
+            overdue.sort_by(|a, b| a.effective_date().cmp(&b.effective_date()));
+            for items in daily_items.values_mut() {
+                items.sort_by(|a, b| a.effective_date().cmp(&b.effective_date()));
+            }
+
+            let mut sections = vec![AgendaSection::new("Overdue", overdue)];
+            for (offset, items) in daily_items {
+                let date = today + chrono::Duration::days(offset);
+                sections.push(AgendaSection::new(
+                    agenda_day_section_label(today, date),
+                    items,
+                ));
+            }
+            sections
         }
     }
-
-    overdue.sort_by(|a, b| a.effective_date().cmp(&b.effective_date()));
-    for items in daily_items.values_mut() {
-        items.sort_by(|a, b| a.effective_date().cmp(&b.effective_date()));
-    }
-
-    let mut labels = vec!["Overdue".to_string()];
-    let mut rows = vec![task_rows(&overdue, source)];
-    for (offset, items) in &daily_items {
-        let date = today + chrono::Duration::days(*offset);
-        labels.push(agenda_day_section_label(today, date));
-        rows.push(task_rows(items, source));
-    }
-
-    let sections: Vec<(&str, &[TaskRow<'_>])> = labels
-        .iter()
-        .zip(rows.iter())
-        .map(|(label, rows)| (label.as_str(), rows.as_slice()))
-        .collect();
-    let item_count = rows.iter().map(Vec::len).sum::<usize>();
-    let footer = format!("Shown: {}, Total: {} task(s)", item_count, total);
-    print_table_with_empty_message(
-        &sections,
-        task_columns(table.columns),
-        table.row_separators,
-        &footer,
-        "No tasks found.",
-    );
-    Ok(())
 }
 
 fn task_rows(items: &[TaskItem], source: SourceSelection) -> Vec<TaskRow<'_>> {
