@@ -1,5 +1,6 @@
 use crate::config::ResolvedConfig;
 use crate::graph::Graph;
+use crate::graph::tasks::TaskLocation as GraphTaskLocation;
 use crate::output::OutputContext;
 use crate::tasks::clock::TaskClock;
 use crate::tasks::id::TaskId;
@@ -10,11 +11,18 @@ use crate::tasks::modifiers::{
 use crate::tasks::pkms::{self, PkmsInboxTarget};
 use crate::tasks::pkms_mutation::{self, Change};
 use anyhow::{Context, Result, bail};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::ExitCode;
 
 use super::super::render;
 use super::{mod_title, parse_mutation_due_date, validate_mod_source};
+
+fn pkms_task_location(location: GraphTaskLocation) -> pkms::TaskLocation {
+    pkms::TaskLocation {
+        path: location.path.into(),
+        line_number: location.line_number,
+    }
+}
 
 pub(super) fn mod_task(
     config: &ResolvedConfig,
@@ -45,8 +53,7 @@ pub(super) fn mod_task(
 
     let graph = Graph::load(config)?;
     let location = graph.resolve_canonical_task_id(config, canonical_id)?;
-    let mut path = PathBuf::from(location.path);
-    let mut line_number = location.line_number;
+    let mut location = pkms_task_location(location);
     let mut changes = Vec::new();
 
     if let Some(dependency) = mod_dependency(spec)? {
@@ -56,12 +63,8 @@ pub(super) fn mod_task(
                     bail!("Cannot make a task depend on itself.");
                 }
                 let target_location = graph.resolve_canonical_task_id(config, target_id)?;
-                (path, line_number) = pkms::move_subtree_to_dependency(
-                    &path,
-                    line_number,
-                    Path::new(&target_location.path),
-                    target_location.line_number,
-                )?;
+                let target_location = pkms_task_location(target_location);
+                location = pkms::move_subtree_to_dependency(&location, &target_location)?;
                 changes.push(render::TaskModChange {
                     property: TaskProperty::Dependency,
                     old: None,
@@ -69,11 +72,10 @@ pub(super) fn mod_task(
                 });
             }
             DependencyMod::Clear => {
-                if let Some((parent_id, parent_line_number)) =
-                    current_dependency_parent(&graph, config, &path, line_number)
+                if let Some((parent_id, parent_location)) =
+                    current_dependency_parent(&graph, config, &location)
                 {
-                    (path, line_number) =
-                        pkms::remove_subtree_dependency(&path, line_number, parent_line_number)?;
+                    location = pkms::remove_subtree_dependency(&location, &parent_location)?;
                     changes.push(render::TaskModChange {
                         property: TaskProperty::Dependency,
                         old: Some(TaskId::Pkms(parent_id).display_id()),
@@ -86,8 +88,8 @@ pub(super) fn mod_task(
 
     changes.extend(
         pkms_mutation::update_heading_properties(
-            &path.display().to_string(),
-            line_number,
+            &location.path.display().to_string(),
+            location.line_number,
             &modifier,
         )?
         .into_iter()
@@ -102,12 +104,14 @@ pub(super) fn mod_task(
         None
     } else {
         Some(
-            pkms::find_task_item_on(config, &path, line_number, clock)?.with_context(|| {
-                format!(
-                    "Changed task but could not reload it from {}:{line_number}",
-                    path.display()
-                )
-            })?,
+            pkms::find_task_item_on(config, &location.path, location.line_number, clock)?
+                .with_context(|| {
+                    format!(
+                        "Changed task but could not reload it from {}:{}",
+                        location.path.display(),
+                        location.line_number
+                    )
+                })?,
         )
     };
     render::print_mod_output(
@@ -141,19 +145,21 @@ fn mod_dependency(spec: &TaskModifierSpec) -> Result<Option<DependencyMod>> {
 fn current_dependency_parent(
     graph: &Graph,
     config: &ResolvedConfig,
-    path: &Path,
-    line_number: usize,
-) -> Option<(usize, usize)> {
-    let result = graph.results.iter().find(|result| result.path == path)?;
+    location: &pkms::TaskLocation,
+) -> Option<(usize, pkms::TaskLocation)> {
+    let result = graph
+        .results
+        .iter()
+        .find(|result| result.path == location.path.as_path())?;
     let source = result
         .parsed
         .headings
         .iter()
-        .find(|heading| heading.line_number == line_number)?;
+        .find(|heading| heading.line_number == location.line_number)?;
     let todo_states = config.todo_states();
     let mut child_level = source.level;
     let parent = result.parsed.headings.iter().rev().find(|heading| {
-        if heading.line_number >= line_number || heading.level >= child_level {
+        if heading.line_number >= location.line_number || heading.level >= child_level {
             return false;
         }
         child_level = heading.level;
@@ -163,14 +169,22 @@ fn current_dependency_parent(
                 .any(|todo_state| todo_state.eq_ignore_ascii_case(state))
         })
     })?;
-    let path = path.display().to_string();
+    let path = location.path.display().to_string();
     graph
         .all_task_entries(config)
         .into_iter()
         .find(|entry| {
             entry.path.as_str() == path.as_str() && entry.line_number == parent.line_number
         })
-        .map(|entry| (entry.id, entry.line_number))
+        .map(|entry| {
+            (
+                entry.id,
+                pkms::TaskLocation {
+                    path: location.path.clone(),
+                    line_number: entry.line_number,
+                },
+            )
+        })
 }
 
 fn mod_pkms_priority(spec: &TaskModifierSpec) -> Result<Change<TaskPriority>> {
@@ -285,7 +299,7 @@ pub(super) fn add(
         bail!("note and dep cannot be used together for PKMS task creation.");
     }
 
-    let (path, line_number) = match spec.dependency.as_ref() {
+    let location = match spec.dependency.as_ref() {
         Some(TaskDependencyArg::Set(TaskId::Pkms(parent_id))) => {
             add_dependency_task(config, spec, *parent_id)?
         }
@@ -293,12 +307,13 @@ pub(super) fn add(
         Some(TaskDependencyArg::Clear) => bail!("dep requires a PKMS task ID for task creation."),
         None => add_inbox_task(config, spec, clock)?,
     };
-    let item = pkms::find_task_item_on(config, &path, line_number, clock)?.with_context(|| {
-        format!(
-            "Created task but could not reload it from {}",
-            path.display()
-        )
-    })?;
+    let item = pkms::find_task_item_on(config, &location.path, location.line_number, clock)?
+        .with_context(|| {
+            format!(
+                "Created task but could not reload it from {}",
+                location.path.display()
+            )
+        })?;
     render::print_add_output(ctx, item)
 }
 
@@ -306,7 +321,7 @@ fn add_inbox_task(
     config: &ResolvedConfig,
     spec: &TaskModifierSpec,
     clock: TaskClock,
-) -> Result<(PathBuf, usize)> {
+) -> Result<pkms::TaskLocation> {
     let inbox_target = match spec.note.as_deref() {
         Some(note) => pkms::resolve_note_task_target(config, note)?,
         None => pkms::resolve_inbox_target_on(config, true, clock.today)?,
@@ -323,14 +338,13 @@ fn add_dependency_task(
     config: &ResolvedConfig,
     spec: &TaskModifierSpec,
     canonical_id: usize,
-) -> Result<(PathBuf, usize)> {
+) -> Result<pkms::TaskLocation> {
     let graph = Graph::load(config)?;
     let location = graph.resolve_canonical_task_id(config, canonical_id)?;
-    let path = PathBuf::from(location.path);
-    let line_number = location.line_number;
-    let parent_level = pkms::heading_level_at(&path, line_number)?;
+    let location = pkms_task_location(location);
+    let parent_level = pkms::heading_level_at(&location)?;
     let entry = format_task_entry(config, spec, parent_level + 1)?;
-    pkms::append_child_entry(&path, line_number, &entry)
+    pkms::append_child_entry(&location, &entry)
 }
 
 fn format_task_entry(

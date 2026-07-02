@@ -19,6 +19,12 @@ pub enum PkmsInboxTarget {
     Daily { path: PathBuf },
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TaskLocation {
+    pub path: PathBuf,
+    pub line_number: usize,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AgendaView {
     All,
@@ -203,52 +209,61 @@ fn ensure_daily_note_exists(path: &Path, today: chrono::NaiveDate) -> Result<()>
     Ok(())
 }
 
-pub fn append_inbox_entry(target: &PkmsInboxTarget, entry: &str) -> Result<(PathBuf, usize)> {
+pub fn append_inbox_entry(target: &PkmsInboxTarget, entry: &str) -> Result<TaskLocation> {
     match target {
         PkmsInboxTarget::Note(path) => {
-            pkms_edit::append_org_entry(path, entry).map(|line| (path.clone(), line))
+            pkms_edit::append_org_entry(path, entry).map(|line_number| TaskLocation {
+                path: path.clone(),
+                line_number,
+            })
         }
         PkmsInboxTarget::Daily { path } => {
-            pkms_edit::append_daily_inbox_entry(path, entry).map(|line| (path.clone(), line))
+            pkms_edit::append_daily_inbox_entry(path, entry).map(|line_number| TaskLocation {
+                path: path.clone(),
+                line_number,
+            })
         }
     }
 }
 
-pub fn heading_level_at(path: &Path, line_number: usize) -> Result<usize> {
-    pkms_edit::heading_level_at(path, line_number)
+pub fn heading_level_at(location: &TaskLocation) -> Result<usize> {
+    pkms_edit::heading_level_at(&location.path, location.line_number)
 }
 
-pub fn append_child_entry(
-    path: &Path,
-    parent_line_number: usize,
-    entry: &str,
-) -> Result<(PathBuf, usize)> {
-    pkms_edit::append_child_org_entry(path, parent_line_number, entry)
-        .map(|line| (path.to_path_buf(), line))
+pub fn append_child_entry(parent: &TaskLocation, entry: &str) -> Result<TaskLocation> {
+    pkms_edit::append_child_org_entry(&parent.path, parent.line_number, entry).map(|line_number| {
+        TaskLocation {
+            path: parent.path.clone(),
+            line_number,
+        }
+    })
 }
 
 pub fn move_subtree_to_dependency(
-    source_path: &Path,
-    source_line_number: usize,
-    target_path: &Path,
-    target_line_number: usize,
-) -> Result<(PathBuf, usize)> {
+    source: &TaskLocation,
+    target: &TaskLocation,
+) -> Result<TaskLocation> {
     pkms_edit::move_org_subtree(
-        source_path,
-        source_line_number,
-        target_path,
-        target_line_number,
+        &source.path,
+        source.line_number,
+        &target.path,
+        target.line_number,
     )
-    .map(|line| (target_path.to_path_buf(), line))
+    .map(|line_number| TaskLocation {
+        path: target.path.clone(),
+        line_number,
+    })
 }
 
 pub fn remove_subtree_dependency(
-    path: &Path,
-    source_line_number: usize,
-    parent_line_number: usize,
-) -> Result<(PathBuf, usize)> {
-    pkms_edit::remove_org_subtree_dependency(path, source_line_number, parent_line_number)
-        .map(|line| (path.to_path_buf(), line))
+    source: &TaskLocation,
+    parent: &TaskLocation,
+) -> Result<TaskLocation> {
+    pkms_edit::remove_org_subtree_dependency(&source.path, source.line_number, parent.line_number)
+        .map(|line_number| TaskLocation {
+            path: source.path.clone(),
+            line_number,
+        })
 }
 
 pub fn find_task_item(
