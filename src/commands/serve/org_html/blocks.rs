@@ -3,9 +3,36 @@ use super::super::inline::{escape_html, render_display_math, render_formatted_te
 use super::OrgRenderContext;
 
 pub(super) struct OrgBlock<'a> {
-    kind: String,
+    kind: OrgBlockKind,
     args: &'a str,
     body: Vec<&'a str>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum OrgBlockKind {
+    Src,
+    Example,
+    Quote,
+    Verse,
+    Center,
+    Comment,
+    Export,
+    Other(String),
+}
+
+impl OrgBlockKind {
+    fn parse(value: &str) -> Self {
+        match value {
+            "src" => Self::Src,
+            "example" => Self::Example,
+            "quote" => Self::Quote,
+            "verse" => Self::Verse,
+            "center" => Self::Center,
+            "comment" => Self::Comment,
+            "export" => Self::Export,
+            other => Self::Other(other.to_string()),
+        }
+    }
 }
 
 pub(super) fn read_org_block<'a>(lines: &[&'a str], start: usize) -> Option<(OrgBlock<'a>, usize)> {
@@ -13,13 +40,14 @@ pub(super) fn read_org_block<'a>(lines: &[&'a str], start: usize) -> Option<(Org
     let lower = trimmed.to_ascii_lowercase();
     let rest = lower.strip_prefix("#+begin_")?;
     let kind_end = rest.find(char::is_whitespace).unwrap_or(rest.len());
-    let kind = rest[..kind_end].to_string();
+    let kind_name = &rest[..kind_end];
+    let kind = OrgBlockKind::parse(kind_name);
     let original_rest = trimmed.get("#+begin_".len()..)?;
     let args = original_rest
         .get(kind_end..)
         .map(str::trim)
         .unwrap_or_default();
-    let end_marker = format!("#+end_{kind}");
+    let end_marker = format!("#+end_{kind_name}");
     let mut body = Vec::new();
     let mut i = start + 1;
     while i < lines.len() && !lines[i].trim().eq_ignore_ascii_case(&end_marker) {
@@ -37,15 +65,21 @@ pub(super) fn render_org_block(
     block: &OrgBlock<'_>,
     caption: Option<&str>,
 ) -> String {
-    match block.kind.as_str() {
-        "src" => render_src_block(block, caption),
-        "example" => render_pre_block("example", "Example", &block.body_text(), caption),
-        "quote" => render_text_block(context, "quote", "Quote", &block.body, caption),
-        "verse" => render_pre_block("verse", "Verse", &block.body_text(), caption),
-        "center" => render_text_block(context, "center", "Center", &block.body, caption),
-        "comment" => render_text_block(context, "comment", "Comment", &block.body, caption),
-        "export" => render_export_block(block, caption),
-        kind => {
+    match &block.kind {
+        OrgBlockKind::Src => render_src_block(block, caption),
+        OrgBlockKind::Example => {
+            render_pre_block("example", "Example", &block.body_text(), caption)
+        }
+        OrgBlockKind::Quote => render_text_block(context, "quote", "Quote", &block.body, caption),
+        OrgBlockKind::Verse => render_pre_block("verse", "Verse", &block.body_text(), caption),
+        OrgBlockKind::Center => {
+            render_text_block(context, "center", "Center", &block.body, caption)
+        }
+        OrgBlockKind::Comment => {
+            render_text_block(context, "comment", "Comment", &block.body, caption)
+        }
+        OrgBlockKind::Export => render_export_block(block, caption),
+        OrgBlockKind::Other(kind) => {
             let label = format!("Block: {kind}");
             render_pre_block("special", &label, &block.body_text(), caption)
         }
@@ -172,4 +206,21 @@ pub(super) fn render_table(lines: &[&str], context: &OrgRenderContext<'_>) -> St
     }
     html.push_str("</tbody>\n</table>\n");
     html
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_org_block_kind_as_domain_value() {
+        let (block, next) =
+            read_org_block(&["#+begin_src rust", "fn main() {}", "#+end_src"], 0).unwrap();
+        assert!(matches!(block.kind, OrgBlockKind::Src));
+        assert_eq!(block.args, "rust");
+        assert_eq!(next, 3);
+
+        let (block, _) = read_org_block(&["#+begin_unknown", "body", "#+end_unknown"], 0).unwrap();
+        assert!(matches!(block.kind, OrgBlockKind::Other(ref kind) if kind == "unknown"));
+    }
 }

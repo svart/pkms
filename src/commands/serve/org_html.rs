@@ -10,7 +10,10 @@ mod blocks;
 mod lists;
 
 use blocks::{read_org_block, render_org_block, render_table};
-use lists::{ListFrame, append_list_continuation, close_lists, list_item, render_list_item};
+use lists::{
+    ListFrame, append_list_continuation as append_list_continuation_html, close_lists, list_item,
+    render_list_item as render_list_item_html,
+};
 
 pub(super) fn render_org_body(
     graph: &Graph,
@@ -18,141 +21,214 @@ pub(super) fn render_org_body(
     node: &Node,
     content: &str,
 ) -> String {
-    let context = OrgRenderContext {
-        graph,
-        config,
-        node,
-    };
-    let mut html = String::new();
-    let lines: Vec<&str> = content.lines().collect();
-    let parsed = parse_note(content);
-    let headings_by_line: BTreeMap<usize, &Heading> = parsed
-        .headings
-        .iter()
-        .map(|heading| (heading.line_number, heading))
-        .collect();
-    let mut i = 0;
-    let mut paragraph: Vec<&str> = Vec::new();
-    let mut list_stack: Vec<ListFrame> = Vec::new();
-    let mut in_properties = false;
-    let mut pending_caption: Option<String> = None;
+    OrgBodyRenderer::new(graph, config, node, content).render()
+}
 
-    while i < lines.len() {
-        let line = lines[i];
+struct OrgBodyRenderer<'a> {
+    context: OrgRenderContext<'a>,
+    lines: Vec<&'a str>,
+    headings_by_line: BTreeMap<usize, Heading>,
+    html: String,
+    paragraph: Vec<&'a str>,
+    list_stack: Vec<ListFrame>,
+    pending_caption: Option<String>,
+}
+
+impl<'a> OrgBodyRenderer<'a> {
+    fn new(graph: &'a Graph, config: &'a ResolvedConfig, node: &'a Node, content: &'a str) -> Self {
+        let parsed = parse_note(content);
+        let headings_by_line = parsed
+            .headings
+            .into_iter()
+            .map(|heading| (heading.line_number, heading))
+            .collect();
+        Self {
+            context: OrgRenderContext {
+                graph,
+                config,
+                node,
+            },
+            lines: content.lines().collect(),
+            headings_by_line,
+            html: String::new(),
+            paragraph: Vec::new(),
+            list_stack: Vec::new(),
+            pending_caption: None,
+        }
+    }
+
+    fn render(mut self) -> String {
+        let mut i = 0;
+        while i < self.lines.len() {
+            i = self.render_line(i);
+        }
+        self.end_flow();
+        self.html
+    }
+
+    fn render_line(&mut self, i: usize) -> usize {
+        let line = self.lines[i];
         let trimmed = line.trim();
         let lower = trimmed.to_ascii_lowercase();
 
         if trimmed == ":PROPERTIES:" {
-            flush_paragraph(&mut html, &mut paragraph, &context);
-            close_lists(&mut html, &mut list_stack);
-            in_properties = true;
-            i += 1;
-            continue;
-        }
-        if in_properties {
-            if trimmed == ":END:" {
-                in_properties = false;
-            }
-            i += 1;
-            continue;
+            return self.skip_properties(i);
         }
         if trimmed.is_empty() {
-            flush_paragraph(&mut html, &mut paragraph, &context);
-            close_lists(&mut html, &mut list_stack);
-            pending_caption = None;
-            i += 1;
-            continue;
+            self.end_flow_and_drop_caption();
+            return i + 1;
         }
         if lower.starts_with("#+title:") || lower.starts_with("#+filetags:") {
-            i += 1;
-            continue;
+            return i + 1;
         }
         if is_planning_line(trimmed) {
-            flush_paragraph(&mut html, &mut paragraph, &context);
-            close_lists(&mut html, &mut list_stack);
-            pending_caption = None;
-            i += 1;
-            continue;
+            self.end_flow_and_drop_caption();
+            return i + 1;
         }
         if lower.starts_with("#+caption:") {
-            flush_paragraph(&mut html, &mut paragraph, &context);
-            close_lists(&mut html, &mut list_stack);
-            (pending_caption, i) = read_caption(&lines, i);
-            continue;
+            return self.read_caption(i);
         }
-        if let Some((block, next_i)) = read_org_block(&lines, i) {
-            flush_paragraph(&mut html, &mut paragraph, &context);
-            close_lists(&mut html, &mut list_stack);
-            let caption = pending_caption.take();
-            html.push_str(&render_org_block(&context, &block, caption.as_deref()));
-            i = next_i;
-            continue;
+        if let Some(next_i) = self.render_block(i) {
+            return next_i;
         }
         if trimmed == r"\[" {
-            flush_paragraph(&mut html, &mut paragraph, &context);
-            close_lists(&mut html, &mut list_stack);
-            pending_caption = None;
-            let (formula, next_i) = read_display_math(&lines, i);
-            html.push_str(&render_display_math(formula.trim()));
-            i = next_i;
-            continue;
+            return self.render_display_math(i);
         }
         if trimmed.starts_with('|') {
-            flush_paragraph(&mut html, &mut paragraph, &context);
-            close_lists(&mut html, &mut list_stack);
-            pending_caption = None;
-            let (table_lines, next_i) = read_table_lines(&lines, i);
-            html.push_str(&render_table(&table_lines, &context));
-            i = next_i;
-            continue;
+            return self.render_table(i);
         }
-        if let Some(caption) = pending_caption.take()
-            && let Some(figure) = render_standalone_image(config, node, trimmed, &caption)
-        {
-            html.push_str(&figure);
-            i += 1;
-            continue;
+        if self.render_standalone_image(trimmed) {
+            return i + 1;
         }
-        if let Some(item) = list_item(line) {
-            flush_paragraph(&mut html, &mut paragraph, &context);
-            pending_caption = None;
-            render_list_item(&mut html, &mut list_stack, item, &context);
-            i += 1;
-            continue;
+        if self.render_list_item(line) {
+            return i + 1;
         }
-        if append_list_continuation(&mut html, &list_stack, line, &context) {
-            pending_caption = None;
-            i += 1;
-            continue;
+        if self.append_list_continuation(line) {
+            return i + 1;
         }
         if let Some(cap) = HEADING_RE.captures(line) {
-            flush_paragraph(&mut html, &mut paragraph, &context);
-            close_lists(&mut html, &mut list_stack);
-            pending_caption = None;
-            html.push_str(&render_heading_line(
-                &context,
-                &headings_by_line,
-                i + 1,
-                &cap,
-            ));
-            i += 1;
-            continue;
+            self.render_heading(i + 1, &cap);
+            return i + 1;
         }
         if trimmed.starts_with("#+") {
-            pending_caption = None;
-            i += 1;
-            continue;
+            self.pending_caption = None;
+            return i + 1;
         }
 
-        pending_caption = None;
-        close_lists(&mut html, &mut list_stack);
-        paragraph.push(line);
-        i += 1;
+        self.push_paragraph_line(line);
+        i + 1
     }
 
-    flush_paragraph(&mut html, &mut paragraph, &context);
-    close_lists(&mut html, &mut list_stack);
-    html
+    fn skip_properties(&mut self, start: usize) -> usize {
+        self.end_flow();
+        let mut i = start + 1;
+        while i < self.lines.len() {
+            if self.lines[i].trim() == ":END:" {
+                return i + 1;
+            }
+            i += 1;
+        }
+        i
+    }
+
+    fn read_caption(&mut self, i: usize) -> usize {
+        self.end_flow();
+        let (caption, next_i) = read_caption(&self.lines, i);
+        self.pending_caption = caption;
+        next_i
+    }
+
+    fn render_block(&mut self, i: usize) -> Option<usize> {
+        let (block, next_i) = read_org_block(&self.lines, i)?;
+        self.end_flow();
+        let caption = self.pending_caption.take();
+        self.html
+            .push_str(&render_org_block(&self.context, &block, caption.as_deref()));
+        Some(next_i)
+    }
+
+    fn render_display_math(&mut self, i: usize) -> usize {
+        self.end_flow_and_drop_caption();
+        let (formula, next_i) = read_display_math(&self.lines, i);
+        self.html.push_str(&render_display_math(formula.trim()));
+        next_i
+    }
+
+    fn render_table(&mut self, i: usize) -> usize {
+        self.end_flow_and_drop_caption();
+        let (table_lines, next_i) = read_table_lines(&self.lines, i);
+        self.html
+            .push_str(&render_table(&table_lines, &self.context));
+        next_i
+    }
+
+    fn render_standalone_image(&mut self, trimmed: &str) -> bool {
+        let Some(caption) = self.pending_caption.take() else {
+            return false;
+        };
+        let Some(figure) =
+            render_standalone_image(self.context.config, self.context.node, trimmed, &caption)
+        else {
+            return false;
+        };
+        self.html.push_str(&figure);
+        true
+    }
+
+    fn render_list_item(&mut self, line: &'a str) -> bool {
+        let Some(item) = list_item(line) else {
+            return false;
+        };
+        self.flush_paragraph();
+        self.pending_caption = None;
+        render_list_item_html(&mut self.html, &mut self.list_stack, item, &self.context);
+        true
+    }
+
+    fn append_list_continuation(&mut self, line: &str) -> bool {
+        if !append_list_continuation_html(&mut self.html, &self.list_stack, line, &self.context) {
+            return false;
+        }
+        self.pending_caption = None;
+        true
+    }
+
+    fn render_heading(&mut self, line_number: usize, cap: &regex::Captures<'_>) {
+        self.end_flow_and_drop_caption();
+        self.html.push_str(&render_heading_line(
+            &self.context,
+            &self.headings_by_line,
+            line_number,
+            cap,
+        ));
+    }
+
+    fn push_paragraph_line(&mut self, line: &'a str) {
+        self.pending_caption = None;
+        close_lists(&mut self.html, &mut self.list_stack);
+        self.paragraph.push(line);
+    }
+
+    fn end_flow_and_drop_caption(&mut self) {
+        self.end_flow();
+        self.pending_caption = None;
+    }
+
+    fn end_flow(&mut self) {
+        self.flush_paragraph();
+        close_lists(&mut self.html, &mut self.list_stack);
+    }
+
+    fn flush_paragraph(&mut self) {
+        if self.paragraph.is_empty() {
+            return;
+        }
+        let text = self.paragraph.join("\n");
+        self.html.push_str("<p>");
+        self.html.push_str(&self.context.render_inline(&text));
+        self.html.push_str("</p>\n");
+        self.paragraph.clear();
+    }
 }
 
 pub(super) struct OrgRenderContext<'a> {
@@ -218,7 +294,7 @@ fn read_table_lines<'a>(lines: &[&'a str], start: usize) -> (Vec<&'a str>, usize
 
 fn render_heading_line(
     context: &OrgRenderContext<'_>,
-    headings_by_line: &BTreeMap<usize, &Heading>,
+    headings_by_line: &BTreeMap<usize, Heading>,
     line_number: usize,
     cap: &regex::Captures<'_>,
 ) -> String {
@@ -232,7 +308,7 @@ fn render_heading_line(
         cap.get(3).map(|m| m.as_str()),
         cap.get(4).map_or("", |m| m.as_str()),
     );
-    let heading = headings_by_line.get(&line_number).copied();
+    let heading = headings_by_line.get(&line_number);
     let anchor = heading_anchor(line_number);
     let mut html = if is_closed_todo_state(context.config, todo) {
         format!(
@@ -257,17 +333,6 @@ fn render_heading_line(
         html.push_str(&render_heading_dates(heading));
     }
     html
-}
-
-fn flush_paragraph(html: &mut String, paragraph: &mut Vec<&str>, context: &OrgRenderContext<'_>) {
-    if paragraph.is_empty() {
-        return;
-    }
-    let text = paragraph.join("\n");
-    html.push_str("<p>");
-    html.push_str(&context.render_inline(&text));
-    html.push_str("</p>\n");
-    paragraph.clear();
 }
 
 fn is_closed_todo_state(config: &ResolvedConfig, state: &str) -> bool {

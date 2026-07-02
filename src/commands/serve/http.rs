@@ -2,12 +2,12 @@ use super::{assets, inline::percent_decode, render_note_html, render_preview_htm
 use crate::commands::open;
 use crate::config::ResolvedConfig;
 use crate::domain::NoteId;
-use crate::graph::{Graph, resolve_file_link_path};
+use crate::graph::{Graph, Node, resolve_file_link_path};
 use crate::parser::{Link, parse_note};
 use anyhow::{Context, Result};
 use std::io::{self, BufRead, BufReader, Write};
 use std::net::TcpStream;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 pub(super) struct ServeState<'a> {
     pub(super) config: &'a ResolvedConfig,
@@ -23,6 +23,45 @@ enum Route<'a> {
     Open,
     Font(&'a str),
     NotFound,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum HttpMethod {
+    Get,
+    Head,
+    Post,
+}
+
+impl HttpMethod {
+    fn parse(value: &str) -> Option<Self> {
+        match value {
+            "GET" => Some(Self::Get),
+            "HEAD" => Some(Self::Head),
+            "POST" => Some(Self::Post),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+struct HttpRequest<'a> {
+    method: HttpMethod,
+    path: &'a str,
+    query: Option<&'a str>,
+}
+
+impl<'a> HttpRequest<'a> {
+    fn parse(request_line: &'a str) -> Option<Self> {
+        let mut parts = request_line.split_whitespace();
+        let method = HttpMethod::parse(parts.next().unwrap_or_default())?;
+        let target = parts.next().unwrap_or("/");
+        let (path, query) = split_target(target);
+        Some(Self {
+            method,
+            path,
+            query,
+        })
+    }
 }
 
 pub(super) fn log_request_error(err: &anyhow::Error) {
@@ -63,38 +102,18 @@ pub(super) fn handle_connection(mut stream: TcpStream, state: &ServeState<'_>) -
     let mut request_line = String::new();
     reader.read_line(&mut request_line)?;
     drain_headers(&mut reader)?;
-    let mut parts = request_line.split_whitespace();
-    let method = parts.next().unwrap_or_default();
-    let target = parts.next().unwrap_or("/");
-    if method != "GET" && method != "HEAD" && method != "POST" {
+    let Some(request) = HttpRequest::parse(&request_line) else {
         return write_response(
             &mut stream,
             405,
             assets::ContentType::PlainText,
             b"Method not allowed",
         );
-    }
+    };
 
-    let (path, query) = split_target(target);
-    let route = route_for_path(path);
-    let response = if method == "POST" {
-        match route {
-            Route::Open => open_response(state, query, open::DEFAULT_EDITOR),
-            _ => Ok(HttpResponse::method_not_allowed("Method not allowed")),
-        }
-    } else {
-        match route {
-            Route::Root => render_response(state, query),
-            Route::Preview => preview_response(state, query),
-            Route::Asset => asset_response(state, query),
-            Route::Favicon => Ok(assets::favicon_response()),
-            Route::Open => Ok(HttpResponse::method_not_allowed("Method not allowed")),
-            Route::Font(font_name) => Ok(assets::font_response(font_name)),
-            Route::NotFound => Ok(HttpResponse::not_found("Not found")),
-        }
-    }?;
+    let response = response_for_request(state, &request)?;
 
-    if method == "HEAD" {
+    if request.method == HttpMethod::Head {
         write_headers(&mut stream, response.status, response.content_type, 0)
     } else {
         write_response(
@@ -103,6 +122,25 @@ pub(super) fn handle_connection(mut stream: TcpStream, state: &ServeState<'_>) -
             response.content_type,
             &response.body,
         )
+    }
+}
+
+fn response_for_request(state: &ServeState<'_>, request: &HttpRequest<'_>) -> Result<HttpResponse> {
+    let route = route_for_path(request.path);
+    match request.method {
+        HttpMethod::Post => match route {
+            Route::Open => open_response(state, request.query, open::DEFAULT_EDITOR),
+            _ => Ok(HttpResponse::method_not_allowed("Method not allowed")),
+        },
+        HttpMethod::Get | HttpMethod::Head => match route {
+            Route::Root => render_response(state, request.query),
+            Route::Preview => preview_response(state, request.query),
+            Route::Asset => asset_response(state, request.query),
+            Route::Favicon => Ok(assets::favicon_response()),
+            Route::Open => Ok(HttpResponse::method_not_allowed("Method not allowed")),
+            Route::Font(font_name) => Ok(assets::font_response(font_name)),
+            Route::NotFound => Ok(HttpResponse::not_found("Not found")),
+        },
     }
 }
 
@@ -158,6 +196,67 @@ impl HttpResponse {
     }
 }
 
+#[derive(Debug, PartialEq, Eq)]
+struct AssetRequest {
+    note_uuid: String,
+    kind: assets::AssetKind,
+    target: String,
+}
+
+struct ResolvedAsset {
+    path: PathBuf,
+    allowed: bool,
+}
+
+impl AssetRequest {
+    fn from_query(query: Option<&str>) -> std::result::Result<Self, HttpResponse> {
+        let Some(note_uuid) = query_param(query, "note") else {
+            return Err(HttpResponse::not_found("Missing note"));
+        };
+        let Some(kind) = query_param(query, "kind") else {
+            return Err(HttpResponse::not_found("Missing kind"));
+        };
+        let Some(target) = query_param(query, "target") else {
+            return Err(HttpResponse::not_found("Missing target"));
+        };
+        let Some(kind) = assets::AssetKind::parse(&kind) else {
+            return Err(HttpResponse::not_found("Unknown asset kind"));
+        };
+        Ok(Self {
+            note_uuid,
+            kind,
+            target,
+        })
+    }
+
+    fn resolve(&self, state: &ServeState<'_>, note: &Node) -> ResolvedAsset {
+        match self.kind {
+            assets::AssetKind::File => {
+                let path = resolve_file_link_path(
+                    &self.target,
+                    &note.path,
+                    state.config.resolved_db_root(),
+                );
+                let allowed = assets::is_db_asset_allowed(&path, state.config.resolved_db_root());
+                ResolvedAsset { path, allowed }
+            }
+            assets::AssetKind::Attachment => {
+                let path = assets::resolve_existing_attachment(
+                    state.config.resolved_db_root(),
+                    &note.uuid,
+                    &self.target,
+                );
+                let allowed = assets::is_attachment_asset_allowed(
+                    &path,
+                    state.config.resolved_db_root(),
+                    &note.uuid,
+                );
+                ResolvedAsset { path, allowed }
+            }
+        }
+    }
+}
+
 fn render_response(state: &ServeState<'_>, query: Option<&str>) -> Result<HttpResponse> {
     let requested = query_param(query, "id").unwrap_or_else(|| state.initial_uuid.to_string());
     let node = state.graph.resolve_target(&requested)?;
@@ -192,49 +291,22 @@ fn preview_response(state: &ServeState<'_>, query: Option<&str>) -> Result<HttpR
 }
 
 fn asset_response(state: &ServeState<'_>, query: Option<&str>) -> Result<HttpResponse> {
-    let Some(note_uuid) = query_param(query, "note") else {
-        return Ok(HttpResponse::not_found("Missing note"));
+    let request = match AssetRequest::from_query(query) {
+        Ok(request) => request,
+        Err(response) => return Ok(response),
     };
-    let Some(kind) = query_param(query, "kind") else {
-        return Ok(HttpResponse::not_found("Missing kind"));
-    };
-    let Some(target) = query_param(query, "target") else {
-        return Ok(HttpResponse::not_found("Missing target"));
-    };
-    let Some(kind) = assets::AssetKind::parse(&kind) else {
-        return Ok(HttpResponse::not_found("Unknown asset kind"));
-    };
-    let note = state.graph.resolve_target(&note_uuid)?;
-    if !note_declares_asset_link(&note.path, kind, &target)? {
+    let note = state.graph.resolve_target(&request.note_uuid)?;
+    if !note_declares_asset_link(&note.path, request.kind, &request.target)? {
         return Ok(HttpResponse::not_found("Asset not found"));
     }
-    let (path, allowed) = match kind {
-        assets::AssetKind::File => {
-            let path = resolve_file_link_path(&target, &note.path, state.config.resolved_db_root());
-            let allowed = assets::is_db_asset_allowed(&path, state.config.resolved_db_root());
-            (path, allowed)
-        }
-        assets::AssetKind::Attachment => {
-            let path = assets::resolve_existing_attachment(
-                state.config.resolved_db_root(),
-                &note.uuid,
-                &target,
-            );
-            let allowed = assets::is_attachment_asset_allowed(
-                &path,
-                state.config.resolved_db_root(),
-                &note.uuid,
-            );
-            (path, allowed)
-        }
-    };
-    if !allowed || !path.is_file() {
+    let asset = request.resolve(state, note);
+    if !asset.allowed || !asset.path.is_file() {
         return Ok(HttpResponse::not_found("Asset not found"));
     }
-    let body = std::fs::read(&path)?;
+    let body = std::fs::read(&asset.path)?;
     Ok(HttpResponse {
         status: 200,
-        content_type: assets::mime_type(&path),
+        content_type: assets::mime_type(&asset.path),
         body,
     })
 }
@@ -334,4 +406,67 @@ fn write_headers(
         "HTTP/1.1 {status} {reason}\r\nContent-Type: {content_type}\r\nContent-Length: {content_len}\r\nConnection: close\r\nX-Content-Type-Options: nosniff\r\n\r\n"
     )?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_supported_http_request_line() {
+        let request = HttpRequest::parse("HEAD /asset?note=a&kind=file HTTP/1.1\r\n").unwrap();
+
+        assert_eq!(request.method, HttpMethod::Head);
+        assert_eq!(request.path, "/asset");
+        assert_eq!(request.query, Some("note=a&kind=file"));
+    }
+
+    #[test]
+    fn request_line_uses_second_token_as_target_and_defaults_when_absent() {
+        let request = HttpRequest::parse("GET HTTP/1.1\r\n").unwrap();
+
+        assert_eq!(request.method, HttpMethod::Get);
+        assert_eq!(request.path, "HTTP/1.1");
+        assert_eq!(request.query, None);
+
+        let request = HttpRequest::parse("GET\r\n").unwrap();
+        assert_eq!(request.path, "/");
+    }
+
+    #[test]
+    fn rejects_unsupported_http_method() {
+        assert!(HttpRequest::parse("DELETE / HTTP/1.1\r\n").is_none());
+        assert!(HttpRequest::parse("\r\n").is_none());
+    }
+
+    #[test]
+    fn asset_request_from_query_decodes_and_validates_kind() {
+        let request = AssetRequest::from_query(Some(
+            "note=alpha%201&kind=attachment&target=dir%2Fpic%20one.png",
+        ))
+        .ok()
+        .unwrap();
+
+        assert_eq!(request.note_uuid, "alpha 1");
+        assert_eq!(request.kind, assets::AssetKind::Attachment);
+        assert_eq!(request.target, "dir/pic one.png");
+    }
+
+    #[test]
+    fn asset_request_from_query_preserves_missing_and_unknown_errors() {
+        let missing = AssetRequest::from_query(Some("kind=file&target=x"))
+            .err()
+            .unwrap();
+        assert_eq!(missing.status, 404);
+        assert_eq!(String::from_utf8(missing.body).unwrap(), "Missing note");
+
+        let unknown = AssetRequest::from_query(Some("note=n&kind=bad&target=x"))
+            .err()
+            .unwrap();
+        assert_eq!(unknown.status, 404);
+        assert_eq!(
+            String::from_utf8(unknown.body).unwrap(),
+            "Unknown asset kind"
+        );
+    }
 }

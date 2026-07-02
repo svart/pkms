@@ -4,10 +4,48 @@ use crate::config::ResolvedConfig;
 use crate::graph::{Graph, Node, resolve_file_link_path};
 use crate::parser::LINK_RE;
 use regex::Regex;
+use std::path::PathBuf;
 use std::sync::LazyLock;
 
 static PLAIN_URL_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r#"https?://[^\s<>"']+"#).expect("plain URL regex is valid"));
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct AssetRef<'a> {
+    kind: assets::AssetKind,
+    target: &'a str,
+}
+
+impl<'a> AssetRef<'a> {
+    fn parse(target: &'a str) -> Option<Self> {
+        if let Some(target) = target.strip_prefix("file:") {
+            return Some(Self {
+                kind: assets::AssetKind::File,
+                target,
+            });
+        }
+        if let Some(target) = target.strip_prefix("attachment:") {
+            return Some(Self {
+                kind: assets::AssetKind::Attachment,
+                target,
+            });
+        }
+        None
+    }
+
+    fn resolve_path(self, config: &ResolvedConfig, node: &Node) -> PathBuf {
+        match self.kind {
+            assets::AssetKind::File => {
+                resolve_file_link_path(self.target, &node.path, config.resolved_db_root())
+            }
+            assets::AssetKind::Attachment => assets::resolve_existing_attachment(
+                config.resolved_db_root(),
+                &node.uuid,
+                self.target,
+            ),
+        }
+    }
+}
 
 pub(super) fn render_inline(
     graph: &Graph,
@@ -71,23 +109,9 @@ fn render_link(
             render_formatted_text(label)
         );
     }
-    if let Some(path) = target.strip_prefix("file:") {
-        let resolved = resolve_file_link_path(path, &node.path, config.resolved_db_root());
-        let href = asset_href(&node.uuid, assets::AssetKind::File, path);
-        if assets::is_image_path(&resolved) {
-            return format!(
-                "<figure><img src=\"{href}\" alt=\"{}\"><figcaption>{}</figcaption></figure>",
-                escape_html(label),
-                render_formatted_text(label)
-            );
-        }
-        return format!("<a href=\"{href}\">{}</a>", render_formatted_text(label));
-    }
-    if let Some(path) = target.strip_prefix("attachment:") {
-        let resolved =
-            assets::resolve_existing_attachment(config.resolved_db_root(), &node.uuid, path);
-        let href = asset_href(&node.uuid, assets::AssetKind::Attachment, path);
-        if assets::is_image_path(&resolved) {
+    if let Some(asset) = AssetRef::parse(target) {
+        let href = asset_href(&node.uuid, asset);
+        if assets::is_image_path(&asset.resolve_path(config, node)) {
             return format!(
                 "<figure><img src=\"{href}\" alt=\"{}\"><figcaption>{}</figcaption></figure>",
                 escape_html(label),
@@ -129,24 +153,12 @@ fn render_image_link(
     desc: Option<&str>,
     caption: Option<&str>,
 ) -> Option<String> {
-    if let Some(path) = target.strip_prefix("file:") {
-        let resolved = resolve_file_link_path(path, &node.path, config.resolved_db_root());
-        if assets::is_image_path(&resolved) {
-            return Some(render_image_figure(
-                &asset_href(&node.uuid, assets::AssetKind::File, path),
-                caption.or(desc).unwrap_or(target),
-            ));
-        }
-    }
-    if let Some(path) = target.strip_prefix("attachment:") {
-        let resolved =
-            assets::resolve_existing_attachment(config.resolved_db_root(), &node.uuid, path);
-        if assets::is_image_path(&resolved) {
-            return Some(render_image_figure(
-                &asset_href(&node.uuid, assets::AssetKind::Attachment, path),
-                caption.or(desc).unwrap_or(target),
-            ));
-        }
+    let asset = AssetRef::parse(target)?;
+    if assets::is_image_path(&asset.resolve_path(config, node)) {
+        return Some(render_image_figure(
+            &asset_href(&node.uuid, asset),
+            caption.or(desc).unwrap_or(target),
+        ));
     }
     None
 }
@@ -159,12 +171,12 @@ fn render_image_figure(href: &str, caption: &str) -> String {
     )
 }
 
-fn asset_href(note_uuid: &str, kind: assets::AssetKind, target: &str) -> String {
+fn asset_href(note_uuid: &str, asset: AssetRef<'_>) -> String {
     format!(
         "/asset?note={}&amp;kind={}&amp;target={}",
         percent_encode(note_uuid),
-        percent_encode(kind.as_str()),
-        percent_encode(target)
+        percent_encode(asset.kind.as_str()),
+        percent_encode(asset.target)
     )
 }
 
@@ -483,4 +495,26 @@ pub(super) fn percent_decode(text: &str) -> String {
         i += 1;
     }
     String::from_utf8_lossy(&decoded).to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_asset_refs_once_for_asset_links() {
+        let file = AssetRef::parse("file:dir/pic one.png").unwrap();
+        assert_eq!(file.kind, assets::AssetKind::File);
+        assert_eq!(file.target, "dir/pic one.png");
+        assert_eq!(
+            asset_href("note id", file),
+            "/asset?note=note%20id&amp;kind=file&amp;target=dir%2Fpic%20one.png"
+        );
+
+        let attachment = AssetRef::parse("attachment:pic.png").unwrap();
+        assert_eq!(attachment.kind, assets::AssetKind::Attachment);
+        assert_eq!(attachment.target, "pic.png");
+
+        assert!(AssetRef::parse("id:aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa").is_none());
+    }
 }
