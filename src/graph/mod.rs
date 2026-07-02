@@ -108,13 +108,44 @@ pub struct OverlinkEntry {
     pub count: usize,
 }
 
-pub fn resolve_file_link_path(target_path: &str, source_path: &Path, db_root: &Path) -> PathBuf {
-    let (inner_path, is_org) = if let Some(rest) = target_path.strip_prefix("org:") {
-        (rest, true)
-    } else {
-        (target_path, false)
-    };
-    let expanded = if inner_path.starts_with('~') {
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct FileLinkTarget {
+    pub(crate) path: PathBuf,
+    pub(crate) line_spec: Option<String>,
+    pub(crate) org_relative: bool,
+}
+
+impl FileLinkTarget {
+    pub(crate) fn parse(target_path: &str) -> Self {
+        let (inner_path, org_relative) = if let Some(rest) = target_path.strip_prefix("org:") {
+            (rest, true)
+        } else {
+            (target_path, false)
+        };
+        let expanded = expand_file_link_home(inner_path);
+        let clean_path = expanded.split("::").next().unwrap_or(&expanded);
+        let line_spec = target_path.split("::").nth(1).map(str::to_string);
+
+        Self {
+            path: PathBuf::from(clean_path),
+            line_spec,
+            org_relative,
+        }
+    }
+
+    pub(crate) fn resolve_path(&self, source_path: &Path, db_root: &Path) -> PathBuf {
+        if self.path.is_absolute() {
+            self.path.clone()
+        } else if self.org_relative {
+            db_root.join(&self.path)
+        } else {
+            source_path.parent().unwrap_or(db_root).join(&self.path)
+        }
+    }
+}
+
+fn expand_file_link_home(inner_path: &str) -> String {
+    if inner_path.starts_with('~') {
         if let Some(home) = dirs::home_dir() {
             inner_path.replacen('~', &home.display().to_string(), 1)
         } else {
@@ -126,25 +157,21 @@ pub fn resolve_file_link_path(target_path: &str, source_path: &Path, db_root: &P
         }
     } else {
         inner_path.to_string()
-    };
-    let clean = expanded.split("::").next().unwrap_or(&expanded).to_string();
-    let path = Path::new(&clean);
-    if path.is_absolute() {
-        path.to_path_buf()
-    } else if is_org {
-        db_root.join(path)
-    } else {
-        source_path.parent().unwrap_or(db_root).join(path)
     }
+}
+
+pub fn resolve_file_link_path(target_path: &str, source_path: &Path, db_root: &Path) -> PathBuf {
+    FileLinkTarget::parse(target_path).resolve_path(source_path, db_root)
 }
 
 /// Check whether a file link target exists on disk and optionally matches a line spec.
 pub fn file_link_target_exists(target: &str, source_path: &Path, db_root: &Path) -> bool {
-    let resolved = resolve_file_link_path(target, source_path, db_root);
+    let target = FileLinkTarget::parse(target);
+    let resolved = target.resolve_path(source_path, db_root);
     if !resolved.exists() {
         return false;
     }
-    if let Some(line_spec) = target.split("::").nth(1) {
+    if let Some(line_spec) = target.line_spec.as_deref() {
         if line_spec.is_empty() {
             return true;
         }

@@ -101,6 +101,62 @@ fn make_parse_error(_uuid: &str, path: &str) -> FileScanResult {
 }
 
 #[test]
+fn file_link_target_parses_resolution_parts() {
+    let db_root = PathBuf::from("/tmp/pkms-db");
+    let source_path = db_root.join("notes").join("source.org");
+
+    let relative = FileLinkTarget::parse("docs/reference.org::needle");
+    assert_eq!(relative.path, PathBuf::from("docs/reference.org"));
+    assert_eq!(relative.line_spec.as_deref(), Some("needle"));
+    assert!(!relative.org_relative);
+    assert_eq!(
+        relative.resolve_path(&source_path, &db_root),
+        db_root.join("notes").join("docs").join("reference.org")
+    );
+
+    let org_relative = FileLinkTarget::parse("org:docs/reference.org::needle");
+    assert_eq!(org_relative.path, PathBuf::from("docs/reference.org"));
+    assert_eq!(org_relative.line_spec.as_deref(), Some("needle"));
+    assert!(org_relative.org_relative);
+    assert_eq!(
+        org_relative.resolve_path(&source_path, &db_root),
+        db_root.join("docs").join("reference.org")
+    );
+
+    let absolute = FileLinkTarget::parse("/var/tmp/reference.org::needle");
+    assert_eq!(absolute.path, PathBuf::from("/var/tmp/reference.org"));
+    assert_eq!(absolute.line_spec.as_deref(), Some("needle"));
+    assert_eq!(
+        absolute.resolve_path(&source_path, &db_root),
+        PathBuf::from("/var/tmp/reference.org")
+    );
+
+    let remote = FileLinkTarget::parse("/ssh:example.org:/var/log/app.log::needle");
+    assert_eq!(
+        remote.path,
+        PathBuf::from("/ssh:example.org:/var/log/app.log")
+    );
+    assert_eq!(remote.line_spec.as_deref(), Some("needle"));
+    assert_eq!(
+        remote.resolve_path(&source_path, &db_root),
+        PathBuf::from("/ssh:example.org:/var/log/app.log")
+    );
+
+    let repeated_separator = FileLinkTarget::parse("docs/reference.org::needle::ignored");
+    assert_eq!(repeated_separator.line_spec.as_deref(), Some("needle"));
+
+    if let Some(home) = dirs::home_dir() {
+        let home_target = FileLinkTarget::parse("~/docs/reference.pdf::page");
+        assert_eq!(home_target.path, home.join("docs").join("reference.pdf"));
+        assert_eq!(home_target.line_spec.as_deref(), Some("page"));
+        assert_eq!(
+            home_target.resolve_path(&source_path, &db_root),
+            home.join("docs").join("reference.pdf")
+        );
+    }
+}
+
+#[test]
 fn test_graph_build() {
     let results = vec![
         make_note("a", "Note A", vec![Link::Internal("b".into())]),
