@@ -6,12 +6,18 @@ const TITLE_MATCH_WEIGHT: f64 = 10.0;
 const REF_MATCH_WEIGHT: f64 = 6.0;
 const TAG_MATCH_WEIGHT: f64 = 5.0;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum SearchField {
+    Title,
+    Alias,
+    Ref,
+    Tag,
+    Category,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SearchFields {
-    pub title: bool,
-    pub alias: bool,
-    pub ref_: bool,
-    pub tag: bool,
-    pub category: bool,
+    selected: [bool; SearchField::COUNT],
 }
 
 pub struct ContentSearchResult<'a> {
@@ -27,86 +33,100 @@ pub struct SearchResult<'a> {
 
 impl Default for SearchFields {
     fn default() -> Self {
-        Self {
-            title: true,
-            alias: true,
-            ref_: true,
-            tag: true,
-            category: false,
+        Self::new([
+            SearchField::Title,
+            SearchField::Alias,
+            SearchField::Ref,
+            SearchField::Tag,
+        ])
+    }
+}
+
+impl SearchField {
+    const ALL: [Self; Self::COUNT] = [
+        Self::Title,
+        Self::Alias,
+        Self::Ref,
+        Self::Tag,
+        Self::Category,
+    ];
+    const COUNT: usize = 5;
+
+    fn index(self) -> usize {
+        match self {
+            Self::Title => 0,
+            Self::Alias => 1,
+            Self::Ref => 2,
+            Self::Tag => 3,
+            Self::Category => 4,
+        }
+    }
+
+    fn label(self) -> &'static str {
+        match self {
+            Self::Title => "title",
+            Self::Alias => "alias",
+            Self::Ref => "ref",
+            Self::Tag => "tag",
+            Self::Category => "category",
         }
     }
 }
 
+impl SearchFields {
+    pub fn new(fields: impl IntoIterator<Item = SearchField>) -> Self {
+        let mut selected = [false; SearchField::COUNT];
+        for field in fields {
+            selected[field.index()] = true;
+        }
+        Self { selected }
+    }
+
+    fn includes(&self, field: SearchField) -> bool {
+        self.selected[field.index()]
+    }
+
+    fn iter(&self) -> impl Iterator<Item = SearchField> + '_ {
+        SearchField::ALL
+            .into_iter()
+            .filter(|field| self.includes(*field))
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct SearchMatch {
+    field: SearchField,
+    score: f64,
+}
+
 impl Graph {
-    #[allow(clippy::cast_precision_loss)]
     pub fn search(&self, terms: &str, fields: &SearchFields) -> Vec<SearchResult<'_>> {
         let query = terms.to_lowercase();
         let words: Vec<&str> = query.split_whitespace().collect();
         let mut results = Vec::new();
 
         for node in self.nodes.values() {
-            let mut score = 0.0;
+            let matches: Vec<SearchMatch> = fields
+                .iter()
+                .flat_map(|field| search_matches_for_field(node, field, &words))
+                .collect();
+            let score = matches.iter().map(|match_| match_.score).sum();
+            if score == 0.0 {
+                continue;
+            }
+
             let mut sources = HashSet::new();
-
-            if fields.title {
-                let title_lower = node.title.to_lowercase();
-                let words_in_title: usize =
-                    words.iter().filter(|w| title_lower.contains(*w)).count();
-                if words_in_title > 0 {
-                    score += words_in_title as f64 * TITLE_MATCH_WEIGHT;
-                    sources.insert("title");
-                }
+            for match_ in matches {
+                sources.insert(match_.field.label());
             }
 
-            if fields.alias {
-                for alias in &node.aliases {
-                    let alias_lower = alias.to_lowercase();
-                    let words_in_alias: usize =
-                        words.iter().filter(|w| alias_lower.contains(*w)).count();
-                    if words_in_alias > 0 {
-                        score += words_in_alias as f64 * TITLE_MATCH_WEIGHT;
-                        sources.insert("alias");
-                    }
-                }
-            }
-
-            if fields.ref_ {
-                for ref_ in &node.refs {
-                    let ref_lower = ref_.to_lowercase();
-                    if words.iter().any(|w| ref_lower.contains(*w)) {
-                        score += REF_MATCH_WEIGHT;
-                        sources.insert("ref");
-                    }
-                }
-            }
-
-            if fields.tag {
-                for tag in &node.filetags {
-                    if words.iter().any(|w| tag.contains(*w)) {
-                        score += TAG_MATCH_WEIGHT;
-                        sources.insert("tag");
-                    }
-                }
-            }
-
-            if fields.category {
-                for cat in &node.categories {
-                    if words.iter().any(|w| cat.contains(*w)) {
-                        score += TAG_MATCH_WEIGHT;
-                        sources.insert("category");
-                    }
-                }
-            }
-
-            if score > 0.0 {
-                let mut matches: Vec<String> = sources.into_iter().map(String::from).collect();
-                matches.sort();
-                results.push(SearchResult {
-                    node,
-                    score,
-                    matches,
-                });
-            }
+            let mut matches: Vec<String> = sources.into_iter().map(String::from).collect();
+            matches.sort();
+            results.push(SearchResult {
+                node,
+                score,
+                matches,
+            });
         }
 
         results.sort_by(|a, b| {
@@ -174,6 +194,99 @@ impl Graph {
         tags.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
         tags
     }
+}
+
+fn search_matches_for_field(
+    node: &super::Node,
+    field: SearchField,
+    words: &[&str],
+) -> Vec<SearchMatch> {
+    match field {
+        SearchField::Title => score_case_insensitive_word_matches(
+            SearchField::Title,
+            &node.title,
+            words,
+            TITLE_MATCH_WEIGHT,
+        )
+        .into_iter()
+        .collect(),
+        SearchField::Alias => node
+            .aliases
+            .iter()
+            .filter_map(|alias| {
+                score_case_insensitive_word_matches(
+                    SearchField::Alias,
+                    alias,
+                    words,
+                    TITLE_MATCH_WEIGHT,
+                )
+            })
+            .collect(),
+        SearchField::Ref => node
+            .refs
+            .iter()
+            .filter_map(|ref_| {
+                score_case_insensitive_any_match(SearchField::Ref, ref_, words, REF_MATCH_WEIGHT)
+            })
+            .collect(),
+        SearchField::Tag => node
+            .filetags
+            .iter()
+            .filter_map(|tag| score_case_sensitive_any_match(SearchField::Tag, tag, words))
+            .collect(),
+        SearchField::Category => node
+            .categories
+            .iter()
+            .filter_map(|category| {
+                score_case_sensitive_any_match(SearchField::Category, category, words)
+            })
+            .collect(),
+    }
+}
+
+#[allow(clippy::cast_precision_loss)]
+fn score_case_insensitive_word_matches(
+    field: SearchField,
+    value: &str,
+    words: &[&str],
+    weight: f64,
+) -> Option<SearchMatch> {
+    let value = value.to_lowercase();
+    let matched_words = words.iter().filter(|word| value.contains(*word)).count();
+    (matched_words > 0).then_some(SearchMatch {
+        field,
+        score: matched_words as f64 * weight,
+    })
+}
+
+fn score_case_insensitive_any_match(
+    field: SearchField,
+    value: &str,
+    words: &[&str],
+    weight: f64,
+) -> Option<SearchMatch> {
+    let value = value.to_lowercase();
+    words
+        .iter()
+        .any(|word| value.contains(*word))
+        .then_some(SearchMatch {
+            field,
+            score: weight,
+        })
+}
+
+fn score_case_sensitive_any_match(
+    field: SearchField,
+    value: &str,
+    words: &[&str],
+) -> Option<SearchMatch> {
+    words
+        .iter()
+        .any(|word| value.contains(*word))
+        .then_some(SearchMatch {
+            field,
+            score: TAG_MATCH_WEIGHT,
+        })
 }
 
 fn content_match_lines(content: &str, query: &str) -> Option<Vec<String>> {

@@ -5,7 +5,44 @@ use crate::parser::Link;
 
 use super::{Graph, NeighborSet};
 
+struct InternalOutgoing<'a> {
+    target: &'a NoteId,
+    link: &'a Link,
+}
+
+struct InternalAdjacency<'a> {
+    outgoing: Vec<InternalOutgoing<'a>>,
+    backlinks: &'a [NoteId],
+}
+
 impl Graph {
+    fn internal_adjacency(&self, uuid: &NoteId) -> InternalAdjacency<'_> {
+        let outgoing = self
+            .nodes
+            .get(uuid)
+            .map(|node| {
+                node.outgoing
+                    .iter()
+                    .filter_map(|link| match link {
+                        Link::Internal(target) => Some(InternalOutgoing { target, link }),
+                        _ => None,
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        let primary = self.nodes.get(uuid).map_or(uuid, |node| &node.uuid);
+        let backlinks = self
+            .backlinks
+            .get(primary)
+            .map(Vec::as_slice)
+            .unwrap_or(&[]);
+
+        InternalAdjacency {
+            outgoing,
+            backlinks,
+        }
+    }
+
     pub fn get_neighbors(&self, uuid: &str, max_depth: u32) -> HashMap<u32, NeighborSet> {
         let start = NoteId::new(uuid);
         let mut result = HashMap::new();
@@ -18,29 +55,23 @@ impl Graph {
             let mut next = Vec::new();
 
             for uid in &current {
-                if let Some(node) = self.nodes.get(uid) {
-                    for link in &node.outgoing {
-                        if let Link::Internal(target) = link
-                            && visited.insert(target.clone())
-                        {
-                            next.push(target.clone());
-                            if let Some(target_node) = self.nodes.get(target) {
-                                neighbors.outgoing.push(target_node.clone());
-                            } else {
-                                neighbors.broken_outgoing.push(link.clone());
-                            }
+                let adjacency = self.internal_adjacency(uid);
+                for outgoing in adjacency.outgoing {
+                    if visited.insert(outgoing.target.clone()) {
+                        next.push(outgoing.target.clone());
+                        if let Some(target_node) = self.nodes.get(outgoing.target) {
+                            neighbors.outgoing.push(target_node.clone());
+                        } else {
+                            neighbors.broken_outgoing.push(outgoing.link.clone());
                         }
                     }
                 }
 
-                let primary = self.nodes.get(uid).map_or(uid, |n| &n.uuid);
-                if let Some(backlinks) = self.backlinks.get(primary) {
-                    for buid in backlinks {
-                        if visited.insert(buid.clone()) {
-                            next.push(buid.clone());
-                            if let Some(back_node) = self.nodes.get(buid) {
-                                neighbors.incoming.push(back_node.clone());
-                            }
+                for backlink in adjacency.backlinks {
+                    if visited.insert(backlink.clone()) {
+                        next.push(backlink.clone());
+                        if let Some(back_node) = self.nodes.get(backlink) {
+                            neighbors.incoming.push(back_node.clone());
                         }
                     }
                 }
@@ -84,36 +115,30 @@ impl Graph {
                 continue;
             }
 
-            if let Some(node) = self.nodes.get(&current) {
-                for link in &node.outgoing {
-                    if let Link::Internal(next) = link {
-                        if next == &to_uuid {
-                            let mut full = path.clone();
-                            full.push(next.clone());
-                            return Some(note_path_to_strings(full));
-                        }
-                        if visited.insert(next.clone()) {
-                            let mut new_path = path.clone();
-                            new_path.push(next.clone());
-                            queue.push_back((next.clone(), new_path));
-                        }
-                    }
+            let adjacency = self.internal_adjacency(&current);
+            for outgoing in adjacency.outgoing {
+                if outgoing.target == &to_uuid {
+                    let mut full = path.clone();
+                    full.push(outgoing.target.clone());
+                    return Some(note_path_to_strings(full));
+                }
+                if visited.insert(outgoing.target.clone()) {
+                    let mut new_path = path.clone();
+                    new_path.push(outgoing.target.clone());
+                    queue.push_back((outgoing.target.clone(), new_path));
                 }
             }
 
-            let primary = self.nodes.get(&current).map_or(&current, |n| &n.uuid);
-            if let Some(backlinks) = self.backlinks.get(primary) {
-                for prev in backlinks {
-                    if prev == &to_uuid {
-                        let mut full = path.clone();
-                        full.push(prev.clone());
-                        return Some(note_path_to_strings(full));
-                    }
-                    if visited.insert(prev.clone()) {
-                        let mut new_path = path.clone();
-                        new_path.push(prev.clone());
-                        queue.push_back((prev.clone(), new_path));
-                    }
+            for backlink in adjacency.backlinks {
+                if backlink == &to_uuid {
+                    let mut full = path.clone();
+                    full.push(backlink.clone());
+                    return Some(note_path_to_strings(full));
+                }
+                if visited.insert(backlink.clone()) {
+                    let mut new_path = path.clone();
+                    new_path.push(backlink.clone());
+                    queue.push_back((backlink.clone(), new_path));
                 }
             }
         }

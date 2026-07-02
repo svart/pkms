@@ -1,5 +1,5 @@
 use super::*;
-use crate::graph::search::SearchFields;
+use crate::graph::search::{SearchField, SearchFields};
 use crate::graph::validation::{
     DuplicateUuidIssueKind, GraphValidationCheck, GraphValidationOptions, NoteValidationIssue,
     SelfLinkKind,
@@ -984,13 +984,7 @@ fn test_search_by_tag_only() {
         make_note_full("b", "Note B", vec![], vec![], vec![]),
     ];
     let graph = Graph::build(results);
-    let fields = SearchFields {
-        title: false,
-        alias: false,
-        ref_: false,
-        tag: true,
-        category: false,
-    };
+    let fields = SearchFields::new([SearchField::Tag]);
     let results = graph.search("quantum", &fields);
     assert_eq!(results.len(), 1);
     assert_eq!(results[0].node.uuid, "a");
@@ -1003,13 +997,7 @@ fn test_search_by_ref() {
     if let Some(node) = graph.nodes.get_mut("a") {
         node.refs.push("reference-keyword".to_string());
     }
-    let fields = SearchFields {
-        title: false,
-        alias: false,
-        ref_: true,
-        tag: false,
-        category: false,
-    };
+    let fields = SearchFields::new([SearchField::Ref]);
     let results = graph.search("reference-keyword", &fields);
     assert_eq!(results.len(), 1);
 }
@@ -1021,13 +1009,7 @@ fn test_search_by_category() {
     if let Some(node) = graph.nodes.get_mut("a") {
         node.categories.push("example-category".to_string());
     }
-    let fields = SearchFields {
-        title: false,
-        alias: false,
-        ref_: false,
-        tag: false,
-        category: true,
-    };
+    let fields = SearchFields::new([SearchField::Category]);
     let results = graph.search("example-category", &fields);
     assert_eq!(results.len(), 1);
     assert_eq!(results[0].node.uuid, "a");

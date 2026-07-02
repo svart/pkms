@@ -93,7 +93,7 @@ pub(crate) struct HeadingLocation {
 pub struct SelfLinkEntry {
     pub source_uuid: NoteId,
     pub source_title: String,
-    pub link_type: String,
+    pub link_type: validation::SelfLinkKind,
     pub target: LinkTarget,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub suggestion: Option<String>,

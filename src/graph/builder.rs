@@ -9,6 +9,12 @@ use super::{DuplicateEntry, DuplicateInfo, FileScanResult, Graph, Node};
 type Backlinks = HashMap<NoteId, Vec<NoteId>>;
 type BrokenLinks = Vec<(NoteId, NoteId)>;
 
+struct HeadingStackEntry {
+    index: usize,
+    uuid: NoteId,
+    children: Vec<NoteId>,
+}
+
 fn build_links(
     uuid_to_outgoing: &HashMap<NoteId, Vec<Link>>,
     nodes: &HashMap<NoteId, Node>,
@@ -50,14 +56,15 @@ impl BuildContext {
         let aliases = &parsed.aliases;
         let refs = &parsed.roam_refs;
 
-        let mut stack: Vec<(usize, NoteId, Vec<NoteId>)> = Vec::new();
+        let mut stack: Vec<HeadingStackEntry> = Vec::new();
 
         for (i, heading) in headings.iter().enumerate() {
-            while let Some(&(top_idx, _, _)) = stack.last() {
-                if headings[top_idx].level >= heading.level {
-                    let (_, uuid, children) = stack.pop().unwrap();
+            while let Some(entry) = stack.last() {
+                if headings[entry.index].level >= heading.level {
+                    let entry = stack.pop().unwrap();
+                    let uuid = entry.uuid;
                     if let Some(node) = self.nodes.get_mut(&uuid) {
-                        node.heading_uuids = children;
+                        node.heading_uuids = entry.children;
                         node.headings_count = node.heading_uuids.len();
                     }
                 } else {
@@ -68,10 +75,13 @@ impl BuildContext {
             if let Some(uuid) = &heading.uuid {
                 let parent_uuid = stack
                     .last()
-                    .map(|(_, u, _)| u.clone())
+                    .map(|entry| entry.uuid.clone())
                     .unwrap_or_else(|| primary_uuid.clone());
 
-                let mut heading_node = Node {
+                let mut heading_outgoing = heading.outgoing.clone();
+                heading_outgoing.push(Link::Internal(parent_uuid.clone()));
+
+                let heading_node = Node {
                     uuid: uuid.clone(),
                     title: heading.title.clone(),
                     path: path.to_path_buf(),
@@ -83,45 +93,39 @@ impl BuildContext {
                     categories: categories.to_vec(),
                     aliases: aliases.to_vec(),
                     refs: refs.to_vec(),
-                    outgoing: {
-                        let mut o = heading.outgoing.clone();
-                        o.push(Link::Internal(parent_uuid.clone()));
-                        o
-                    },
+                    outgoing: heading_outgoing.clone(),
                     headings_count: 0,
                     heading_uuids: vec![],
                     has_todos: heading.todo_state.is_some(),
                 };
 
-                self.uuid_to_outgoing.insert(uuid.clone(), {
-                    let mut o = heading.outgoing.clone();
-                    o.push(Link::Internal(parent_uuid.clone()));
-                    o
-                });
+                self.uuid_to_outgoing.insert(uuid.clone(), heading_outgoing);
 
                 self.uuid_to_outgoing
                     .entry(parent_uuid.clone())
                     .or_default()
                     .push(Link::Internal(uuid.clone()));
 
-                heading_node.outgoing = self.uuid_to_outgoing[&uuid.clone()].clone();
-
                 self.heading_uuid_to_primary
                     .insert(uuid.clone(), primary_uuid.clone());
 
                 self.nodes.insert(uuid.clone(), heading_node);
 
-                if let Some((_, _, children)) = stack.last_mut() {
-                    children.push(uuid.clone());
+                if let Some(entry) = stack.last_mut() {
+                    entry.children.push(uuid.clone());
                 }
 
-                stack.push((i, uuid.clone(), vec![]));
+                stack.push(HeadingStackEntry {
+                    index: i,
+                    uuid: uuid.clone(),
+                    children: vec![],
+                });
             }
         }
 
-        while let Some((_, uuid, children)) = stack.pop() {
-            if let Some(node) = self.nodes.get_mut(&uuid) {
-                node.heading_uuids = children;
+        while let Some(entry) = stack.pop() {
+            if let Some(node) = self.nodes.get_mut(&entry.uuid) {
+                node.heading_uuids = entry.children;
                 node.headings_count = node.heading_uuids.len();
             }
         }
@@ -165,6 +169,16 @@ impl BuildContext {
         }
     }
 
+    fn push_duplicate_uuid(&mut self, uuid: &NoteId, first_path: &Path, second_path: &Path) {
+        self.duplicate_uuids.push(DuplicateEntry {
+            value: uuid.to_string(),
+            paths: vec![
+                first_path.display().to_string(),
+                second_path.display().to_string(),
+            ],
+        });
+    }
+
     fn process_result(&mut self, result: &FileScanResult) {
         if let Some(err) = &result.parse_error {
             self.parse_errors.push((result.path.clone(), err.clone()));
@@ -182,28 +196,17 @@ impl BuildContext {
 
         let primary_uuid = parsed.uuids[0].clone();
 
-        if let Some(existing) = self.seen_uuids.get(primary_uuid.as_str())
-            && existing != path
+        if let Some(existing) = self.seen_uuids.get(primary_uuid.as_str()).cloned()
+            && existing.as_path() != path.as_path()
         {
-            self.duplicate_uuids.push(DuplicateEntry {
-                value: primary_uuid.to_string(),
-                paths: vec![
-                    self.seen_uuids[primary_uuid.as_str()]
-                        .to_string_lossy()
-                        .to_string(),
-                    path.display().to_string(),
-                ],
-            });
+            self.push_duplicate_uuid(&primary_uuid, &existing, path);
             return;
         }
 
-        if let Some(existing) = self.all_uuids_seen.get(primary_uuid.as_str())
-            && existing != path
+        if let Some(existing) = self.all_uuids_seen.get(primary_uuid.as_str()).cloned()
+            && existing.as_path() != path.as_path()
         {
-            self.duplicate_uuids.push(DuplicateEntry {
-                value: primary_uuid.to_string(),
-                paths: vec![existing.display().to_string(), path.display().to_string()],
-            });
+            self.push_duplicate_uuid(&primary_uuid, &existing, path);
         }
 
         self.seen_uuids.insert(primary_uuid.clone(), path.clone());
@@ -274,26 +277,17 @@ impl BuildContext {
         let heading_uuids_list = parsed.heading_uuids();
         for heading_uuid in &heading_uuids_list {
             if heading_uuid == primary_uuid {
-                self.duplicate_uuids.push(DuplicateEntry {
-                    value: heading_uuid.to_string(),
-                    paths: vec![path.display().to_string(), path.display().to_string()],
-                });
+                self.push_duplicate_uuid(heading_uuid, path, path);
                 continue;
             }
             if !file_heading_uuids_seen.insert(heading_uuid.clone()) {
-                self.duplicate_uuids.push(DuplicateEntry {
-                    value: heading_uuid.to_string(),
-                    paths: vec![path.display().to_string(), path.display().to_string()],
-                });
+                self.push_duplicate_uuid(heading_uuid, path, path);
                 continue;
             }
-            if let Some(existing) = self.all_uuids_seen.get(heading_uuid.as_str())
+            if let Some(existing) = self.all_uuids_seen.get(heading_uuid.as_str()).cloned()
                 && existing != path
             {
-                self.duplicate_uuids.push(DuplicateEntry {
-                    value: heading_uuid.to_string(),
-                    paths: vec![existing.display().to_string(), path.display().to_string()],
-                });
+                self.push_duplicate_uuid(heading_uuid, &existing, path);
             }
             self.all_uuids_seen
                 .insert(heading_uuid.clone(), path.to_path_buf());

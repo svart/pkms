@@ -2,7 +2,7 @@ use crate::cli::{OutputFormat, QueryArgs};
 use crate::command_context::CommandContext;
 use crate::config::ResolvedConfig;
 use crate::graph::Graph;
-use crate::graph::search::SearchFields;
+use crate::graph::search::{SearchField, SearchFields};
 use crate::output::OutputContext;
 use anyhow::Result;
 use serde::Serialize;
@@ -153,13 +153,14 @@ fn search_by_text(
     let mut combined: Vec<QueryResultEntry> = Vec::new();
 
     if search_title || search_tags {
-        let fields = SearchFields {
-            title: search_title,
-            alias: search_title,
-            ref_: search_title,
-            tag: search_tags,
-            category: search_tags,
-        };
+        let mut fields = Vec::new();
+        if search_title {
+            fields.extend([SearchField::Title, SearchField::Alias, SearchField::Ref]);
+        }
+        if search_tags {
+            fields.extend([SearchField::Tag, SearchField::Category]);
+        }
+        let fields = SearchFields::new(fields);
         let title_results = graph.search(terms, &fields);
         for result in title_results {
             combined.push(QueryResultEntry {

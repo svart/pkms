@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, Default)]
 pub struct GraphValidationOptions {
-    checks: Vec<GraphValidationCheck>,
+    selected: [bool; GraphValidationCheck::COUNT],
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -24,13 +24,29 @@ pub enum GraphValidationCheck {
 
 impl GraphValidationOptions {
     pub fn new(checks: impl IntoIterator<Item = GraphValidationCheck>) -> Self {
-        GraphValidationOptions {
-            checks: checks.into_iter().collect(),
+        let mut selected = [false; GraphValidationCheck::COUNT];
+        for check in checks {
+            selected[check.index()] = true;
         }
+        GraphValidationOptions { selected }
     }
 
     pub fn includes(&self, check: GraphValidationCheck) -> bool {
-        self.checks.contains(&check)
+        self.selected[check.index()]
+    }
+}
+
+impl GraphValidationCheck {
+    const COUNT: usize = 5;
+
+    fn index(self) -> usize {
+        match self {
+            Self::InternalLinks => 0,
+            Self::Filetags => 1,
+            Self::Duplicates => 2,
+            Self::SelfLinks => 3,
+            Self::Overlinks => 4,
+        }
     }
 }
 
@@ -105,10 +121,20 @@ pub enum DuplicateUuidIssueKind {
     HeadingBelongsToAnotherNote { other_paths: Vec<String> },
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "lowercase")]
 pub enum SelfLinkKind {
     Id,
     File,
+}
+
+impl std::fmt::Display for SelfLinkKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Id => f.write_str("id"),
+            Self::File => f.write_str("file"),
+        }
+    }
 }
 
 impl Graph {
@@ -299,7 +325,7 @@ impl Graph {
                             results.push(SelfLinkEntry {
                                 source_uuid: node.uuid.clone(),
                                 source_title: node.title.clone(),
-                                link_type: "id".to_string(),
+                                link_type: SelfLinkKind::Id,
                                 target: LinkTarget::new(uuid.as_str()),
                                 suggestion: None,
                             });
@@ -318,7 +344,7 @@ impl Graph {
                                 results.push(SelfLinkEntry {
                                     source_uuid: node.uuid.clone(),
                                     source_title: node.title.clone(),
-                                    link_type: "file".to_string(),
+                                    link_type: SelfLinkKind::File,
                                     target: target_path.clone(),
                                     suggestion,
                                 });
@@ -336,13 +362,7 @@ impl Graph {
     pub fn detect_overlinks(&self) -> Vec<OverlinkEntry> {
         let mut results = Vec::new();
         for node in self.nodes.values() {
-            let mut counts: HashMap<NoteId, usize> = HashMap::new();
-            for link in &node.outgoing {
-                if let Link::Internal(target) = link {
-                    *counts.entry(target.clone()).or_default() += 1;
-                }
-            }
-            for (target_uuid, count) in counts {
+            for (target_uuid, count) in internal_link_counts(node) {
                 if count >= 2 {
                     let target_title = self
                         .nodes
@@ -500,13 +520,7 @@ fn collect_node_self_link_issues(
 }
 
 fn collect_node_overlink_issues(graph: &Graph, node: &Node, issues: &mut Vec<NoteValidationIssue>) {
-    let mut target_counts: HashMap<NoteId, usize> = HashMap::new();
-    for link in &node.outgoing {
-        if let Link::Internal(uuid) = link {
-            *target_counts.entry(uuid.clone()).or_default() += 1;
-        }
-    }
-    for (target_uuid, count) in target_counts {
+    for (target_uuid, count) in internal_link_counts(node) {
         if count >= 2 {
             let target_title = graph
                 .nodes
@@ -520,6 +534,16 @@ fn collect_node_overlink_issues(graph: &Graph, node: &Node, issues: &mut Vec<Not
             });
         }
     }
+}
+
+fn internal_link_counts(node: &Node) -> HashMap<NoteId, usize> {
+    let mut counts = HashMap::new();
+    for link in &node.outgoing {
+        if let Link::Internal(uuid) = link {
+            *counts.entry(uuid.clone()).or_default() += 1;
+        }
+    }
+    counts
 }
 
 fn filetags_issues_for_content(
