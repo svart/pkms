@@ -1,14 +1,15 @@
 use crate::cli::OutputFormat;
 use crate::command_context::CommandContext;
 use crate::config::ResolvedConfig;
-use crate::graph::Graph;
+use crate::graph::{FileScanResult, Graph, Node};
 use crate::org_edit::parsed_heading_subtree_end_index;
 use crate::output::{OutputContext, terminal_markup};
-use crate::parser::{Link, strip_org_links};
+use crate::parser::{Heading, Link, strip_org_links};
 use anyhow::Result;
 use serde::Serialize;
 use std::collections::HashMap;
 use std::fmt::Write;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, Serialize)]
 pub struct RelatedTaskHeading {
@@ -54,9 +55,9 @@ pub struct ShowOptions {
     pub targets: Vec<HeadingTarget>,
 }
 
-pub struct HeadingTarget {
-    pub note_target: String,
-    pub canonical_id: Option<usize>,
+pub enum HeadingTarget {
+    Note(String),
+    CanonicalTaskId(usize),
 }
 
 type TaskIdMap = HashMap<(String, usize), usize>;
@@ -151,12 +152,22 @@ fn extract_outgoing(links: &[Link]) -> Vec<OutgoingLink> {
 
 struct HeadingShowContext<'a> {
     content: &'a str,
-    headings: &'a [crate::parser::Heading],
+    headings: &'a [Heading],
     filetags: &'a [String],
     note_title: &'a str,
     note_uuid: &'a str,
-    path: &'a std::path::Path,
+    path: &'a Path,
     task_ids: &'a TaskIdMap,
+}
+
+struct ResolvedHeadingTarget<'a> {
+    content: String,
+    headings: &'a [Heading],
+    filetags: &'a [String],
+    note_title: String,
+    note_uuid: String,
+    path: PathBuf,
+    line_number: usize,
 }
 
 fn show_heading_by_line(ctx: HeadingShowContext<'_>, line_number: usize) -> Result<ShowOutput> {
@@ -240,138 +251,173 @@ fn process_one_show(
     target: &HeadingTarget,
     task_ids: &TaskIdMap,
 ) -> Result<ShowOutput> {
-    let location = if let Some(cid) = target.canonical_id {
-        graph.resolve_canonical_task_id(config, cid)?
-    } else {
-        // Try graph node lookup first
-        if let Ok(node) = graph.resolve_target(&target.note_target) {
-            let parsed = graph
-                .results
-                .iter()
-                .find(|r| r.path == node.path)
-                .map(|r| &r.parsed);
+    let resolved = resolve_heading_target(graph, config, target)?;
 
-            let headings: &[crate::parser::Heading] = match parsed {
-                Some(p) => &p.headings,
-                None => &[],
-            };
+    show_heading_by_line(
+        HeadingShowContext {
+            content: &resolved.content,
+            headings: resolved.headings,
+            filetags: resolved.filetags,
+            note_title: &resolved.note_title,
+            note_uuid: &resolved.note_uuid,
+            path: &resolved.path,
+            task_ids,
+        },
+        resolved.line_number,
+    )
+}
 
-            let content = std::fs::read_to_string(&node.path)?;
-            let note_title = strip_org_links(&node.title);
+fn resolve_heading_target<'a>(
+    graph: &'a Graph,
+    config: &ResolvedConfig,
+    target: &HeadingTarget,
+) -> Result<ResolvedHeadingTarget<'a>> {
+    match target {
+        HeadingTarget::CanonicalTaskId(id) => resolve_canonical_heading_target(graph, config, *id),
+        HeadingTarget::Note(note_target) => resolve_note_heading_target(graph, note_target),
+    }
+}
 
-            let first_todo = headings.iter().find(|h| h.todo_state.is_some());
-            match first_todo {
-                Some(h) => {
-                    return show_heading_by_line(
-                        HeadingShowContext {
-                            content: &content,
-                            headings,
-                            filetags: &node.filetags,
-                            note_title: &note_title,
-                            note_uuid: &node.uuid,
-                            path: &node.path,
-                            task_ids,
-                        },
-                        h.line_number,
-                    );
-                }
-                None => {
-                    anyhow::bail!(
-                        "No TODO heading found in note '{}'. Use a numeric canonical ID from task list or task agenda, or --uuid to specify an exact note.",
-                        note_title
-                    );
-                }
-            }
-        }
+fn resolve_canonical_heading_target<'a>(
+    graph: &'a Graph,
+    config: &ResolvedConfig,
+    id: usize,
+) -> Result<ResolvedHeadingTarget<'a>> {
+    let location = graph.resolve_canonical_task_id(config, id)?;
+    let path = PathBuf::from(&location.path);
+    let content = std::fs::read_to_string(&path)?;
 
-        // Fallback: search in results for files without UUIDs
-        let mut found = None;
-        for result in &graph.results {
-            let path_str = result.path.to_string_lossy().to_lowercase();
-            let target_lower = target.note_target.to_lowercase();
-            if path_str.contains(&target_lower)
-                || result
-                    .path
-                    .file_stem()
-                    .is_some_and(|s| s.to_string_lossy().to_lowercase() == target_lower)
-                || result
-                    .parsed
-                    .title
-                    .as_ref()
-                    .is_some_and(|t| t.to_lowercase() == target_lower)
-            {
-                let content = std::fs::read_to_string(&result.path)?;
-                let headings = &result.parsed.headings;
-                let note_title =
-                    strip_org_links(&result.parsed.title.clone().unwrap_or_else(|| {
-                        result
-                            .path
-                            .file_stem()
-                            .map(|s| s.display().to_string())
-                            .unwrap_or_default()
-                    }));
-                let first_todo = headings.iter().find(|h| h.todo_state.is_some());
-                match first_todo {
-                    Some(h) => {
-                        return show_heading_by_line(
-                            HeadingShowContext {
-                                content: &content,
-                                headings,
-                                filetags: &result.parsed.filetags,
-                                note_title: &note_title,
-                                note_uuid: "",
-                                path: &result.path,
-                                task_ids,
-                            },
-                            h.line_number,
-                        );
-                    }
-                    None => {
-                        found = Some(anyhow::anyhow!(
-                            "No TODO heading found in note '{}'. Use a numeric canonical ID from task list or task agenda, or --uuid to specify an exact note.",
-                            note_title
-                        ));
-                    }
-                }
-            }
-        }
-        match found {
-            Some(e) => return Err(e),
-            None => anyhow::bail!("Note not found: {}", target.note_target),
-        }
-    };
-
-    // Show heading by resolved path + line_number
-    let content = std::fs::read_to_string(&location.path)?;
-    let path_ref = std::path::Path::new(&location.path);
-
-    let result = graph.results.iter().find(|r| r.path == *path_ref);
+    let result = graph.results.iter().find(|r| r.path == path);
     let parsed = match result {
         Some(r) => &r.parsed,
         None => anyhow::bail!("No parsed data for path: {}", location.path),
     };
 
-    let note_title = strip_org_links(&parsed.title.clone().unwrap_or_else(|| {
-        path_ref
+    Ok(ResolvedHeadingTarget {
+        content,
+        headings: &parsed.headings,
+        filetags: &parsed.filetags,
+        note_title: note_title_from_parsed(&path, parsed.title.as_deref()),
+        note_uuid: parsed
+            .uuids
+            .first()
+            .map(ToString::to_string)
+            .unwrap_or_default(),
+        path,
+        line_number: location.line_number,
+    })
+}
+
+fn resolve_note_heading_target<'a>(
+    graph: &'a Graph,
+    note_target: &str,
+) -> Result<ResolvedHeadingTarget<'a>> {
+    if let Ok(node) = graph.resolve_target(note_target) {
+        return resolve_node_heading_target(graph, node);
+    }
+
+    resolve_fallback_heading_target(graph, note_target)
+}
+
+fn resolve_node_heading_target<'a>(
+    graph: &'a Graph,
+    node: &'a Node,
+) -> Result<ResolvedHeadingTarget<'a>> {
+    let parsed = graph
+        .results
+        .iter()
+        .find(|r| r.path == node.path)
+        .map(|r| &r.parsed);
+    let headings = parsed.map(|p| p.headings.as_slice()).unwrap_or(&[]);
+    let content = std::fs::read_to_string(&node.path)?;
+    let note_title = strip_org_links(&node.title);
+    let line_number = first_todo_line(headings, &note_title)?;
+
+    Ok(ResolvedHeadingTarget {
+        content,
+        headings,
+        filetags: &node.filetags,
+        note_title,
+        note_uuid: node.uuid.to_string(),
+        path: node.path.clone(),
+        line_number,
+    })
+}
+
+fn resolve_fallback_heading_target<'a>(
+    graph: &'a Graph,
+    note_target: &str,
+) -> Result<ResolvedHeadingTarget<'a>> {
+    let target_lower = note_target.to_lowercase();
+    let mut found = None;
+
+    for result in &graph.results {
+        if !fallback_result_matches(result, &target_lower) {
+            continue;
+        }
+
+        let content = std::fs::read_to_string(&result.path)?;
+        let headings = &result.parsed.headings;
+        let note_title = note_title_from_parsed(&result.path, result.parsed.title.as_deref());
+        let line_number = match first_todo_line(headings, &note_title) {
+            Ok(line_number) => line_number,
+            Err(e) => {
+                found = Some(e);
+                continue;
+            }
+        };
+
+        return Ok(ResolvedHeadingTarget {
+            content,
+            headings,
+            filetags: &result.parsed.filetags,
+            note_title,
+            note_uuid: String::new(),
+            path: result.path.clone(),
+            line_number,
+        });
+    }
+
+    match found {
+        Some(e) => Err(e),
+        None => anyhow::bail!("Note not found: {}", note_target),
+    }
+}
+
+fn fallback_result_matches(result: &FileScanResult, target_lower: &str) -> bool {
+    let path_str = result.path.to_string_lossy().to_lowercase();
+    path_str.contains(target_lower)
+        || result
+            .path
             .file_stem()
+            .is_some_and(|s| s.to_string_lossy().to_lowercase() == target_lower)
+        || result
+            .parsed
+            .title
+            .as_ref()
+            .is_some_and(|t| t.to_lowercase() == target_lower)
+}
+
+fn note_title_from_parsed(path: &Path, title: Option<&str>) -> String {
+    let raw_title = title.map(str::to_string).unwrap_or_else(|| {
+        path.file_stem()
             .map(|s| s.display().to_string())
             .unwrap_or_default()
-    }));
+    });
+    strip_org_links(&raw_title)
+}
 
-    let note_uuid = parsed.uuids.first().cloned().unwrap_or_default();
-
-    show_heading_by_line(
-        HeadingShowContext {
-            content: &content,
-            headings: &parsed.headings,
-            filetags: &parsed.filetags,
-            note_title: &note_title,
-            note_uuid: &note_uuid,
-            path: path_ref,
-            task_ids,
-        },
-        location.line_number,
-    )
+fn first_todo_line(headings: &[Heading], note_title: &str) -> Result<usize> {
+    headings
+        .iter()
+        .find(|h| h.todo_state.is_some())
+        .map(|h| h.line_number)
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "No TODO heading found in note '{}'. Use a numeric canonical ID from task list or task agenda, or --uuid to specify an exact note.",
+                note_title
+            )
+        })
 }
 
 fn resolve_outgoing_titles(output: &mut ShowOutput, graph: &Graph) {

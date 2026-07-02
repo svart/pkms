@@ -174,10 +174,7 @@ pub(super) fn run_show(ctx: &CommandContext<'_>, id: &str) -> Result<()> {
         TaskId::Pkms(id) => crate::commands::show::run(
             ctx,
             &ShowOptions {
-                targets: vec![HeadingTarget {
-                    note_target: String::new(),
-                    canonical_id: Some(id),
-                }],
+                targets: vec![HeadingTarget::CanonicalTaskId(id)],
             },
         ),
         TaskId::Todoist(id) => show_todoist_task(config, output, &id),
