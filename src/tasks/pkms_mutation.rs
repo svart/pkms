@@ -45,6 +45,15 @@ pub struct TaskPropertyChange {
     pub new: Option<String>,
 }
 
+struct ParsedHeading {
+    level: String,
+    newline: String,
+    state: Option<String>,
+    priority: Option<TaskPriority>,
+    title: String,
+    tags: Vec<String>,
+}
+
 pub fn replace_heading_state(
     path: &str,
     line_number: usize,
@@ -102,50 +111,85 @@ pub fn update_heading_properties(
     let heading_idx = line_number
         .checked_sub(1)
         .ok_or_else(|| anyhow::anyhow!("Invalid task line number: {line_number}"))?;
+    let heading = parse_heading(&lines, heading_idx, line_number, path)?;
+
+    let mut changes = Vec::new();
+    apply_heading_fields(&mut lines, heading_idx, &heading, modifier, &mut changes);
+    apply_planning(&mut lines, heading_idx, modifier, &mut changes)?;
+    apply_drawer_properties(&mut lines, heading_idx, modifier, &mut changes);
+    apply_description(&mut lines, heading_idx, modifier, &mut changes);
+
+    if !changes.is_empty() {
+        org_edit::write_lines(path, &lines)?;
+    }
+    Ok(changes)
+}
+
+fn parse_heading(
+    lines: &[String],
+    heading_idx: usize,
+    line_number: usize,
+    path: &str,
+) -> Result<ParsedHeading> {
     let heading = lines
         .get(heading_idx)
-        .ok_or_else(|| anyhow::anyhow!("Task line {line_number} no longer exists in {path}"))?
-        .clone();
-    let (heading_body, heading_newline) = org_edit::split_line_ending(&heading);
+        .ok_or_else(|| anyhow::anyhow!("Task line {line_number} no longer exists in {path}"))?;
+    let (heading_body, heading_newline) = org_edit::split_line_ending(heading);
     let captures = HEADING_RE
         .captures(heading_body)
         .ok_or_else(|| anyhow::anyhow!("Task line {line_number} is no longer an org heading"))?;
 
-    let mut changes = Vec::new();
-    let level = captures.get(1).map_or("", |m| m.as_str());
-    let state = captures.get(2).map(|m| m.as_str().to_string());
-    let old_priority = captures.get(3).and_then(|m| m.as_str().chars().next());
-    let old_title = captures
-        .get(4)
-        .map_or("", |m| m.as_str())
-        .trim()
-        .to_string();
-    let old_tags = heading_tags(captures.get(5).map(|m| m.as_str()));
+    Ok(ParsedHeading {
+        level: captures.get(1).map_or("", |m| m.as_str()).to_string(),
+        newline: heading_newline.to_string(),
+        state: captures.get(2).map(|m| m.as_str().to_string()),
+        priority: captures
+            .get(3)
+            .and_then(|m| m.as_str().chars().next())
+            .and_then(TaskPriority::from_char),
+        title: captures
+            .get(4)
+            .map_or("", |m| m.as_str())
+            .trim()
+            .to_string(),
+        tags: heading_tags(captures.get(5).map(|m| m.as_str())),
+    })
+}
 
-    let old_state = state;
-    let new_state = modifier.state.as_deref().or(old_state.as_deref());
-    let new_title = modifier.title.as_ref().unwrap_or(&old_title);
-    let old_priority = old_priority.and_then(TaskPriority::from_char);
+fn apply_heading_fields(
+    lines: &mut [String],
+    heading_idx: usize,
+    heading: &ParsedHeading,
+    modifier: &HeadingMod,
+    changes: &mut Vec<TaskPropertyChange>,
+) {
+    let old_state = heading.state.as_deref();
+    let new_state = modifier.state.as_deref().or(old_state);
+    let new_title = modifier.title.as_ref().unwrap_or(&heading.title);
+    let old_priority = heading.priority;
     let new_priority = match modifier.priority {
         Change::Unchanged => old_priority,
         Change::Set(priority) => Some(priority),
         Change::Clear => None,
     };
-    let new_tags = modifier.tags.as_ref().unwrap_or(&old_tags);
+    let new_tags = modifier.tags.as_ref().unwrap_or(&heading.tags);
 
-    if modifier.state.is_some() && old_state.as_deref() != new_state {
+    let mut heading_changed = false;
+    if modifier.state.is_some() && old_state != new_state {
         changes.push(TaskPropertyChange {
             property: TaskProperty::Status,
-            old: old_state.clone(),
+            old: heading.state.clone(),
             new: new_state.map(str::to_string),
         });
+        heading_changed = true;
     }
-    if modifier.title.is_some() && old_title != *new_title {
+    if modifier.title.is_some() && heading.title != *new_title {
         changes.push(TaskPropertyChange {
             property: TaskProperty::Title,
-            old: Some(old_title.clone()),
+            old: Some(heading.title.clone()),
             new: Some(new_title.clone()),
         });
+        heading_changed = true;
     }
     if !matches!(modifier.priority, Change::Unchanged) && old_priority != new_priority {
         changes.push(TaskPropertyChange {
@@ -153,56 +197,46 @@ pub fn update_heading_properties(
             old: old_priority.map(|p| p.to_string()),
             new: new_priority.map(|p| p.to_string()),
         });
+        heading_changed = true;
     }
-    if modifier.tags.is_some() && old_tags != *new_tags {
+    if modifier.tags.is_some() && heading.tags != *new_tags {
         changes.push(TaskPropertyChange {
             property: TaskProperty::Tags,
-            old: non_empty_tags(&old_tags),
+            old: non_empty_tags(&heading.tags),
             new: non_empty_tags(new_tags),
         });
+        heading_changed = true;
     }
-    if changes.iter().any(|change| {
-        matches!(
-            change.property,
-            TaskProperty::Status
-                | TaskProperty::Title
-                | TaskProperty::Priority
-                | TaskProperty::Tags
-        )
-    }) {
+    if heading_changed {
         lines[heading_idx] = format!(
             "{}{}",
-            format_heading(level, new_state, new_priority, new_title, new_tags),
-            heading_newline
+            format_heading(&heading.level, new_state, new_priority, new_title, new_tags),
+            heading.newline.as_str()
         );
     }
+}
 
+fn apply_planning(
+    lines: &mut Vec<String>,
+    heading_idx: usize,
+    modifier: &HeadingMod,
+    changes: &mut Vec<TaskPropertyChange>,
+) -> Result<()> {
     apply_planning_change(
-        &mut lines,
+        lines,
         heading_idx,
         PlanningKind::Scheduled,
         &modifier.scheduled,
-        &mut changes,
+        changes,
     )?;
     apply_planning_change(
-        &mut lines,
+        lines,
         heading_idx,
         PlanningKind::Deadline,
         &modifier.deadline,
-        &mut changes,
+        changes,
     )?;
-    apply_project_change(&mut lines, heading_idx, &modifier.project, &mut changes);
-    apply_description_change(
-        &mut lines,
-        heading_idx,
-        modifier.description.as_ref(),
-        &mut changes,
-    );
-
-    if !changes.is_empty() {
-        org_edit::write_lines(path, &lines)?;
-    }
-    Ok(changes)
+    Ok(())
 }
 
 pub fn update_heading_planning_date(
@@ -354,13 +388,13 @@ fn planning_display_label(kind: PlanningKind) -> TaskProperty {
     }
 }
 
-fn apply_project_change(
+fn apply_drawer_properties(
     lines: &mut Vec<String>,
     heading_idx: usize,
-    requested: &Change<String>,
+    modifier: &HeadingMod,
     changes: &mut Vec<TaskPropertyChange>,
 ) {
-    let requested = match requested {
+    let requested = match &modifier.project {
         Change::Unchanged => return,
         Change::Set(value) => Some(value.as_str()),
         Change::Clear => None,
@@ -457,13 +491,13 @@ fn metadata_insert_index(lines: &[String], heading_idx: usize) -> usize {
         .unwrap_or(heading_idx + 1)
 }
 
-fn apply_description_change(
+fn apply_description(
     lines: &mut Vec<String>,
     heading_idx: usize,
-    requested: Option<&String>,
+    modifier: &HeadingMod,
     changes: &mut Vec<TaskPropertyChange>,
 ) {
-    let Some(requested) = requested else {
+    let Some(requested) = modifier.description.as_ref() else {
         return;
     };
     let (start, end) = description_range(lines, heading_idx);
