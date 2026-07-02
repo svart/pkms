@@ -378,6 +378,48 @@ fn test_check_file_links_json() {
 }
 
 #[test]
+fn test_check_plain_file_uri_links_json() {
+    let (_dir, root) = setup_clean_db();
+    let existing = root.join("existing.txt");
+    let missing = root.join("missing.txt");
+    fs::write(&existing, b"exists").unwrap();
+    db_write(
+        &root,
+        "plain-file-uri.org",
+        &format!(
+            r#":PROPERTIES:
+:ID:       aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa
+:END:
+#+title: Plain File URI
+
+file://{}
+file://{}
+"#,
+            existing.display(),
+            missing.display()
+        ),
+    );
+
+    let (v, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "check",
+        "--file-links",
+    ]);
+
+    assert!(!status.success());
+    let broken_files = v["broken_file_links"].as_array().unwrap();
+    assert_eq!(broken_files.len(), 1);
+    assert_eq!(broken_files[0]["source_title"], "Plain File URI");
+    assert_eq!(
+        broken_files[0]["target_path"],
+        missing.display().to_string()
+    );
+}
+
+#[test]
 fn test_check_file_links_deterministic_order() {
     let (_dir, root) = setup_clean_db();
     db_write(

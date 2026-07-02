@@ -116,6 +116,9 @@ impl PropertyKey {
 pub(crate) static LINK_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"\[\[([^\]]+?)(?:\]\[([^\]]*))?\]\]").unwrap());
 
+static PLAIN_FILE_URI_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r#"\bfile://[^\s<>\[\]\(\)\"']+"#).unwrap());
+
 pub(crate) static HEADING_RE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(
         r"^(\*+)\s+(?:([A-Z][A-Z-]*)\s+)?(?:\[#([A-C])\]\s+)?(.*?)(?:\s+:(\w+(?::\w+)*):)?\s*$",
@@ -372,14 +375,33 @@ impl ParseContext {
     }
 
     fn push_links_from_line(&mut self, line: &str) {
+        let mut org_link_spans = Vec::new();
         for cap in LINK_RE.captures_iter(line) {
-            if let Some(link) = parse_link(&cap[1]) {
-                if let Some(&idx) = self.heading_stack.last() {
-                    self.headings[idx].outgoing.push(link);
-                } else {
-                    self.outgoing.push(link);
-                }
+            if let Some(full_match) = cap.get(0) {
+                org_link_spans.push(full_match.range());
             }
+            if let Some(link) = parse_link(&cap[1]) {
+                self.push_link(link);
+            }
+        }
+        for file_uri in PLAIN_FILE_URI_RE.find_iter(line) {
+            if org_link_spans
+                .iter()
+                .any(|span| span.contains(&file_uri.start()))
+            {
+                continue;
+            }
+            if let Some(target) = parse_plain_file_uri(file_uri.as_str()) {
+                self.push_link(Link::File(target));
+            }
+        }
+    }
+
+    fn push_link(&mut self, link: Link) {
+        if let Some(&idx) = self.heading_stack.last() {
+            self.headings[idx].outgoing.push(link);
+        } else {
+            self.outgoing.push(link);
         }
     }
 }
@@ -592,6 +614,12 @@ fn parse_link(target: &str) -> Option<Link> {
     None
 }
 
+fn parse_plain_file_uri(target: &str) -> Option<LinkTarget> {
+    target
+        .strip_prefix("file://")
+        .map(|path| LinkTarget::new(path.to_string()))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -636,6 +664,23 @@ Some content here."#;
         assert_eq!(note.roam_refs, vec!["https://example.com"]);
         assert_eq!(note.outgoing.len(), 4);
         assert!(matches!(note.outgoing[0], Link::Internal(_)));
+    }
+
+    #[test]
+    fn test_parse_with_plain_file_uri_link() {
+        let content = r#":PROPERTIES:
+:ID:       a1b2c3d4-e5f6-7890-abcd-ef1234567890
+:END:
+#+title: file uri note
+
+file:///mnt/unreasonable_link
+"#;
+        let note = parse_note(content);
+        assert_eq!(note.outgoing.len(), 1);
+        match &note.outgoing[0] {
+            Link::File(target) => assert_eq!(target.as_str(), "/mnt/unreasonable_link"),
+            other => panic!("expected file link, got {other:?}"),
+        }
     }
 
     #[test]
