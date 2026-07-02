@@ -118,7 +118,12 @@ pub fn execute(config: &ResolvedConfig, opts: &QueryOptions) -> Result<QueryOutp
     let mut combined = search_by_text(&graph, &opts.terms, &opts.scope)?;
 
     if opts.todo_filter == QueryTodoFilter::WithTodos {
-        combined.retain(|r| graph.nodes.get(&r.uuid).is_some_and(|n| n.has_todos));
+        combined.retain(|r| {
+            graph
+                .nodes
+                .get(r.uuid.as_str())
+                .is_some_and(|n| n.has_todos)
+        });
     }
 
     let total_results = combined.len();

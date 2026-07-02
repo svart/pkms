@@ -3,6 +3,72 @@ use std::borrow::Borrow;
 use std::fmt;
 use std::ops::Deref;
 
+macro_rules! impl_string_newtype {
+    ($type:ident) => {
+        impl fmt::Display for $type {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                f.write_str(&self.0)
+            }
+        }
+
+        impl AsRef<str> for $type {
+            fn as_ref(&self) -> &str {
+                self.as_str()
+            }
+        }
+
+        impl Deref for $type {
+            type Target = str;
+
+            fn deref(&self) -> &Self::Target {
+                self.as_str()
+            }
+        }
+
+        impl Borrow<str> for $type {
+            fn borrow(&self) -> &str {
+                self.as_str()
+            }
+        }
+
+        impl From<String> for $type {
+            fn from(value: String) -> Self {
+                Self::new(value)
+            }
+        }
+
+        impl From<&str> for $type {
+            fn from(value: &str) -> Self {
+                Self::new(value)
+            }
+        }
+
+        impl From<$type> for String {
+            fn from(value: $type) -> Self {
+                value.0
+            }
+        }
+
+        impl PartialEq<&str> for $type {
+            fn eq(&self, other: &&str) -> bool {
+                self.as_str() == *other
+            }
+        }
+
+        impl PartialEq<str> for $type {
+            fn eq(&self, other: &str) -> bool {
+                self.as_str() == other
+            }
+        }
+
+        impl PartialEq<String> for $type {
+            fn eq(&self, other: &String) -> bool {
+                self.as_str() == other
+            }
+        }
+    };
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize)]
 #[serde(transparent)]
 pub struct NoteId(String);
@@ -21,73 +87,7 @@ impl NoteId {
     }
 }
 
-impl fmt::Display for NoteId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&self.0)
-    }
-}
-
-impl AsRef<str> for NoteId {
-    fn as_ref(&self) -> &str {
-        self.as_str()
-    }
-}
-
-impl Deref for NoteId {
-    type Target = str;
-
-    fn deref(&self) -> &Self::Target {
-        self.as_str()
-    }
-}
-
-impl Borrow<str> for NoteId {
-    fn borrow(&self) -> &str {
-        self.as_str()
-    }
-}
-
-impl Borrow<String> for NoteId {
-    fn borrow(&self) -> &String {
-        &self.0
-    }
-}
-
-impl From<String> for NoteId {
-    fn from(value: String) -> Self {
-        Self::new(value)
-    }
-}
-
-impl From<&str> for NoteId {
-    fn from(value: &str) -> Self {
-        Self::new(value)
-    }
-}
-
-impl From<NoteId> for String {
-    fn from(value: NoteId) -> Self {
-        value.0
-    }
-}
-
-impl PartialEq<&str> for NoteId {
-    fn eq(&self, other: &&str) -> bool {
-        self.as_str() == *other
-    }
-}
-
-impl PartialEq<str> for NoteId {
-    fn eq(&self, other: &str) -> bool {
-        self.as_str() == other
-    }
-}
-
-impl PartialEq<String> for NoteId {
-    fn eq(&self, other: &String) -> bool {
-        self.as_str() == other
-    }
-}
+impl_string_newtype!(NoteId);
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize)]
 #[serde(transparent)]
@@ -103,70 +103,4 @@ impl LinkTarget {
     }
 }
 
-impl fmt::Display for LinkTarget {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&self.0)
-    }
-}
-
-impl AsRef<str> for LinkTarget {
-    fn as_ref(&self) -> &str {
-        self.as_str()
-    }
-}
-
-impl Deref for LinkTarget {
-    type Target = str;
-
-    fn deref(&self) -> &Self::Target {
-        self.as_str()
-    }
-}
-
-impl Borrow<str> for LinkTarget {
-    fn borrow(&self) -> &str {
-        self.as_str()
-    }
-}
-
-impl Borrow<String> for LinkTarget {
-    fn borrow(&self) -> &String {
-        &self.0
-    }
-}
-
-impl From<String> for LinkTarget {
-    fn from(value: String) -> Self {
-        Self::new(value)
-    }
-}
-
-impl From<&str> for LinkTarget {
-    fn from(value: &str) -> Self {
-        Self::new(value)
-    }
-}
-
-impl From<LinkTarget> for String {
-    fn from(value: LinkTarget) -> Self {
-        value.0
-    }
-}
-
-impl PartialEq<&str> for LinkTarget {
-    fn eq(&self, other: &&str) -> bool {
-        self.as_str() == *other
-    }
-}
-
-impl PartialEq<str> for LinkTarget {
-    fn eq(&self, other: &str) -> bool {
-        self.as_str() == other
-    }
-}
-
-impl PartialEq<String> for LinkTarget {
-    fn eq(&self, other: &String) -> bool {
-        self.as_str() == other
-    }
-}
+impl_string_newtype!(LinkTarget);

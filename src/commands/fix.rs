@@ -114,7 +114,7 @@ pub fn run(ctx: &CommandContext<'_>, opts: &FixOptions) -> Result<()> {
 
     let (replacement_uuid, replacement_title) = graph
         .nodes
-        .get(&opts.target_uuid)
+        .get(opts.target_uuid.as_str())
         .map(|n| (n.uuid.clone(), n.title.clone()))
         .ok_or_else(|| {
             anyhow::anyhow!(
