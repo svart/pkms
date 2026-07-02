@@ -256,28 +256,8 @@ pub fn update_heading_planning_date(
         bail!("Task line {line_number} is no longer an org heading");
     }
 
-    let planning_idx = find_planning_line_index(&lines, heading_idx);
-    match (planning_idx, date) {
-        (Some(idx), Some(date)) => {
-            let updated = replace_planning_token(&lines[idx], kind, Some(&org_date(date)?));
-            lines[idx] = updated;
-        }
-        (Some(idx), None) => {
-            let updated = replace_planning_token(&lines[idx], kind, None);
-            if updated.trim().is_empty() {
-                lines.remove(idx);
-            } else {
-                lines[idx] = updated;
-            }
-        }
-        (None, Some(date)) => {
-            lines.insert(
-                heading_idx + 1,
-                format!("{}: {}\n", planning_label(kind), org_date(date)?),
-            );
-        }
-        (None, None) => {}
-    }
+    let new = date.map(org_date).transpose()?;
+    set_planning_value(&mut lines, heading_idx, kind, new.as_deref());
     org_edit::write_lines(path, &lines)?;
     Ok(())
 }
@@ -336,8 +316,23 @@ fn apply_planning_change(
         return Ok(());
     }
 
+    set_planning_value(lines, heading_idx, kind, new.as_deref());
+    changes.push(TaskPropertyChange {
+        property: planning_display_label(kind),
+        old,
+        new,
+    });
+    Ok(())
+}
+
+fn set_planning_value(
+    lines: &mut Vec<String>,
+    heading_idx: usize,
+    kind: PlanningKind,
+    value: Option<&str>,
+) {
     let planning_idx = find_planning_line_index(lines, heading_idx);
-    match (planning_idx, new.as_deref()) {
+    match (planning_idx, value) {
         (Some(idx), Some(value)) => {
             lines[idx] = replace_planning_token(&lines[idx], kind, Some(value));
         }
@@ -357,12 +352,6 @@ fn apply_planning_change(
         }
         (None, None) => {}
     }
-    changes.push(TaskPropertyChange {
-        property: planning_display_label(kind),
-        old,
-        new,
-    });
-    Ok(())
 }
 
 fn current_planning_value(
