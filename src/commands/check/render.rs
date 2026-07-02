@@ -45,14 +45,12 @@ fn render_summary(text: &mut String, output: &CheckOutput) {
 
     if let Some(stats) = &output.stats {
         let _ = writeln!(text, "  Notes:          {}", stats.total_notes);
-        let _ = writeln!(
-            text,
-            "  Links:          {} (internal: {}, file: {}, url: {})",
-            stats.total_links,
-            stats.total_internal_links,
-            stats.total_file_links,
-            stats.total_url_links,
-        );
+        let _ = writeln!(text, "  Links:          {}", stats.total_links);
+        let _ = writeln!(text, "    internal: {}", stats.total_internal_links);
+        let _ = writeln!(text, "    url: {}", stats.total_url_links);
+        let _ = writeln!(text, "    file: {}", stats.total_file_links);
+        #[cfg(feature = "ssh")]
+        let _ = writeln!(text, "    ssh: {}", stats.total_ssh_links);
         let _ = writeln!(text, "  Orphans:        {}", stats.orphan_notes);
         let _ = writeln!(text, "  Broken links:   {}", stats.broken_link_count);
         let _ = writeln!(text, "  Parse errors:   {}", stats.parse_error_count);

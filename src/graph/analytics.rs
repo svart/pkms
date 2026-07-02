@@ -3,6 +3,8 @@ use std::path::Path;
 use std::time::SystemTime;
 
 use crate::domain::NoteId;
+#[cfg(feature = "ssh")]
+use crate::link_check::is_ssh_file_target;
 use crate::parser::Link;
 use crate::parser::find_daily_file_date;
 
@@ -108,6 +110,13 @@ impl Graph {
             .flat_map(authored_links)
             .filter(|l| matches!(l, Link::Url(_)))
             .count();
+        #[cfg(feature = "ssh")]
+        let total_ssh_links: usize = self
+            .results
+            .iter()
+            .flat_map(authored_links)
+            .filter(|l| matches!(l, Link::File(target) if is_ssh_file_target(target)))
+            .count();
         let total_links = total_internal_links + total_file_links + total_url_links;
         let orphan_notes = self.orphan_nodes().len();
         let broken_link_count = self.broken_links.len();
@@ -123,6 +132,8 @@ impl Graph {
             total_internal_links,
             total_file_links,
             total_url_links,
+            #[cfg(feature = "ssh")]
+            total_ssh_links,
             orphan_notes,
             broken_link_count,
             skipped_count,

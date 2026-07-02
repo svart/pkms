@@ -11,6 +11,8 @@ fn healthy_output() -> CheckOutput {
             total_internal_links: 1,
             total_file_links: 1,
             total_url_links: 1,
+            #[cfg(feature = "ssh")]
+            total_ssh_links: 0,
             orphan_notes: 0,
             broken_link_count: 0,
             skipped_count: 0,
@@ -39,7 +41,14 @@ fn renders_healthy_text_from_typed_output() {
 
     assert!(text.contains("Database: /notes"));
     assert!(text.contains("  Notes:          2"));
-    assert!(text.contains("  Links:          3 (internal: 1, file: 1, url: 1)"));
+    assert!(text.contains("  Links:          3"));
+    assert!(text.contains("    internal: 1"));
+    assert!(text.contains("    url: 1"));
+    assert!(text.contains("    file: 1"));
+    #[cfg(not(feature = "ssh"))]
+    assert!(!text.contains("    ssh:"));
+    #[cfg(feature = "ssh")]
+    assert!(text.contains("    ssh: 0"));
     assert!(text.ends_with("Status: healthy\n"));
 }
 

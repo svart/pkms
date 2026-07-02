@@ -334,6 +334,8 @@ pub struct GraphStats {
     pub total_internal_links: usize,
     pub total_file_links: usize,
     pub total_url_links: usize,
+    #[cfg(feature = "ssh")]
+    pub total_ssh_links: usize,
     pub orphan_notes: usize,
     pub broken_link_count: usize,
     pub skipped_count: usize,

@@ -224,6 +224,22 @@ Body
 }
 
 #[test]
+#[cfg(feature = "ssh")]
+fn stats_count_ssh_file_links_separately() {
+    let results = vec![make_note(
+        "a",
+        "Note A",
+        vec![Link::File("/ssh:example.org:/srv/note.org".into())],
+    )];
+    let graph = Graph::build(results);
+    let stats = graph.stats();
+
+    assert_eq!(stats.total_links, 1);
+    assert_eq!(stats.total_file_links, 1);
+    assert_eq!(stats.total_ssh_links, 1);
+}
+
+#[test]
 fn collect_node_validation_issues_returns_typed_records() {
     let dir = tempfile::tempdir().unwrap();
     let source_uuid = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
