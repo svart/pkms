@@ -142,17 +142,9 @@ fn heading_block_from_content(content: &str, heading_title: &str) -> Option<Stri
     Some(lines[start..end].join("\n"))
 }
 
-fn process_one_get(
-    graph: &Graph,
-    target: &str,
-    show_links: bool,
-    show_headings: bool,
-    heading: Option<&str>,
-    no_content: bool,
-    encoding: tokens::Encoding,
-) -> Result<GetOutput> {
+fn process_one_get(graph: &Graph, target: &str, opts: &GetOptions) -> Result<GetOutput> {
     let node = graph.resolve_target(target)?.clone();
-    let neighbors = if show_links {
+    let neighbors = if opts.show_links {
         get_neighbor_map(graph, &node.uuid)
     } else {
         HashMap::new()
@@ -160,7 +152,7 @@ fn process_one_get(
 
     let full_content = match std::fs::read_to_string(&node.path) {
         Ok(content) => Some(content),
-        Err(err) if heading.is_some() => {
+        Err(err) if opts.heading.is_some() => {
             return Err(err).with_context(|| {
                 format!(
                     "Failed to read note content: {}",
@@ -170,7 +162,9 @@ fn process_one_get(
         }
         Err(_) => None,
     };
-    let heading_content = heading
+    let heading_content = opts
+        .heading
+        .as_deref()
         .map(|title| {
             let content = full_content
                 .as_deref()
@@ -180,22 +174,22 @@ fn process_one_get(
         })
         .transpose()?;
 
-    let node_content = if no_content {
+    let node_content = if opts.no_content {
         None
     } else if let Some(content) = &heading_content {
         Some(content.clone())
-    } else if show_headings {
+    } else if opts.show_headings {
         full_content.clone()
     } else {
         None
     };
-    let text_content = if no_content {
+    let text_content = if opts.no_content {
         None
     } else {
         heading_content.clone().or_else(|| full_content.clone())
     };
 
-    let headings = if show_headings {
+    let headings = if opts.show_headings {
         full_content.as_deref().map(headings_from_content)
     } else {
         None
@@ -206,7 +200,7 @@ fn process_one_get(
     let estimated_tokens = heading_content
         .as_deref()
         .or(full_content.as_deref())
-        .map(|c| tokens::count_tokens(c, encoding));
+        .map(|c| tokens::count_tokens(c, opts.encoding));
 
     Ok(GetOutput {
         node: node_json,
@@ -220,17 +214,7 @@ pub fn execute(config: &ResolvedConfig, opts: &GetOptions) -> Result<Vec<GetOutp
     let graph = Graph::load(config)?;
     opts.targets
         .iter()
-        .map(|target| {
-            process_one_get(
-                &graph,
-                target,
-                opts.show_links,
-                opts.show_headings,
-                opts.heading.as_deref(),
-                opts.no_content,
-                opts.encoding,
-            )
-        })
+        .map(|target| process_one_get(&graph, target, opts))
         .collect()
 }
 
