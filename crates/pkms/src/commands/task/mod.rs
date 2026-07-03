@@ -7,7 +7,7 @@ use crate::commands::show::{HeadingTarget, ShowOptions};
 #[cfg(feature = "todoist")]
 use crate::commands::task_common::RowSeparatorMode;
 use crate::commands::task_common::TaskSortField;
-use crate::config::ResolvedConfig;
+use crate::config::{ResolvedConfig, TaskCommandConfig};
 use crate::output::{OutputContext, terminal_markup};
 use crate::tasks::clock::TaskClock;
 #[cfg(feature = "todoist")]
@@ -39,7 +39,8 @@ use plan::{
 pub fn run(ctx: &CommandContext<'_>, command: &TaskCommand) -> Result<ExitCode> {
     let config = ctx.config();
     let output = ctx.output();
-    let task_id_snapshot = task_id_snapshot_before_command(config, command);
+    let task_config = config.task_command_config();
+    let task_id_snapshot = task_id_snapshot_before_command(&task_config, command);
     let clock = TaskClock::now();
     let runtime = TaskRuntime {
         config,
@@ -60,7 +61,7 @@ pub fn run(ctx: &CommandContext<'_>, command: &TaskCommand) -> Result<ExitCode> 
         TaskCommand::Postpone(args) => success(run_postpone(runtime, &args.id, &args.to)),
         TaskCommand::Target(args) => id_command::run(ctx, args, runtime),
     }?;
-    maybe_warn_task_ids_changed(config, task_id_snapshot);
+    maybe_warn_task_ids_changed(&task_config, task_id_snapshot);
     Ok(exit_code)
 }
 
@@ -300,9 +301,9 @@ struct TaskIdentity {
 }
 
 impl TaskIdSnapshot {
-    fn capture(config: &ResolvedConfig) -> Result<Self> {
-        let graph = pkms_org::Graph::load(&config.org_config())?;
-        let entries = graph.all_task_entries(&config.task_state_config());
+    fn capture(config: &TaskCommandConfig) -> Result<Self> {
+        let graph = pkms_org::Graph::load(&config.org)?;
+        let entries = graph.all_task_entries(&config.task_states);
         let identities = task_identities_by_location(&entries);
         let mut ordered = Vec::new();
         for entry in entries {
@@ -350,7 +351,7 @@ fn task_identities_by_location(
 }
 
 fn task_id_snapshot_before_command(
-    config: &ResolvedConfig,
+    config: &TaskCommandConfig,
     command: &TaskCommand,
 ) -> Option<TaskIdSnapshot> {
     if !command_may_change_pkms_task_ids(command) {
@@ -365,7 +366,7 @@ fn task_id_snapshot_before_command(
     }
 }
 
-fn maybe_warn_task_ids_changed(config: &ResolvedConfig, before: Option<TaskIdSnapshot>) {
+fn maybe_warn_task_ids_changed(config: &TaskCommandConfig, before: Option<TaskIdSnapshot>) {
     let Some(before) = before else {
         return;
     };

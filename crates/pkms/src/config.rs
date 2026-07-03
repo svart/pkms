@@ -44,6 +44,8 @@ pub struct WebCommandConfig {
 
 #[derive(Debug, Clone)]
 pub struct TaskCommandConfig {
+    pub org: pkms_org::OrgConfig,
+    pub task_states: pkms_org::graph::tasks::TaskStateConfig,
     pub columns: Option<ColumnsConfig>,
 }
 
@@ -327,6 +329,8 @@ impl ResolvedConfig {
 
     pub fn task_command_config(&self) -> TaskCommandConfig {
         TaskCommandConfig {
+            org: self.org_config(),
+            task_states: self.task_state_config(),
             columns: self.columns.clone(),
         }
     }
