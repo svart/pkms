@@ -207,35 +207,35 @@ impl PropertyKey {
     }
 }
 
-pub(crate) static LINK_RE: LazyLock<Regex> =
+pub static LINK_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"\[\[([^\]]+?)(?:\]\[([^\]]*))?\]\]").unwrap());
 
 static PLAIN_FILE_URI_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r#"\bfile://[^\s<>\[\]\(\)\"']+"#).unwrap());
 
-pub(crate) static HEADING_RE: LazyLock<Regex> = LazyLock::new(|| {
+pub static HEADING_RE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(
         r"^(\*+)\s+(?:([A-Z][A-Z-]*)\s+)?(?:\[#([A-C])\]\s+)?(.*?)(?:\s+:(\w+(?::\w+)*):)?\s*$",
     )
     .unwrap()
 });
 
-pub(crate) static SCHEDULED_RE: LazyLock<Regex> =
+pub static SCHEDULED_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"SCHEDULED:\s*(<[^>]+>(?:--<[^>]+>)?)").unwrap());
 
-pub(crate) static DEADLINE_RE: LazyLock<Regex> =
+pub static DEADLINE_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"DEADLINE:\s*(<[^>]+>(?:--<[^>]+>)?)").unwrap());
 
-pub(crate) static DAILY_FILE_RE: LazyLock<Regex> =
+pub static DAILY_FILE_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"(\d{4}-\d{2}-\d{2})\.org$").unwrap());
 
-pub(crate) static TITLE_RE: LazyLock<Regex> =
+pub static TITLE_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"(?im)^#\+title:\s*(.*)$").unwrap());
 
-pub(crate) static FILETAGS_RE: LazyLock<Regex> =
+pub static FILETAGS_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"(?im)^#\+filetags:\s*(.+)$").unwrap());
 
-pub(crate) static ID_PROPERTY_RE: LazyLock<Regex> = LazyLock::new(|| {
+pub static ID_PROPERTY_RE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"(?i):ID:\s+([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})")
         .unwrap()
 });
@@ -246,7 +246,7 @@ static CATEGORY_RE: LazyLock<Regex> =
 static ALIASES_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"(?i):ROAM_ALIASES:\s+(.*)").unwrap());
 
-pub(crate) static UUID_FORMAT_RE: LazyLock<Regex> = LazyLock::new(|| {
+pub static UUID_FORMAT_RE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$").unwrap()
 });
 

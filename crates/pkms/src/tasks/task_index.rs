@@ -1,14 +1,14 @@
 use crate::config::ResolvedConfig;
-use crate::corpus::Corpus;
-use crate::domain::NoteId;
 use crate::graph::Graph;
-use crate::org_date::parse_org_date;
-use crate::parser::{Heading, OrgPriority, find_daily_file_date, strip_org_links};
 use crate::tasks::clock::TaskClock;
 use crate::tasks::filter::{
     TextFilter, matches_tag_filters, matches_text_filters, matches_type_filters,
 };
 use crate::tasks::model::{TaskDateValue, TaskPriority, TaskState};
+use pkms_org::corpus::Corpus;
+use pkms_org::domain::NoteId;
+use pkms_org::org_date::parse_org_date;
+use pkms_org::parser::{Heading, OrgPriority, find_daily_file_date, strip_org_links};
 
 #[derive(Debug, Clone)]
 pub struct TaskRecord {
@@ -197,7 +197,7 @@ pub fn assign_canonical_ids(config: &ResolvedConfig, graph: &Graph, records: &mu
 
 fn collect_records(
     corpus: &Corpus,
-    mut include_heading: impl FnMut(&crate::parser::ParsedNote, &Heading, bool) -> bool,
+    mut include_heading: impl FnMut(&pkms_org::parser::ParsedNote, &Heading, bool) -> bool,
     clock: TaskClock,
 ) -> Vec<TaskRecord> {
     let mut items = Vec::new();

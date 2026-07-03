@@ -1,9 +1,9 @@
-use crate::domain::NoteId;
 use crate::tasks::id::TaskId;
 use crate::tasks::model::{
     TaskDate, TaskDateValue, TaskItem, TaskPriority, TaskSourceKind, TaskState, TaskStatus,
 };
 use anyhow::{Context, Result};
+use pkms_org::domain::NoteId;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 

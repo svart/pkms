@@ -2,10 +2,10 @@ use crate::cli::OutputFormat;
 use crate::command_context::CommandContext;
 use crate::config::ResolvedConfig;
 use crate::graph::{FileScanResult, Graph, Node};
-use crate::org_edit::parsed_heading_subtree_end_index;
 use crate::output::{OutputContext, terminal_markup};
-use crate::parser::{Heading, Link, strip_org_links};
 use anyhow::Result;
+use pkms_org::org_edit::parsed_heading_subtree_end_index;
+use pkms_org::parser::{Heading, Link, strip_org_links};
 use serde::Serialize;
 use std::collections::HashMap;
 use std::fmt::Write;
@@ -63,7 +63,7 @@ pub enum HeadingTarget {
 type TaskIdMap = HashMap<(String, usize), usize>;
 
 fn find_parents(
-    headings: &[crate::parser::Heading],
+    headings: &[pkms_org::parser::Heading],
     target_idx: usize,
     path: &std::path::Path,
     task_ids: &TaskIdMap,
@@ -88,7 +88,7 @@ fn find_parents(
 }
 
 fn find_children(
-    headings: &[crate::parser::Heading],
+    headings: &[pkms_org::parser::Heading],
     target_idx: usize,
     end_line: usize,
     path: &std::path::Path,
@@ -119,7 +119,7 @@ fn canonical_task_id(
         .copied()
 }
 
-fn related_task_heading(id: usize, heading: &crate::parser::Heading) -> RelatedTaskHeading {
+fn related_task_heading(id: usize, heading: &pkms_org::parser::Heading) -> RelatedTaskHeading {
     RelatedTaskHeading {
         id,
         title: heading.title.clone(),

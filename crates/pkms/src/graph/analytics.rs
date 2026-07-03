@@ -2,10 +2,10 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::time::SystemTime;
 
-use crate::domain::NoteId;
 use crate::link_check::is_ssh_file_target;
-use crate::parser::Link;
-use crate::parser::find_daily_file_date;
+use pkms_org::domain::NoteId;
+use pkms_org::parser::Link;
+use pkms_org::parser::find_daily_file_date;
 
 use super::{Graph, GraphStats};
 

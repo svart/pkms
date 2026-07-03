@@ -1,10 +1,10 @@
 use super::{DuplicateInfo, Graph, Node, OverlinkEntry, SelfLinkEntry, resolve_file_link_path};
-use crate::domain::{LinkTarget, NoteId};
 use crate::link_check::{
     LinkCheckBackend, LinkCheckJob, LinkCheckKind, LinkSource, is_ssh_file_target,
     local_file_link_target_exists, sort_link_check_jobs,
 };
-use crate::parser::{ID_PROPERTY_RE, Link, TITLE_RE, UUID_FORMAT_RE, validate_filetags_format};
+use pkms_org::domain::{LinkTarget, NoteId};
+use pkms_org::parser::{ID_PROPERTY_RE, Link, TITLE_RE, UUID_FORMAT_RE, validate_filetags_format};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 

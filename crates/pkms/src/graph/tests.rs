@@ -4,7 +4,7 @@ use crate::graph::validation::{
     DuplicateUuidIssueKind, GraphValidationCheck, GraphValidationOptions, NoteValidationIssue,
     SelfLinkKind,
 };
-use crate::parser::ParsedNote;
+use pkms_org::parser::ParsedNote;
 
 fn make_note(uuid: &str, title: &str, outgoing: Vec<Link>) -> FileScanResult {
     FileScanResult {
@@ -31,9 +31,9 @@ fn make_note_with_headings(
     outgoing: Vec<Link>,
     heading_uuids: Vec<&str>,
 ) -> FileScanResult {
-    let headings: Vec<crate::parser::Heading> = heading_uuids
+    let headings: Vec<pkms_org::parser::Heading> = heading_uuids
         .into_iter()
-        .map(|huid| crate::parser::Heading {
+        .map(|huid| pkms_org::parser::Heading {
             level: 1,
             title: format!("Heading {}", huid),
             todo_state: None,
@@ -1048,7 +1048,7 @@ This is the content with a unique-searchable-keyword here.
 
     let results = vec![FileScanResult {
         path: path.clone(),
-        parsed: crate::parser::ParsedNote {
+        parsed: pkms_org::parser::ParsedNote {
             uuids: vec!["aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa".into()],
             title: Some("Content Test".to_string()),
             filetags: vec![],

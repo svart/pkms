@@ -259,6 +259,15 @@ impl ResolvedConfig {
         &self.db_root
     }
 
+    pub fn org_config(&self) -> pkms_org::OrgConfig {
+        pkms_org::OrgConfig {
+            db_root: self.db_root.clone(),
+            new_notes_dir: Some(self.resolve_new_notes_dir()),
+            daily_notes_dir: Some(self.resolve_daily_notes_dir()),
+            ignore_patterns: self.resolve_ignore_patterns(),
+        }
+    }
+
     pub fn todo_states(&self) -> Vec<String> {
         let open = self.open_todo_states();
         let closed = self.closed_todo_states();

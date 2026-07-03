@@ -12,8 +12,8 @@ use crate::link_check::{
     LinkCheckErrorTarget, LinkCheckKind, LinkCheckResults, SshFileCheckOptions,
     run_local_link_checks, run_ssh_link_checks,
 };
-use crate::parser::Link;
 use anyhow::Result;
+use pkms_org::parser::Link;
 use std::path::Path;
 
 pub(super) struct CheckDisplayOptions {

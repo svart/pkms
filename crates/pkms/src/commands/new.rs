@@ -2,8 +2,8 @@ use crate::cli::NewArgs;
 use crate::command_context::CommandContext;
 use crate::config::ResolvedConfig;
 use crate::output::OutputContext;
-use crate::parser::{HEADING_RE, ID_PROPERTY_RE};
 use anyhow::{Context, Result};
+use pkms_org::parser::{HEADING_RE, ID_PROPERTY_RE};
 use serde::Serialize;
 use std::fmt::Write;
 use std::io::Write as IoWrite;
@@ -33,7 +33,7 @@ fn find_note_by_title(
     title: &str,
 ) -> Option<std::path::PathBuf> {
     let title_re = regex::Regex::new(r"(?im)^#\+title:\s*(.*)$").ok()?;
-    let files = crate::discovery::walk_org_files(db_root, ignore).ok()?;
+    let files = pkms_org::discovery::walk_org_files(db_root, ignore).ok()?;
     for path in files {
         let content = std::fs::read_to_string(&path).ok()?;
         if let Some(cap) = title_re.captures(&content) {

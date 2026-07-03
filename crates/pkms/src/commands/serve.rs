@@ -94,7 +94,7 @@ fn page_js() -> &'static str {
 mod tests {
     use super::*;
     use crate::config::ResolvedConfig;
-    use crate::corpus::Corpus;
+    use pkms_org::Corpus;
     use std::fs;
     use std::io;
 
@@ -178,7 +178,7 @@ Preview body.
         )
         .unwrap();
         let config = ResolvedConfig::for_test_db(root);
-        let corpus = Corpus::load(&config).unwrap();
+        let corpus = Corpus::load(&config.org_config()).unwrap();
         let graph = Graph::from_corpus(&corpus);
         let alpha = graph
             .resolve_target("aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa")
@@ -255,7 +255,7 @@ Sibling body.
         )
         .unwrap();
         let config = ResolvedConfig::for_test_db(root);
-        let corpus = Corpus::load(&config).unwrap();
+        let corpus = Corpus::load(&config.org_config()).unwrap();
         let graph = Graph::from_corpus(&corpus);
         let alpha = graph
             .resolve_target("aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa")
@@ -300,7 +300,7 @@ Body.
         )
         .unwrap();
         let config = ResolvedConfig::for_test_db(root);
-        let corpus = Corpus::load(&config).unwrap();
+        let corpus = Corpus::load(&config.org_config()).unwrap();
         let graph = Graph::from_corpus(&corpus);
         let state = ServeState {
             config: &config,
@@ -353,7 +353,7 @@ Body.
         )
         .unwrap();
         let config = ResolvedConfig::for_test_db(root);
-        let corpus = Corpus::load(&config).unwrap();
+        let corpus = Corpus::load(&config.org_config()).unwrap();
         let graph = Graph::from_corpus(&corpus);
         let node = graph
             .resolve_target("aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa")
@@ -403,7 +403,7 @@ Body.
         )
         .unwrap();
         let config = ResolvedConfig::for_test_db(root);
-        let corpus = Corpus::load(&config).unwrap();
+        let corpus = Corpus::load(&config.org_config()).unwrap();
         let graph = Graph::from_corpus(&corpus);
         let node = graph
             .resolve_target("aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa")
@@ -550,7 +550,7 @@ fn main() {}
         )
         .unwrap();
         let config = ResolvedConfig::for_test_db(root);
-        let corpus = Corpus::load(&config).unwrap();
+        let corpus = Corpus::load(&config.org_config()).unwrap();
         let graph = Graph::from_corpus(&corpus);
         let node = graph
             .resolve_target("aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa")
@@ -665,7 +665,7 @@ generic export
         )
         .unwrap();
         let config = ResolvedConfig::for_test_db(root);
-        let corpus = Corpus::load(&config).unwrap();
+        let corpus = Corpus::load(&config.org_config()).unwrap();
         let graph = Graph::from_corpus(&corpus);
         let node = graph
             .resolve_target("aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa")
@@ -756,7 +756,7 @@ generic export
         )
         .unwrap();
         let config = ResolvedConfig::for_test_db(root);
-        let corpus = Corpus::load(&config).unwrap();
+        let corpus = Corpus::load(&config.org_config()).unwrap();
         let graph = Graph::from_corpus(&corpus);
         let node = graph
             .resolve_target("aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa")
@@ -801,7 +801,7 @@ generic export
         )
         .unwrap();
         let config = ResolvedConfig::for_test_db(root);
-        let corpus = Corpus::load(&config).unwrap();
+        let corpus = Corpus::load(&config.org_config()).unwrap();
         let graph = Graph::from_corpus(&corpus);
         let node = graph
             .resolve_target("aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa")

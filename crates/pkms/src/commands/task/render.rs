@@ -281,7 +281,7 @@ fn display_mod_value(property: TaskProperty, value: Option<&str>, today: NaiveDa
         return "None".to_string();
     };
     if matches!(property, TaskProperty::Scheduled | TaskProperty::Deadline)
-        && let Some(parsed) = crate::org_date::parse_org_date(value)
+        && let Some(parsed) = pkms_org::org_date::parse_org_date(value)
     {
         let date = parsed.base_date.format("%Y-%m-%d").to_string();
         let day = if parsed.base_date == today {

@@ -1,9 +1,9 @@
-use crate::org_date::parse_org_date;
 use crate::output::table::{TableLayout, adaptive_table_layout, table_padding_width};
 use crate::output::{ALL_COLUMNS, Column, terminal_markup};
 use crate::tasks::clock::TaskClock;
 use anyhow::{Result, bail};
 use chrono::{NaiveDate, Timelike};
+use pkms_org::org_date::parse_org_date;
 use std::collections::HashSet;
 use tabled::builder::Builder;
 use tabled::settings::object::{Columns, Object, Rows};

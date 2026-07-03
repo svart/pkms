@@ -1,6 +1,6 @@
-use crate::domain::NoteId;
 use crate::tasks::id::TaskId;
 use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
+use pkms_org::domain::NoteId;
 use serde::{Serialize, Serializer};
 use std::fmt;
 use std::ops::Deref;
@@ -349,7 +349,7 @@ impl TaskItem {
             .into_iter()
             .flatten()
             .filter_map(|date| {
-                crate::org_date::parse_org_date(&date.raw).map(|parsed| {
+                pkms_org::org_date::parse_org_date(&date.raw).map(|parsed| {
                     let time = parsed
                         .time
                         .unwrap_or_else(|| NaiveTime::from_hms_opt(0, 0, 0).unwrap());

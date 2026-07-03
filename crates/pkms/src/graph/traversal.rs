@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet, VecDeque};
 
-use crate::domain::NoteId;
-use crate::parser::Link;
+use pkms_org::domain::NoteId;
+use pkms_org::parser::Link;
 
 use super::{Graph, NeighborSet};
 

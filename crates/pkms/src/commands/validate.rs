@@ -73,7 +73,7 @@ fn build_validate_output(
         outgoing_internal: node
             .outgoing
             .iter()
-            .filter(|l| matches!(l, crate::parser::Link::Internal(_)))
+            .filter(|l| matches!(l, pkms_org::parser::Link::Internal(_)))
             .count(),
         broken_internal,
         broken_files,

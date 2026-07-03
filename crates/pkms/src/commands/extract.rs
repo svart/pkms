@@ -3,12 +3,12 @@ use crate::command_context::CommandContext;
 use crate::commands::new::{create_note_file_exclusive, title_to_slug, unique_note_filename};
 use crate::config::ResolvedConfig;
 use crate::graph::{Graph, HeadingLocation};
-use crate::org_edit::{
+use crate::output::OutputContext;
+use anyhow::{Context, Result};
+use pkms_org::org_edit::{
     is_heading_line, parsed_heading_subtree_end_index, read_lines, split_line_ending, write_lines,
 };
-use crate::output::OutputContext;
-use crate::parser::{Heading, ID_PROPERTY_RE};
-use anyhow::{Context, Result};
+use pkms_org::parser::{Heading, ID_PROPERTY_RE};
 use serde::Serialize;
 use std::path::{Path, PathBuf};
 
@@ -298,7 +298,7 @@ fn next_available_note_path(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::parser::parse_note;
+    use pkms_org::parser::parse_note;
 
     #[test]
     fn subtree_end_stops_before_same_or_lower_heading() {

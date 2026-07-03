@@ -1,7 +1,7 @@
 //! In-memory knowledge graph of org-roam notes.
 //!
 //! [`Graph`] is the central data structure, built from parsed `.org` files.
-//! Each file is parsed into a [`ParsedNote`](crate::parser::ParsedNote)
+//! Each file is parsed into a [`ParsedNote`](pkms_org::parser::ParsedNote)
 //! (UUIDs, title, tags, aliases, links, headings). The builder promotes the primary UUID of
 //! each file into a [`Node`] and creates separate heading-nodes for headings with their own
 //! `:ID:` property. The graph resolves internal links into backlinks and detects broken links.
@@ -14,10 +14,10 @@ pub mod traversal;
 pub mod validation;
 
 use crate::config::ResolvedConfig;
-use crate::corpus::Corpus;
-pub use crate::corpus::FileScanResult;
-use crate::domain::{LinkTarget, NoteId};
-use crate::parser::{Link, ParsedNote};
+use pkms_org::corpus::Corpus;
+pub use pkms_org::corpus::FileScanResult;
+use pkms_org::domain::{LinkTarget, NoteId};
+use pkms_org::parser::{Link, ParsedNote};
 use serde::Serialize;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -194,7 +194,7 @@ fn file_link_line_spec_exists(path: &Path, line_spec: &str) -> bool {
 impl Graph {
     pub fn load(config: &ResolvedConfig) -> anyhow::Result<Self> {
         tracing::debug!(db_root = %config.resolved_db_root().display(), "loading graph");
-        let corpus = Corpus::load(config)?;
+        let corpus = Corpus::load(&config.org_config())?;
         let mut graph = Self::from_corpus(&corpus);
         graph.index_db_relative_paths(config.resolved_db_root());
         tracing::debug!(

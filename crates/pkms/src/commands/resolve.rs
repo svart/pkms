@@ -1,10 +1,10 @@
 use crate::cli::{OutputFormat, ResolveArgs};
 use crate::command_context::CommandContext;
 use crate::config::ResolvedConfig;
-use crate::discovery;
 use crate::output::OutputContext;
-use crate::parser::{ParsedNoteSummary, parse_note_summary};
 use anyhow::Result;
+use pkms_org::discovery;
+use pkms_org::parser::{ParsedNoteSummary, parse_note_summary};
 use serde::Serialize;
 use std::collections::HashSet;
 use std::fmt::Write;

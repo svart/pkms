@@ -1,5 +1,4 @@
 use crate::config::ResolvedConfig;
-use crate::parser::find_daily_file_date;
 use crate::tasks::clock::TaskClock;
 use crate::tasks::id::TaskId;
 use crate::tasks::model::{TaskDate, TaskItem, TaskSourceKind, TaskStatus};
@@ -10,6 +9,7 @@ use crate::tasks::task_index::{
 use crate::workspace::Workspace;
 use anyhow::{Context, Result};
 use chrono::NaiveDate;
+use pkms_org::parser::find_daily_file_date;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
@@ -438,8 +438,8 @@ fn item_date(item: &TaskRecord) -> Option<NaiveDate> {
 mod tests {
     use super::*;
     use crate::config::Config;
-    use crate::domain::NoteId;
     use crate::tasks::model::{TaskDateValue, TaskPriority, TaskState};
+    use pkms_org::domain::NoteId;
 
     fn config() -> ResolvedConfig {
         Config {

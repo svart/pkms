@@ -1,8 +1,8 @@
-use crate::org_edit;
-use crate::parser::{DEADLINE_RE, HEADING_RE, SCHEDULED_RE};
 use crate::tasks::model::{TaskDateValue, TaskPriority, TaskProperty, TaskState};
 use anyhow::{Result, bail};
 use chrono::{NaiveDate, NaiveDateTime};
+use pkms_org::org_edit;
+use pkms_org::parser::{DEADLINE_RE, HEADING_RE, SCHEDULED_RE};
 
 #[derive(Debug, Clone, Copy)]
 pub enum PlanningKind {
@@ -595,7 +595,7 @@ fn postpone_recurring_token(
     let Some(raw_match) = captures.get(1) else {
         return Ok(None);
     };
-    let parsed = crate::org_date::parse_org_date(raw_match.as_str())
+    let parsed = pkms_org::org_date::parse_org_date(raw_match.as_str())
         .ok_or_else(|| anyhow::anyhow!("Could not parse existing {label} date"))?;
     if parsed.repeater.is_none() {
         bail!("Task {label} date is not recurring");
@@ -604,7 +604,7 @@ fn postpone_recurring_token(
     Ok(Some(regex.replace(line, replacement.as_str()).to_string()))
 }
 
-fn format_org_date_like(existing: &crate::org_date::OrgDate, new_date: NaiveDate) -> String {
+fn format_org_date_like(existing: &pkms_org::org_date::OrgDate, new_date: NaiveDate) -> String {
     let open = if existing.inactive { "[" } else { "<" };
     let close = if existing.inactive { "]" } else { ">" };
     let mut parts = vec![new_date.format("%Y-%m-%d %a").to_string()];

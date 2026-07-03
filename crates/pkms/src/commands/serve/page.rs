@@ -5,8 +5,8 @@ use super::org_html::{
 use super::{page_css, page_js};
 use crate::config::ResolvedConfig;
 use crate::graph::{Graph, Node};
-use crate::org_edit::parsed_heading_subtree_end_index;
-use crate::parser::{HEADING_RE, Heading, parse_note, strip_org_links};
+use pkms_org::org_edit::parsed_heading_subtree_end_index;
+use pkms_org::parser::{HEADING_RE, Heading, parse_note, strip_org_links};
 use std::collections::BTreeMap;
 use std::fmt::Write as FmtWrite;
 
