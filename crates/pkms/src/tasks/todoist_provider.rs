@@ -42,7 +42,7 @@ pub fn list_items(config: &ResolvedConfig, filters: &TaskFilters) -> Result<Vec<
         .into_iter()
         .map(|task| crate::tasks::todoist::task_to_item_with_metadata(task, metadata.as_ref()))
         .collect::<Vec<_>>();
-    crate::tasks::todoist::enrich_items_with_pkms_notes(config, &mut items)?;
+    crate::tasks::todoist::enrich_items_with_pkms_notes(&config.org_config(), &mut items)?;
     Ok(items)
 }
 

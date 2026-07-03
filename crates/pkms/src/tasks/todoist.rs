@@ -117,7 +117,7 @@ pub fn pkms_note_marker_uuid(description: &str) -> Option<NoteId> {
 }
 
 pub fn enrich_items_with_pkms_notes(
-    config: &crate::config::ResolvedConfig,
+    config: &pkms_org::OrgConfig,
     items: &mut [TaskItem],
 ) -> Result<()> {
     if !items.iter().any(|item| {
@@ -129,7 +129,7 @@ pub fn enrich_items_with_pkms_notes(
         return Ok(());
     }
 
-    let graph = pkms_org::Graph::load(&config.org_config())?;
+    let graph = pkms_org::Graph::load(config)?;
     for item in items {
         let Some(uuid) = item.body.as_deref().and_then(pkms_note_marker_uuid) else {
             continue;

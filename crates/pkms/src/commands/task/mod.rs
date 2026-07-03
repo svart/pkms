@@ -220,7 +220,10 @@ fn show_todoist_task(config: &ResolvedConfig, ctx: &OutputContext, id: &str) -> 
         None
     };
     let mut item = crate::tasks::todoist::task_to_item_with_metadata(task, metadata.as_ref());
-    crate::tasks::todoist::enrich_items_with_pkms_notes(config, std::slice::from_mut(&mut item))?;
+    crate::tasks::todoist::enrich_items_with_pkms_notes(
+        &config.org_config(),
+        std::slice::from_mut(&mut item),
+    )?;
     match ctx.format {
         OutputFormat::Text => render::print_task_table(
             &[item],
