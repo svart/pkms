@@ -10,9 +10,9 @@ use crate::tasks::filter::{SourceSelection, TaskFilterContext, TaskFilterCriteri
 use crate::tasks::model::TaskItem;
 use crate::tasks::provider::TaskListView;
 use crate::tasks::scope::ResolvedScope;
-use crate::workspace::Workspace;
 use anyhow::Result;
 use chrono::NaiveDate;
+use pkms_org::Workspace;
 use std::collections::BTreeMap;
 
 pub(super) struct TaskListExecution {
@@ -174,7 +174,7 @@ fn apply_task_filter_criteria_on(
     let scope = if criteria.scope.is_empty() {
         None
     } else {
-        let workspace = Workspace::load(config)?;
+        let workspace = Workspace::load(&config.org_config())?;
         Some(ResolvedScope::resolve(
             &workspace.graph,
             config.resolved_db_root(),

@@ -1,10 +1,10 @@
 use crate::cli::OutputFormat;
 use crate::command_context::CommandContext;
 use crate::config::ResolvedConfig;
-use crate::graph::Graph;
-use crate::graph::validation::{DuplicateUuidIssueKind, NoteValidationIssue, SelfLinkKind};
 use crate::output::OutputContext;
 use anyhow::Result;
+use pkms_org::Graph;
+use pkms_org::graph::validation::{DuplicateUuidIssueKind, NoteValidationIssue, SelfLinkKind};
 use serde::Serialize;
 use std::fmt::Write;
 use std::path::Path;
@@ -36,8 +36,8 @@ pub struct BacklinkEntry {
     pub title: String,
 }
 
-impl From<&crate::graph::Node> for BacklinkEntry {
-    fn from(n: &crate::graph::Node) -> Self {
+impl From<&pkms_org::graph::Node> for BacklinkEntry {
+    fn from(n: &pkms_org::graph::Node) -> Self {
         BacklinkEntry {
             uuid: n.uuid.to_string(),
             title: n.title.clone(),
@@ -46,7 +46,7 @@ impl From<&crate::graph::Node> for BacklinkEntry {
 }
 
 fn build_validate_output(
-    node: &crate::graph::Node,
+    node: &pkms_org::graph::Node,
     incoming_len: usize,
     broken_internal: Vec<String>,
     broken_files: Vec<String>,
@@ -132,7 +132,7 @@ fn validate_one(graph: &Graph, target: &str, db_root: &Path) -> Result<ValidateO
 
 fn validate_node(
     graph: &Graph,
-    node: &crate::graph::Node,
+    node: &pkms_org::graph::Node,
     target: &str,
     db_root: &Path,
 ) -> Result<ValidateOutput> {
@@ -187,7 +187,7 @@ pub fn run(ctx: &CommandContext<'_>, opts: &ValidateOptions) -> Result<()> {
 }
 
 pub fn execute(config: &ResolvedConfig, opts: &ValidateOptions) -> Result<Vec<ValidateOutput>> {
-    let graph = Graph::load(config)?;
+    let graph = Graph::load(&config.org_config())?;
     let db_root = config.resolved_db_root();
 
     opts.targets

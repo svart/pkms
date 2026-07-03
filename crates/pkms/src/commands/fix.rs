@@ -1,9 +1,9 @@
 use crate::cli::{FixArgs, FixAttachArgs, FixCommand, FixUuidArgs};
 use crate::command_context::CommandContext;
-use crate::graph::Graph;
 use crate::output::OutputContext;
 use crate::util::resolve_attachment_path;
 use anyhow::{Context, Result};
+use pkms_org::Graph;
 use pkms_org::discovery;
 use pkms_org::parser::Link;
 use regex::Regex;

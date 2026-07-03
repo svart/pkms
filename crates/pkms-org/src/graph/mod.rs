@@ -1,7 +1,7 @@
 //! In-memory knowledge graph of org-roam notes.
 //!
 //! [`Graph`] is the central data structure, built from parsed `.org` files.
-//! Each file is parsed into a [`ParsedNote`](pkms_org::parser::ParsedNote)
+//! Each file is parsed into a [`ParsedNote`](crate::parser::ParsedNote)
 //! (UUIDs, title, tags, aliases, links, headings). The builder promotes the primary UUID of
 //! each file into a [`Node`] and creates separate heading-nodes for headings with their own
 //! `:ID:` property. The graph resolves internal links into backlinks and detects broken links.
@@ -13,11 +13,11 @@ pub mod tasks;
 pub mod traversal;
 pub mod validation;
 
-use crate::config::ResolvedConfig;
-use pkms_org::corpus::Corpus;
-pub use pkms_org::corpus::FileScanResult;
-use pkms_org::domain::{LinkTarget, NoteId};
-use pkms_org::parser::{Link, ParsedNote};
+use crate::OrgConfig;
+use crate::corpus::Corpus;
+pub use crate::corpus::FileScanResult;
+use crate::domain::{LinkTarget, NoteId};
+use crate::parser::{Link, ParsedNote};
 use serde::Serialize;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -70,23 +70,23 @@ pub struct DuplicateEntry {
 
 #[derive(Debug)]
 pub struct Graph {
-    pub(crate) nodes: HashMap<NoteId, Node>,
-    pub(crate) path_to_uuid: HashMap<PathBuf, NoteId>,
-    pub(crate) title_to_uuid: HashMap<String, Vec<NoteId>>,
-    pub(crate) alias_to_uuid: HashMap<String, Vec<NoteId>>,
-    pub(crate) backlinks: HashMap<NoteId, Vec<NoteId>>,
-    pub(crate) broken_links: Vec<(NoteId, NoteId)>,
-    pub(crate) parse_errors: Vec<(PathBuf, String)>,
-    pub(crate) skipped_files: Vec<PathBuf>,
-    pub(crate) duplicates: DuplicateInfo,
-    pub(crate) heading_uuid_to_primary: HashMap<NoteId, NoteId>,
-    pub(crate) results: Vec<FileScanResult>,
+    pub nodes: HashMap<NoteId, Node>,
+    pub path_to_uuid: HashMap<PathBuf, NoteId>,
+    pub title_to_uuid: HashMap<String, Vec<NoteId>>,
+    pub alias_to_uuid: HashMap<String, Vec<NoteId>>,
+    pub backlinks: HashMap<NoteId, Vec<NoteId>>,
+    pub broken_links: Vec<(NoteId, NoteId)>,
+    pub parse_errors: Vec<(PathBuf, String)>,
+    pub skipped_files: Vec<PathBuf>,
+    pub duplicates: DuplicateInfo,
+    pub heading_uuid_to_primary: HashMap<NoteId, NoteId>,
+    pub results: Vec<FileScanResult>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct HeadingLocation {
-    pub(crate) primary_uuid: NoteId,
-    pub(crate) line_number: usize,
+pub struct HeadingLocation {
+    pub primary_uuid: NoteId,
+    pub line_number: usize,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -192,11 +192,11 @@ fn file_link_line_spec_exists(path: &Path, line_spec: &str) -> bool {
 }
 
 impl Graph {
-    pub fn load(config: &ResolvedConfig) -> anyhow::Result<Self> {
-        tracing::debug!(db_root = %config.resolved_db_root().display(), "loading graph");
-        let corpus = Corpus::load(&config.org_config())?;
+    pub fn load(config: &OrgConfig) -> anyhow::Result<Self> {
+        tracing::debug!(db_root = %config.db_root.display(), "loading graph");
+        let corpus = Corpus::load(config)?;
         let mut graph = Self::from_corpus(&corpus);
-        graph.index_db_relative_paths(config.resolved_db_root());
+        graph.index_db_relative_paths(&config.db_root);
         tracing::debug!(
             node_count = graph.nodes.len(),
             backlink_target_count = graph.backlinks.len(),
@@ -282,14 +282,14 @@ impl Graph {
             .ok_or_else(|| anyhow::anyhow!("Note not found: {target}"))
     }
 
-    pub(crate) fn primary_uuid_for_heading(&self, heading_uuid: &str) -> Option<&str> {
+    pub fn primary_uuid_for_heading(&self, heading_uuid: &str) -> Option<&str> {
         let heading_uuid = NoteId::new(heading_uuid);
         self.heading_uuid_to_primary
             .get(&heading_uuid)
             .map(NoteId::as_str)
     }
 
-    pub(crate) fn heading_location(&self, heading_uuid: &str) -> Option<HeadingLocation> {
+    pub fn heading_location(&self, heading_uuid: &str) -> Option<HeadingLocation> {
         let primary_uuid = self.primary_uuid_for_heading(heading_uuid)?;
         let primary = self.nodes.get(primary_uuid)?;
         let heading = self
@@ -312,7 +312,7 @@ impl Graph {
         })
     }
 
-    pub(crate) fn raw_content_for_path(&self, path: &Path) -> Option<&str> {
+    pub fn raw_content_for_path(&self, path: &Path) -> Option<&str> {
         self.results
             .iter()
             .find(|result| result.path == path)

@@ -1,9 +1,9 @@
 use crate::cli::OutputFormat;
 use crate::command_context::CommandContext;
 use crate::config::ResolvedConfig;
-use crate::graph::{Graph, Node};
 use crate::output::OutputContext;
 use anyhow::Result;
+use pkms_org::graph::{Graph, Node};
 use pkms_org::parser::{HEADING_RE, Link};
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
@@ -56,7 +56,7 @@ fn find_heading_title_for_uuid(content: &str, heading_uuid: &str) -> Option<Stri
 }
 
 struct ScoredItem<'a> {
-    node: &'a crate::graph::Node,
+    node: &'a Node,
     score: f64,
     reasons: Vec<String>,
     factor_scores: HashMap<String, f64>,
@@ -249,7 +249,7 @@ fn neighbor_relevance(
     score
 }
 
-fn is_orphan(node: &crate::graph::Node, graph: &Graph) -> bool {
+fn is_orphan(node: &Node, graph: &Graph) -> bool {
     let has_outgoing = node.outgoing.iter().any(|l| matches!(l, Link::Internal(_)));
     let has_incoming = graph
         .backlinks
@@ -258,11 +258,7 @@ fn is_orphan(node: &crate::graph::Node, graph: &Graph) -> bool {
     !has_outgoing && !has_incoming
 }
 
-fn score_title_overlap(
-    other: &crate::graph::Node,
-    ctx: &SuggestionContext,
-    reasons: &mut Vec<String>,
-) -> f64 {
+fn score_title_overlap(other: &Node, ctx: &SuggestionContext, reasons: &mut Vec<String>) -> f64 {
     let other_lower = other.title.to_lowercase();
     let other_words: Vec<&str> = other_lower.split_whitespace().collect();
     let overlap: usize = other_words
@@ -278,7 +274,7 @@ fn score_title_overlap(
 }
 
 fn score_content_match(
-    other: &crate::graph::Node,
+    other: &Node,
     graph: &Graph,
     ctx: &SuggestionContext,
     title_overlap: bool,
@@ -306,11 +302,7 @@ fn score_content_match(
     }
 }
 
-fn score_tag_overlap(
-    other: &crate::graph::Node,
-    ctx: &SuggestionContext,
-    reasons: &mut Vec<String>,
-) -> f64 {
+fn score_tag_overlap(other: &Node, ctx: &SuggestionContext, reasons: &mut Vec<String>) -> f64 {
     let tag_overlap: usize = other
         .filetags
         .iter()
@@ -331,7 +323,7 @@ fn score_tag_overlap(
 }
 
 fn score_backlink_overlap(
-    other: &crate::graph::Node,
+    other: &Node,
     graph: &Graph,
     ctx: &SuggestionContext,
     reasons: &mut Vec<String>,
@@ -350,11 +342,7 @@ fn score_backlink_overlap(
     }
 }
 
-fn score_outgoing_overlap(
-    other: &crate::graph::Node,
-    ctx: &SuggestionContext,
-    reasons: &mut Vec<String>,
-) -> f64 {
+fn score_outgoing_overlap(other: &Node, ctx: &SuggestionContext, reasons: &mut Vec<String>) -> f64 {
     let other_outgoing: HashSet<&str> = other
         .outgoing
         .iter()
@@ -375,7 +363,7 @@ fn score_outgoing_overlap(
     }
 }
 
-fn score_directory_proximity(node: &crate::graph::Node, other: &crate::graph::Node) -> f64 {
+fn score_directory_proximity(node: &Node, other: &Node) -> f64 {
     if let (Some(tp), Some(op)) = (node.path.parent(), other.path.parent())
         && tp == op
     {
@@ -387,9 +375,9 @@ fn score_directory_proximity(node: &crate::graph::Node, other: &crate::graph::No
 
 #[allow(clippy::cast_precision_loss)]
 fn score_neighborhood(
-    other: &crate::graph::Node,
+    other: &Node,
     graph: &Graph,
-    node: &crate::graph::Node,
+    node: &Node,
     ctx: &SuggestionContext,
     reasons: &mut Vec<String>,
 ) -> f64 {
@@ -429,8 +417,8 @@ fn score_neighborhood(
 
 #[allow(clippy::cast_precision_loss)]
 fn compute_scores<'a>(
-    node: &'a crate::graph::Node,
-    graph: &'a crate::graph::Graph,
+    node: &'a Node,
+    graph: &'a Graph,
     ctx: &SuggestionContext,
     exclude_orphans: bool,
 ) -> Vec<ScoredItem<'a>> {
@@ -627,7 +615,7 @@ pub fn run(ctx: &CommandContext<'_>, opts: &SuggestOptions) -> Result<()> {
 }
 
 pub fn execute(config: &ResolvedConfig, opts: &SuggestOptions) -> Result<Vec<SuggestOutput>> {
-    let graph = Graph::load(config)?;
+    let graph = Graph::load(&config.org_config())?;
 
     opts.targets
         .iter()

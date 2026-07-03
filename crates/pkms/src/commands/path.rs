@@ -1,8 +1,8 @@
 use crate::cli::PathArgs;
 use crate::command_context::CommandContext;
-use crate::graph::Graph;
 use crate::output::OutputContext;
 use anyhow::Result;
+use pkms_org::Graph;
 use serde::Serialize;
 
 #[derive(Debug, PartialEq, Eq, Serialize)]

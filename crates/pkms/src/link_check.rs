@@ -1,6 +1,9 @@
 use crate::config::SshConfig;
-use crate::graph::file_link_target_exists;
 use crate::util::attachment_target_exists;
+pub use pkms_org::link_check::{
+    LinkCheckBackend, LinkCheckJob, LinkCheckKind, LinkCheckTarget, LinkSource, is_ssh_file_target,
+    local_file_link_target_exists, sort_link_check_jobs, split_file_link_line_spec,
+};
 use rayon::prelude::*;
 use std::cmp::Ordering;
 #[cfg(feature = "ssh")]
@@ -14,27 +17,6 @@ use std::time::Duration;
 const DEFAULT_SSH_CONNECT_TIMEOUT_MS: u64 = 5_000;
 const DEFAULT_SSH_OPERATION_TIMEOUT_MS: u32 = 5_000;
 const DEFAULT_SSH_MAX_CONNECTIONS: usize = 4;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum LinkCheckKind {
-    File,
-    Attachment,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum LinkCheckBackend {
-    Local,
-    Ssh,
-}
-
-impl LinkCheckBackend {
-    pub fn as_str(self) -> &'static str {
-        match self {
-            LinkCheckBackend::Local => "local",
-            LinkCheckBackend::Ssh => "ssh",
-        }
-    }
-}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SshErrorKind {
@@ -155,53 +137,6 @@ pub struct SshFileTargetParseError {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct LinkSource {
-    pub uuid: String,
-    pub title: String,
-    pub path: PathBuf,
-}
-
-impl LinkSource {
-    pub fn new(
-        uuid: impl Into<String>,
-        title: impl Into<String>,
-        path: impl Into<PathBuf>,
-    ) -> Self {
-        Self {
-            uuid: uuid.into(),
-            title: title.into(),
-            path: path.into(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct LinkCheckTarget {
-    pub kind: LinkCheckKind,
-    pub path: String,
-}
-
-impl LinkCheckTarget {
-    pub fn new(kind: LinkCheckKind, path: impl Into<String>) -> Self {
-        Self {
-            kind,
-            path: path.into(),
-        }
-    }
-
-    pub fn as_str(&self) -> &str {
-        self.path.as_str()
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct LinkCheckJob {
-    pub backend: LinkCheckBackend,
-    pub source: LinkSource,
-    pub target: LinkCheckTarget,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LinkCheckOutcome {
     Ok,
     Broken(LinkCheckBrokenTarget),
@@ -242,41 +177,12 @@ impl LinkCheckResults {
     }
 }
 
-impl LinkCheckJob {
-    pub fn new(
-        kind: LinkCheckKind,
-        backend: LinkCheckBackend,
-        source: LinkSource,
-        target: impl Into<String>,
-    ) -> Self {
-        Self {
-            backend,
-            source,
-            target: LinkCheckTarget::new(kind, target),
-        }
-    }
-}
-
-pub fn sort_link_check_jobs(jobs: &mut [LinkCheckJob]) {
-    jobs.sort_by(compare_jobs);
-}
-
 pub fn sort_broken_targets(targets: &mut [LinkCheckBrokenTarget]) {
     targets.sort_by(compare_broken_targets);
 }
 
 pub fn sort_link_check_errors(errors: &mut [LinkCheckErrorTarget]) {
     errors.sort_by(compare_error_targets);
-}
-
-pub fn is_ssh_file_target(target: &str) -> bool {
-    normalized_file_target(target).starts_with("/ssh:")
-}
-
-pub fn split_file_link_line_spec(target: &str) -> (&str, Option<&str>) {
-    target
-        .split_once("::")
-        .map_or((target, None), |(path, line_spec)| (path, Some(line_spec)))
 }
 
 pub fn parse_ssh_file_target(
@@ -345,13 +251,6 @@ pub fn parse_ssh_file_target(
         line_spec: line_spec.map(str::to_string),
         raw_target: target.to_string(),
     }))
-}
-
-pub fn local_file_link_target_exists(target: &str, source_path: &Path, db_root: &Path) -> bool {
-    if is_ssh_file_target(target) {
-        return true;
-    }
-    file_link_target_exists(target, source_path, db_root)
 }
 
 pub fn check_local_link_job(job: LinkCheckJob, db_root: &Path) -> LinkCheckOutcome {
@@ -454,26 +353,12 @@ pub fn run_ssh_link_checks(
     results
 }
 
-fn compare_jobs(a: &LinkCheckJob, b: &LinkCheckJob) -> Ordering {
-    job_sort_key(a).cmp(&job_sort_key(b))
-}
-
 fn compare_broken_targets(a: &LinkCheckBrokenTarget, b: &LinkCheckBrokenTarget) -> Ordering {
     broken_target_sort_key(a).cmp(&broken_target_sort_key(b))
 }
 
 fn compare_error_targets(a: &LinkCheckErrorTarget, b: &LinkCheckErrorTarget) -> Ordering {
     error_target_sort_key(a).cmp(&error_target_sort_key(b))
-}
-
-fn job_sort_key(job: &LinkCheckJob) -> (LinkCheckKind, &str, &str, &Path, &str) {
-    (
-        job.target.kind,
-        job.source.uuid.as_str(),
-        job.source.title.as_str(),
-        job.source.path.as_path(),
-        job.target.as_str(),
-    )
 }
 
 fn broken_target_sort_key(

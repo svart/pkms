@@ -2,10 +2,10 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::time::SystemTime;
 
+use crate::domain::NoteId;
 use crate::link_check::is_ssh_file_target;
-use pkms_org::domain::NoteId;
-use pkms_org::parser::Link;
-use pkms_org::parser::find_daily_file_date;
+use crate::parser::Link;
+use crate::parser::find_daily_file_date;
 
 use super::{Graph, GraphStats};
 
@@ -141,7 +141,7 @@ impl Graph {
         }
     }
 
-    pub(crate) fn authored_internal_degrees(&self) -> HashMap<NoteId, (usize, usize)> {
+    pub fn authored_internal_degrees(&self) -> HashMap<NoteId, (usize, usize)> {
         let mut degrees: HashMap<NoteId, (usize, usize)> = self
             .primary_nodes()
             .into_iter()

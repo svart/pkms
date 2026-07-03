@@ -2,6 +2,7 @@ use crate::command_context::CommandContext;
 use crate::config::ResolvedConfig;
 use crate::output::OutputContext;
 use anyhow::Result;
+use pkms_org::Graph;
 use std::process::ExitCode;
 
 mod data;
@@ -27,7 +28,7 @@ pub fn render(ctx: &OutputContext, output: &CheckCommandOutput) -> Result<ExitCo
 pub fn execute(config: &ResolvedConfig, opts: &CheckOptions) -> Result<CheckCommandOutput> {
     ensure_remote_file_links_available(opts.checks.requests(CheckItem::RemoteFileLinks))?;
 
-    let graph = crate::graph::Graph::load(config)?;
+    let graph = Graph::load(&config.org_config())?;
     let db_root = config.resolved_db_root();
 
     let display_opts = CheckDisplayOptions::from_options(opts);

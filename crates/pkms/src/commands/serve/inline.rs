@@ -1,7 +1,7 @@
 use super::assets;
 use super::page::heading_anchor;
 use crate::config::ResolvedConfig;
-use crate::graph::{Graph, Node, resolve_file_link_path};
+use pkms_org::graph::{Graph, Node, resolve_file_link_path};
 use pkms_org::parser::LINK_RE;
 use regex::Regex;
 use std::path::PathBuf;

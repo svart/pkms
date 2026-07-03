@@ -6,10 +6,10 @@ use crate::tasks::pkms_edit;
 use crate::tasks::task_index::{
     TaskRecord, TaskRecordQuery, assign_canonical_ids, collect_agenda_records, collect_todo_records,
 };
-use crate::workspace::Workspace;
 use anyhow::{Context, Result};
 use chrono::NaiveDate;
 use pkms_org::parser::find_daily_file_date;
+use pkms_org::{Graph, Workspace};
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
@@ -39,7 +39,7 @@ pub fn list_items(config: &ResolvedConfig) -> Result<Vec<TaskItem>> {
 }
 
 pub fn list_items_on(config: &ResolvedConfig, clock: TaskClock) -> Result<Vec<TaskItem>> {
-    let workspace = Workspace::load(config)?;
+    let workspace = Workspace::load(&config.org_config())?;
     let valid_states = config.todo_states();
     let mut records = collect_todo_records(
         &workspace.corpus,
@@ -58,7 +58,7 @@ pub fn collect_inbox_items(config: &ResolvedConfig) -> Result<Vec<TaskItem>> {
 
 pub fn collect_inbox_items_on(config: &ResolvedConfig, clock: TaskClock) -> Result<Vec<TaskItem>> {
     let target = resolve_inbox_target_on(config, false, clock.today)?;
-    let workspace = Workspace::load(config)?;
+    let workspace = Workspace::load(&config.org_config())?;
     let graph = &workspace.graph;
     let valid_states = config.todo_states();
     let mut records = collect_todo_records(
@@ -109,7 +109,7 @@ pub fn resolve_inbox_target_on(
         return resolve_daily_inbox_target(config, create_daily, today);
     }
 
-    let graph = crate::graph::Graph::load(config)?;
+    let graph = Graph::load(&config.org_config())?;
     if let Some(node) = graph.find_node(target) {
         return Ok(PkmsInboxTarget::Note(node.path.clone()));
     }
@@ -129,7 +129,7 @@ pub fn resolve_inbox_target_on(
 }
 
 pub fn resolve_note_task_target(config: &ResolvedConfig, target: &str) -> Result<PkmsInboxTarget> {
-    let graph = crate::graph::Graph::load(config)?;
+    let graph = Graph::load(&config.org_config())?;
     if let Some(node) = graph.find_node(target) {
         return Ok(PkmsInboxTarget::Note(node.path.clone()));
     }
@@ -165,7 +165,7 @@ fn resolve_daily_inbox_target(
         });
     }
 
-    let graph = crate::graph::Graph::load(config)?;
+    let graph = Graph::load(&config.org_config())?;
     if let Some(result) = graph
         .results
         .iter()
@@ -280,7 +280,7 @@ pub fn find_task_item_on(
     line_number: usize,
     clock: TaskClock,
 ) -> Result<Option<TaskItem>> {
-    let workspace = Workspace::load(config)?;
+    let workspace = Workspace::load(&config.org_config())?;
     let graph = &workspace.graph;
     let valid_states = config.todo_states();
     let mut records = collect_todo_records(
@@ -317,7 +317,7 @@ pub fn agenda_items_for_clock(
     view: AgendaView,
     clock: TaskClock,
 ) -> Result<Vec<TaskItem>> {
-    let workspace = Workspace::load(config)?;
+    let workspace = Workspace::load(&config.org_config())?;
     let valid_states = config.todo_states();
     let closed_states = config.closed_todo_states();
     let mut records = collect_agenda_records(

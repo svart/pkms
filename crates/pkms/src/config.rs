@@ -268,8 +268,8 @@ impl ResolvedConfig {
         }
     }
 
-    pub fn task_state_config(&self) -> crate::graph::tasks::TaskStateConfig {
-        crate::graph::tasks::TaskStateConfig {
+    pub fn task_state_config(&self) -> pkms_org::graph::tasks::TaskStateConfig {
+        pkms_org::graph::tasks::TaskStateConfig {
             valid_states: self.todo_states(),
             open_states: self.open_todo_states(),
             closed_states: self.closed_todo_states(),

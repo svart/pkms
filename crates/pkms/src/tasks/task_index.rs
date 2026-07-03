@@ -1,10 +1,10 @@
 use crate::config::ResolvedConfig;
-use crate::graph::Graph;
 use crate::tasks::clock::TaskClock;
 use crate::tasks::filter::{
     TextFilter, matches_tag_filters, matches_text_filters, matches_type_filters,
 };
 use crate::tasks::model::{TaskDateValue, TaskPriority, TaskState};
+use pkms_org::Graph;
 use pkms_org::corpus::Corpus;
 use pkms_org::domain::NoteId;
 use pkms_org::org_date::parse_org_date;

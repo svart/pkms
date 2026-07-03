@@ -1,10 +1,10 @@
 use crate::cli::OutputFormat;
 use crate::command_context::CommandContext;
 use crate::config::ResolvedConfig;
-use crate::graph::{Graph, Node};
 use crate::output::OutputContext;
 use crate::util;
 use anyhow::{Context, Result};
+use pkms_org::graph::{Graph, Node};
 use pkms_org::org_edit::parsed_heading_subtree_end_index;
 use pkms_org::parser;
 use pkms_org::tokens;
@@ -206,7 +206,7 @@ fn process_one_get(graph: &Graph, target: &str, opts: &GetOptions) -> Result<Get
 }
 
 pub fn execute(config: &ResolvedConfig, opts: &GetOptions) -> Result<Vec<GetOutput>> {
-    let graph = Graph::load(config)?;
+    let graph = Graph::load(&config.org_config())?;
     opts.targets
         .iter()
         .map(|target| process_one_get(&graph, target, opts))

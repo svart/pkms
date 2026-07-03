@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 use std::path::Path;
 
-use pkms_org::domain::NoteId;
-use pkms_org::parser::Link;
+use crate::domain::NoteId;
+use crate::parser::{Link, ParsedNote};
 
 use super::{DuplicateEntry, DuplicateInfo, FileScanResult, Graph, Node};
 
@@ -44,12 +44,7 @@ fn build_links(
 }
 
 impl BuildContext {
-    fn process_headings(
-        &mut self,
-        primary_uuid: &NoteId,
-        parsed: &pkms_org::parser::ParsedNote,
-        path: &Path,
-    ) {
+    fn process_headings(&mut self, primary_uuid: &NoteId, parsed: &ParsedNote, path: &Path) {
         let headings = &parsed.headings;
         let filetags = &parsed.filetags;
         let categories = &parsed.categories;
@@ -269,7 +264,7 @@ impl BuildContext {
 
     fn check_heading_uuids(
         &mut self,
-        parsed: &pkms_org::parser::ParsedNote,
+        parsed: &ParsedNote,
         primary_uuid: &NoteId,
         path: &std::path::Path,
     ) {

@@ -1,7 +1,7 @@
 use crate::command_context::CommandContext;
-#[cfg(test)]
-use crate::graph::Graph;
 use anyhow::{Context, Result};
+#[cfg(test)]
+use pkms_org::Graph;
 use serde::Serialize;
 use std::io::Write;
 use std::net::TcpListener;

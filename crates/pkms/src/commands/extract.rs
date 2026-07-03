@@ -2,9 +2,9 @@ use crate::cli::ExtractArgs;
 use crate::command_context::CommandContext;
 use crate::commands::new::{create_note_file_exclusive, title_to_slug, unique_note_filename};
 use crate::config::ResolvedConfig;
-use crate::graph::{Graph, HeadingLocation};
 use crate::output::OutputContext;
 use anyhow::{Context, Result};
+use pkms_org::graph::{Graph, HeadingLocation};
 use pkms_org::org_edit::{
     is_heading_line, parsed_heading_subtree_end_index, read_lines, split_line_ending, write_lines,
 };
@@ -50,7 +50,7 @@ pub fn run(ctx: &CommandContext<'_>, opts: &ExtractOptions) -> Result<()> {
 }
 
 fn execute(config: &ResolvedConfig, opts: &ExtractOptions) -> Result<ExtractOutput> {
-    let graph = Graph::load(config)?;
+    let graph = Graph::load(&config.org_config())?;
     let location = resolve_heading_location(&graph, &opts.heading_uuid)?;
     let source_node = graph.nodes.get(&location.primary_uuid).ok_or_else(|| {
         anyhow::anyhow!("Source note not found for heading {}", opts.heading_uuid)

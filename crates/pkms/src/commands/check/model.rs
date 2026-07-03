@@ -1,5 +1,5 @@
 use crate::cli::CheckArgs;
-use crate::graph::{DuplicateInfo, GraphStats, OverlinkEntry, SelfLinkEntry};
+use pkms_org::graph::{DuplicateInfo, GraphStats, OverlinkEntry, SelfLinkEntry};
 use serde::Serialize;
 use std::process::ExitCode;
 

@@ -2,10 +2,10 @@ use crate::cli::OrphansArgs;
 use crate::cli::OutputFormat;
 use crate::command_context::CommandContext;
 use crate::config::ResolvedConfig;
-use crate::graph::Graph;
 use crate::output::OutputContext;
 use crate::util;
 use anyhow::Result;
+use pkms_org::Graph;
 use serde::Serialize;
 
 #[derive(Serialize)]
@@ -40,7 +40,7 @@ impl From<&OrphansArgs> for OrphansOptions {
 }
 
 pub fn execute(config: &ResolvedConfig, opts: &OrphansOptions) -> Result<OrphansOutput> {
-    let graph = Graph::load(config)?;
+    let graph = Graph::load(&config.org_config())?;
     let mut orphans = if opts.with_dailies {
         graph.orphan_nodes_including_dailies()
     } else {

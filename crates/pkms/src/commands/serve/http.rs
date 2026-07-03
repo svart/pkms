@@ -1,9 +1,9 @@
 use super::{assets, inline::percent_decode, render_note_html, render_preview_html};
 use crate::commands::open;
 use crate::config::ResolvedConfig;
-use crate::graph::{Graph, Node, resolve_file_link_path};
 use anyhow::{Context, Result};
 use pkms_org::domain::NoteId;
+use pkms_org::graph::{Graph, Node, resolve_file_link_path};
 use pkms_org::parser::{Link, parse_note};
 use std::io::{self, BufRead, BufReader, Write};
 use std::net::TcpStream;

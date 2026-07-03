@@ -1,8 +1,8 @@
 use crate::command_context::CommandContext;
 use crate::config::ResolvedConfig;
-use crate::graph::Graph;
-use crate::graph::tasks::TaskLocation;
 use anyhow::Result;
+use pkms_org::Graph;
+use pkms_org::graph::tasks::TaskLocation;
 
 pub struct OpenOptions {
     pub targets: Vec<String>,

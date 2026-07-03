@@ -1,6 +1,6 @@
 use super::*;
-use crate::graph::{Graph, GraphStats};
 use crate::link_check::LinkCheckKind;
+use pkms_org::graph::{Graph, GraphStats};
 
 fn healthy_output() -> CheckOutput {
     CheckOutput {
@@ -151,7 +151,7 @@ fn collects_only_requested_local_link_check_jobs_in_stable_order() {
     )
     .unwrap();
     let config = ResolvedConfig::for_test_db(db_root);
-    let graph = Graph::load(&config).unwrap();
+    let graph = Graph::load(&config.org_config()).unwrap();
 
     let all_jobs =
         graph.collect_local_link_check_jobs(&[LinkCheckKind::File, LinkCheckKind::Attachment]);

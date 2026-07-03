@@ -1,6 +1,6 @@
 use super::Graph;
+use crate::parser::find_daily_file_date;
 use chrono::{NaiveDateTime, NaiveTime};
-use pkms_org::parser::find_daily_file_date;
 use std::cmp::Ordering;
 use std::path::Path;
 
@@ -182,11 +182,11 @@ fn parse_timestamped_filename(path: &Path, filename: &str) -> Option<(NaiveDateT
 
 #[cfg(test)]
 mod tests {
+    use crate::corpus::FileScanResult;
+    use crate::domain::NoteId;
     use crate::graph::tasks::TaskStateConfig;
     use crate::graph::{DuplicateInfo, Graph};
-    use pkms_org::corpus::FileScanResult;
-    use pkms_org::domain::NoteId;
-    use pkms_org::parser::{Heading, OrgPriority, OrgTodoState, ParsedNote};
+    use crate::parser::{Heading, OrgPriority, OrgTodoState, ParsedNote};
     use std::collections::HashMap;
     use std::path::PathBuf;
 

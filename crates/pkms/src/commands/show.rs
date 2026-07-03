@@ -1,9 +1,9 @@
 use crate::cli::OutputFormat;
 use crate::command_context::CommandContext;
 use crate::config::ResolvedConfig;
-use crate::graph::{FileScanResult, Graph, Node};
 use crate::output::{OutputContext, terminal_markup};
 use anyhow::Result;
+use pkms_org::graph::{FileScanResult, Graph, Node};
 use pkms_org::org_edit::parsed_heading_subtree_end_index;
 use pkms_org::parser::{Heading, Link, strip_org_links};
 use serde::Serialize;
@@ -424,7 +424,7 @@ fn resolve_outgoing_titles(output: &mut ShowOutput, graph: &Graph) {
 }
 
 pub fn execute(config: &ResolvedConfig, opts: &ShowOptions) -> Result<Vec<ShowOutput>> {
-    let graph = Graph::load(config)?;
+    let graph = Graph::load(&config.org_config())?;
     let task_ids: TaskIdMap = graph
         .all_task_entries(&config.task_state_config())
         .into_iter()

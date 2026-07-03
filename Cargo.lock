@@ -2042,6 +2042,7 @@ version = "1.12.3"
 dependencies = [
  "anyhow",
  "chrono",
+ "dirs",
  "glob",
  "proptest",
  "rayon",

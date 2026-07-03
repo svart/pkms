@@ -1,5 +1,5 @@
-use crate::graph::Graph;
 use crate::tasks::model::TaskItem;
+use pkms_org::Graph;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 

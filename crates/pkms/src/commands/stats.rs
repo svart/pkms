@@ -1,10 +1,10 @@
 use crate::cli::{OutputFormat, StatsArgs};
 use crate::command_context::CommandContext;
 use crate::config::ResolvedConfig;
-use crate::graph::Graph;
 use crate::output::OutputContext;
 use crate::util::format_size;
 use anyhow::Result;
+use pkms_org::Graph;
 use serde::Serialize;
 use std::collections::{BTreeMap, HashMap, HashSet};
 
@@ -70,8 +70,8 @@ pub struct RecentNote {
     pub path: String,
 }
 
-impl From<&crate::graph::Node> for RecentNote {
-    fn from(n: &crate::graph::Node) -> Self {
+impl From<&pkms_org::graph::Node> for RecentNote {
+    fn from(n: &pkms_org::graph::Node) -> Self {
         RecentNote {
             uuid: n.uuid.to_string(),
             title: n.title.clone(),
@@ -132,7 +132,7 @@ pub fn run(ctx: &CommandContext<'_>, opts: &StatsOptions) -> Result<()> {
 }
 
 pub fn execute(config: &ResolvedConfig, opts: &StatsOptions) -> Result<StatsCommandOutput> {
-    let graph = Graph::load(config)?;
+    let graph = Graph::load(&config.org_config())?;
     let db_root = config.resolved_db_root();
 
     if let Some(limit) = opts.hubs {

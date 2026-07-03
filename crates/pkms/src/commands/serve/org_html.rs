@@ -1,7 +1,7 @@
 use super::inline::{escape_html, render_display_math, render_inline, render_standalone_image};
 use super::page::{heading_anchor, render_heading_dates, render_heading_tags};
 use crate::config::ResolvedConfig;
-use crate::graph::{Graph, Node};
+use pkms_org::graph::{Graph, Node};
 use pkms_org::parser::{DEADLINE_RE, HEADING_RE, Heading, SCHEDULED_RE, parse_note};
 use std::collections::BTreeMap;
 use std::fmt::Write as FmtWrite;

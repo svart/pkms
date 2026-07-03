@@ -1,6 +1,4 @@
 use crate::config::ResolvedConfig;
-use crate::graph::Graph;
-use crate::graph::tasks::TaskLocation as GraphTaskLocation;
 use crate::output::OutputContext;
 use crate::tasks::clock::TaskClock;
 use crate::tasks::id::TaskId;
@@ -11,6 +9,8 @@ use crate::tasks::modifiers::{
 use crate::tasks::pkms::{self, PkmsInboxTarget};
 use crate::tasks::pkms_mutation::{self, Change};
 use anyhow::{Context, Result, bail};
+use pkms_org::Graph;
+use pkms_org::graph::tasks::TaskLocation as GraphTaskLocation;
 use std::path::Path;
 use std::process::ExitCode;
 
@@ -51,7 +51,7 @@ pub(super) fn mod_task(
             .map(|description| description.trim().to_string()),
     };
 
-    let graph = Graph::load(config)?;
+    let graph = Graph::load(&config.org_config())?;
     let location = graph.resolve_canonical_task_id(&config.task_state_config(), canonical_id)?;
     let mut location = pkms_task_location(location);
     let mut changes = Vec::new();
@@ -233,7 +233,7 @@ pub(super) fn set_state(
     dry_run: bool,
 ) -> Result<()> {
     let new_state = canonical_state(config, requested_state)?;
-    let graph = Graph::load(config)?;
+    let graph = Graph::load(&config.org_config())?;
     let location = graph.resolve_canonical_task_id(&config.task_state_config(), canonical_id)?;
     let title =
         task_title_in_graph(&graph, &location.path, location.line_number).with_context(|| {
@@ -340,7 +340,7 @@ fn add_dependency_task(
     spec: &TaskModifierSpec,
     canonical_id: usize,
 ) -> Result<pkms::TaskLocation> {
-    let graph = Graph::load(config)?;
+    let graph = Graph::load(&config.org_config())?;
     let location = graph.resolve_canonical_task_id(&config.task_state_config(), canonical_id)?;
     let location = pkms_task_location(location);
     let parent_level = pkms::heading_level_at(&location)?;
@@ -431,7 +431,7 @@ pub(super) fn postpone(
     clock: TaskClock,
 ) -> Result<()> {
     let date = parse_mutation_due_date(to, clock.today)?;
-    let graph = Graph::load(config)?;
+    let graph = Graph::load(&config.org_config())?;
     let location = graph.resolve_canonical_task_id(&config.task_state_config(), canonical_id)?;
     pkms_mutation::update_recurring_planning_date(&location.path, location.line_number, &date)?;
     let item = pkms::find_task_item_on(

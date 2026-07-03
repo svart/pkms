@@ -4,15 +4,15 @@ use super::model::{
     FiletagsIssue,
 };
 use crate::config::ResolvedConfig;
-use crate::graph::Graph;
-use crate::graph::validation::{
-    GraphValidationCheck, GraphValidationIssues, GraphValidationOptions,
-};
 use crate::link_check::{
     LinkCheckErrorTarget, LinkCheckKind, LinkCheckResults, SshFileCheckOptions,
     run_local_link_checks, run_ssh_link_checks,
 };
 use anyhow::Result;
+use pkms_org::Graph;
+use pkms_org::graph::validation::{
+    GraphValidationCheck, GraphValidationIssues, GraphValidationOptions,
+};
 use pkms_org::parser::Link;
 use std::path::Path;
 

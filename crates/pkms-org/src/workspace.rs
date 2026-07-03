@@ -1,7 +1,5 @@
-use crate::config::ResolvedConfig;
-use crate::graph::Graph;
+use crate::{Corpus, Graph, OrgConfig};
 use anyhow::Result;
-use pkms_org::Corpus;
 
 pub struct Workspace {
     pub corpus: Corpus,
@@ -9,9 +7,9 @@ pub struct Workspace {
 }
 
 impl Workspace {
-    pub fn load(config: &ResolvedConfig) -> Result<Self> {
-        tracing::debug!(db_root = %config.resolved_db_root().display(), "loading workspace");
-        let corpus = Corpus::load(&config.org_config())?;
+    pub fn load(config: &OrgConfig) -> Result<Self> {
+        tracing::debug!(db_root = %config.db_root.display(), "loading workspace");
+        let corpus = Corpus::load(config)?;
         let graph = Graph::from_corpus_without_raw_content(&corpus);
         tracing::debug!(
             file_count = corpus.results().len(),

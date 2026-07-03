@@ -1,10 +1,20 @@
 use super::*;
+use crate::OrgConfig;
 use crate::graph::search::{SearchField, SearchFields};
 use crate::graph::validation::{
     DuplicateUuidIssueKind, GraphValidationCheck, GraphValidationOptions, NoteValidationIssue,
     SelfLinkKind,
 };
-use pkms_org::parser::ParsedNote;
+use crate::parser::{Heading, ParsedNote};
+
+fn test_org_config(db_root: impl Into<PathBuf>) -> OrgConfig {
+    OrgConfig {
+        db_root: db_root.into(),
+        new_notes_dir: None,
+        daily_notes_dir: None,
+        ignore_patterns: Vec::new(),
+    }
+}
 
 fn make_note(uuid: &str, title: &str, outgoing: Vec<Link>) -> FileScanResult {
     FileScanResult {
@@ -31,9 +41,9 @@ fn make_note_with_headings(
     outgoing: Vec<Link>,
     heading_uuids: Vec<&str>,
 ) -> FileScanResult {
-    let headings: Vec<pkms_org::parser::Heading> = heading_uuids
+    let headings: Vec<Heading> = heading_uuids
         .into_iter()
-        .map(|huid| pkms_org::parser::Heading {
+        .map(|huid| Heading {
             level: 1,
             title: format!("Heading {}", huid),
             todo_state: None,
@@ -209,7 +219,7 @@ Body
 "#,
     )
     .unwrap();
-    let config = crate::config::ResolvedConfig::for_test_db(dir.path());
+    let config = test_org_config(dir.path());
     let graph = Graph::load(&config).unwrap();
     let stats = graph.stats();
 
@@ -286,7 +296,7 @@ fn collect_node_validation_issues_returns_typed_records() {
     )
     .unwrap();
 
-    let config = crate::config::ResolvedConfig::for_test_db(dir.path());
+    let config = test_org_config(dir.path());
     let graph = Graph::load(&config).unwrap();
     let node = graph.resolve_target(source_uuid).unwrap();
     let issues = graph.collect_node_validation_issues(node, source_uuid, dir.path());
@@ -360,7 +370,7 @@ fn collect_validation_issues_returns_graph_level_health_records() {
     )
     .unwrap();
 
-    let config = crate::config::ResolvedConfig::for_test_db(dir.path());
+    let config = test_org_config(dir.path());
     let graph = Graph::load(&config).unwrap();
     let issues = graph.collect_validation_issues(
         dir.path(),
@@ -1048,7 +1058,7 @@ This is the content with a unique-searchable-keyword here.
 
     let results = vec![FileScanResult {
         path: path.clone(),
-        parsed: pkms_org::parser::ParsedNote {
+        parsed: ParsedNote {
             uuids: vec!["aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa".into()],
             title: Some("Content Test".to_string()),
             filetags: vec![],

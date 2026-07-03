@@ -8,7 +8,6 @@ use crate::commands::show::{HeadingTarget, ShowOptions};
 use crate::commands::task_common::RowSeparatorMode;
 use crate::commands::task_common::TaskSortField;
 use crate::config::ResolvedConfig;
-use crate::graph::tasks::CanonicalTaskEntry;
 use crate::output::{OutputContext, terminal_markup};
 use crate::tasks::clock::TaskClock;
 #[cfg(feature = "todoist")]
@@ -19,6 +18,7 @@ use crate::tasks::model::TaskSourceKind;
 use crate::tasks::modifiers::TaskModifierSpec;
 use crate::tasks::provider::TaskMetadataRow;
 use anyhow::{Result, anyhow, bail};
+use pkms_org::graph::tasks::CanonicalTaskEntry;
 use std::collections::HashMap;
 use std::io::{self, Write};
 use std::process::ExitCode;
@@ -298,7 +298,7 @@ struct TaskIdentity {
 
 impl TaskIdSnapshot {
     fn capture(config: &ResolvedConfig) -> Result<Self> {
-        let graph = crate::graph::Graph::load(config)?;
+        let graph = pkms_org::Graph::load(&config.org_config())?;
         let entries = graph.all_task_entries(&config.task_state_config());
         let identities = task_identities_by_location(&entries);
         let mut ordered = Vec::new();
