@@ -1,6 +1,6 @@
+use crate::org_edit::{heading_level, heading_level_at_index, heading_subtree_end_index};
+use crate::parser::HEADING_RE;
 use anyhow::{Context, Result};
-use pkms_org::org_edit::{heading_level, heading_level_at_index, heading_subtree_end_index};
-use pkms_org::parser::HEADING_RE;
 use std::path::Path;
 
 pub fn append_org_entry(path: &Path, entry: &str) -> Result<usize> {
@@ -277,7 +277,7 @@ fn relevel_subtree_lines(
 ) -> Result<()> {
     let delta = new_root_level as isize - old_root_level as isize;
     for line in lines {
-        let (body, newline) = pkms_org::org_edit::split_line_ending(line);
+        let (body, newline) = crate::org_edit::split_line_ending(line);
         let Some(captures) = HEADING_RE.captures(body) else {
             continue;
         };

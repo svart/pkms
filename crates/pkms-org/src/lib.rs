@@ -10,6 +10,7 @@ pub mod graph;
 pub mod link_check;
 pub mod org_date;
 pub mod org_edit;
+pub mod org_task_edit;
 pub mod parser;
 pub mod tokens;
 pub mod workspace;

@@ -2,13 +2,13 @@ use crate::config::ResolvedConfig;
 use crate::tasks::clock::TaskClock;
 use crate::tasks::id::TaskId;
 use crate::tasks::model::{TaskDate, TaskItem, TaskSourceKind, TaskStatus};
-use crate::tasks::pkms_edit;
 use crate::tasks::task_index::{
     TaskRecord, TaskRecordQuery, assign_canonical_ids, collect_agenda_records, collect_todo_records,
 };
 use anyhow::{Context, Result};
 use chrono::NaiveDate;
 use pkms_org::graph::tasks::TaskStateConfig;
+use pkms_org::org_task_edit;
 use pkms_org::parser::find_daily_file_date;
 use pkms_org::{Graph, Workspace};
 use std::collections::HashSet;
@@ -74,7 +74,7 @@ pub fn collect_inbox_items_on(config: &ResolvedConfig, clock: TaskClock) -> Resu
             .filter(|record| record.path == path.display().to_string())
             .collect(),
         PkmsInboxTarget::Daily { path } => {
-            let section = pkms_edit::inbox_section_range(&path)?;
+            let section = org_task_edit::inbox_section_range(&path)?;
             records
                 .into_iter()
                 .filter(|record| {
@@ -213,38 +213,37 @@ fn ensure_daily_note_exists(path: &Path, today: chrono::NaiveDate) -> Result<()>
 pub fn append_inbox_entry(target: &PkmsInboxTarget, entry: &str) -> Result<TaskLocation> {
     match target {
         PkmsInboxTarget::Note(path) => {
-            pkms_edit::append_org_entry(path, entry).map(|line_number| TaskLocation {
+            org_task_edit::append_org_entry(path, entry).map(|line_number| TaskLocation {
                 path: path.clone(),
                 line_number,
             })
         }
-        PkmsInboxTarget::Daily { path } => {
-            pkms_edit::append_daily_inbox_entry(path, entry).map(|line_number| TaskLocation {
+        PkmsInboxTarget::Daily { path } => org_task_edit::append_daily_inbox_entry(path, entry)
+            .map(|line_number| TaskLocation {
                 path: path.clone(),
                 line_number,
-            })
-        }
+            }),
     }
 }
 
 pub fn heading_level_at(location: &TaskLocation) -> Result<usize> {
-    pkms_edit::heading_level_at(&location.path, location.line_number)
+    org_task_edit::heading_level_at(&location.path, location.line_number)
 }
 
 pub fn append_child_entry(parent: &TaskLocation, entry: &str) -> Result<TaskLocation> {
-    pkms_edit::append_child_org_entry(&parent.path, parent.line_number, entry).map(|line_number| {
-        TaskLocation {
+    org_task_edit::append_child_org_entry(&parent.path, parent.line_number, entry).map(
+        |line_number| TaskLocation {
             path: parent.path.clone(),
             line_number,
-        }
-    })
+        },
+    )
 }
 
 pub fn move_subtree_to_dependency(
     source: &TaskLocation,
     target: &TaskLocation,
 ) -> Result<TaskLocation> {
-    pkms_edit::move_org_subtree(
+    org_task_edit::move_org_subtree(
         &source.path,
         source.line_number,
         &target.path,
@@ -260,11 +259,15 @@ pub fn remove_subtree_dependency(
     source: &TaskLocation,
     parent: &TaskLocation,
 ) -> Result<TaskLocation> {
-    pkms_edit::remove_org_subtree_dependency(&source.path, source.line_number, parent.line_number)
-        .map(|line_number| TaskLocation {
-            path: source.path.clone(),
-            line_number,
-        })
+    org_task_edit::remove_org_subtree_dependency(
+        &source.path,
+        source.line_number,
+        parent.line_number,
+    )
+    .map(|line_number| TaskLocation {
+        path: source.path.clone(),
+        line_number,
+    })
 }
 
 pub fn find_task_item(
