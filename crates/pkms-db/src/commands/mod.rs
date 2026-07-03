@@ -1,4 +1,5 @@
 pub mod extract;
+pub mod fix;
 pub mod get;
 pub mod new;
 pub mod open;
