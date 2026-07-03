@@ -52,7 +52,7 @@ fn dispatch(cli: &Cli, command_ctx: &CommandContext<'_>) -> Result<ExitCode> {
         ))?,
         Command::Orphans(args) => success(commands::orphans::run(
             command_ctx,
-            &commands::orphans::OrphansOptions::from(args),
+            &commands::orphans::options_from_args(args),
         ))?,
         Command::Info => success(commands::info::run(command_ctx))?,
         Command::InitConfig(args) => success(init_config(args.db.as_deref(), ctx))?,
