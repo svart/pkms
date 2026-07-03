@@ -8,6 +8,7 @@ use crate::tasks::task_index::{
 };
 use anyhow::{Context, Result};
 use chrono::NaiveDate;
+use pkms_org::graph::tasks::TaskStateConfig;
 use pkms_org::parser::find_daily_file_date;
 use pkms_org::{Graph, Workspace};
 use std::collections::HashSet;
@@ -48,7 +49,7 @@ pub fn list_items_on(config: &ResolvedConfig, clock: TaskClock) -> Result<Vec<Ta
     assign_canonical_ids(&task_states, &workspace.graph, &mut records);
     Ok(records
         .into_iter()
-        .map(|record| record_to_task_item(config, record))
+        .map(|record| record_to_task_item(&task_states, record))
         .collect())
 }
 
@@ -88,7 +89,7 @@ pub fn collect_inbox_items_on(config: &ResolvedConfig, clock: TaskClock) -> Resu
 
     Ok(records
         .into_iter()
-        .map(|record| record_to_task_item(config, record))
+        .map(|record| record_to_task_item(&task_states, record))
         .collect())
 }
 
@@ -293,7 +294,7 @@ pub fn find_task_item_on(
         .find(|record| {
             record.path == path.display().to_string() && record.line_number == line_number
         })
-        .map(|record| record_to_task_item(config, record)))
+        .map(|record| record_to_task_item(&task_states, record)))
 }
 
 pub fn agenda_items(config: &ResolvedConfig) -> Result<Vec<TaskItem>> {
@@ -329,7 +330,7 @@ pub fn agenda_items_for_clock(
     assign_canonical_ids(&task_states, &workspace.graph, &mut records);
     Ok(records
         .into_iter()
-        .map(|record| record_to_task_item(config, record))
+        .map(|record| record_to_task_item(&task_states, record))
         .collect())
 }
 
@@ -354,11 +355,11 @@ fn retain_agenda_view_records(records: &mut Vec<TaskRecord>, view: AgendaView, t
     }
 }
 
-pub fn record_to_task_item(config: &ResolvedConfig, record: TaskRecord) -> TaskItem {
+pub fn record_to_task_item(task_states: &TaskStateConfig, record: TaskRecord) -> TaskItem {
     let id = TaskId::Pkms(record.id);
     let source_id = id.source_id();
     let display_id = id.display_id();
-    let status = pkms_status(config, record.todo_state.as_deref());
+    let status = pkms_status(task_states, record.todo_state.as_deref());
     TaskItem {
         id,
         display_id,
@@ -393,21 +394,21 @@ pub fn record_to_task_item(config: &ResolvedConfig, record: TaskRecord) -> TaskI
     }
 }
 
-fn pkms_status(config: &ResolvedConfig, todo_state: Option<&str>) -> TaskStatus {
+fn pkms_status(task_states: &TaskStateConfig, todo_state: Option<&str>) -> TaskStatus {
     let Some(todo_state) = todo_state else {
         return TaskStatus::Unknown;
     };
 
-    if config
-        .closed_todo_states()
+    if task_states
+        .closed_states
         .iter()
         .any(|state| state.eq_ignore_ascii_case(todo_state))
     {
         return TaskStatus::Done;
     }
 
-    if config
-        .open_todo_states()
+    if task_states
+        .open_states
         .iter()
         .any(|state| state.eq_ignore_ascii_case(todo_state))
     {
@@ -535,7 +536,7 @@ mod tests {
 
     #[test]
     fn converts_pkms_task_record_to_source_neutral_item() {
-        let item = record_to_task_item(&config(), record());
+        let item = record_to_task_item(&config().task_state_config(), record());
         assert_eq!(item.id, TaskId::Pkms(7));
         assert_eq!(item.display_id, "p7");
         assert_eq!(item.source, TaskSourceKind::Pkms);
@@ -555,7 +556,7 @@ mod tests {
     fn closed_state_maps_to_done_case_insensitively() {
         let mut record = record();
         record.todo_state = Some(TaskState::new("done"));
-        let item = record_to_task_item(&config(), record);
+        let item = record_to_task_item(&config().task_state_config(), record);
         assert_eq!(item.status, TaskStatus::Done);
     }
 }
