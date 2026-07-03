@@ -1,6 +1,6 @@
 use crate::cli::OutputFormat;
 use crate::command_context::CommandContext;
-use crate::config::ResolvedConfig;
+use crate::config::DbCommandConfig;
 use crate::output::OutputContext;
 use anyhow::Result;
 use pkms_org::Graph;
@@ -182,13 +182,14 @@ pub struct ValidateOptions {
 }
 
 pub fn run(ctx: &CommandContext<'_>, opts: &ValidateOptions) -> Result<()> {
-    let outputs = execute(ctx.config(), opts)?;
+    let config = ctx.config().db_command_config();
+    let outputs = execute(&config, opts)?;
     render(ctx.output(), &outputs)
 }
 
-pub fn execute(config: &ResolvedConfig, opts: &ValidateOptions) -> Result<Vec<ValidateOutput>> {
-    let graph = Graph::load(&config.org_config())?;
-    let db_root = config.resolved_db_root();
+pub fn execute(config: &DbCommandConfig, opts: &ValidateOptions) -> Result<Vec<ValidateOutput>> {
+    let graph = Graph::load(&config.org)?;
+    let db_root = config.org.db_root.as_path();
 
     opts.targets
         .iter()
@@ -293,6 +294,7 @@ fn render_one_text(output: &ValidateOutput) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::ResolvedConfig;
 
     fn healthy_output() -> ValidateOutput {
         ValidateOutput {
@@ -362,8 +364,9 @@ Body
         )
         .unwrap();
         let config = ResolvedConfig::for_test_db(dir.path());
+        let db_config = config.db_command_config();
         let outputs = execute(
-            &config,
+            &db_config,
             &ValidateOptions {
                 targets: vec!["aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa".to_string()],
             },

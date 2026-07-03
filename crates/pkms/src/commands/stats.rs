@@ -1,6 +1,6 @@
 use crate::cli::{OutputFormat, StatsArgs};
 use crate::command_context::CommandContext;
-use crate::config::ResolvedConfig;
+use crate::config::DbCommandConfig;
 use crate::output::OutputContext;
 use crate::util::format_size;
 use anyhow::Result;
@@ -127,13 +127,14 @@ impl From<&StatsArgs> for StatsOptions {
 }
 
 pub fn run(ctx: &CommandContext<'_>, opts: &StatsOptions) -> Result<()> {
-    let output = execute(ctx.config(), opts)?;
+    let config = ctx.config().db_command_config();
+    let output = execute(&config, opts)?;
     render(ctx.output(), &output)
 }
 
-pub fn execute(config: &ResolvedConfig, opts: &StatsOptions) -> Result<StatsCommandOutput> {
-    let graph = Graph::load(&config.org_config())?;
-    let db_root = config.resolved_db_root();
+pub fn execute(config: &DbCommandConfig, opts: &StatsOptions) -> Result<StatsCommandOutput> {
+    let graph = Graph::load(&config.org)?;
+    let db_root = config.org.db_root.as_path();
 
     if let Some(limit) = opts.hubs {
         return Ok(StatsCommandOutput::Hubs(build_hubs_output(&graph, limit)));

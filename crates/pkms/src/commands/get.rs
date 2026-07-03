@@ -1,6 +1,6 @@
 use crate::cli::OutputFormat;
 use crate::command_context::CommandContext;
-use crate::config::ResolvedConfig;
+use crate::config::DbCommandConfig;
 use crate::output::OutputContext;
 use crate::util;
 use anyhow::{Context, Result};
@@ -205,8 +205,8 @@ fn process_one_get(graph: &Graph, target: &str, opts: &GetOptions) -> Result<Get
     })
 }
 
-pub fn execute(config: &ResolvedConfig, opts: &GetOptions) -> Result<Vec<GetOutput>> {
-    let graph = Graph::load(&config.org_config())?;
+pub fn execute(config: &DbCommandConfig, opts: &GetOptions) -> Result<Vec<GetOutput>> {
+    let graph = Graph::load(&config.org)?;
     opts.targets
         .iter()
         .map(|target| process_one_get(&graph, target, opts))
@@ -300,7 +300,8 @@ fn render_one_text(output: &GetOutput) -> String {
 }
 
 pub fn run(ctx: &CommandContext<'_>, opts: &GetOptions) -> Result<()> {
-    let outputs = execute(ctx.config(), opts)?;
+    let config = ctx.config().db_command_config();
+    let outputs = execute(&config, opts)?;
     render(ctx.output(), &outputs)
 }
 

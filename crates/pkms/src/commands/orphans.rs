@@ -1,7 +1,7 @@
 use crate::cli::OrphansArgs;
 use crate::cli::OutputFormat;
 use crate::command_context::CommandContext;
-use crate::config::ResolvedConfig;
+use crate::config::DbCommandConfig;
 use crate::output::OutputContext;
 use crate::util;
 use anyhow::Result;
@@ -39,8 +39,8 @@ impl From<&OrphansArgs> for OrphansOptions {
     }
 }
 
-pub fn execute(config: &ResolvedConfig, opts: &OrphansOptions) -> Result<OrphansOutput> {
-    let graph = Graph::load(&config.org_config())?;
+pub fn execute(config: &DbCommandConfig, opts: &OrphansOptions) -> Result<OrphansOutput> {
+    let graph = Graph::load(&config.org)?;
     let mut orphans = if opts.with_dailies {
         graph.orphan_nodes_including_dailies()
     } else {
@@ -109,7 +109,8 @@ pub fn render(ctx: &OutputContext, output: &OrphansOutput) -> Result<()> {
 }
 
 pub fn run(ctx: &CommandContext<'_>, opts: &OrphansOptions) -> Result<()> {
-    let output = execute(ctx.config(), opts)?;
+    let config = ctx.config().db_command_config();
+    let output = execute(&config, opts)?;
     render(ctx.output(), &output)
 }
 

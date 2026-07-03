@@ -1,6 +1,6 @@
 use crate::cli::{OutputFormat, QueryArgs};
 use crate::command_context::CommandContext;
-use crate::config::ResolvedConfig;
+use crate::config::DbCommandConfig;
 use crate::output::OutputContext;
 use anyhow::Result;
 use pkms_org::Graph;
@@ -108,12 +108,13 @@ impl QuerySearchScope {
 }
 
 pub fn run(ctx: &CommandContext<'_>, opts: &QueryOptions) -> Result<()> {
-    let output = execute(ctx.config(), opts)?;
+    let config = ctx.config().db_command_config();
+    let output = execute(&config, opts)?;
     render(ctx.output(), &output)
 }
 
-pub fn execute(config: &ResolvedConfig, opts: &QueryOptions) -> Result<QueryOutput> {
-    let graph = Graph::load(&config.org_config())?;
+pub fn execute(config: &DbCommandConfig, opts: &QueryOptions) -> Result<QueryOutput> {
+    let graph = Graph::load(&config.org)?;
 
     let mut combined = search_by_text(&graph, &opts.terms, &opts.scope)?;
 
