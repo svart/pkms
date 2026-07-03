@@ -74,7 +74,7 @@ fn dispatch(cli: &Cli, command_ctx: &CommandContext<'_>) -> Result<ExitCode> {
         }
         Command::New(args) => success(commands::new::run(
             command_ctx,
-            &commands::new::NewOptions::from(args),
+            &commands::new::options_from_args(args),
         ))?,
         Command::Extract(args) => success(commands::extract::run(command_ctx, &args.try_into()?))?,
         Command::Get(args) => {

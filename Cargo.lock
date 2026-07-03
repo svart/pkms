@@ -2042,10 +2042,13 @@ name = "pkms-db"
 version = "1.12.3"
 dependencies = [
  "anyhow",
+ "chrono",
  "pkms-org",
+ "regex",
  "serde",
  "serde_json",
  "tempfile",
+ "uuid",
 ]
 
 [[package]]
