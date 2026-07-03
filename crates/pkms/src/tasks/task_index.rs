@@ -1,4 +1,3 @@
-use crate::config::ResolvedConfig;
 use crate::tasks::clock::TaskClock;
 use crate::tasks::filter::{
     TextFilter, matches_tag_filters, matches_text_filters, matches_type_filters,
@@ -7,6 +6,7 @@ use crate::tasks::model::{TaskDateValue, TaskPriority, TaskState};
 use pkms_org::Graph;
 use pkms_org::corpus::Corpus;
 use pkms_org::domain::NoteId;
+use pkms_org::graph::tasks::TaskStateConfig;
 use pkms_org::org_date::parse_org_date;
 use pkms_org::parser::{Heading, OrgPriority, find_daily_file_date, strip_org_links};
 
@@ -181,9 +181,13 @@ pub fn collect_agenda_records(corpus: &Corpus, query: TaskRecordQuery<'_>) -> Ve
     .collect()
 }
 
-pub fn assign_canonical_ids(config: &ResolvedConfig, graph: &Graph, records: &mut [TaskRecord]) {
+pub fn assign_canonical_ids(
+    task_states: &TaskStateConfig,
+    graph: &Graph,
+    records: &mut [TaskRecord],
+) {
     let global_ids: std::collections::HashMap<(String, usize), usize> = graph
-        .all_task_entries(&config.task_state_config())
+        .all_task_entries(task_states)
         .into_iter()
         .map(|entry| ((entry.path, entry.line_number), entry.id))
         .collect();
