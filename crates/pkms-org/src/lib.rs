@@ -2,6 +2,7 @@
 
 use std::path::PathBuf;
 
+pub mod attachments;
 pub mod corpus;
 pub mod discovery;
 pub mod domain;
