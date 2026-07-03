@@ -1,6 +1,6 @@
 use crate::cli::{OutputFormat, ResolveArgs};
 use crate::command_context::CommandContext;
-use crate::config::ResolvedConfig;
+use crate::config::DbCommandConfig;
 use crate::output::OutputContext;
 use anyhow::Result;
 use pkms_org::discovery;
@@ -135,14 +135,15 @@ impl From<&ResolveArgs> for ResolveOptions {
 }
 
 pub fn run(ctx: &CommandContext<'_>, opts: &ResolveOptions) -> Result<()> {
-    let output = execute(ctx.config(), opts)?;
+    let config = ctx.config().db_command_config();
+    let output = execute(&config, opts)?;
     render(ctx.output(), &output)
 }
 
-pub fn execute(config: &ResolvedConfig, opts: &ResolveOptions) -> Result<ResolveCommandOutput> {
-    let db_root = config.resolved_db_root();
-    let ignore = config.resolve_ignore_patterns();
-    let notes = scan_files(db_root, &ignore, opts.uuid.as_deref(), opts.todos);
+pub fn execute(config: &DbCommandConfig, opts: &ResolveOptions) -> Result<ResolveCommandOutput> {
+    let db_root = config.org.db_root.as_path();
+    let ignore = config.org.ignore_patterns.as_slice();
+    let notes = scan_files(db_root, ignore, opts.uuid.as_deref(), opts.todos);
 
     let title_query = opts.title.as_ref().map(|s| s.to_lowercase());
 
@@ -307,6 +308,7 @@ fn filter_fields(value: &serde_json::Value, fields: Option<&HashSet<String>>) ->
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::ResolvedConfig;
 
     fn resolved_note() -> ResolvedNote {
         ResolvedNote {
@@ -412,8 +414,9 @@ mod tests {
         content.push_str("* TODO Late task\n");
         std::fs::write(dir.path().join("alpha.org"), content).unwrap();
         let config = ResolvedConfig::for_test_db(dir.path());
+        let db_config = config.db_command_config();
         let output = execute(
-            &config,
+            &db_config,
             &ResolveOptions {
                 uuid: None,
                 title: Some("Alpha".to_string()),
