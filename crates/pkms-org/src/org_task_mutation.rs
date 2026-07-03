@@ -1,8 +1,7 @@
-use crate::tasks::model::{TaskDateValue, TaskPriority, TaskProperty, TaskState};
+use crate::org_edit;
+use crate::parser::{DEADLINE_RE, HEADING_RE, OrgPriority, OrgTodoState, SCHEDULED_RE};
 use anyhow::{Result, bail};
 use chrono::{NaiveDate, NaiveDateTime};
-use pkms_org::org_edit;
-use pkms_org::parser::{DEADLINE_RE, HEADING_RE, SCHEDULED_RE};
 
 #[derive(Debug, Clone, Copy)]
 pub enum PlanningKind {
@@ -28,19 +27,31 @@ pub enum Change<T> {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HeadingMod {
-    pub state: Option<TaskState>,
+    pub state: Option<OrgTodoState>,
     pub title: Option<String>,
-    pub priority: Change<TaskPriority>,
+    pub priority: Change<OrgPriority>,
     pub tags: Option<Vec<String>>,
-    pub scheduled: Change<TaskDateValue>,
-    pub deadline: Change<TaskDateValue>,
+    pub scheduled: Change<String>,
+    pub deadline: Change<String>,
     pub project: Change<String>,
     pub description: Option<String>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OrgTaskProperty {
+    Status,
+    Title,
+    Priority,
+    Tags,
+    Scheduled,
+    Deadline,
+    Project,
+    Description,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TaskPropertyChange {
-    pub property: TaskProperty,
+    pub property: OrgTaskProperty,
     pub old: Option<String>,
     pub new: Option<String>,
 }
@@ -49,7 +60,7 @@ struct ParsedHeading {
     level: String,
     newline: String,
     state: Option<String>,
-    priority: Option<TaskPriority>,
+    priority: Option<OrgPriority>,
     title: String,
     tags: Vec<String>,
 }
@@ -146,7 +157,7 @@ fn parse_heading(
         priority: captures
             .get(3)
             .and_then(|m| m.as_str().chars().next())
-            .and_then(TaskPriority::from_char),
+            .and_then(OrgPriority::from_char),
         title: captures
             .get(4)
             .map_or("", |m| m.as_str())
@@ -177,7 +188,7 @@ fn apply_heading_fields(
     let mut heading_changed = false;
     if modifier.state.is_some() && old_state != new_state {
         changes.push(TaskPropertyChange {
-            property: TaskProperty::Status,
+            property: OrgTaskProperty::Status,
             old: heading.state.clone(),
             new: new_state.map(str::to_string),
         });
@@ -185,7 +196,7 @@ fn apply_heading_fields(
     }
     if modifier.title.is_some() && heading.title != *new_title {
         changes.push(TaskPropertyChange {
-            property: TaskProperty::Title,
+            property: OrgTaskProperty::Title,
             old: Some(heading.title.clone()),
             new: Some(new_title.clone()),
         });
@@ -193,7 +204,7 @@ fn apply_heading_fields(
     }
     if !matches!(modifier.priority, Change::Unchanged) && old_priority != new_priority {
         changes.push(TaskPropertyChange {
-            property: TaskProperty::Priority,
+            property: OrgTaskProperty::Priority,
             old: old_priority.map(|p| p.to_string()),
             new: new_priority.map(|p| p.to_string()),
         });
@@ -201,7 +212,7 @@ fn apply_heading_fields(
     }
     if modifier.tags.is_some() && heading.tags != *new_tags {
         changes.push(TaskPropertyChange {
-            property: TaskProperty::Tags,
+            property: OrgTaskProperty::Tags,
             old: non_empty_tags(&heading.tags),
             new: non_empty_tags(new_tags),
         });
@@ -277,7 +288,7 @@ fn non_empty_tags(tags: &[String]) -> Option<String> {
 fn format_heading(
     level: &str,
     state: Option<&str>,
-    priority: Option<TaskPriority>,
+    priority: Option<OrgPriority>,
     title: &str,
     tags: &[String],
 ) -> String {
@@ -303,7 +314,7 @@ fn apply_planning_change(
     lines: &mut Vec<String>,
     heading_idx: usize,
     kind: PlanningKind,
-    requested: &Change<TaskDateValue>,
+    requested: &Change<String>,
     changes: &mut Vec<TaskPropertyChange>,
 ) -> Result<()> {
     let new = match requested {
@@ -370,10 +381,10 @@ fn current_planning_value(
         .map(|m| m.as_str().to_string())
 }
 
-fn planning_display_label(kind: PlanningKind) -> TaskProperty {
+fn planning_display_label(kind: PlanningKind) -> OrgTaskProperty {
     match kind {
-        PlanningKind::Scheduled => TaskProperty::Scheduled,
-        PlanningKind::Deadline => TaskProperty::Deadline,
+        PlanningKind::Scheduled => OrgTaskProperty::Scheduled,
+        PlanningKind::Deadline => OrgTaskProperty::Deadline,
     }
 }
 
@@ -395,7 +406,7 @@ fn apply_drawer_properties(
 
     set_heading_project(lines, heading_idx, requested);
     changes.push(TaskPropertyChange {
-        property: TaskProperty::Project,
+        property: OrgTaskProperty::Project,
         old,
         new: requested.map(str::to_string),
     });
@@ -511,7 +522,7 @@ fn apply_description(
         }
     }
     changes.push(TaskPropertyChange {
-        property: TaskProperty::Description,
+        property: OrgTaskProperty::Description,
         old,
         new,
     });
@@ -595,7 +606,7 @@ fn postpone_recurring_token(
     let Some(raw_match) = captures.get(1) else {
         return Ok(None);
     };
-    let parsed = pkms_org::org_date::parse_org_date(raw_match.as_str())
+    let parsed = crate::org_date::parse_org_date(raw_match.as_str())
         .ok_or_else(|| anyhow::anyhow!("Could not parse existing {label} date"))?;
     if parsed.repeater.is_none() {
         bail!("Task {label} date is not recurring");
@@ -604,7 +615,7 @@ fn postpone_recurring_token(
     Ok(Some(regex.replace(line, replacement.as_str()).to_string()))
 }
 
-fn format_org_date_like(existing: &pkms_org::org_date::OrgDate, new_date: NaiveDate) -> String {
+fn format_org_date_like(existing: &crate::org_date::OrgDate, new_date: NaiveDate) -> String {
     let open = if existing.inactive { "[" } else { "<" };
     let close = if existing.inactive { "]" } else { ">" };
     let mut parts = vec![new_date.format("%Y-%m-%d %a").to_string()];

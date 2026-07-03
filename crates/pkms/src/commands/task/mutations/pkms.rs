@@ -2,15 +2,16 @@ use crate::config::ResolvedConfig;
 use crate::output::OutputContext;
 use crate::tasks::clock::TaskClock;
 use crate::tasks::id::TaskId;
-use crate::tasks::model::{TaskDateValue, TaskPriority, TaskProperty, TaskState};
+use crate::tasks::model::{TaskDateValue, TaskPriority, TaskProperty};
 use crate::tasks::modifiers::{
     TaskDateArg, TaskDependencyArg, TaskModifierSpec, TaskPriorityArg, is_clear_value, org_date,
 };
 use crate::tasks::pkms::{self, PkmsInboxTarget};
-use crate::tasks::pkms_mutation::{self, Change};
 use anyhow::{Context, Result, bail};
 use pkms_org::Graph;
 use pkms_org::graph::tasks::TaskLocation as GraphTaskLocation;
+use pkms_org::org_task_mutation::{self, Change, OrgTaskProperty};
+use pkms_org::parser::{OrgPriority, OrgTodoState};
 use std::path::Path;
 use std::process::ExitCode;
 
@@ -37,7 +38,7 @@ pub(super) fn mod_task(
     }
 
     let title = mod_title(spec)?;
-    let modifier = pkms_mutation::HeadingMod {
+    let modifier = org_task_mutation::HeadingMod {
         state: mod_state(config, spec)?,
         title,
         priority: mod_pkms_priority(spec)?,
@@ -88,14 +89,14 @@ pub(super) fn mod_task(
     }
 
     changes.extend(
-        pkms_mutation::update_heading_properties(
+        org_task_mutation::update_heading_properties(
             &location.path.display().to_string(),
             location.line_number,
             &modifier,
         )?
         .into_iter()
         .map(|change| render::TaskModChange {
-            property: change.property,
+            property: task_property_from_org(change.property),
             old: change.old,
             new: change.new,
         }),
@@ -188,21 +189,21 @@ fn current_dependency_parent(
         })
 }
 
-fn mod_pkms_priority(spec: &TaskModifierSpec) -> Result<Change<TaskPriority>> {
+fn mod_pkms_priority(spec: &TaskModifierSpec) -> Result<Change<OrgPriority>> {
     let Some(priority) = spec.priority else {
         return Ok(Change::Unchanged);
     };
     Ok(match priority {
         TaskPriorityArg::Clear => Change::Clear,
-        TaskPriorityArg::Set(priority) => Change::Set(priority),
+        TaskPriorityArg::Set(priority) => Change::Set(org_priority(priority)),
     })
 }
 
-fn mod_pkms_date(value: Option<&TaskDateArg>) -> Change<TaskDateValue> {
+fn mod_pkms_date(value: Option<&TaskDateArg>) -> Change<String> {
     match value {
         None => Change::Unchanged,
         Some(TaskDateArg::Clear) => Change::Clear,
-        Some(TaskDateArg::Set(date)) => Change::Set(date.clone()),
+        Some(TaskDateArg::Set(date)) => Change::Set(date.as_str().to_string()),
     }
 }
 
@@ -218,7 +219,7 @@ fn mod_pkms_optional_text(value: Option<&str>) -> Change<String> {
     }
 }
 
-fn mod_state(config: &ResolvedConfig, spec: &TaskModifierSpec) -> Result<Option<TaskState>> {
+fn mod_state(config: &ResolvedConfig, spec: &TaskModifierSpec) -> Result<Option<OrgTodoState>> {
     spec.state
         .as_deref()
         .map(|state| canonical_state(config, state))
@@ -242,7 +243,7 @@ pub(super) fn set_state(
                 location.path, location.line_number
             )
         })?;
-    let output = pkms_mutation::replace_heading_state(
+    let output = org_task_mutation::replace_heading_state(
         &location.path,
         location.line_number,
         &new_state,
@@ -275,12 +276,12 @@ fn task_title_in_graph(graph: &Graph, path: &str, line_number: usize) -> Option<
         .map(|heading| heading.title.clone())
 }
 
-fn canonical_state(config: &ResolvedConfig, requested_state: &str) -> Result<TaskState> {
+fn canonical_state(config: &ResolvedConfig, requested_state: &str) -> Result<OrgTodoState> {
     let states = config.todo_states();
     states
         .iter()
         .find(|state| state.eq_ignore_ascii_case(requested_state))
-        .map(|state| TaskState::new(state.clone()))
+        .map(|state| OrgTodoState::new(state.clone()))
         .ok_or_else(|| {
             anyhow::anyhow!(
                 "Unknown TODO state '{}'. Valid states: {}",
@@ -423,6 +424,27 @@ fn add_priority(spec: &TaskModifierSpec) -> Result<String> {
     }
 }
 
+fn org_priority(priority: TaskPriority) -> OrgPriority {
+    match priority {
+        TaskPriority::A => OrgPriority::A,
+        TaskPriority::B => OrgPriority::B,
+        TaskPriority::C => OrgPriority::C,
+    }
+}
+
+fn task_property_from_org(property: OrgTaskProperty) -> TaskProperty {
+    match property {
+        OrgTaskProperty::Status => TaskProperty::Status,
+        OrgTaskProperty::Title => TaskProperty::Title,
+        OrgTaskProperty::Priority => TaskProperty::Priority,
+        OrgTaskProperty::Tags => TaskProperty::Tags,
+        OrgTaskProperty::Scheduled => TaskProperty::Scheduled,
+        OrgTaskProperty::Deadline => TaskProperty::Deadline,
+        OrgTaskProperty::Project => TaskProperty::Project,
+        OrgTaskProperty::Description => TaskProperty::Description,
+    }
+}
+
 pub(super) fn postpone(
     config: &ResolvedConfig,
     ctx: &OutputContext,
@@ -433,7 +455,7 @@ pub(super) fn postpone(
     let date = parse_mutation_due_date(to, clock.today)?;
     let graph = Graph::load(&config.org_config())?;
     let location = graph.resolve_canonical_task_id(&config.task_state_config(), canonical_id)?;
-    pkms_mutation::update_recurring_planning_date(&location.path, location.line_number, &date)?;
+    org_task_mutation::update_recurring_planning_date(&location.path, location.line_number, &date)?;
     let item = pkms::find_task_item_on(
         config,
         Path::new(&location.path),
