@@ -2015,6 +2015,7 @@ dependencies = [
  "katex",
  "pkms-db",
  "pkms-org",
+ "pkms-task",
  "proptest",
  "regex",
  "serde",
@@ -2071,6 +2072,16 @@ dependencies = [
  "tracing",
  "uuid",
  "walkdir",
+]
+
+[[package]]
+name = "pkms-task"
+version = "1.12.3"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "pkms-org",
+ "serde",
 ]
 
 [[package]]

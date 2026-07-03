@@ -23,6 +23,7 @@ glob = "0.3"
 anyhow = "1"
 pkms-db = { path = "../pkms-db" }
 pkms-org = { path = "../pkms-org" }
+pkms-task = { path = "../pkms-task" }
 chrono = { version = "0.4", default-features = false, features = ["clock", "serde", "std"] }
 dirs = "6"
 tiktoken-rs = "0.11"
