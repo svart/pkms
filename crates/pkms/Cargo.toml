@@ -9,7 +9,7 @@ license = "MIT"
 default = []
 todoist = ["dep:ureq", "ureq/platform-verifier"]
 web = ["dep:katex", "dep:syntect"]
-ssh = ["dep:russh", "dep:russh-sftp", "dep:tokio"]
+ssh = ["pkms-db/ssh"]
 
 [dependencies]
 clap = { version = "4", features = ["derive"] }
@@ -25,7 +25,6 @@ pkms-db = { path = "../pkms-db" }
 pkms-org = { path = "../pkms-org" }
 chrono = { version = "0.4", default-features = false, features = ["clock", "serde", "std"] }
 dirs = "6"
-rayon = "1"
 tiktoken-rs = "0.11"
 tabled = { version = "0.20", default-features = false, features = ["std"] }
 terminal_size = "0.4"
@@ -34,9 +33,6 @@ tracing-subscriber = { version = "0.3", default-features = false, features = ["e
 ureq = { version = "3.3.0", optional = true, features = ["json"] }
 katex = { version = "0.4.6", optional = true }
 syntect = { version = "5.3.0", optional = true }
-russh = { version = "0.61.2", optional = true }
-russh-sftp = { version = "2.3.0", optional = true }
-tokio = { version = "1", optional = true, features = ["io-util", "net", "rt-multi-thread", "time"] }
 
 [[test]]
 name = "integration"

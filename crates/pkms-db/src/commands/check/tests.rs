@@ -1,7 +1,23 @@
 use super::*;
-use crate::config::ResolvedConfig;
 use crate::link_check::LinkCheckKind;
+use pkms_org::OrgConfig;
 use pkms_org::graph::{Graph, GraphStats};
+
+fn org_config(db_root: &std::path::Path) -> OrgConfig {
+    OrgConfig {
+        db_root: db_root.to_path_buf(),
+        new_notes_dir: None,
+        daily_notes_dir: None,
+        ignore_patterns: Vec::new(),
+    }
+}
+
+fn check_config(db_root: &std::path::Path) -> CheckConfig {
+    CheckConfig {
+        org: org_config(db_root),
+        ssh: None,
+    }
+}
 
 fn healthy_output() -> CheckOutput {
     CheckOutput {
@@ -106,8 +122,7 @@ fn targeted_file_link_check_health_ignores_hidden_id_link_issues() {
 "#,
     )
     .unwrap();
-    let config = ResolvedConfig::for_test_db(dir.path());
-    let db_config = config.db_command_config();
+    let db_config = check_config(dir.path());
     let output = execute(
         &db_config,
         &CheckOptions {
@@ -152,8 +167,7 @@ fn collects_only_requested_local_link_check_jobs_in_stable_order() {
 "#,
     )
     .unwrap();
-    let config = ResolvedConfig::for_test_db(db_root);
-    let graph = Graph::load(&config.org_config()).unwrap();
+    let graph = Graph::load(&org_config(db_root)).unwrap();
 
     let all_jobs =
         graph.collect_local_link_check_jobs(&[LinkCheckKind::File, LinkCheckKind::Attachment]);

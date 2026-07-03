@@ -1,60 +1,91 @@
+use crate::cli::CheckArgs;
 use crate::command_context::CommandContext;
-use crate::config::DbCommandConfig;
+use crate::config::SshConfig;
 use crate::output::OutputContext;
 use anyhow::Result;
-use pkms_org::Graph;
+use pkms_db::commands::check::{
+    self, CheckCommandOutput, CheckConfig, CheckItem, CheckOptions, CheckSelection,
+    CrossLinkTargets,
+};
+use pkms_db::link_check::SshFileCheckConfig;
 use std::process::ExitCode;
-
-mod data;
-mod model;
-#[path = "check/render.rs"]
-mod rendering;
-#[cfg(test)]
-mod tests;
-
-use data::{CheckDisplayOptions, build_check_output, collect_check_data};
-pub use model::*;
-pub use rendering::render_text;
 
 pub fn run(ctx: &CommandContext<'_>, opts: &CheckOptions) -> Result<ExitCode> {
     let config = ctx.config().db_command_config();
-    let output = execute(&config, opts)?;
+    let output = check::execute(
+        &CheckConfig {
+            org: config.org,
+            ssh: config.ssh.as_ref().map(ssh_file_check_config_from_config),
+        },
+        opts,
+    )?;
     render(ctx.output(), &output)
 }
 
 pub fn render(ctx: &OutputContext, output: &CheckCommandOutput) -> Result<ExitCode> {
-    rendering::render(ctx, output)
+    if ctx.is_structured() {
+        ctx.print_structured(&output.output)?;
+    } else {
+        print!("{}", check::render_text(&output.output));
+    }
+
+    Ok(output.exit_code)
 }
 
-pub fn execute(config: &DbCommandConfig, opts: &CheckOptions) -> Result<CheckCommandOutput> {
-    ensure_remote_file_links_available(opts.checks.requests(CheckItem::RemoteFileLinks))?;
-
-    let graph = Graph::load(&config.org)?;
-    let db_root = config.org.db_root.as_path();
-
-    let display_opts = CheckDisplayOptions::from_options(opts);
-    let issue_data = collect_check_data(config, &graph, db_root, opts, &display_opts)?;
-    let output = build_check_output(&issue_data, &display_opts);
-    let exit_code = if output.healthy {
-        ExitCode::SUCCESS
+pub fn options_from_args(args: &CheckArgs) -> CheckOptions {
+    let mut checks = Vec::new();
+    if args.stats {
+        checks.push(CheckItem::Stats);
+    }
+    if args.file_links {
+        checks.push(CheckItem::FileLinks);
+    }
+    if args.remote_file_links {
+        checks.push(CheckItem::RemoteFileLinks);
+    }
+    if args.attachment_links {
+        checks.push(CheckItem::AttachmentLinks);
+    }
+    if args.id_links {
+        checks.push(CheckItem::IdLinks);
+    }
+    if args.filetags {
+        checks.push(CheckItem::Filetags);
+    }
+    if args.self_links {
+        checks.push(CheckItem::SelfLinks);
+    }
+    if args.overlinks {
+        checks.push(CheckItem::Overlinks);
+    }
+    let cross_links = args.cross_links.as_ref().and_then(|targets| {
+        let [source, target] = targets.as_slice() else {
+            return None;
+        };
+        Some(CrossLinkTargets {
+            source: source.clone(),
+            target: target.clone(),
+        })
+    });
+    let checks = if checks.is_empty() && cross_links.is_none() {
+        CheckSelection::Default
     } else {
-        ExitCode::from(1)
+        CheckSelection::Explicit(checks)
     };
 
-    Ok(CheckCommandOutput { output, exit_code })
-}
-
-#[cfg(feature = "ssh")]
-fn ensure_remote_file_links_available(_requested: bool) -> Result<()> {
-    Ok(())
-}
-
-#[cfg(not(feature = "ssh"))]
-fn ensure_remote_file_links_available(requested: bool) -> Result<()> {
-    if requested {
-        anyhow::bail!(
-            "SSH file-link checks are not available in this build. Rebuild with --features ssh."
-        )
+    CheckOptions {
+        checks,
+        cross_links,
     }
-    Ok(())
+}
+
+fn ssh_file_check_config_from_config(config: &SshConfig) -> SshFileCheckConfig {
+    SshFileCheckConfig {
+        identity_file: config.identity_file.clone(),
+        known_hosts: config.known_hosts.clone(),
+        connect_timeout_ms: config.connect_timeout_ms,
+        operation_timeout_ms: config.operation_timeout_ms,
+        max_connections: config.max_connections,
+        agent: config.agent,
+    }
 }

@@ -1,18 +1,5 @@
-use super::model::{CheckCommandOutput, CheckOutput};
-use crate::output::OutputContext;
-use anyhow::Result;
+use super::model::CheckOutput;
 use std::fmt::Write;
-use std::process::ExitCode;
-
-pub(super) fn render(ctx: &OutputContext, output: &CheckCommandOutput) -> Result<ExitCode> {
-    if ctx.is_structured() {
-        ctx.print_structured(&output.output)?;
-    } else {
-        print!("{}", render_text(&output.output));
-    }
-
-    Ok(output.exit_code)
-}
 
 pub fn render_text(output: &CheckOutput) -> String {
     let mut text = String::new();

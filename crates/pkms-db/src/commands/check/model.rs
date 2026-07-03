@@ -1,4 +1,3 @@
-use crate::cli::CheckArgs;
 use pkms_org::graph::{DuplicateInfo, GraphStats, OverlinkEntry, SelfLinkEntry};
 use serde::Serialize;
 use std::process::ExitCode;
@@ -117,55 +116,6 @@ pub struct CrossLinkTargets {
 pub struct CheckCommandOutput {
     pub output: CheckOutput,
     pub exit_code: ExitCode,
-}
-
-impl From<&CheckArgs> for CheckOptions {
-    fn from(args: &CheckArgs) -> Self {
-        let mut checks = Vec::new();
-        if args.stats {
-            checks.push(CheckItem::Stats);
-        }
-        if args.file_links {
-            checks.push(CheckItem::FileLinks);
-        }
-        if args.remote_file_links {
-            checks.push(CheckItem::RemoteFileLinks);
-        }
-        if args.attachment_links {
-            checks.push(CheckItem::AttachmentLinks);
-        }
-        if args.id_links {
-            checks.push(CheckItem::IdLinks);
-        }
-        if args.filetags {
-            checks.push(CheckItem::Filetags);
-        }
-        if args.self_links {
-            checks.push(CheckItem::SelfLinks);
-        }
-        if args.overlinks {
-            checks.push(CheckItem::Overlinks);
-        }
-        let cross_links = args.cross_links.as_ref().and_then(|targets| {
-            let [source, target] = targets.as_slice() else {
-                return None;
-            };
-            Some(CrossLinkTargets {
-                source: source.clone(),
-                target: target.clone(),
-            })
-        });
-        let checks = if checks.is_empty() && cross_links.is_none() {
-            CheckSelection::Default
-        } else {
-            CheckSelection::Explicit(checks)
-        };
-
-        CheckOptions {
-            checks,
-            cross_links,
-        }
-    }
 }
 
 impl CheckSelection {

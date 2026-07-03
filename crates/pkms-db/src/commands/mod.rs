@@ -1,3 +1,4 @@
+pub mod check;
 pub mod extract;
 pub mod fix;
 pub mod get;

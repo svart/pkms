@@ -37,7 +37,7 @@ fn dispatch(cli: &Cli, command_ctx: &CommandContext<'_>) -> Result<ExitCode> {
     let ctx = command_ctx.output();
     Ok(match &cli.command {
         Command::Check(args) => {
-            commands::check::run(command_ctx, &commands::check::CheckOptions::from(args))?
+            commands::check::run(command_ctx, &commands::check::options_from_args(args))?
         }
         Command::Validate(args) => {
             let targets = input::resolve_targets(&args.target, args.from_stdin)?;
