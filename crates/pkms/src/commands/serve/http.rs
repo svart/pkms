@@ -346,7 +346,8 @@ pub(super) fn open_response(
         return Ok(HttpResponse::not_found("Missing id"));
     };
     let node = state.graph.resolve_target(&note_uuid)?;
-    open::open_target(&state.graph, state.config, &node.uuid, editor, Some(1))?;
+    let task_states = state.config.task_state_config();
+    open::open_target(&state.graph, &task_states, &node.uuid, editor, Some(1))?;
     Ok(HttpResponse::text(format!("Opened {}", node.title)))
 }
 

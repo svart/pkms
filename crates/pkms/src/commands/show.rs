@@ -1,8 +1,9 @@
 use crate::cli::OutputFormat;
 use crate::command_context::CommandContext;
-use crate::config::ResolvedConfig;
+use crate::config::DbCommandConfig;
 use crate::output::{OutputContext, terminal_markup};
 use anyhow::Result;
+use pkms_org::graph::tasks::TaskStateConfig;
 use pkms_org::graph::{FileScanResult, Graph, Node};
 use pkms_org::org_edit::parsed_heading_subtree_end_index;
 use pkms_org::parser::{Heading, Link, strip_org_links};
@@ -242,11 +243,11 @@ fn show_heading_by_line(ctx: HeadingShowContext<'_>, line_number: usize) -> Resu
 
 fn process_one_show(
     graph: &Graph,
-    config: &ResolvedConfig,
+    task_states: &TaskStateConfig,
     target: &HeadingTarget,
     task_ids: &TaskIdMap,
 ) -> Result<ShowOutput> {
-    let resolved = resolve_heading_target(graph, config, target)?;
+    let resolved = resolve_heading_target(graph, task_states, target)?;
 
     show_heading_by_line(
         HeadingShowContext {
@@ -264,21 +265,23 @@ fn process_one_show(
 
 fn resolve_heading_target<'a>(
     graph: &'a Graph,
-    config: &ResolvedConfig,
+    task_states: &TaskStateConfig,
     target: &HeadingTarget,
 ) -> Result<ResolvedHeadingTarget<'a>> {
     match target {
-        HeadingTarget::CanonicalTaskId(id) => resolve_canonical_heading_target(graph, config, *id),
+        HeadingTarget::CanonicalTaskId(id) => {
+            resolve_canonical_heading_target(graph, task_states, *id)
+        }
         HeadingTarget::Note(note_target) => resolve_note_heading_target(graph, note_target),
     }
 }
 
 fn resolve_canonical_heading_target<'a>(
     graph: &'a Graph,
-    config: &ResolvedConfig,
+    task_states: &TaskStateConfig,
     id: usize,
 ) -> Result<ResolvedHeadingTarget<'a>> {
-    let location = graph.resolve_canonical_task_id(&config.task_state_config(), id)?;
+    let location = graph.resolve_canonical_task_id(task_states, id)?;
     let path = PathBuf::from(&location.path);
     let content = std::fs::read_to_string(&path)?;
 
@@ -423,17 +426,17 @@ fn resolve_outgoing_titles(output: &mut ShowOutput, graph: &Graph) {
     }
 }
 
-pub fn execute(config: &ResolvedConfig, opts: &ShowOptions) -> Result<Vec<ShowOutput>> {
-    let graph = Graph::load(&config.org_config())?;
+pub fn execute(config: &DbCommandConfig, opts: &ShowOptions) -> Result<Vec<ShowOutput>> {
+    let graph = Graph::load(&config.org)?;
     let task_ids: TaskIdMap = graph
-        .all_task_entries(&config.task_state_config())
+        .all_task_entries(&config.task_states)
         .into_iter()
         .map(|entry| ((entry.path, entry.line_number), entry.id))
         .collect();
     opts.targets
         .iter()
         .map(|target| {
-            let mut output = process_one_show(&graph, config, target, &task_ids)?;
+            let mut output = process_one_show(&graph, &config.task_states, target, &task_ids)?;
             resolve_outgoing_titles(&mut output, &graph);
             Ok(output)
         })
@@ -548,7 +551,8 @@ fn render_one_text(output: &ShowOutput) -> String {
 }
 
 pub fn run(ctx: &CommandContext<'_>, opts: &ShowOptions) -> Result<()> {
-    let outputs = execute(ctx.config(), opts)?;
+    let config = ctx.config().db_command_config();
+    let outputs = execute(&config, opts)?;
     render(ctx.output(), &outputs)
 }
 

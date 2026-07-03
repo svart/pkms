@@ -1,8 +1,8 @@
 use crate::command_context::CommandContext;
-use crate::config::ResolvedConfig;
+use crate::config::DbCommandConfig;
 use anyhow::Result;
 use pkms_org::Graph;
-use pkms_org::graph::tasks::TaskLocation;
+use pkms_org::graph::tasks::{TaskLocation, TaskStateConfig};
 
 pub struct OpenOptions {
     pub targets: Vec<String>,
@@ -29,13 +29,13 @@ fn find_line_for_node(graph: &Graph, path: &std::path::Path) -> usize {
 
 pub fn open_target(
     graph: &Graph,
-    config: &ResolvedConfig,
+    task_states: &TaskStateConfig,
     target: &str,
     editor: &str,
     line: Option<usize>,
 ) -> Result<()> {
     let location = if let Ok(id) = target.parse::<usize>() {
-        graph.resolve_canonical_task_id(&config.task_state_config(), id)?
+        graph.resolve_canonical_task_id(task_states, id)?
     } else {
         let node = graph.resolve_target(target)?;
         let path = node.path.display().to_string();
@@ -83,10 +83,15 @@ pub fn open_target(
 }
 
 pub fn run(ctx: &CommandContext<'_>, opts: &OpenOptions) -> Result<()> {
-    let graph = ctx.load_graph()?;
+    let config = ctx.config().db_command_config();
+    execute(&config, opts)
+}
+
+fn execute(config: &DbCommandConfig, opts: &OpenOptions) -> Result<()> {
+    let graph = Graph::load(&config.org)?;
 
     for target in &opts.targets {
-        open_target(&graph, ctx.config(), target, &opts.editor, opts.line)?;
+        open_target(&graph, &config.task_states, target, &opts.editor, opts.line)?;
     }
 
     Ok(())
