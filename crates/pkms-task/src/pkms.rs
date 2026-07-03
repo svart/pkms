@@ -1,0 +1,558 @@
+use crate::clock::TaskClock;
+use crate::config::PkmsTaskConfig;
+use crate::id::TaskId;
+use crate::model::{TaskDate, TaskItem, TaskSourceKind, TaskStatus};
+use crate::task_index::{
+    TaskRecord, TaskRecordQuery, assign_canonical_ids, collect_agenda_records, collect_todo_records,
+};
+use anyhow::{Context, Result};
+use chrono::NaiveDate;
+use pkms_org::graph::tasks::TaskStateConfig;
+use pkms_org::org_task_edit;
+use pkms_org::parser::find_daily_file_date;
+use pkms_org::{Graph, Workspace};
+use std::collections::HashSet;
+use std::path::{Path, PathBuf};
+
+#[derive(Debug, Clone)]
+pub enum PkmsInboxTarget {
+    Note(PathBuf),
+    Daily { path: PathBuf },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TaskLocation {
+    pub path: PathBuf,
+    pub line_number: usize,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AgendaView {
+    All,
+    Today,
+    Week,
+    Overdue,
+    Upcoming,
+}
+
+pub fn list_items(config: &PkmsTaskConfig) -> Result<Vec<TaskItem>> {
+    list_items_on(config, TaskClock::now())
+}
+
+pub fn list_items_on(config: &PkmsTaskConfig, clock: TaskClock) -> Result<Vec<TaskItem>> {
+    let workspace = Workspace::load(&config.org)?;
+    let task_states = &config.task_states;
+    let mut records = collect_todo_records(
+        &workspace.corpus,
+        TaskRecordQuery::todo(&task_states.valid_states, clock),
+    );
+    assign_canonical_ids(task_states, &workspace.graph, &mut records);
+    Ok(records
+        .into_iter()
+        .map(|record| record_to_task_item(task_states, record))
+        .collect())
+}
+
+pub fn collect_inbox_items(config: &PkmsTaskConfig) -> Result<Vec<TaskItem>> {
+    collect_inbox_items_on(config, TaskClock::now())
+}
+
+pub fn collect_inbox_items_on(config: &PkmsTaskConfig, clock: TaskClock) -> Result<Vec<TaskItem>> {
+    let target = resolve_inbox_target_on(config, false, clock.today)?;
+    let workspace = Workspace::load(&config.org)?;
+    let graph = &workspace.graph;
+    let task_states = &config.task_states;
+    let mut records = collect_todo_records(
+        &workspace.corpus,
+        TaskRecordQuery::todo(&task_states.valid_states, clock),
+    );
+    assign_canonical_ids(task_states, graph, &mut records);
+
+    let records: Vec<_> = match target {
+        PkmsInboxTarget::Note(path) => records
+            .into_iter()
+            .filter(|record| record.path == path.display().to_string())
+            .collect(),
+        PkmsInboxTarget::Daily { path } => {
+            let section = org_task_edit::inbox_section_range(&path)?;
+            records
+                .into_iter()
+                .filter(|record| {
+                    record.path == path.display().to_string()
+                        && section.is_some_and(|(start, end)| {
+                            record.line_number > start && record.line_number < end
+                        })
+                })
+                .collect()
+        }
+    };
+
+    Ok(records
+        .into_iter()
+        .map(|record| record_to_task_item(task_states, record))
+        .collect())
+}
+
+pub fn resolve_inbox_target(
+    config: &PkmsTaskConfig,
+    create_daily: bool,
+) -> Result<PkmsInboxTarget> {
+    resolve_inbox_target_on(config, create_daily, TaskClock::now().today)
+}
+
+pub fn resolve_inbox_target_on(
+    config: &PkmsTaskConfig,
+    create_daily: bool,
+    today: NaiveDate,
+) -> Result<PkmsInboxTarget> {
+    let target = config.task_inbox()?;
+    if target.eq_ignore_ascii_case("daily") {
+        return resolve_daily_inbox_target(config, create_daily, today);
+    }
+
+    let graph = Graph::load(&config.org)?;
+    if let Some(node) = graph.find_node(target) {
+        return Ok(PkmsInboxTarget::Note(node.path.clone()));
+    }
+
+    let configured = PathBuf::from(target);
+    let candidates = if configured.is_absolute() {
+        vec![configured]
+    } else {
+        vec![config.resolved_db_root().join(&configured), configured]
+    };
+
+    candidates
+        .into_iter()
+        .find(|path| path.exists())
+        .map(PkmsInboxTarget::Note)
+        .ok_or_else(|| anyhow::anyhow!("PKMS task inbox note not found: {target}"))
+}
+
+pub fn resolve_note_task_target(config: &PkmsTaskConfig, target: &str) -> Result<PkmsInboxTarget> {
+    let graph = Graph::load(&config.org)?;
+    if let Some(node) = graph.find_node(target) {
+        return Ok(PkmsInboxTarget::Note(node.path.clone()));
+    }
+
+    let configured = PathBuf::from(target);
+    let candidates = if configured.is_absolute() {
+        vec![configured]
+    } else {
+        vec![config.resolved_db_root().join(&configured), configured]
+    };
+
+    candidates
+        .into_iter()
+        .find(|path| path.exists())
+        .map(PkmsInboxTarget::Note)
+        .ok_or_else(|| anyhow::anyhow!("PKMS task target note not found: {target}"))
+}
+
+fn resolve_daily_inbox_target(
+    config: &PkmsTaskConfig,
+    create: bool,
+    today: NaiveDate,
+) -> Result<PkmsInboxTarget> {
+    let configured_path = config
+        .resolve_daily_notes_dir()
+        .join(format!("{today}.org"));
+    if config.daily_notes_dir_configured || configured_path.exists() {
+        if create {
+            ensure_daily_note_exists(&configured_path, today)?;
+        }
+        return Ok(PkmsInboxTarget::Daily {
+            path: configured_path,
+        });
+    }
+
+    let graph = Graph::load(&config.org)?;
+    if let Some(result) = graph
+        .results
+        .iter()
+        .find(|result| find_daily_file_date(&result.path) == Some(today))
+    {
+        return Ok(PkmsInboxTarget::Daily {
+            path: result.path.clone(),
+        });
+    }
+
+    if !create {
+        return Ok(PkmsInboxTarget::Daily {
+            path: configured_path,
+        });
+    }
+
+    ensure_daily_note_exists(&configured_path, today)?;
+    Ok(PkmsInboxTarget::Daily {
+        path: configured_path,
+    })
+}
+
+fn ensure_daily_note_exists(path: &Path, today: chrono::NaiveDate) -> Result<()> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).with_context(|| {
+            format!(
+                "Failed to create daily note directory: {}",
+                parent.display()
+            )
+        })?;
+    }
+    if !path.exists() {
+        let title = today.format("%Y-%m-%d").to_string();
+        let uuid = uuid::Uuid::new_v4();
+        std::fs::write(
+            path,
+            format!(":PROPERTIES:\n:ID:       {uuid}\n:END:\n#+title: {title}\n\n"),
+        )
+        .with_context(|| format!("Failed to create daily note: {}", path.display()))?;
+    }
+    Ok(())
+}
+
+pub fn append_inbox_entry(target: &PkmsInboxTarget, entry: &str) -> Result<TaskLocation> {
+    match target {
+        PkmsInboxTarget::Note(path) => {
+            org_task_edit::append_org_entry(path, entry).map(|line_number| TaskLocation {
+                path: path.clone(),
+                line_number,
+            })
+        }
+        PkmsInboxTarget::Daily { path } => org_task_edit::append_daily_inbox_entry(path, entry)
+            .map(|line_number| TaskLocation {
+                path: path.clone(),
+                line_number,
+            }),
+    }
+}
+
+pub fn heading_level_at(location: &TaskLocation) -> Result<usize> {
+    org_task_edit::heading_level_at(&location.path, location.line_number)
+}
+
+pub fn append_child_entry(parent: &TaskLocation, entry: &str) -> Result<TaskLocation> {
+    org_task_edit::append_child_org_entry(&parent.path, parent.line_number, entry).map(
+        |line_number| TaskLocation {
+            path: parent.path.clone(),
+            line_number,
+        },
+    )
+}
+
+pub fn move_subtree_to_dependency(
+    source: &TaskLocation,
+    target: &TaskLocation,
+) -> Result<TaskLocation> {
+    org_task_edit::move_org_subtree(
+        &source.path,
+        source.line_number,
+        &target.path,
+        target.line_number,
+    )
+    .map(|line_number| TaskLocation {
+        path: target.path.clone(),
+        line_number,
+    })
+}
+
+pub fn remove_subtree_dependency(
+    source: &TaskLocation,
+    parent: &TaskLocation,
+) -> Result<TaskLocation> {
+    org_task_edit::remove_org_subtree_dependency(
+        &source.path,
+        source.line_number,
+        parent.line_number,
+    )
+    .map(|line_number| TaskLocation {
+        path: source.path.clone(),
+        line_number,
+    })
+}
+
+pub fn find_task_item(
+    config: &PkmsTaskConfig,
+    path: &Path,
+    line_number: usize,
+) -> Result<Option<TaskItem>> {
+    find_task_item_on(config, path, line_number, TaskClock::now())
+}
+
+pub fn find_task_item_on(
+    config: &PkmsTaskConfig,
+    path: &Path,
+    line_number: usize,
+    clock: TaskClock,
+) -> Result<Option<TaskItem>> {
+    let workspace = Workspace::load(&config.org)?;
+    let graph = &workspace.graph;
+    let task_states = &config.task_states;
+    let mut records = collect_todo_records(
+        &workspace.corpus,
+        TaskRecordQuery::todo(&task_states.valid_states, clock),
+    );
+    assign_canonical_ids(task_states, graph, &mut records);
+    Ok(records
+        .into_iter()
+        .find(|record| {
+            record.path == path.display().to_string() && record.line_number == line_number
+        })
+        .map(|record| record_to_task_item(task_states, record)))
+}
+
+pub fn agenda_items(config: &PkmsTaskConfig) -> Result<Vec<TaskItem>> {
+    agenda_items_for(config, AgendaView::All)
+}
+
+pub fn agenda_items_for(config: &PkmsTaskConfig, view: AgendaView) -> Result<Vec<TaskItem>> {
+    agenda_items_for_on(config, view, TaskClock::now().today)
+}
+
+pub fn agenda_items_for_on(
+    config: &PkmsTaskConfig,
+    view: AgendaView,
+    today: NaiveDate,
+) -> Result<Vec<TaskItem>> {
+    agenda_items_for_clock(config, view, TaskClock::at_start_of_day(today))
+}
+
+pub fn agenda_items_for_clock(
+    config: &PkmsTaskConfig,
+    view: AgendaView,
+    clock: TaskClock,
+) -> Result<Vec<TaskItem>> {
+    let workspace = Workspace::load(&config.org)?;
+    let task_states = &config.task_states;
+    let mut records = collect_agenda_records(
+        &workspace.corpus,
+        TaskRecordQuery::agenda(&task_states.valid_states, &task_states.closed_states, clock),
+    );
+
+    retain_agenda_view_records(&mut records, view, clock.today);
+
+    assign_canonical_ids(task_states, &workspace.graph, &mut records);
+    Ok(records
+        .into_iter()
+        .map(|record| record_to_task_item(task_states, record))
+        .collect())
+}
+
+fn retain_agenda_view_records(records: &mut Vec<TaskRecord>, view: AgendaView, today: NaiveDate) {
+    match view {
+        AgendaView::All => {}
+        AgendaView::Week => {
+            let cutoff = today + chrono::Duration::days(7);
+            records.retain(|item| item_date(item).is_some_and(|date| date <= cutoff));
+        }
+        AgendaView::Today => {
+            records.retain(|item| item_date(item).is_some_and(|date| date == today));
+        }
+        AgendaView::Overdue => {
+            records.retain(|item| item.is_overdue);
+        }
+        AgendaView::Upcoming => {
+            records.retain(|item| {
+                !item.is_overdue && item_date(item).is_some_and(|date| date > today)
+            });
+        }
+    }
+}
+
+pub fn record_to_task_item(task_states: &TaskStateConfig, record: TaskRecord) -> TaskItem {
+    let id = TaskId::Pkms(record.id);
+    let source_id = id.source_id();
+    let display_id = id.display_id();
+    let status = pkms_status(task_states, record.todo_state.as_deref());
+    TaskItem {
+        id,
+        display_id,
+        source: TaskSourceKind::Pkms,
+        source_id,
+        title: record.heading_title,
+        body: None,
+        status,
+        state: record.todo_state,
+        priority: record.priority,
+        scheduled: record.scheduled.map(|raw| TaskDate {
+            raw,
+            date: record.scheduled_date,
+        }),
+        deadline: record.deadline.map(|raw| TaskDate {
+            raw,
+            date: record.deadline_date,
+        }),
+        tags: combine_tags(&record.filetags, &record.heading_tags),
+        project: record.project.clone(),
+        project_id: record.project,
+        note_title: Some(record.title),
+        note_uuid: Some(record.uuid),
+        path: Some(PathBuf::from(record.path)),
+        has_agenda_tag: Some(record.has_agenda_tag),
+        is_daily_file: record.is_daily_file,
+        daily_file_date: record.daily_file_date,
+        heading_level: Some(record.heading_level),
+        line_number: Some(record.line_number),
+        url: None,
+        is_overdue: record.is_overdue,
+    }
+}
+
+fn pkms_status(task_states: &TaskStateConfig, todo_state: Option<&str>) -> TaskStatus {
+    let Some(todo_state) = todo_state else {
+        return TaskStatus::Unknown;
+    };
+
+    if task_states
+        .closed_states
+        .iter()
+        .any(|state| state.eq_ignore_ascii_case(todo_state))
+    {
+        return TaskStatus::Done;
+    }
+
+    if task_states
+        .open_states
+        .iter()
+        .any(|state| state.eq_ignore_ascii_case(todo_state))
+    {
+        return TaskStatus::Open;
+    }
+
+    TaskStatus::Unknown
+}
+
+fn combine_tags(filetags: &[String], heading_tags: &[String]) -> Vec<String> {
+    let mut seen = HashSet::new();
+    let mut tags = Vec::new();
+    for tag in filetags.iter().chain(heading_tags.iter()) {
+        if seen.insert(tag.clone()) {
+            tags.push(tag.clone());
+        }
+    }
+    tags
+}
+
+fn item_date(item: &TaskRecord) -> Option<NaiveDate> {
+    item.effective_date()
+        .and_then(|date| NaiveDate::parse_from_str(date, "%Y-%m-%d").ok())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::model::{TaskDateValue, TaskPriority, TaskState};
+    use pkms_org::domain::NoteId;
+
+    fn task_states() -> TaskStateConfig {
+        TaskStateConfig {
+            valid_states: vec![
+                "TODO".to_string(),
+                "WAITING".to_string(),
+                "DONE".to_string(),
+                "CANCELED".to_string(),
+            ],
+            open_states: vec!["TODO".to_string(), "WAITING".to_string()],
+            closed_states: vec!["DONE".to_string(), "CANCELED".to_string()],
+        }
+    }
+
+    fn record() -> TaskRecord {
+        TaskRecord {
+            id: 7,
+            uuid: NoteId::new("aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa"),
+            title: "Note A".to_string(),
+            path: "/tmp/a.org".to_string(),
+            filetags: vec!["agenda".to_string(), "work".to_string()],
+            has_agenda_tag: true,
+            is_daily_file: false,
+            daily_file_date: None,
+            heading_title: "Call supplier".to_string(),
+            heading_level: 1,
+            line_number: 12,
+            todo_state: Some(TaskState::new("todo")),
+            priority: Some(TaskPriority::A),
+            project: Some("Work".to_string()),
+            scheduled: Some("<2026-05-23 Sat>".to_string()),
+            scheduled_date: Some(TaskDateValue::new("2026-05-23")),
+            deadline: None,
+            deadline_date: None,
+            is_overdue: false,
+            heading_tags: vec!["work".to_string(), "phone".to_string()],
+        }
+    }
+
+    fn record_with_date(title: &str, date: Option<&str>, is_overdue: bool) -> TaskRecord {
+        let mut record = record();
+        record.heading_title = title.to_string();
+        record.is_overdue = is_overdue;
+        if let Some(date) = date {
+            record.scheduled = Some(format!("<{date}>"));
+            record.scheduled_date = Some(TaskDateValue::new(date));
+        } else {
+            record.scheduled = None;
+            record.scheduled_date = None;
+        }
+        record
+    }
+
+    fn agenda_view_records() -> Vec<TaskRecord> {
+        vec![
+            record_with_date("overdue", Some("2026-05-22"), true),
+            record_with_date("today", Some("2026-05-23"), false),
+            record_with_date("this week", Some("2026-05-29"), false),
+            record_with_date("future", Some("2026-06-02"), false),
+            record_with_date("undated", None, false),
+        ]
+    }
+
+    #[test]
+    fn agenda_view_filters_records_by_mode() {
+        let today = chrono::NaiveDate::from_ymd_opt(2026, 5, 23).unwrap();
+
+        for (view, expected_titles) in [
+            (
+                AgendaView::All,
+                vec!["overdue", "today", "this week", "future", "undated"],
+            ),
+            (AgendaView::Today, vec!["today"]),
+            (AgendaView::Week, vec!["overdue", "today", "this week"]),
+            (AgendaView::Overdue, vec!["overdue"]),
+            (AgendaView::Upcoming, vec!["this week", "future"]),
+        ] {
+            let mut records = agenda_view_records();
+            retain_agenda_view_records(&mut records, view, today);
+            let titles: Vec<_> = records
+                .iter()
+                .map(|record| record.heading_title.as_str())
+                .collect();
+
+            assert_eq!(titles, expected_titles, "{view:?}");
+        }
+    }
+
+    #[test]
+    fn converts_pkms_task_record_to_source_neutral_item() {
+        let item = record_to_task_item(&task_states(), record());
+        assert_eq!(item.id, TaskId::Pkms(7));
+        assert_eq!(item.display_id, "p7");
+        assert_eq!(item.source, TaskSourceKind::Pkms);
+        assert_eq!(item.status, TaskStatus::Open);
+        assert_eq!(item.title, "Call supplier");
+        assert_eq!(item.note_title.as_deref(), Some("Note A"));
+        assert_eq!(item.has_agenda_tag, Some(true));
+        assert!(!item.is_daily_file);
+        assert_eq!(item.heading_level, Some(1));
+        assert_eq!(item.project.as_deref(), Some("Work"));
+        assert_eq!(item.project_id.as_deref(), Some("Work"));
+        assert_eq!(item.tags, vec!["agenda", "work", "phone"]);
+        assert_eq!(item.scheduled.unwrap().date.as_deref(), Some("2026-05-23"));
+    }
+
+    #[test]
+    fn closed_state_maps_to_done_case_insensitively() {
+        let mut record = record();
+        record.todo_state = Some(TaskState::new("done"));
+        let item = record_to_task_item(&task_states(), record);
+        assert_eq!(item.status, TaskStatus::Done);
+    }
+}
