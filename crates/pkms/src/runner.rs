@@ -48,7 +48,7 @@ fn dispatch(cli: &Cli, command_ctx: &CommandContext<'_>) -> Result<ExitCode> {
         }
         Command::Stats(args) => success(commands::stats::run(
             command_ctx,
-            &commands::stats::StatsOptions::from(args),
+            &commands::stats::options_from_args(args),
         ))?,
         Command::Orphans(args) => success(commands::orphans::run(
             command_ctx,
