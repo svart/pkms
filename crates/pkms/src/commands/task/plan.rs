@@ -2,7 +2,7 @@ use crate::cli::{
     TaskAgendaArgs, TaskAgendaCommand, TaskListArgs, TaskShortcutArgs, TaskTableArgs,
 };
 use crate::commands::task_common::{AgendaWindow, RowSeparatorMode};
-use crate::config::{ColumnSource, ColumnView, ResolvedConfig};
+use crate::config::{ColumnSource, ColumnView, TaskCommandConfig};
 use crate::input;
 use crate::output::Column;
 use crate::tasks::clock::TaskClock;
@@ -67,7 +67,7 @@ pub(super) fn split_task_list_mode(filters: &[String]) -> (TaskListMode, Vec<Str
 }
 
 pub(super) fn plan_task_list_request(
-    config: &ResolvedConfig,
+    config: &TaskCommandConfig,
     args: &TaskListArgs,
     raw_filters: &[String],
     clock: TaskClock,
@@ -115,7 +115,7 @@ fn task_scope(from_stdin: bool, filter_scope: &[String]) -> Result<Vec<String>> 
 }
 
 pub(super) fn resolve_task_table_columns(
-    config: &ResolvedConfig,
+    config: &TaskCommandConfig,
     source: SourceSelection,
     view: ColumnView,
     raw_columns: Option<&str>,
@@ -146,7 +146,7 @@ pub(super) fn shortcut_column_view(kind: ShortcutKind) -> ColumnView {
 }
 
 pub(super) fn plan_agenda_request(
-    config: &ResolvedConfig,
+    config: &TaskCommandConfig,
     args: &TaskAgendaArgs,
     clock: TaskClock,
 ) -> Result<AgendaRequest> {
@@ -187,7 +187,7 @@ pub(super) fn plan_agenda_request(
 }
 
 fn plan_agenda_request_from_filters(
-    config: &ResolvedConfig,
+    config: &TaskCommandConfig,
     raw_filters: &[String],
     raw_sort: Option<&str>,
     limit: Option<usize>,
@@ -222,7 +222,7 @@ fn plan_agenda_request_from_filters(
 }
 
 fn plan_agenda_date_shortcut_request(
-    config: &ResolvedConfig,
+    config: &TaskCommandConfig,
     args: &TaskShortcutArgs,
     date_filter: &str,
     clock: TaskClock,

@@ -42,6 +42,11 @@ pub struct WebCommandConfig {
     pub task_states: pkms_org::graph::tasks::TaskStateConfig,
 }
 
+#[derive(Debug, Clone)]
+pub struct TaskCommandConfig {
+    pub columns: Option<ColumnsConfig>,
+}
+
 impl WebCommandConfig {
     pub fn resolved_db_root(&self) -> &Path {
         &self.org.db_root
@@ -53,6 +58,16 @@ impl WebCommandConfig {
 
     pub fn closed_todo_states(&self) -> &[String] {
         &self.task_states.closed_states
+    }
+}
+
+impl TaskCommandConfig {
+    pub fn default_columns(
+        &self,
+        source: ColumnSource,
+        view: ColumnView,
+    ) -> Result<Option<&[String]>> {
+        default_columns_for(self.columns.as_ref(), source, view)
     }
 }
 
@@ -310,6 +325,12 @@ impl ResolvedConfig {
         }
     }
 
+    pub fn task_command_config(&self) -> TaskCommandConfig {
+        TaskCommandConfig {
+            columns: self.columns.clone(),
+        }
+    }
+
     pub fn task_state_config(&self) -> pkms_org::graph::tasks::TaskStateConfig {
         pkms_org::graph::tasks::TaskStateConfig {
             valid_states: self.todo_states(),
@@ -401,11 +422,7 @@ impl ResolvedConfig {
         source: ColumnSource,
         view: ColumnView,
     ) -> Result<Option<&[String]>> {
-        self.columns
-            .as_ref()
-            .map(|columns| columns.default_for(source, view))
-            .transpose()
-            .map(Option::flatten)
+        default_columns_for(self.columns.as_ref(), source, view)
     }
 
     pub fn resolved_info(&self) -> ConfigInfo {
@@ -417,6 +434,17 @@ impl ResolvedConfig {
             has_config_file: dirs::config_dir().is_some_and(|d| d.join("pkms.toml").exists()),
         }
     }
+}
+
+fn default_columns_for(
+    columns: Option<&ColumnsConfig>,
+    source: ColumnSource,
+    view: ColumnView,
+) -> Result<Option<&[String]>> {
+    columns
+        .map(|columns| columns.default_for(source, view))
+        .transpose()
+        .map(Option::flatten)
 }
 
 #[derive(Debug, Clone, Serialize)]

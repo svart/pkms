@@ -79,7 +79,8 @@ fn run_list(runtime: TaskRuntime<'_>, args: &TaskListArgs) -> Result<()> {
     let (mode, filters) = split_task_list_mode(&args.filters);
     match mode {
         TaskListMode::Tasks => {
-            let request = plan_task_list_request(runtime.config, args, &filters, runtime.clock)?;
+            let task_config = runtime.config.task_command_config();
+            let request = plan_task_list_request(&task_config, args, &filters, runtime.clock)?;
             let output = execution::execute_task_list(runtime.config, &request)?;
             render_task_list(runtime.output, output)
         }
@@ -126,8 +127,9 @@ fn run_shortcut(
     let (source, mut items) =
         execution::collect_shortcut_items_on(runtime.config, &args.filters, kind, runtime.clock)?;
     execution::sort_task_items(&mut items, &[TaskSortField::Priority]);
+    let task_config = runtime.config.task_command_config();
     let columns = plan::resolve_task_table_columns(
-        runtime.config,
+        &task_config,
         source,
         plan::shortcut_column_view(kind),
         args.table.columns.as_deref(),
@@ -145,7 +147,8 @@ fn run_shortcut(
 }
 
 fn run_agenda(runtime: TaskRuntime<'_>, args: &TaskAgendaArgs) -> Result<()> {
-    let request = plan_agenda_request(runtime.config, args, runtime.clock)?;
+    let task_config = runtime.config.task_command_config();
+    let request = plan_agenda_request(&task_config, args, runtime.clock)?;
     let output = execution::execute_task_agenda(runtime.config, &request)?;
     render_task_agenda(runtime.output, output)
 }
