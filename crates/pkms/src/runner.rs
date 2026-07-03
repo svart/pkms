@@ -76,7 +76,10 @@ fn dispatch(cli: &Cli, command_ctx: &CommandContext<'_>) -> Result<ExitCode> {
             command_ctx,
             &commands::new::options_from_args(args),
         ))?,
-        Command::Extract(args) => success(commands::extract::run(command_ctx, &args.try_into()?))?,
+        Command::Extract(args) => success(commands::extract::run(
+            command_ctx,
+            &commands::extract::options_from_args(args)?,
+        ))?,
         Command::Get(args) => {
             let targets = input::resolve_targets(&args.target, args.from_stdin)?;
             success(commands::get::run(

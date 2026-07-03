@@ -4,10 +4,6 @@ use crate::output::OutputContext;
 use anyhow::Result;
 use pkms_db::commands::new::{self, NewOptions, NewOutput};
 
-pub(crate) use pkms_db::commands::new::{
-    create_note_file_exclusive, title_to_slug, unique_note_filename,
-};
-
 pub fn options_from_args(args: &NewArgs) -> NewOptions {
     NewOptions {
         title: args.title.clone(),
