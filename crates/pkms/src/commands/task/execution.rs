@@ -3,7 +3,7 @@ use crate::commands::task_common::{
     AgendaWindow, RowSeparatorMode, TaskGroupField, TaskSortField, date_in_agenda_window,
     parse_task_group_field, parse_task_sort_fields,
 };
-use crate::config::ResolvedConfig;
+use crate::config::{ResolvedConfig, TaskCommandConfig};
 use crate::output::Column;
 use crate::tasks::clock::TaskClock;
 use crate::tasks::filter::{SourceSelection, TaskFilterContext, TaskFilterCriteria};
@@ -48,11 +48,12 @@ pub(super) fn execute_task_list(
     config: &ResolvedConfig,
     request: &plan::TaskListRequest,
 ) -> Result<TaskListExecution> {
+    let task_config = config.task_command_config();
     let mut items =
         providers::collect_task_items(config, &request.filters, TaskListView::All, request.clock)?;
     let mut criteria = request.filters.criteria.clone();
     criteria.scope = request.scope.clone();
-    apply_task_filter_criteria_on(config, &mut items, &criteria, request.clock.today)?;
+    apply_task_filter_criteria_on(&task_config, &mut items, &criteria, request.clock.today)?;
     let sort = request.sort.as_deref().unwrap_or("date,priority");
     let items = if let Some(group_field) = &request.group {
         let (group_field, groups, total) =
@@ -84,11 +85,12 @@ pub(super) fn collect_shortcut_items_on(
     kind: plan::ShortcutKind,
     clock: TaskClock,
 ) -> Result<(SourceSelection, Vec<TaskItem>)> {
+    let task_config = config.task_command_config();
     let filters = crate::tasks::filter::parse_task_filters_on(raw_filters, clock.today)?;
     let source = filters.source;
     let mut items =
         providers::collect_task_items(config, &filters, plan::shortcut_task_view(kind), clock)?;
-    apply_task_filter_criteria_on(config, &mut items, &filters.criteria, clock.today)?;
+    apply_task_filter_criteria_on(&task_config, &mut items, &filters.criteria, clock.today)?;
     Ok((source, items))
 }
 
@@ -96,10 +98,11 @@ pub(super) fn execute_task_agenda(
     config: &ResolvedConfig,
     request: &plan::AgendaRequest,
 ) -> Result<AgendaExecution> {
+    let task_config = config.task_command_config();
     let mut items =
         providers::collect_task_items(config, &request.filters, request.view, request.clock)?;
     apply_task_filter_criteria_on(
-        config,
+        &task_config,
         &mut items,
         &request.filters.criteria,
         request.clock.today,
@@ -165,7 +168,7 @@ fn task_group_key(item: &TaskItem, group_field: TaskGroupField) -> String {
 }
 
 fn apply_task_filter_criteria_on(
-    config: &ResolvedConfig,
+    config: &TaskCommandConfig,
     items: &mut Vec<TaskItem>,
     criteria: &TaskFilterCriteria,
     today: NaiveDate,
@@ -174,20 +177,18 @@ fn apply_task_filter_criteria_on(
     let scope = if criteria.scope.is_empty() {
         None
     } else {
-        let workspace = Workspace::load(&config.org_config())?;
+        let workspace = Workspace::load(&config.org)?;
         Some(ResolvedScope::resolve(
             &workspace.graph,
-            config.resolved_db_root(),
+            &config.org.db_root,
             &criteria.scope,
         ))
     };
-    let open_todo_states = config.open_todo_states();
-    let closed_todo_states = config.closed_todo_states();
     let context = TaskFilterContext {
         today,
         scope: scope.as_ref(),
-        open_todo_states: &open_todo_states,
-        closed_todo_states: &closed_todo_states,
+        open_todo_states: &config.task_states.open_states,
+        closed_todo_states: &config.task_states.closed_states,
     };
     items.retain(|item| criteria.matches_item(item, &context));
     tracing::debug!(
