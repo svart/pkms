@@ -58,7 +58,7 @@ fn dispatch(cli: &Cli, command_ctx: &CommandContext<'_>) -> Result<ExitCode> {
         Command::InitConfig(args) => success(init_config(args.db.as_deref(), ctx))?,
         Command::Resolve(args) => success(commands::resolve::run(
             command_ctx,
-            &commands::resolve::ResolveOptions::from(args),
+            &commands::resolve::options_from_args(args),
         ))?,
         Command::Fix(args) => success(commands::fix::run(command_ctx, args))?,
         Command::Suggest(args) => {

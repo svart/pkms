@@ -2044,6 +2044,8 @@ dependencies = [
  "anyhow",
  "pkms-org",
  "serde",
+ "serde_json",
+ "tempfile",
 ]
 
 [[package]]
