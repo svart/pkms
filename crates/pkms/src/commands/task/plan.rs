@@ -45,13 +45,11 @@ pub(super) struct AgendaRequest {
     pub(super) view: TaskListView,
 }
 
-impl SourceSelection {
-    fn column_source(self) -> ColumnSource {
-        match self {
-            SourceSelection::Pkms => ColumnSource::Pkms,
-            SourceSelection::Todoist => ColumnSource::Todoist,
-            SourceSelection::All => ColumnSource::All,
-        }
+fn column_source(source: SourceSelection) -> ColumnSource {
+    match source {
+        SourceSelection::Pkms => ColumnSource::Pkms,
+        SourceSelection::Todoist => ColumnSource::Todoist,
+        SourceSelection::All => ColumnSource::All,
     }
 }
 
@@ -126,7 +124,7 @@ pub(super) fn resolve_task_table_columns(
         return input::resolve_columns(Some(raw_columns), None).map(Some);
     }
 
-    let default_columns = config.default_columns(source.column_source(), view)?;
+    let default_columns = config.default_columns(column_source(source), view)?;
     if raw_columns.is_none() && default_columns.is_none() {
         return Ok(None);
     }
