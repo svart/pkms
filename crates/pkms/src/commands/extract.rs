@@ -1,7 +1,7 @@
 use crate::cli::ExtractArgs;
 use crate::command_context::CommandContext;
 use crate::commands::new::{create_note_file_exclusive, title_to_slug, unique_note_filename};
-use crate::config::ResolvedConfig;
+use crate::config::DbCommandConfig;
 use crate::output::OutputContext;
 use anyhow::{Context, Result};
 use pkms_org::graph::{Graph, HeadingLocation};
@@ -45,12 +45,13 @@ pub struct ExtractOutput {
 }
 
 pub fn run(ctx: &CommandContext<'_>, opts: &ExtractOptions) -> Result<()> {
-    let output = execute(ctx.config(), opts)?;
+    let config = ctx.config().db_command_config();
+    let output = execute(&config, opts)?;
     render(ctx.output(), &output)
 }
 
-fn execute(config: &ResolvedConfig, opts: &ExtractOptions) -> Result<ExtractOutput> {
-    let graph = Graph::load(&config.org_config())?;
+fn execute(config: &DbCommandConfig, opts: &ExtractOptions) -> Result<ExtractOutput> {
+    let graph = Graph::load(&config.org)?;
     let location = resolve_heading_location(&graph, &opts.heading_uuid)?;
     let source_node = graph.nodes.get(&location.primary_uuid).ok_or_else(|| {
         anyhow::anyhow!("Source note not found for heading {}", opts.heading_uuid)
@@ -94,16 +95,20 @@ fn execute(config: &ResolvedConfig, opts: &ExtractOptions) -> Result<ExtractOutp
     let note_content = build_new_note_content(&opts.heading_uuid, &title, &copied_subtree);
     let slug = title_to_slug(&title);
     let timestamp = chrono::Local::now().format("%Y%m%d%H%M%S").to_string();
-    let new_notes_dir = config.resolve_new_notes_dir();
+    let new_notes_dir = config
+        .org
+        .new_notes_dir
+        .as_deref()
+        .context("new notes directory is not configured")?;
 
     let (new_path, created) = if opts.apply {
-        std::fs::create_dir_all(&new_notes_dir)
+        std::fs::create_dir_all(new_notes_dir)
             .with_context(|| format!("Failed to create {}", new_notes_dir.display()))?;
         let (_filename, path) =
-            create_note_file_exclusive(&new_notes_dir, &timestamp, &slug, &note_content)?;
+            create_note_file_exclusive(new_notes_dir, &timestamp, &slug, &note_content)?;
         (path, true)
     } else {
-        let (_filename, path) = next_available_note_path(&new_notes_dir, &timestamp, &slug);
+        let (_filename, path) = next_available_note_path(new_notes_dir, &timestamp, &slug);
         (path, false)
     };
 

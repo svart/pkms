@@ -1,5 +1,6 @@
 use crate::cli::{FixArgs, FixAttachArgs, FixCommand, FixUuidArgs};
 use crate::command_context::CommandContext;
+use crate::config::DbCommandConfig;
 use crate::output::OutputContext;
 use crate::util::resolve_attachment_path;
 use anyhow::{Context, Result};
@@ -240,17 +241,19 @@ impl From<&FixAttachArgs> for FixAttachOptions {
 }
 
 pub fn run(ctx: &CommandContext<'_>, args: &FixArgs) -> Result<()> {
+    let config = ctx.config().db_command_config();
     match &args.command {
-        FixCommand::Uuid(args) => run_uuid(ctx, &args.try_into()?),
-        FixCommand::Attach(args) => run_attach(ctx, &FixAttachOptions::from(args)),
+        FixCommand::Uuid(args) => run_uuid(ctx.output(), &config, &args.try_into()?),
+        FixCommand::Attach(args) => {
+            run_attach(ctx.output(), &config, &FixAttachOptions::from(args))
+        }
     }
 }
 
-fn run_uuid(ctx: &CommandContext<'_>, opts: &FixUuidOptions) -> Result<()> {
-    let config = ctx.config();
-    let graph = ctx.load_graph()?;
-    let db_root = config.resolved_db_root();
-    let ignore_patterns = config.resolve_ignore_patterns();
+fn run_uuid(ctx: &OutputContext, config: &DbCommandConfig, opts: &FixUuidOptions) -> Result<()> {
+    let graph = Graph::load(&config.org)?;
+    let db_root = config.org.db_root.as_path();
+    let ignore_patterns = config.org.ignore_patterns.as_slice();
 
     let (replacement_uuid, replacement_title) = graph
         .nodes
@@ -265,7 +268,7 @@ fn run_uuid(ctx: &CommandContext<'_>, opts: &FixUuidOptions) -> Result<()> {
 
     let (files_affected, total_replacements) = find_and_replace_links(
         db_root,
-        &ignore_patterns,
+        ignore_patterns,
         &opts.broken_uuid,
         &replacement_uuid,
         opts.apply,
@@ -280,13 +283,16 @@ fn run_uuid(ctx: &CommandContext<'_>, opts: &FixUuidOptions) -> Result<()> {
         applied: opts.apply,
     };
 
-    print_uuid_fix_output(ctx.output(), &output)
+    print_uuid_fix_output(ctx, &output)
 }
 
-fn run_attach(ctx: &CommandContext<'_>, opts: &FixAttachOptions) -> Result<()> {
-    let config = ctx.config();
-    let graph = ctx.load_graph()?;
-    let db_root = config.resolved_db_root();
+fn run_attach(
+    ctx: &OutputContext,
+    config: &DbCommandConfig,
+    opts: &FixAttachOptions,
+) -> Result<()> {
+    let graph = Graph::load(&config.org)?;
+    let db_root = config.org.db_root.as_path();
     let mode = if opts.copy {
         AttachMode::Copy
     } else {
@@ -332,7 +338,7 @@ fn run_attach(ctx: &CommandContext<'_>, opts: &FixAttachOptions) -> Result<()> {
         skipped,
     };
 
-    print_attach_fix_output(ctx.output(), &output, mode)
+    print_attach_fix_output(ctx, &output, mode)
 }
 
 fn collect_attachment_candidates(graph: &Graph, db_root: &Path) -> Vec<AttachmentCandidate> {

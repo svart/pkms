@@ -1,6 +1,6 @@
 use crate::cli::NewArgs;
 use crate::command_context::CommandContext;
-use crate::config::ResolvedConfig;
+use crate::config::DbCommandConfig;
 use crate::output::OutputContext;
 use anyhow::{Context, Result};
 use pkms_org::parser::{HEADING_RE, ID_PROPERTY_RE};
@@ -67,14 +67,19 @@ impl From<&NewArgs> for NewOptions {
 }
 
 pub fn run(ctx: &CommandContext<'_>, opts: &NewOptions) -> Result<()> {
-    let output = execute(ctx.config(), opts)?;
+    let config = ctx.config().db_command_config();
+    let output = execute(&config, opts)?;
     render(ctx.output(), &output)
 }
 
-fn execute(config: &ResolvedConfig, opts: &NewOptions) -> Result<NewOutput> {
-    let db_root = config.resolved_db_root();
-    let ignore = config.resolve_ignore_patterns();
-    let new_notes_dir = config.resolve_new_notes_dir();
+fn execute(config: &DbCommandConfig, opts: &NewOptions) -> Result<NewOutput> {
+    let db_root = config.org.db_root.as_path();
+    let ignore = config.org.ignore_patterns.as_slice();
+    let new_notes_dir = config
+        .org
+        .new_notes_dir
+        .as_deref()
+        .context("new notes directory is not configured")?;
 
     let mut uuid = uuid::Uuid::new_v4().to_string();
     let slug = title_to_slug(&opts.title);
@@ -84,7 +89,7 @@ fn execute(config: &ResolvedConfig, opts: &NewOptions) -> Result<NewOutput> {
     let mut path = new_notes_dir.join(&filename);
 
     if opts.create {
-        std::fs::create_dir_all(&new_notes_dir)?;
+        std::fs::create_dir_all(new_notes_dir)?;
     }
 
     let mut created = false;
@@ -94,7 +99,7 @@ fn execute(config: &ResolvedConfig, opts: &NewOptions) -> Result<NewOutput> {
                 "Cannot use --heading without --create. The note file must exist to add a heading UUID."
             );
         }
-        let existing = find_note_by_title(db_root, &ignore, &opts.title);
+        let existing = find_note_by_title(db_root, ignore, &opts.title);
         if let Some(note_path) = existing {
             let content = std::fs::read_to_string(&note_path)
                 .with_context(|| format!("Failed to read {}", note_path.display()))?;
@@ -148,7 +153,7 @@ fn execute(config: &ResolvedConfig, opts: &NewOptions) -> Result<NewOutput> {
             let _ = writeln!(content, "#+filetags: {ft}");
         }
 
-        (filename, path) = create_note_file_exclusive(&new_notes_dir, &timestamp, &slug, &content)?;
+        (filename, path) = create_note_file_exclusive(new_notes_dir, &timestamp, &slug, &content)?;
         created = true;
     } else if opts.create && heading_output.is_some() {
         created = true;
