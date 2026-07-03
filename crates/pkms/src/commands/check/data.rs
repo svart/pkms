@@ -3,7 +3,7 @@ use super::model::{
     CheckOutput, CheckSelection, CrossLinkResult, FailedFileEntry, FileLinkErrorEntry,
     FiletagsIssue,
 };
-use crate::config::ResolvedConfig;
+use crate::config::DbCommandConfig;
 use crate::link_check::{
     LinkCheckErrorTarget, LinkCheckKind, LinkCheckResults, SshFileCheckOptions,
     run_local_link_checks, run_ssh_link_checks,
@@ -107,7 +107,7 @@ fn selection_shows(selection: &CheckSelection, section: CheckDisplaySection) -> 
 }
 
 pub(super) fn collect_check_data<'a>(
-    config: &'a ResolvedConfig,
+    config: &'a DbCommandConfig,
     graph: &'a Graph,
     db_root: &'a Path,
     opts: &CheckOptions,

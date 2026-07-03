@@ -1,4 +1,5 @@
 use super::*;
+use crate::config::ResolvedConfig;
 use crate::link_check::LinkCheckKind;
 use pkms_org::graph::{Graph, GraphStats};
 
@@ -106,8 +107,9 @@ fn targeted_file_link_check_health_ignores_hidden_id_link_issues() {
     )
     .unwrap();
     let config = ResolvedConfig::for_test_db(dir.path());
+    let db_config = config.db_command_config();
     let output = execute(
-        &config,
+        &db_config,
         &CheckOptions {
             checks: CheckSelection::Explicit(vec![CheckItem::FileLinks]),
             cross_links: None,

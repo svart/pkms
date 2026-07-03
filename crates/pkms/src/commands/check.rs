@@ -1,5 +1,5 @@
 use crate::command_context::CommandContext;
-use crate::config::ResolvedConfig;
+use crate::config::DbCommandConfig;
 use crate::output::OutputContext;
 use anyhow::Result;
 use pkms_org::Graph;
@@ -17,7 +17,8 @@ pub use model::*;
 pub use rendering::render_text;
 
 pub fn run(ctx: &CommandContext<'_>, opts: &CheckOptions) -> Result<ExitCode> {
-    let output = execute(ctx.config(), opts)?;
+    let config = ctx.config().db_command_config();
+    let output = execute(&config, opts)?;
     render(ctx.output(), &output)
 }
 
@@ -25,11 +26,11 @@ pub fn render(ctx: &OutputContext, output: &CheckCommandOutput) -> Result<ExitCo
     rendering::render(ctx, output)
 }
 
-pub fn execute(config: &ResolvedConfig, opts: &CheckOptions) -> Result<CheckCommandOutput> {
+pub fn execute(config: &DbCommandConfig, opts: &CheckOptions) -> Result<CheckCommandOutput> {
     ensure_remote_file_links_available(opts.checks.requests(CheckItem::RemoteFileLinks))?;
 
-    let graph = Graph::load(&config.org_config())?;
-    let db_root = config.resolved_db_root();
+    let graph = Graph::load(&config.org)?;
+    let db_root = config.org.db_root.as_path();
 
     let display_opts = CheckDisplayOptions::from_options(opts);
     let issue_data = collect_check_data(config, &graph, db_root, opts, &display_opts)?;

@@ -29,6 +29,12 @@ pub struct ResolvedConfig {
     pub ssh: Option<SshConfig>,
 }
 
+#[derive(Debug, Clone)]
+pub struct DbCommandConfig {
+    pub org: pkms_org::OrgConfig,
+    pub ssh: Option<SshConfig>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct AgendaConfig {
@@ -265,6 +271,13 @@ impl ResolvedConfig {
             new_notes_dir: Some(self.resolve_new_notes_dir()),
             daily_notes_dir: Some(self.resolve_daily_notes_dir()),
             ignore_patterns: self.resolve_ignore_patterns(),
+        }
+    }
+
+    pub fn db_command_config(&self) -> DbCommandConfig {
+        DbCommandConfig {
+            org: self.org_config(),
+            ssh: self.ssh.clone(),
         }
     }
 
