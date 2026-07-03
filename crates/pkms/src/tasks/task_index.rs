@@ -3,7 +3,7 @@ use crate::corpus::Corpus;
 use crate::domain::NoteId;
 use crate::graph::Graph;
 use crate::org_date::parse_org_date;
-use crate::parser::{Heading, find_daily_file_date, strip_org_links};
+use crate::parser::{Heading, OrgPriority, find_daily_file_date, strip_org_links};
 use crate::tasks::clock::TaskClock;
 use crate::tasks::filter::{
     TextFilter, matches_tag_filters, matches_text_filters, matches_type_filters,
@@ -238,8 +238,11 @@ fn collect_records(
                 heading_title: strip_org_links(&heading.title),
                 heading_level: heading.level,
                 line_number: heading.line_number,
-                todo_state: heading.todo_state.clone(),
-                priority: heading.priority,
+                todo_state: heading
+                    .todo_state
+                    .as_ref()
+                    .map(|state| TaskState::new(state.as_str())),
+                priority: heading.priority.map(task_priority),
                 project: heading.project.clone().or_else(|| parsed.project.clone()),
                 scheduled: heading.scheduled.clone(),
                 scheduled_date: extract_date(heading.scheduled.as_ref()),
@@ -291,6 +294,14 @@ fn extract_date(raw: Option<&String>) -> Option<TaskDateValue> {
     Some(TaskDateValue::new(
         parsed.base_date.format("%Y-%m-%d").to_string(),
     ))
+}
+
+fn task_priority(priority: OrgPriority) -> TaskPriority {
+    match priority {
+        OrgPriority::A => TaskPriority::A,
+        OrgPriority::B => TaskPriority::B,
+        OrgPriority::C => TaskPriority::C,
+    }
 }
 
 fn is_overdue_on(raw: Option<&String>, clock: TaskClock) -> bool {

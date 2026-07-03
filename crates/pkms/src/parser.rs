@@ -6,10 +6,11 @@
 //! and headings with their TODO states, priorities, tags, and line numbers.
 
 use crate::domain::{LinkTarget, NoteId};
-use crate::tasks::model::{TaskPriority, TaskState};
 use chrono::NaiveDate;
 use regex::Regex;
-use serde::Serialize;
+use serde::{Serialize, Serializer};
+use std::fmt;
+use std::ops::Deref;
 use std::sync::LazyLock;
 
 #[derive(Debug, Clone)]
@@ -74,16 +75,109 @@ pub enum Link {
     Attachment(LinkTarget),
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
+#[serde(transparent)]
+pub struct OrgTodoState(String);
+
+impl OrgTodoState {
+    pub fn new(value: impl Into<String>) -> Self {
+        Self(value.into())
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Display for OrgTodoState {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl AsRef<str> for OrgTodoState {
+    fn as_ref(&self) -> &str {
+        self.as_str()
+    }
+}
+
+impl Deref for OrgTodoState {
+    type Target = str;
+
+    fn deref(&self) -> &Self::Target {
+        self.as_str()
+    }
+}
+
+impl From<String> for OrgTodoState {
+    fn from(value: String) -> Self {
+        Self::new(value)
+    }
+}
+
+impl From<&str> for OrgTodoState {
+    fn from(value: &str) -> Self {
+        Self::new(value)
+    }
+}
+
+impl From<OrgTodoState> for String {
+    fn from(value: OrgTodoState) -> Self {
+        value.0
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum OrgPriority {
+    A,
+    B,
+    C,
+}
+
+impl OrgPriority {
+    pub fn as_char(self) -> char {
+        match self {
+            OrgPriority::A => 'A',
+            OrgPriority::B => 'B',
+            OrgPriority::C => 'C',
+        }
+    }
+
+    pub fn from_char(value: char) -> Option<Self> {
+        match value.to_ascii_uppercase() {
+            'A' => Some(OrgPriority::A),
+            'B' => Some(OrgPriority::B),
+            'C' => Some(OrgPriority::C),
+            _ => None,
+        }
+    }
+}
+
+impl fmt::Display for OrgPriority {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.as_char().to_string())
+    }
+}
+
+impl Serialize for OrgPriority {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(&self.as_char().to_string())
+    }
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct Heading {
     pub level: usize,
     pub title: String,
-    pub todo_state: Option<TaskState>,
+    pub todo_state: Option<OrgTodoState>,
     pub tags: Vec<String>,
     pub uuid: Option<NoteId>,
     pub scheduled: Option<String>,
     pub deadline: Option<String>,
-    pub priority: Option<TaskPriority>,
+    pub priority: Option<OrgPriority>,
     pub project: Option<String>,
     pub line_number: usize,
     pub outgoing: Vec<Link>,
@@ -320,11 +414,11 @@ impl ParseContext {
             }
         }
 
-        let todo_state = cap.get(2).map(|m| TaskState::new(m.as_str()));
+        let todo_state = cap.get(2).map(|m| OrgTodoState::new(m.as_str()));
         let priority = cap
             .get(3)
             .and_then(|m| m.as_str().chars().next())
-            .and_then(TaskPriority::from_char);
+            .and_then(OrgPriority::from_char);
         let heading_title = cap.get(4).map_or("", |m| m.as_str()).to_string();
         let tags = cap
             .get(5)
@@ -969,11 +1063,11 @@ Some text
 *** No priority"#;
         let note = parse_note(content);
         assert_eq!(note.headings.len(), 4);
-        assert_eq!(note.headings[0].priority, Some(TaskPriority::A));
+        assert_eq!(note.headings[0].priority, Some(OrgPriority::A));
         assert_eq!(note.headings[0].todo_state.as_deref(), Some("TODO"));
-        assert_eq!(note.headings[1].priority, Some(TaskPriority::B));
+        assert_eq!(note.headings[1].priority, Some(OrgPriority::B));
         assert!(note.headings[1].todo_state.is_none());
-        assert_eq!(note.headings[2].priority, Some(TaskPriority::C));
+        assert_eq!(note.headings[2].priority, Some(OrgPriority::C));
         assert!(note.headings[3].priority.is_none());
     }
 

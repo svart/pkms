@@ -167,8 +167,7 @@ mod tests {
     use crate::corpus::FileScanResult;
     use crate::domain::NoteId;
     use crate::graph::{DuplicateInfo, Graph};
-    use crate::parser::{Heading, ParsedNote};
-    use crate::tasks::model::{TaskPriority, TaskState};
+    use crate::parser::{Heading, OrgPriority, OrgTodoState, ParsedNote};
     use std::collections::HashMap;
     use std::path::PathBuf;
 
@@ -226,12 +225,12 @@ mod tests {
         Heading {
             level: 1,
             title: format!("Task {line_number}"),
-            todo_state: Some(TaskState::new(state)),
+            todo_state: Some(OrgTodoState::new(state)),
             tags: tags.into_iter().map(str::to_string).collect(),
             uuid: None,
             scheduled: scheduled.map(str::to_string),
             deadline: deadline.map(str::to_string),
-            priority: priority.and_then(TaskPriority::from_char),
+            priority: priority.and_then(OrgPriority::from_char),
             project: None,
             line_number,
             outgoing: Vec::new(),
