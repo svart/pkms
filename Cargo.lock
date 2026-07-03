@@ -2036,6 +2036,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "pkms-org"
+version = "1.12.3"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "glob",
+ "rayon",
+ "regex",
+ "serde",
+ "tempfile",
+ "tiktoken-rs",
+ "tracing",
+ "walkdir",
+]
+
+[[package]]
 name = "plist"
 version = "1.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
