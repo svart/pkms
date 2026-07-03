@@ -1,5 +1,6 @@
 use crate::cli::PathArgs;
 use crate::command_context::CommandContext;
+use crate::config::DbCommandConfig;
 use crate::output::OutputContext;
 use anyhow::Result;
 use pkms_org::Graph;
@@ -35,12 +36,13 @@ impl From<&PathArgs> for PathOptions {
 }
 
 pub fn run(ctx: &CommandContext<'_>, opts: &PathOptions) -> Result<()> {
-    let output = execute(ctx, opts)?;
+    let config = ctx.config().db_command_config();
+    let output = execute(&config, opts)?;
     render(ctx.output(), &output)
 }
 
-fn execute(ctx: &CommandContext<'_>, opts: &PathOptions) -> Result<PathOutput> {
-    let graph = ctx.load_graph()?;
+fn execute(config: &DbCommandConfig, opts: &PathOptions) -> Result<PathOutput> {
+    let graph = Graph::load(&config.org)?;
     build_output(&graph, opts)
 }
 
