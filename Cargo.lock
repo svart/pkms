@@ -2037,6 +2037,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "pkms-db"
+version = "1.12.3"
+dependencies = [
+ "anyhow",
+ "pkms-org",
+ "serde",
+]
+
+[[package]]
 name = "pkms-org"
 version = "1.12.3"
 dependencies = [

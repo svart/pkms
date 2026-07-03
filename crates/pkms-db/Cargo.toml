@@ -1,0 +1,11 @@
+[package]
+name = "pkms-db"
+version = "1.12.3"
+description = "Note database command logic for pkms"
+edition = "2024"
+license = "MIT"
+
+[dependencies]
+anyhow = "1"
+pkms-org = { path = "../pkms-org" }
+serde = { version = "1", features = ["derive"] }
