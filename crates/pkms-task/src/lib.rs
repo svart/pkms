@@ -7,5 +7,6 @@ pub mod id;
 pub mod model;
 pub mod modifiers;
 pub mod pkms;
+pub mod provider;
 pub mod scope;
 pub mod task_index;
