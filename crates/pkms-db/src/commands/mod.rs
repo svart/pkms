@@ -1,6 +1,7 @@
 pub mod extract;
 pub mod get;
 pub mod new;
+pub mod open;
 pub mod orphans;
 pub mod path;
 pub mod query;
