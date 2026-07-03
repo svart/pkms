@@ -7,8 +7,10 @@ use pkms_org::Graph;
 use pkms_org::corpus::Corpus;
 use pkms_org::domain::NoteId;
 use pkms_org::graph::tasks::TaskStateConfig;
-use pkms_org::org_date::parse_org_date;
-use pkms_org::parser::{Heading, OrgPriority, find_daily_file_date, strip_org_links};
+use pkms_org::org_task_extract::{
+    OrgTaskClock, OrgTaskRecord, OrgTaskRecordQuery, collect_org_task_records,
+};
+use pkms_org::parser::OrgPriority;
 
 #[derive(Debug, Clone)]
 pub struct TaskRecord {
@@ -110,21 +112,14 @@ pub fn collect_todo_records(corpus: &Corpus, query: TaskRecordQuery<'_>) -> Vec<
         ..
     } = query;
 
-    collect_records(
+    collect_org_task_records(
         corpus,
-        |parsed, heading, _is_daily| {
-            heading
-                .todo_state
-                .as_ref()
-                .is_some_and(|s| valid_states.iter().any(|vs| vs.eq_ignore_ascii_case(s)))
-                && apply_common_filters(
-                    parsed.filetags.iter().chain(heading.tags.iter()),
-                    heading,
-                    filters,
-                )
-        },
-        clock,
+        OrgTaskRecordQuery::todo(valid_states, org_task_clock(clock)),
     )
+    .into_iter()
+    .map(task_record_from_org)
+    .filter(|record| apply_common_filters(record, filters))
+    .collect()
 }
 
 pub fn collect_agenda_records(corpus: &Corpus, query: TaskRecordQuery<'_>) -> Vec<TaskRecord> {
@@ -135,49 +130,13 @@ pub fn collect_agenda_records(corpus: &Corpus, query: TaskRecordQuery<'_>) -> Ve
         clock,
     } = query;
 
-    collect_records(
+    collect_org_task_records(
         corpus,
-        |parsed, heading, is_daily| {
-            let eligible = heading.scheduled.is_some()
-                || heading.deadline.is_some()
-                || (is_daily
-                    && heading
-                        .todo_state
-                        .as_ref()
-                        .is_some_and(|s| valid_states.iter().any(|vs| vs.eq_ignore_ascii_case(s))));
-
-            if !eligible {
-                return false;
-            }
-
-            if !closed_states.is_empty()
-                && let Some(ref todo_state) = heading.todo_state
-                && closed_states
-                    .iter()
-                    .any(|cs| cs.eq_ignore_ascii_case(todo_state))
-            {
-                return false;
-            }
-
-            apply_common_filters(
-                parsed.filetags.iter().chain(heading.tags.iter()),
-                heading,
-                filters,
-            )
-        },
-        clock,
+        OrgTaskRecordQuery::agenda(valid_states, closed_states, org_task_clock(clock)),
     )
     .into_iter()
-    .map(|mut record| {
-        if record.is_daily_file && record.scheduled.is_none() && record.deadline.is_none() {
-            record.is_overdue = record
-                .daily_file_date
-                .as_ref()
-                .and_then(TaskDateValue::parse_naive_date)
-                .is_some_and(|date| date < clock.today);
-        }
-        record
-    })
+    .map(task_record_from_org)
+    .filter(|record| apply_common_filters(record, filters))
     .collect()
 }
 
@@ -199,84 +158,53 @@ pub fn assign_canonical_ids(
     }
 }
 
-fn collect_records(
-    corpus: &Corpus,
-    mut include_heading: impl FnMut(&pkms_org::parser::ParsedNote, &Heading, bool) -> bool,
-    clock: TaskClock,
-) -> Vec<TaskRecord> {
-    let mut items = Vec::new();
-    for result in corpus.results() {
-        if result.parse_error.is_some() {
-            continue;
-        }
-
-        let parsed = &result.parsed;
-        let path = &result.path;
-        let is_daily = find_daily_file_date(path).is_some();
-        let daily_date = find_daily_file_date(path).map(|d| d.format("%Y-%m-%d").to_string());
-        let has_agenda = parsed.filetags.iter().any(|t| t == "agenda");
-        let primary_uuid = parsed.uuids.first().cloned().unwrap_or_default();
-        let note_title = strip_org_links(&parsed.title.clone().unwrap_or_else(|| {
-            path.file_stem()
-                .map(|s| s.display().to_string())
-                .unwrap_or_default()
-        }));
-
-        for heading in &parsed.headings {
-            if !include_heading(parsed, heading, is_daily) {
-                continue;
-            }
-
-            let item_is_overdue = is_overdue_on(heading.deadline.as_ref(), clock)
-                || is_overdue_on(heading.scheduled.as_ref(), clock);
-
-            items.push(TaskRecord {
-                id: 0,
-                uuid: primary_uuid.clone(),
-                title: note_title.clone(),
-                path: path.display().to_string(),
-                filetags: parsed.filetags.clone(),
-                has_agenda_tag: has_agenda,
-                is_daily_file: is_daily,
-                daily_file_date: daily_date.clone().map(TaskDateValue::new),
-                heading_title: strip_org_links(&heading.title),
-                heading_level: heading.level,
-                line_number: heading.line_number,
-                todo_state: heading
-                    .todo_state
-                    .as_ref()
-                    .map(|state| TaskState::new(state.as_str())),
-                priority: heading.priority.map(task_priority),
-                project: heading.project.clone().or_else(|| parsed.project.clone()),
-                scheduled: heading.scheduled.clone(),
-                scheduled_date: extract_date(heading.scheduled.as_ref()),
-                deadline: heading.deadline.clone(),
-                deadline_date: extract_date(heading.deadline.as_ref()),
-                is_overdue: item_is_overdue,
-                heading_tags: heading.tags.clone(),
-            });
-        }
+fn org_task_clock(clock: TaskClock) -> OrgTaskClock {
+    OrgTaskClock {
+        today: clock.today,
+        now: clock.now,
     }
-    items
 }
 
-fn apply_common_filters<'a>(
-    tags: impl Iterator<Item = &'a String>,
-    heading: &Heading,
-    filters: RecordFilters<'_>,
-) -> bool {
-    if !matches_text_filters(heading.todo_state.as_deref(), filters.state_filters) {
+fn task_record_from_org(record: OrgTaskRecord) -> TaskRecord {
+    TaskRecord {
+        id: 0,
+        uuid: record.uuid,
+        title: record.title,
+        path: record.path,
+        filetags: record.filetags,
+        has_agenda_tag: record.has_agenda_tag,
+        is_daily_file: record.is_daily_file,
+        daily_file_date: record.daily_file_date.map(TaskDateValue::new),
+        heading_title: record.heading_title,
+        heading_level: record.heading_level,
+        line_number: record.line_number,
+        todo_state: record
+            .todo_state
+            .map(|state| TaskState::new(state.as_str())),
+        priority: record.priority.map(task_priority),
+        project: record.project,
+        scheduled: record.scheduled,
+        scheduled_date: record.scheduled_date.map(TaskDateValue::new),
+        deadline: record.deadline,
+        deadline_date: record.deadline_date.map(TaskDateValue::new),
+        is_overdue: record.is_overdue,
+        heading_tags: record.heading_tags,
+    }
+}
+
+fn apply_common_filters(record: &TaskRecord, filters: RecordFilters<'_>) -> bool {
+    if !matches_text_filters(record.todo_state.as_deref(), filters.state_filters) {
         return false;
     }
 
-    let combined_tags = combined_tags(tags);
+    let combined_tags = combined_tags(record.filetags.iter().chain(record.heading_tags.iter()));
     if !matches_tag_filters(&combined_tags, filters.tags_filters) {
         return false;
     }
 
     matches_type_filters(
-        heading.scheduled.is_some(),
-        heading.deadline.is_some(),
+        record.scheduled.is_some(),
+        record.deadline.is_some(),
         filters.type_filters,
     )
 }
@@ -292,39 +220,10 @@ fn combined_tags<'a>(tags: impl Iterator<Item = &'a String>) -> Vec<String> {
     result
 }
 
-fn extract_date(raw: Option<&String>) -> Option<TaskDateValue> {
-    let raw = raw.as_ref()?;
-    let parsed = parse_org_date(raw)?;
-    Some(TaskDateValue::new(
-        parsed.base_date.format("%Y-%m-%d").to_string(),
-    ))
-}
-
 fn task_priority(priority: OrgPriority) -> TaskPriority {
     match priority {
         OrgPriority::A => TaskPriority::A,
         OrgPriority::B => TaskPriority::B,
         OrgPriority::C => TaskPriority::C,
     }
-}
-
-fn is_overdue_on(raw: Option<&String>, clock: TaskClock) -> bool {
-    let raw = match raw {
-        Some(r) => r,
-        None => return false,
-    };
-    let parsed = match parse_org_date(raw) {
-        Some(d) => d,
-        None => return false,
-    };
-    let compare_date = parsed.base_date_end.unwrap_or(parsed.base_date);
-    if compare_date < clock.today {
-        return true;
-    }
-    if compare_date == clock.today
-        && let Some(end_time) = parsed.time_end
-    {
-        return clock.now > end_time;
-    }
-    false
 }

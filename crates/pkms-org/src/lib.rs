@@ -11,6 +11,7 @@ pub mod link_check;
 pub mod org_date;
 pub mod org_edit;
 pub mod org_task_edit;
+pub mod org_task_extract;
 pub mod org_task_mutation;
 pub mod parser;
 pub mod tokens;
