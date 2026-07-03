@@ -1,6 +1,5 @@
 use crate::command_context::CommandContext;
 use anyhow::{Context, Result};
-#[cfg(test)]
 use pkms_org::Graph;
 use serde::Serialize;
 use std::io::Write;
@@ -39,9 +38,9 @@ struct ServeStarted {
 }
 
 pub fn run(ctx: &CommandContext<'_>, opts: &ServeOptions) -> Result<()> {
-    let config = ctx.config();
+    let config = ctx.config().web_command_config();
     let output = ctx.output();
-    let graph = ctx.load_graph()?;
+    let graph = Graph::load(&config.org)?;
     let initial_uuid = graph.resolve_target(&opts.target)?.uuid.clone();
     let listener = TcpListener::bind((opts.host.as_str(), opts.port))
         .with_context(|| format!("Failed to bind {}:{}", opts.host, opts.port))?;
@@ -62,7 +61,7 @@ pub fn run(ctx: &CommandContext<'_>, opts: &ServeOptions) -> Result<()> {
     std::io::stdout().flush()?;
 
     let state = ServeState {
-        config,
+        config: &config,
         graph,
         initial_uuid,
     };
@@ -189,8 +188,9 @@ Preview body.
         let alpha_content = fs::read_to_string(&alpha.path).unwrap();
         let beta_content = fs::read_to_string(&beta.path).unwrap();
 
-        let page = render_note_html(&graph, &config, alpha, &alpha_content);
-        let preview = render_preview_html(&graph, &config, beta, &beta_content);
+        let page = render_note_html(&graph, &config.web_command_config(), alpha, &alpha_content);
+        let preview =
+            render_preview_html(&graph, &config.web_command_config(), beta, &beta_content);
 
         assert!(page.contains("data-preview-id=\"bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb\""));
         assert!(page.contains("id=\"note-preview\""));
@@ -266,8 +266,13 @@ Sibling body.
         let alpha_content = fs::read_to_string(&alpha.path).unwrap();
         let beta_content = fs::read_to_string(&target_heading.path).unwrap();
 
-        let page = render_note_html(&graph, &config, alpha, &alpha_content);
-        let preview = render_preview_html(&graph, &config, target_heading, &beta_content);
+        let page = render_note_html(&graph, &config.web_command_config(), alpha, &alpha_content);
+        let preview = render_preview_html(
+            &graph,
+            &config.web_command_config(),
+            target_heading,
+            &beta_content,
+        );
 
         assert!(page.contains(
             "href=\"/?id=bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb#h-8\" data-preview-id=\"dddddddd-dddd-4ddd-8ddd-dddddddddddd\""
@@ -302,8 +307,9 @@ Body.
         let config = ResolvedConfig::for_test_db(root);
         let corpus = Corpus::load(&config.org_config()).unwrap();
         let graph = Graph::from_corpus(&corpus);
+        let web_config = config.web_command_config();
         let state = ServeState {
-            config: &config,
+            config: &web_config,
             graph,
             initial_uuid: "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa".into(),
         };
@@ -360,7 +366,7 @@ Body.
             .unwrap();
         let content = fs::read_to_string(&node.path).unwrap();
 
-        let html = render_note_html(&graph, &config, node, &content);
+        let html = render_note_html(&graph, &config.web_command_config(), node, &content);
 
         assert!(html.contains("<details class=\"side-panel contents-panel\">"));
         assert!(html.contains("<summary>Contents</summary>"));
@@ -410,7 +416,7 @@ Body.
             .unwrap();
         let content = fs::read_to_string(&node.path).unwrap();
 
-        let html = render_note_html(&graph, &config, node, &content);
+        let html = render_note_html(&graph, &config.web_command_config(), node, &content);
 
         assert!(html.contains("<a href=\"#h-6\">WAITING Plain heading</a>"));
         assert!(html.contains("<h2 id=\"h-6\">WAITING Plain heading</h2>"));
@@ -557,7 +563,7 @@ fn main() {}
             .unwrap();
         let content = fs::read_to_string(&node.path).unwrap();
 
-        let html = render_note_html(&graph, &config, node, &content);
+        let html = render_note_html(&graph, &config.web_command_config(), node, &content);
 
         assert!(html.contains("href=\"/?id=bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb\""));
         assert!(
@@ -672,7 +678,7 @@ generic export
             .unwrap();
         let content = fs::read_to_string(&node.path).unwrap();
 
-        let html = render_note_html(&graph, &config, node, &content);
+        let html = render_note_html(&graph, &config.web_command_config(), node, &content);
 
         assert!(html.contains("org-block-src"));
         assert!(html.contains("<figcaption>Source: rust</figcaption>"));
@@ -763,7 +769,7 @@ generic export
             .unwrap();
         let content = fs::read_to_string(&node.path).unwrap();
 
-        let html = render_note_html(&graph, &config, node, &content);
+        let html = render_note_html(&graph, &config.web_command_config(), node, &content);
 
         assert!(html.contains("href=\"/?id=bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb\""));
         assert!(html.contains(
@@ -808,7 +814,7 @@ generic export
             .unwrap();
         let content = fs::read_to_string(&node.path).unwrap();
 
-        let html = render_note_html(&graph, &config, node, &content);
+        let html = render_note_html(&graph, &config.web_command_config(), node, &content);
 
         assert!(html.contains("<figcaption><strong>Bold</strong> caption</figcaption>"));
         assert!(html.contains("<figcaption>Long caption first line second line</figcaption>"));

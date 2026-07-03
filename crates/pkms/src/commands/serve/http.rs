@@ -1,6 +1,6 @@
 use super::{assets, inline::percent_decode, render_note_html, render_preview_html};
 use crate::commands::open;
-use crate::config::ResolvedConfig;
+use crate::config::WebCommandConfig;
 use anyhow::{Context, Result};
 use pkms_org::domain::NoteId;
 use pkms_org::graph::{Graph, Node, resolve_file_link_path};
@@ -10,7 +10,7 @@ use std::net::TcpStream;
 use std::path::{Path, PathBuf};
 
 pub(super) struct ServeState<'a> {
-    pub(super) config: &'a ResolvedConfig,
+    pub(super) config: &'a WebCommandConfig,
     pub(super) graph: Graph,
     pub(super) initial_uuid: NoteId,
 }
@@ -346,8 +346,13 @@ pub(super) fn open_response(
         return Ok(HttpResponse::not_found("Missing id"));
     };
     let node = state.graph.resolve_target(&note_uuid)?;
-    let task_states = state.config.task_state_config();
-    open::open_target(&state.graph, &task_states, &node.uuid, editor, Some(1))?;
+    open::open_target(
+        &state.graph,
+        &state.config.task_states,
+        &node.uuid,
+        editor,
+        Some(1),
+    )?;
     Ok(HttpResponse::text(format!("Opened {}", node.title)))
 }
 

@@ -36,6 +36,26 @@ pub struct DbCommandConfig {
     pub ssh: Option<SshConfig>,
 }
 
+#[derive(Debug, Clone)]
+pub struct WebCommandConfig {
+    pub org: pkms_org::OrgConfig,
+    pub task_states: pkms_org::graph::tasks::TaskStateConfig,
+}
+
+impl WebCommandConfig {
+    pub fn resolved_db_root(&self) -> &Path {
+        &self.org.db_root
+    }
+
+    pub fn open_todo_states(&self) -> &[String] {
+        &self.task_states.open_states
+    }
+
+    pub fn closed_todo_states(&self) -> &[String] {
+        &self.task_states.closed_states
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct AgendaConfig {
@@ -280,6 +300,13 @@ impl ResolvedConfig {
             org: self.org_config(),
             task_states: self.task_state_config(),
             ssh: self.ssh.clone(),
+        }
+    }
+
+    pub fn web_command_config(&self) -> WebCommandConfig {
+        WebCommandConfig {
+            org: self.org_config(),
+            task_states: self.task_state_config(),
         }
     }
 

@@ -3,7 +3,7 @@ use super::org_html::{
     heading_title_with_unconfigured_todo, is_configured_todo_state, render_org_body,
 };
 use super::{page_css, page_js};
-use crate::config::ResolvedConfig;
+use crate::config::WebCommandConfig;
 use pkms_org::graph::{Graph, Node};
 use pkms_org::org_edit::parsed_heading_subtree_end_index;
 use pkms_org::parser::{HEADING_RE, Heading, parse_note, strip_org_links};
@@ -12,7 +12,7 @@ use std::fmt::Write as FmtWrite;
 
 pub(super) fn render_note_html(
     graph: &Graph,
-    config: &ResolvedConfig,
+    config: &WebCommandConfig,
     node: &Node,
     content: &str,
 ) -> String {
@@ -61,7 +61,7 @@ pub(super) fn render_note_html(
 
 pub(super) fn render_preview_html(
     graph: &Graph,
-    config: &ResolvedConfig,
+    config: &WebCommandConfig,
     node: &Node,
     content: &str,
 ) -> String {
@@ -106,7 +106,7 @@ struct OutlineHeading {
     title: String,
 }
 
-fn collect_outline_headings(config: &ResolvedConfig, content: &str) -> Vec<OutlineHeading> {
+fn collect_outline_headings(config: &WebCommandConfig, content: &str) -> Vec<OutlineHeading> {
     content
         .lines()
         .enumerate()
@@ -131,7 +131,7 @@ fn collect_outline_headings(config: &ResolvedConfig, content: &str) -> Vec<Outli
         .collect()
 }
 
-fn render_contents_panel(config: &ResolvedConfig, content: &str) -> String {
+fn render_contents_panel(config: &WebCommandConfig, content: &str) -> String {
     let headings = collect_outline_headings(config, content);
     let mut html = String::from(
         "<details class=\"side-panel contents-panel\">\n<summary>Contents</summary>\n",
