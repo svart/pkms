@@ -2013,6 +2013,7 @@ dependencies = [
  "glob",
  "insta",
  "katex",
+ "pkms-db",
  "pkms-org",
  "proptest",
  "rayon",

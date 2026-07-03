@@ -95,7 +95,7 @@ fn dispatch(cli: &Cli, command_ctx: &CommandContext<'_>) -> Result<ExitCode> {
         Command::Task(args) => commands::task::run(command_ctx, &args.command)?,
         Command::Path(args) => success(commands::path::run(
             command_ctx,
-            &commands::path::PathOptions::from(args),
+            &commands::path::options_from_args(args),
         ))?,
         #[cfg(feature = "web")]
         Command::Serve(args) => success(commands::serve::run(
