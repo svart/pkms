@@ -268,6 +268,14 @@ impl ResolvedConfig {
         }
     }
 
+    pub fn task_state_config(&self) -> crate::graph::tasks::TaskStateConfig {
+        crate::graph::tasks::TaskStateConfig {
+            valid_states: self.todo_states(),
+            open_states: self.open_todo_states(),
+            closed_states: self.closed_todo_states(),
+        }
+    }
+
     pub fn todo_states(&self) -> Vec<String> {
         let open = self.open_todo_states();
         let closed = self.closed_todo_states();

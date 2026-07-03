@@ -35,7 +35,7 @@ pub fn open_target(
     line: Option<usize>,
 ) -> Result<()> {
     let location = if let Ok(id) = target.parse::<usize>() {
-        graph.resolve_canonical_task_id(config, id)?
+        graph.resolve_canonical_task_id(&config.task_state_config(), id)?
     } else {
         let node = graph.resolve_target(target)?;
         let path = node.path.display().to_string();

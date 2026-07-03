@@ -52,7 +52,7 @@ pub(super) fn mod_task(
     };
 
     let graph = Graph::load(config)?;
-    let location = graph.resolve_canonical_task_id(config, canonical_id)?;
+    let location = graph.resolve_canonical_task_id(&config.task_state_config(), canonical_id)?;
     let mut location = pkms_task_location(location);
     let mut changes = Vec::new();
 
@@ -62,7 +62,8 @@ pub(super) fn mod_task(
                 if target_id == canonical_id {
                     bail!("Cannot make a task depend on itself.");
                 }
-                let target_location = graph.resolve_canonical_task_id(config, target_id)?;
+                let target_location =
+                    graph.resolve_canonical_task_id(&config.task_state_config(), target_id)?;
                 let target_location = pkms_task_location(target_location);
                 location = pkms::move_subtree_to_dependency(&location, &target_location)?;
                 changes.push(render::TaskModChange {
@@ -171,7 +172,7 @@ fn current_dependency_parent(
     })?;
     let path = location.path.display().to_string();
     graph
-        .all_task_entries(config)
+        .all_task_entries(&config.task_state_config())
         .into_iter()
         .find(|entry| {
             entry.path.as_str() == path.as_str() && entry.line_number == parent.line_number
@@ -233,7 +234,7 @@ pub(super) fn set_state(
 ) -> Result<()> {
     let new_state = canonical_state(config, requested_state)?;
     let graph = Graph::load(config)?;
-    let location = graph.resolve_canonical_task_id(config, canonical_id)?;
+    let location = graph.resolve_canonical_task_id(&config.task_state_config(), canonical_id)?;
     let title =
         task_title_in_graph(&graph, &location.path, location.line_number).with_context(|| {
             format!(
@@ -340,7 +341,7 @@ fn add_dependency_task(
     canonical_id: usize,
 ) -> Result<pkms::TaskLocation> {
     let graph = Graph::load(config)?;
-    let location = graph.resolve_canonical_task_id(config, canonical_id)?;
+    let location = graph.resolve_canonical_task_id(&config.task_state_config(), canonical_id)?;
     let location = pkms_task_location(location);
     let parent_level = pkms::heading_level_at(&location)?;
     let entry = format_task_entry(config, spec, parent_level + 1)?;
@@ -431,7 +432,7 @@ pub(super) fn postpone(
 ) -> Result<()> {
     let date = parse_mutation_due_date(to, clock.today)?;
     let graph = Graph::load(config)?;
-    let location = graph.resolve_canonical_task_id(config, canonical_id)?;
+    let location = graph.resolve_canonical_task_id(&config.task_state_config(), canonical_id)?;
     pkms_mutation::update_recurring_planning_date(&location.path, location.line_number, &date)?;
     let item = pkms::find_task_item_on(
         config,

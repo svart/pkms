@@ -1,9 +1,15 @@
 use super::Graph;
-use crate::config::ResolvedConfig;
 use chrono::{NaiveDateTime, NaiveTime};
 use pkms_org::parser::find_daily_file_date;
 use std::cmp::Ordering;
 use std::path::Path;
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct TaskStateConfig {
+    pub valid_states: Vec<String>,
+    pub open_states: Vec<String>,
+    pub closed_states: Vec<String>,
+}
 
 #[derive(Debug)]
 struct TaskEntry {
@@ -34,7 +40,7 @@ pub struct TaskLocation {
 }
 
 impl Graph {
-    pub fn all_task_entries(&self, config: &ResolvedConfig) -> Vec<CanonicalTaskEntry> {
+    pub fn all_task_entries(&self, config: &TaskStateConfig) -> Vec<CanonicalTaskEntry> {
         let entries = self.sorted_task_entries(config);
         entries
             .into_iter()
@@ -49,7 +55,7 @@ impl Graph {
 
     pub fn resolve_canonical_task_id(
         &self,
-        config: &ResolvedConfig,
+        config: &TaskStateConfig,
         id: usize,
     ) -> anyhow::Result<TaskLocation> {
         let entries = self.sorted_task_entries(config);
@@ -67,10 +73,7 @@ impl Graph {
         })
     }
 
-    fn sorted_task_entries(&self, config: &ResolvedConfig) -> Vec<TaskEntry> {
-        let valid_states = config.todo_states();
-        let open_states = config.open_todo_states();
-        let closed_states = config.closed_todo_states();
+    fn sorted_task_entries(&self, config: &TaskStateConfig) -> Vec<TaskEntry> {
         let mut items: Vec<TaskEntry> = Vec::new();
 
         for result in &self.results {
@@ -79,17 +82,33 @@ impl Graph {
             }
             let file_order = FileTaskOrder::from_path(&result.path);
             for heading in &result.parsed.headings {
-                let is_todo = heading
-                    .todo_state
-                    .as_ref()
-                    .is_some_and(|s| valid_states.iter().any(|vs| vs.eq_ignore_ascii_case(s)));
+                let is_todo = heading.todo_state.as_ref().is_some_and(|s| {
+                    config
+                        .valid_states
+                        .iter()
+                        .any(|vs| vs.eq_ignore_ascii_case(s))
+                });
                 let has_dates = heading.scheduled.is_some() || heading.deadline.is_some();
                 if !is_todo && !has_dates {
                     continue;
                 }
                 let is_open = match &heading.todo_state {
-                    Some(s) if open_states.iter().any(|os| os.eq_ignore_ascii_case(s)) => true,
-                    Some(s) if closed_states.iter().any(|cs| cs.eq_ignore_ascii_case(s)) => false,
+                    Some(s)
+                        if config
+                            .open_states
+                            .iter()
+                            .any(|os| os.eq_ignore_ascii_case(s)) =>
+                    {
+                        true
+                    }
+                    Some(s)
+                        if config
+                            .closed_states
+                            .iter()
+                            .any(|cs| cs.eq_ignore_ascii_case(s)) =>
+                    {
+                        false
+                    }
                     _ => true,
                 };
                 items.push(TaskEntry {
@@ -163,7 +182,7 @@ fn parse_timestamped_filename(path: &Path, filename: &str) -> Option<(NaiveDateT
 
 #[cfg(test)]
 mod tests {
-    use crate::config::ResolvedConfig;
+    use crate::graph::tasks::TaskStateConfig;
     use crate::graph::{DuplicateInfo, Graph};
     use pkms_org::corpus::FileScanResult;
     use pkms_org::domain::NoteId;
@@ -171,8 +190,12 @@ mod tests {
     use std::collections::HashMap;
     use std::path::PathBuf;
 
-    fn test_config() -> ResolvedConfig {
-        ResolvedConfig::for_test_db(".")
+    fn test_config() -> TaskStateConfig {
+        TaskStateConfig {
+            valid_states: vec!["TODO".to_string(), "DONE".to_string()],
+            open_states: vec!["TODO".to_string()],
+            closed_states: vec!["DONE".to_string()],
+        }
     }
 
     fn graph_with_results(results: Vec<FileScanResult>) -> Graph {

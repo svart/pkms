@@ -278,7 +278,7 @@ fn resolve_canonical_heading_target<'a>(
     config: &ResolvedConfig,
     id: usize,
 ) -> Result<ResolvedHeadingTarget<'a>> {
-    let location = graph.resolve_canonical_task_id(config, id)?;
+    let location = graph.resolve_canonical_task_id(&config.task_state_config(), id)?;
     let path = PathBuf::from(&location.path);
     let content = std::fs::read_to_string(&path)?;
 
@@ -426,7 +426,7 @@ fn resolve_outgoing_titles(output: &mut ShowOutput, graph: &Graph) {
 pub fn execute(config: &ResolvedConfig, opts: &ShowOptions) -> Result<Vec<ShowOutput>> {
     let graph = Graph::load(config)?;
     let task_ids: TaskIdMap = graph
-        .all_task_entries(config)
+        .all_task_entries(&config.task_state_config())
         .into_iter()
         .map(|entry| ((entry.path, entry.line_number), entry.id))
         .collect();

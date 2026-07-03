@@ -299,7 +299,7 @@ struct TaskIdentity {
 impl TaskIdSnapshot {
     fn capture(config: &ResolvedConfig) -> Result<Self> {
         let graph = crate::graph::Graph::load(config)?;
-        let entries = graph.all_task_entries(config);
+        let entries = graph.all_task_entries(&config.task_state_config());
         let identities = task_identities_by_location(&entries);
         let mut ordered = Vec::new();
         for entry in entries {

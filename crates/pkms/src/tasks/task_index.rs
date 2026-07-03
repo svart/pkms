@@ -183,7 +183,7 @@ pub fn collect_agenda_records(corpus: &Corpus, query: TaskRecordQuery<'_>) -> Ve
 
 pub fn assign_canonical_ids(config: &ResolvedConfig, graph: &Graph, records: &mut [TaskRecord]) {
     let global_ids: std::collections::HashMap<(String, usize), usize> = graph
-        .all_task_entries(config)
+        .all_task_entries(&config.task_state_config())
         .into_iter()
         .map(|entry| ((entry.path, entry.line_number), entry.id))
         .collect();
