@@ -6,7 +6,7 @@ pub mod models;
 pub mod ndjson;
 pub mod schema;
 
-pub use db::{connect, ingest_records, status};
+pub use db::{build_fts_query, connect, ingest_records, search, status};
 pub use embeddings::{
     DEFAULT_EMBEDDING_MAX_BODY_CHARS, DEFAULT_HASH_EMBEDDING_DIMENSION, EmbeddingProvider,
     HashEmbeddingProvider, cosine_similarity, embedding_text, pack_vector, unpack_vector,

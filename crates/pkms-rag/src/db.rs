@@ -12,7 +12,7 @@ use crate::{
     embeddings::{EmbeddingProvider, embedding_text, pack_vector},
     models::{
         ChunkRecord, DeleteEntityType, DeleteRecord, IngestSummary, LinkRecord, RetrievalRecord,
-        SUPPORTED_SCHEMA_VERSION, StatusResponse,
+        SUPPORTED_SCHEMA_VERSION, ScoreBreakdown, SearchResult, StatusResponse,
     },
     schema::SCHEMA_SQL,
 };
@@ -113,6 +113,118 @@ pub fn status(conn: &Connection, db_path: impl AsRef<Path>) -> Result<StatusResp
         embeddings: count(conn, "SELECT COUNT(*) FROM chunk_embeddings")?,
         embedding_models: embedding_models(conn)?,
         db_path: display_path(db_path.as_ref()),
+    })
+}
+
+pub fn search(conn: &Connection, query: &str, limit: usize) -> Result<Vec<SearchResult>> {
+    let fts_query = build_fts_query(query);
+    if fts_query.is_empty() || limit == 0 {
+        return Ok(Vec::new());
+    }
+
+    let mut stmt = conn
+        .prepare(
+            r#"
+            SELECT
+                c.chunk_id,
+                c.note_id,
+                c.title,
+                c.path,
+                c.aliases_json,
+                c.tags_json,
+                c.heading_path_json,
+                c.heading_level,
+                c.start_line,
+                c.end_line,
+                c.body,
+                bm25(chunks_fts) AS raw_bm25
+            FROM chunks_fts
+            JOIN chunks c ON c.chunk_id = chunks_fts.chunk_id
+            WHERE chunks_fts MATCH ?
+              AND c.stale = 0
+            ORDER BY raw_bm25 ASC
+            LIMIT ?
+            "#,
+        )
+        .context("failed to prepare RAG search query")?;
+    let rows = stmt
+        .query_map(params![fts_query, limit as i64], row_to_search_result)
+        .context("failed to run RAG search query")?;
+    rows.collect::<rusqlite::Result<Vec<_>>>()
+        .context("failed to read RAG search rows")
+}
+
+pub fn build_fts_query(query: &str) -> String {
+    let mut parts = Vec::new();
+    let mut chars = query.chars().peekable();
+    loop {
+        while matches!(chars.peek(), Some(ch) if ch.is_whitespace()) {
+            chars.next();
+        }
+        let Some(first) = chars.next() else {
+            break;
+        };
+        let mut value = String::new();
+        if first == '"' {
+            for ch in chars.by_ref() {
+                if ch == '"' {
+                    break;
+                }
+                value.push(ch);
+            }
+        } else {
+            value.push(first);
+            while let Some(ch) = chars.peek().copied() {
+                if ch.is_whitespace() {
+                    break;
+                }
+                value.push(ch);
+                chars.next();
+            }
+        }
+        let value = value.trim();
+        if !value.is_empty() {
+            parts.push(format!("\"{}\"", value.replace('"', "\"\"")));
+        }
+    }
+    parts.join(" OR ")
+}
+
+fn row_to_search_result(row: &rusqlite::Row<'_>) -> rusqlite::Result<SearchResult> {
+    let raw_bm25 = row.get::<_, f64>("raw_bm25")?;
+    let magnitude = raw_bm25.abs();
+    let score = magnitude / (1.0 + magnitude);
+    Ok(SearchResult {
+        chunk_id: row.get("chunk_id")?,
+        note_id: row.get("note_id")?,
+        title: row.get("title")?,
+        path: row.get("path")?,
+        aliases: json_column(row, "aliases_json")?,
+        tags: json_column(row, "tags_json")?,
+        heading_path: json_column(row, "heading_path_json")?,
+        heading_level: row.get("heading_level")?,
+        start_line: row.get("start_line")?,
+        end_line: row.get("end_line")?,
+        text: row.get("body")?,
+        scores: ScoreBreakdown {
+            bm25: score,
+            final_score: score,
+            ..ScoreBreakdown::default()
+        },
+    })
+}
+
+fn json_column<T>(row: &rusqlite::Row<'_>, column: &str) -> rusqlite::Result<T>
+where
+    T: serde::de::DeserializeOwned,
+{
+    let value = row.get::<_, String>(column)?;
+    serde_json::from_str(&value).map_err(|err| {
+        rusqlite::Error::FromSqlConversionFailure(
+            value.len(),
+            rusqlite::types::Type::Text,
+            Box::new(err),
+        )
     })
 }
 
@@ -860,5 +972,79 @@ mod tests {
                 .join("tests/fixtures/retrieval-export.ndjson"),
         )
         .expect("fixture records load")
+    }
+
+    #[test]
+    fn search_builds_python_compatible_fts_query() {
+        assert_eq!(
+            build_fts_query(r#""pkms task" agenda"#),
+            r#""pkms task" OR "agenda""#
+        );
+        assert_eq!(
+            build_fts_query("UrlBase externalHostname"),
+            r#""UrlBase" OR "externalHostname""#
+        );
+        assert_eq!(build_fts_query("   "), "");
+    }
+
+    #[test]
+    fn search_finds_exact_technical_terms() {
+        let (_tempdir, path) = db_path();
+        let mut conn = connect(&path).expect("connect initializes database");
+        let provider = HashEmbeddingProvider::default();
+        ingest_records(&mut conn, &fixture_records(), &provider, false).expect("fixture ingests");
+
+        let results = search(&conn, "externalHostname", 10).expect("search succeeds");
+
+        assert_eq!(results.len(), 1);
+        let result = &results[0];
+        assert_eq!(result.title, "Media Library Migration to Jellyfin");
+        assert_eq!(result.heading_path, vec!["Seerr", "Jellyfin links"]);
+        assert_eq!(result.start_line, 40);
+        assert_eq!(result.end_line, 58);
+        assert!(result.text.contains("externalHostname"));
+        assert!(result.scores.bm25 > 0.0);
+        assert_eq!(result.scores.final_score, result.scores.bm25);
+    }
+
+    #[test]
+    fn search_returns_pkms_task_command_for_phrase_and_token_query() {
+        let (_tempdir, path) = db_path();
+        let mut conn = connect(&path).expect("connect initializes database");
+        let provider = HashEmbeddingProvider::default();
+        ingest_records(&mut conn, &fixture_records(), &provider, false).expect("fixture ingests");
+
+        let results = search(&conn, r#""pkms task" agenda"#, 10).expect("search succeeds");
+
+        assert!(!results.is_empty());
+        assert_eq!(results[0].title, "PKMS Task Backend");
+        assert!(
+            results[0]
+                .text
+                .contains("pkms task agenda today source:all")
+        );
+    }
+
+    #[test]
+    fn search_uses_or_semantics_for_multiple_tokens() {
+        let (_tempdir, path) = db_path();
+        let mut conn = connect(&path).expect("connect initializes database");
+        let provider = HashEmbeddingProvider::default();
+        ingest_records(&mut conn, &fixture_records(), &provider, false).expect("fixture ingests");
+
+        let results = search(&conn, "UrlBase externalHostname", 10).expect("search succeeds");
+
+        assert!(!results.is_empty());
+        assert_eq!(results[0].title, "Media Library Migration to Jellyfin");
+    }
+
+    #[test]
+    fn search_empty_query_returns_no_results() {
+        let (_tempdir, path) = db_path();
+        let conn = connect(path).expect("connect initializes database");
+
+        let results = search(&conn, "   ", 10).expect("search succeeds");
+
+        assert!(results.is_empty());
     }
 }
