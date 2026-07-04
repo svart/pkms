@@ -1,7 +1,8 @@
+use crate::org_date::format_org_date;
 use crate::org_edit;
 use crate::parser::{DEADLINE_RE, HEADING_RE, OrgPriority, OrgTodoState, SCHEDULED_RE};
 use anyhow::{Result, bail};
-use chrono::{NaiveDate, NaiveDateTime};
+use chrono::NaiveDate;
 
 #[derive(Debug, Clone, Copy)]
 pub enum PlanningKind {
@@ -267,7 +268,7 @@ pub fn update_heading_planning_date(
         bail!("Task line {line_number} is no longer an org heading");
     }
 
-    let new = date.map(org_date).transpose()?;
+    let new = date.map(format_org_date).transpose()?;
     set_planning_value(&mut lines, heading_idx, kind, new.as_deref());
     org_edit::write_lines(path, &lines)?;
     Ok(())
@@ -319,7 +320,7 @@ fn apply_planning_change(
 ) -> Result<()> {
     let new = match requested {
         Change::Unchanged => return Ok(()),
-        Change::Set(date) => Some(org_date(date)?),
+        Change::Set(date) => Some(format_org_date(date)?),
         Change::Clear => None,
     };
     let old = current_planning_value(lines, heading_idx, kind);
@@ -665,15 +666,4 @@ fn replace_planning_token(line: &str, kind: PlanningKind, value: Option<&str>) -
         }
     };
     format!("{}{}", updated.trim(), newline)
-}
-
-fn org_date(date: impl AsRef<str>) -> Result<String> {
-    let date = date.as_ref();
-    if let Ok(datetime) = NaiveDateTime::parse_from_str(date, "%Y-%m-%d %H:%M") {
-        return Ok(format!("<{}>", datetime.format("%Y-%m-%d %a %H:%M")));
-    }
-    Ok(format!(
-        "<{}>",
-        NaiveDate::parse_from_str(date, "%Y-%m-%d")?.format("%Y-%m-%d %a")
-    ))
 }

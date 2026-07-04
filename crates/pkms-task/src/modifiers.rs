@@ -470,14 +470,6 @@ fn upcoming_weekday(today: NaiveDate, weekday: Weekday) -> NaiveDate {
     today + chrono::Duration::days(days_until)
 }
 
-pub fn org_date(date: &TaskDateValue) -> Result<String> {
-    if let Ok(datetime) = NaiveDateTime::parse_from_str(date.as_str(), "%Y-%m-%d %H:%M") {
-        return Ok(format!("<{}>", datetime.format("%Y-%m-%d %a %H:%M")));
-    }
-    let date = NaiveDate::parse_from_str(date.as_str(), "%Y-%m-%d")?;
-    Ok(format!("<{}>", date.format("%Y-%m-%d %a")))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -644,18 +636,6 @@ mod tests {
         assert!(
             err.to_string()
                 .contains("task modifier title was provided more than once")
-        );
-    }
-
-    #[test]
-    fn formats_org_dates() {
-        assert_eq!(
-            org_date(&TaskDateValue::from("2026-05-27")).unwrap(),
-            "<2026-05-27 Wed>"
-        );
-        assert_eq!(
-            org_date(&TaskDateValue::from("2026-05-27 09:30")).unwrap(),
-            "<2026-05-27 Wed 09:30>"
         );
     }
 

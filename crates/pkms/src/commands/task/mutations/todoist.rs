@@ -10,9 +10,11 @@ use crate::cli::OutputFormat;
 #[cfg(feature = "todoist")]
 use anyhow::Context;
 #[cfg(feature = "todoist")]
+use pkms_org::org_date::format_org_date;
+#[cfg(feature = "todoist")]
 use pkms_task::model::{TaskPriority, TaskProperty};
 #[cfg(feature = "todoist")]
-use pkms_task::modifiers::{TaskDateArg, TaskPriorityArg, org_date};
+use pkms_task::modifiers::{TaskDateArg, TaskPriorityArg};
 #[cfg(feature = "todoist")]
 use pkms_task::todoist;
 #[cfg(feature = "todoist")]
@@ -249,7 +251,7 @@ pub(super) fn mod_task(
     }
     if let Some(date) = mod_date(spec.due.as_ref()) {
         if old_item.scheduled_date_str() != date.as_deref() {
-            let new_raw = date.as_ref().map(org_date).transpose()?;
+            let new_raw = date.as_ref().map(format_org_date).transpose()?;
             push_change(
                 &mut changes,
                 TaskProperty::Scheduled,
@@ -266,7 +268,7 @@ pub(super) fn mod_task(
     }
     if let Some(date) = mod_date(spec.deadline.as_ref()) {
         if old_item.deadline_date_str() != date.as_deref() {
-            let new_raw = date.as_ref().map(org_date).transpose()?;
+            let new_raw = date.as_ref().map(format_org_date).transpose()?;
             push_change(
                 &mut changes,
                 TaskProperty::Deadline,

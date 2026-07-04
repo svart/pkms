@@ -197,19 +197,23 @@ fn ensure_daily_note_exists(path: &Path, today: chrono::NaiveDate) -> Result<()>
     })
 }
 
-pub fn append_inbox_entry(target: &PkmsInboxTarget, entry: &str) -> Result<TaskLocation> {
+pub fn append_inbox_task(
+    target: &PkmsInboxTarget,
+    spec: &org_task_edit::OrgTaskInsertSpec,
+) -> Result<TaskLocation> {
     match target {
         PkmsInboxTarget::Note(path) => {
-            org_task_edit::append_org_entry(path, entry).map(|line_number| TaskLocation {
+            org_task_edit::append_org_task(path, spec).map(|line_number| TaskLocation {
                 path: path.clone(),
                 line_number,
             })
         }
-        PkmsInboxTarget::Daily { path } => org_task_edit::append_daily_inbox_entry(path, entry)
-            .map(|line_number| TaskLocation {
+        PkmsInboxTarget::Daily { path } => {
+            org_task_edit::append_daily_inbox_task(path, spec).map(|line_number| TaskLocation {
                 path: path.clone(),
                 line_number,
-            }),
+            })
+        }
     }
 }
 
@@ -217,8 +221,11 @@ pub fn heading_level_at(location: &TaskLocation) -> Result<usize> {
     org_task_edit::heading_level_at(&location.path, location.line_number)
 }
 
-pub fn append_child_entry(parent: &TaskLocation, entry: &str) -> Result<TaskLocation> {
-    org_task_edit::append_child_org_entry(&parent.path, parent.line_number, entry).map(
+pub fn append_child_task(
+    parent: &TaskLocation,
+    spec: &org_task_edit::OrgTaskInsertSpec,
+) -> Result<TaskLocation> {
+    org_task_edit::append_child_org_task(&parent.path, parent.line_number, spec).map(
         |line_number| TaskLocation {
             path: parent.path.clone(),
             line_number,

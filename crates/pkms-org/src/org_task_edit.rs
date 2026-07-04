@@ -1,7 +1,8 @@
+use crate::org_date::format_org_date;
 use crate::org_edit::{heading_level, heading_level_at_index, heading_subtree_end_index};
 use crate::parser::{HEADING_RE, OrgPriority, OrgTodoState};
 use anyhow::{Context, Result};
-use chrono::{NaiveDate, NaiveDateTime};
+use chrono::NaiveDate;
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -183,16 +184,10 @@ fn format_org_task_heading(spec: &OrgTaskInsertSpec) -> String {
 fn format_org_task_planning(spec: &OrgTaskInsertSpec) -> Result<Option<String>> {
     let mut planning = Vec::new();
     if let Some(scheduled) = &spec.scheduled {
-        planning.push(format!(
-            "SCHEDULED: {}",
-            format_org_task_timestamp(scheduled)?
-        ));
+        planning.push(format!("SCHEDULED: {}", format_org_date(scheduled)?));
     }
     if let Some(deadline) = &spec.deadline {
-        planning.push(format!(
-            "DEADLINE: {}",
-            format_org_task_timestamp(deadline)?
-        ));
+        planning.push(format!("DEADLINE: {}", format_org_date(deadline)?));
     }
     Ok((!planning.is_empty()).then(|| planning.join(" ")))
 }
@@ -201,14 +196,6 @@ fn format_org_task_description(description: Option<&str>) -> Option<&str> {
     description
         .map(str::trim)
         .filter(|description| !description.is_empty())
-}
-
-fn format_org_task_timestamp(value: &str) -> Result<String> {
-    if let Ok(datetime) = NaiveDateTime::parse_from_str(value, "%Y-%m-%d %H:%M") {
-        return Ok(format!("<{}>", datetime.format("%Y-%m-%d %a %H:%M")));
-    }
-    let date = NaiveDate::parse_from_str(value, "%Y-%m-%d")?;
-    Ok(format!("<{}>", date.format("%Y-%m-%d %a")))
 }
 
 fn append_org_entry_to_content(content: &mut String, entry: &str) -> usize {

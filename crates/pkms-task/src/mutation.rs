@@ -3,7 +3,7 @@ use crate::config::PkmsTaskConfig;
 use crate::id::TaskId;
 use crate::model::{TaskDateValue, TaskItem, TaskPriority, TaskProperty};
 use crate::modifiers::{
-    TaskDateArg, TaskDependencyArg, TaskModifierSpec, TaskPriorityArg, is_clear_value, org_date,
+    TaskDateArg, TaskDependencyArg, TaskModifierSpec, TaskPriorityArg, is_clear_value,
     parse_task_date_arg_on,
 };
 use crate::pkms::{self, PkmsInboxTarget};
@@ -11,6 +11,7 @@ use anyhow::{Context, Result, bail};
 use chrono::NaiveDate;
 use pkms_org::Graph;
 use pkms_org::graph::tasks::TaskLocation as GraphTaskLocation;
+use pkms_org::org_task_edit::OrgTaskInsertSpec;
 use pkms_org::org_task_mutation::{self, Change, OrgTaskProperty};
 use pkms_org::parser::{OrgPriority, OrgTodoState};
 use serde::Serialize;
@@ -398,8 +399,8 @@ fn add_inbox_task(
         PkmsInboxTarget::Note(_) => 1,
         PkmsInboxTarget::Daily { .. } => 2,
     };
-    let entry = format_task_entry(config, spec, heading_level)?;
-    pkms::append_inbox_entry(&inbox_target, &entry)
+    let task = task_insert_spec(config, spec, heading_level)?;
+    pkms::append_inbox_task(&inbox_target, &task)
 }
 
 fn add_dependency_task(
@@ -411,59 +412,48 @@ fn add_dependency_task(
     let location = graph.resolve_canonical_task_id(&config.task_states, canonical_id)?;
     let location = pkms_task_location(location);
     let parent_level = pkms::heading_level_at(&location)?;
-    let entry = format_task_entry(config, spec, parent_level + 1)?;
-    pkms::append_child_entry(&location, &entry)
+    let task = task_insert_spec(config, spec, parent_level + 1)?;
+    pkms::append_child_task(&location, &task)
 }
 
-fn format_task_entry(
+fn task_insert_spec(
     config: &PkmsTaskConfig,
     spec: &TaskModifierSpec,
     heading_level: usize,
-) -> Result<String> {
-    let title = add_title(spec)?;
+) -> Result<OrgTaskInsertSpec> {
+    let title = add_title(spec)?.to_string();
     let state = match spec.state.as_deref() {
-        Some(state) => canonical_state(config, state)?.to_string(),
-        None => config
-            .task_states
-            .open_states
-            .first()
-            .cloned()
-            .unwrap_or_else(|| "TODO".to_string()),
+        Some(state) => canonical_state(config, state)?,
+        None => OrgTodoState::new(
+            config
+                .task_states
+                .open_states
+                .first()
+                .cloned()
+                .unwrap_or_else(|| "TODO".to_string()),
+        ),
     };
     let priority = add_priority(spec)?;
-    let labels = spec.labels();
-    let tags = if labels.is_empty() {
-        String::new()
-    } else {
-        format!(" :{}:", labels.join(":"))
-    };
-
-    let level = "*".repeat(heading_level);
-    let mut entry = format!("{level} {state}{priority} {title}{tags}\n");
-    let due = add_date("due", spec.due.as_ref())?;
-    let deadline = add_date("deadline", spec.deadline.as_ref())?;
-    if due.is_some() || deadline.is_some() {
-        let mut planning = Vec::new();
-        if let Some(due) = due {
-            planning.push(format!("SCHEDULED: {}", org_date(due)?));
-        }
-        if let Some(deadline) = deadline {
-            planning.push(format!("DEADLINE: {}", org_date(deadline)?));
-        }
-        entry.push_str(&format!("{}\n", planning.join(" ")));
-    }
-    if let Some(description) = spec
+    let scheduled = add_date("due", spec.due.as_ref())?.map(|date| date.as_str().to_string());
+    let deadline =
+        add_date("deadline", spec.deadline.as_ref())?.map(|date| date.as_str().to_string());
+    let description = spec
         .description
         .as_deref()
         .map(str::trim)
-        .filter(|d| !d.is_empty())
-    {
-        entry.push('\n');
-        entry.push_str(description);
-        entry.push('\n');
-    }
+        .filter(|description| !description.is_empty())
+        .map(str::to_string);
 
-    Ok(entry)
+    Ok(OrgTaskInsertSpec {
+        level: heading_level,
+        state,
+        title,
+        priority,
+        tags: spec.labels().to_vec(),
+        scheduled,
+        deadline,
+        description,
+    })
 }
 
 fn add_date<'a>(name: &str, value: Option<&'a TaskDateArg>) -> Result<Option<&'a TaskDateValue>> {
@@ -483,10 +473,10 @@ fn add_title(spec: &TaskModifierSpec) -> Result<&str> {
         .ok_or_else(|| anyhow::anyhow!("PKMS task creation requires task text or title:"))
 }
 
-fn add_priority(spec: &TaskModifierSpec) -> Result<String> {
+fn add_priority(spec: &TaskModifierSpec) -> Result<Option<OrgPriority>> {
     match spec.priority {
-        None => Ok(String::new()),
-        Some(TaskPriorityArg::Set(priority)) => Ok(format!(" [#{priority}]")),
+        None => Ok(None),
+        Some(TaskPriorityArg::Set(priority)) => Ok(Some(org_priority(priority))),
         Some(TaskPriorityArg::Clear) => bail!("Invalid priority 'none'. Use A, B, or C."),
     }
 }

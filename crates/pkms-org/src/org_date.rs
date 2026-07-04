@@ -1,4 +1,5 @@
-use chrono::{NaiveDate, NaiveTime};
+use anyhow::Result;
+use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
 use serde::{Serialize, Serializer, ser::SerializeStruct};
 
 #[derive(Debug, Clone)]
@@ -59,6 +60,17 @@ pub fn parse_org_date(raw: &str) -> Option<OrgDate> {
     }
 
     parse_single_org_date(raw)
+}
+
+pub fn format_org_date(date: impl AsRef<str>) -> Result<String> {
+    let date = date.as_ref();
+    if let Ok(datetime) = NaiveDateTime::parse_from_str(date, "%Y-%m-%d %H:%M") {
+        return Ok(format!("<{}>", datetime.format("%Y-%m-%d %a %H:%M")));
+    }
+    Ok(format!(
+        "<{}>",
+        NaiveDate::parse_from_str(date, "%Y-%m-%d")?.format("%Y-%m-%d %a")
+    ))
 }
 
 fn parse_single_org_date(raw: &str) -> Option<OrgDate> {
@@ -198,6 +210,15 @@ mod tests {
         let value = serde_json::to_value(d).unwrap();
 
         assert_eq!(value["has_time"], serde_json::json!(true));
+    }
+
+    #[test]
+    fn test_formats_date_values_as_active_org_timestamps() {
+        assert_eq!(format_org_date("2026-05-27").unwrap(), "<2026-05-27 Wed>");
+        assert_eq!(
+            format_org_date("2026-05-27 09:30").unwrap(),
+            "<2026-05-27 Wed 09:30>"
+        );
     }
 
     #[test]
