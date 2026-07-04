@@ -1,14 +1,13 @@
 use crate::tasks::id::TaskId;
 use crate::tasks::model::TaskSourceKind;
-use crate::tasks::modifiers::{TaskModifierSpec, parse_task_date_arg_on};
-use anyhow::{Result, bail};
-use chrono::NaiveDate;
+use crate::tasks::modifiers::TaskModifierSpec;
+use anyhow::Result;
+#[cfg(feature = "todoist")]
+pub(super) use pkms_task::mutation::{mod_date, mod_optional_text};
+pub(super) use pkms_task::mutation::{
+    mod_title, parse_mutation_due_date, unsupported_task_source, validate_mod_source,
+};
 use std::process::ExitCode;
-
-#[cfg(feature = "todoist")]
-use crate::tasks::model::TaskDateValue;
-#[cfg(feature = "todoist")]
-use crate::tasks::modifiers::{TaskDateArg, is_clear_value};
 
 use super::TaskRuntime;
 
@@ -112,46 +111,4 @@ pub(in crate::commands::task) fn run_mod(
             unsupported_task_source(&source).map(|()| ExitCode::SUCCESS)
         }
     }
-}
-
-pub(super) fn validate_mod_source(spec: &TaskModifierSpec, expected: &str) -> Result<()> {
-    if let Some(source) = spec.source
-        && !source.as_str().eq_ignore_ascii_case(expected)
-    {
-        bail!("Task source cannot be changed by task mod.");
-    }
-    Ok(())
-}
-
-pub(super) fn mod_title(spec: &TaskModifierSpec) -> Result<Option<String>> {
-    Ok(spec
-        .title
-        .as_deref()
-        .map(str::trim)
-        .filter(|title| !title.is_empty())
-        .map(str::to_string))
-}
-
-#[cfg(feature = "todoist")]
-pub(super) fn mod_optional_text(value: Option<&str>) -> Option<Option<String>> {
-    value.map(|value| {
-        let value = value.trim();
-        (!is_clear_value(value)).then(|| value.to_string())
-    })
-}
-
-#[cfg(feature = "todoist")]
-pub(super) fn mod_date(value: Option<&TaskDateArg>) -> Option<Option<TaskDateValue>> {
-    value.map(|date| date.as_value().cloned())
-}
-
-pub(super) fn parse_mutation_due_date(value: &str, today: NaiveDate) -> Result<String> {
-    Ok(parse_task_date_arg_on("due", value, today)?.to_string())
-}
-
-pub(in crate::commands::task) fn unsupported_task_source(source: impl AsRef<str>) -> Result<()> {
-    bail!(
-        "Task source '{}' is not configured in this build.",
-        source.as_ref()
-    )
 }
