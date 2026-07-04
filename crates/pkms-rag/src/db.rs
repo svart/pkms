@@ -1,4 +1,5 @@
 use std::{
+    cmp::Ordering,
     collections::HashSet,
     fs,
     path::Path,
@@ -9,7 +10,9 @@ use anyhow::{Context, Result};
 use rusqlite::{Connection, OptionalExtension, Transaction, params};
 
 use crate::{
-    embeddings::{EmbeddingProvider, embedding_text, pack_vector},
+    embeddings::{
+        EmbeddingProvider, cosine_similarity, embedding_text, pack_vector, unpack_vector,
+    },
     models::{
         ChunkRecord, DeleteEntityType, DeleteRecord, IngestSummary, LinkRecord, RetrievalRecord,
         SUPPORTED_SCHEMA_VERSION, ScoreBreakdown, SearchResult, StatusResponse,
@@ -154,6 +157,107 @@ pub fn search(conn: &Connection, query: &str, limit: usize) -> Result<Vec<Search
         .context("failed to read RAG search rows")
 }
 
+pub fn dense_search(
+    conn: &Connection,
+    query: &str,
+    limit: usize,
+    embedding_provider: &dyn EmbeddingProvider,
+) -> Result<Vec<SearchResult>> {
+    let query = query.trim();
+    if query.is_empty() || limit == 0 {
+        return Ok(Vec::new());
+    }
+
+    let query_vectors = embedding_provider
+        .embed(&[query.to_string()])
+        .context("failed to embed dense search query")?;
+    anyhow::ensure!(
+        query_vectors.len() == 1,
+        "embedding provider returned {} query vectors; expected 1",
+        query_vectors.len()
+    );
+    let query_vector = &query_vectors[0];
+    anyhow::ensure!(
+        query_vector.len() == embedding_provider.dimension(),
+        "embedding provider returned query dimension {} for model {}; expected {}",
+        query_vector.len(),
+        embedding_provider.model_name(),
+        embedding_provider.dimension()
+    );
+
+    let mut stmt = conn
+        .prepare(
+            r#"
+            SELECT
+                c.chunk_id,
+                c.note_id,
+                c.title,
+                c.path,
+                c.aliases_json,
+                c.tags_json,
+                c.heading_path_json,
+                c.heading_level,
+                c.start_line,
+                c.end_line,
+                c.body,
+                e.vector
+            FROM chunk_embeddings e
+            JOIN chunks c ON c.chunk_id = e.chunk_id
+            WHERE e.model_name = ?
+              AND e.dimension = ?
+              AND c.stale = 0
+            "#,
+        )
+        .context("failed to prepare RAG dense search query")?;
+    let mut rows = stmt
+        .query(params![
+            embedding_provider.model_name(),
+            embedding_provider.dimension() as i64
+        ])
+        .context("failed to run RAG dense search query")?;
+
+    let mut results = Vec::new();
+    while let Some(row) = rows.next().context("failed to read RAG dense search row")? {
+        let mut result = row_to_stored_search_result(row, ScoreBreakdown::default())
+            .context("failed to read RAG dense search result")?;
+        let vector_blob = row
+            .get::<_, Vec<u8>>("vector")
+            .context("failed to read RAG dense search vector blob")?;
+        let stored_vector = unpack_vector(&vector_blob).with_context(|| {
+            format!(
+                "failed to unpack dense vector for chunk {}",
+                result.chunk_id
+            )
+        })?;
+        anyhow::ensure!(
+            stored_vector.len() == embedding_provider.dimension(),
+            "stored dense vector for chunk {} has dimension {}; expected {}",
+            result.chunk_id,
+            stored_vector.len(),
+            embedding_provider.dimension()
+        );
+
+        let score = f64::from(cosine_similarity(query_vector, &stored_vector).max(0.0));
+        result.scores = ScoreBreakdown {
+            dense: score,
+            final_score: score,
+            ..ScoreBreakdown::default()
+        };
+        results.push(result);
+    }
+
+    results.sort_by(|left, right| {
+        right
+            .scores
+            .dense
+            .partial_cmp(&left.scores.dense)
+            .unwrap_or(Ordering::Equal)
+            .then_with(|| left.chunk_id.cmp(&right.chunk_id))
+    });
+    results.truncate(limit);
+    Ok(results)
+}
+
 pub fn build_fts_query(query: &str) -> String {
     let mut parts = Vec::new();
     let mut chars = query.chars().peekable();
@@ -194,6 +298,20 @@ fn row_to_search_result(row: &rusqlite::Row<'_>) -> rusqlite::Result<SearchResul
     let raw_bm25 = row.get::<_, f64>("raw_bm25")?;
     let magnitude = raw_bm25.abs();
     let score = magnitude / (1.0 + magnitude);
+    row_to_stored_search_result(
+        row,
+        ScoreBreakdown {
+            bm25: score,
+            final_score: score,
+            ..ScoreBreakdown::default()
+        },
+    )
+}
+
+fn row_to_stored_search_result(
+    row: &rusqlite::Row<'_>,
+    scores: ScoreBreakdown,
+) -> rusqlite::Result<SearchResult> {
     Ok(SearchResult {
         chunk_id: row.get("chunk_id")?,
         note_id: row.get("note_id")?,
@@ -206,11 +324,7 @@ fn row_to_search_result(row: &rusqlite::Row<'_>) -> rusqlite::Result<SearchResul
         start_line: row.get("start_line")?,
         end_line: row.get("end_line")?,
         text: row.get("body")?,
-        scores: ScoreBreakdown {
-            bm25: score,
-            final_score: score,
-            ..ScoreBreakdown::default()
-        },
+        scores,
     })
 }
 
@@ -1046,5 +1160,121 @@ mod tests {
         let results = search(&conn, "   ", 10).expect("search succeeds");
 
         assert!(results.is_empty());
+    }
+
+    #[test]
+    fn dense_search_returns_related_fixture_chunks_with_hash_provider() {
+        let (_tempdir, path) = db_path();
+        let mut conn = connect(&path).expect("connect initializes database");
+        let provider = HashEmbeddingProvider::default();
+        ingest_records(&mut conn, &fixture_records(), &provider, false).expect("fixture ingests");
+
+        let results =
+            dense_search(&conn, "today agenda inspect tasks", 10, &provider).expect("dense search");
+
+        assert!(!results.is_empty());
+        assert_eq!(results[0].title, "PKMS Task Backend");
+        assert!(results[0].scores.dense > 0.0);
+        assert_eq!(results[0].scores.final_score, results[0].scores.dense);
+        assert_eq!(results[0].scores.bm25, 0.0);
+        assert!(
+            results[0]
+                .text
+                .contains("pkms task agenda today source:all")
+        );
+    }
+
+    #[test]
+    fn dense_search_filters_embedding_model_and_dimension() {
+        let (_tempdir, path) = db_path();
+        let mut conn = connect(&path).expect("connect initializes database");
+        let provider = HashEmbeddingProvider::default();
+        ingest_records(&mut conn, &fixture_records(), &provider, false).expect("fixture ingests");
+
+        let wrong_dimension_provider = HashEmbeddingProvider::with_dimension(8);
+        let wrong_dimension_results = dense_search(
+            &conn,
+            "today agenda inspect tasks",
+            10,
+            &wrong_dimension_provider,
+        )
+        .expect("dense search with mismatched dimension");
+        assert!(wrong_dimension_results.is_empty());
+
+        conn.execute("UPDATE chunk_embeddings SET model_name = 'other-model'", [])
+            .expect("embedding model updates");
+        let wrong_model_results = dense_search(&conn, "today agenda inspect tasks", 10, &provider)
+            .expect("dense search with mismatched model");
+        assert!(wrong_model_results.is_empty());
+    }
+
+    #[test]
+    fn dense_search_clamps_negative_scores_to_zero() {
+        let (_tempdir, path) = db_path();
+        let mut conn = connect(&path).expect("connect initializes database");
+        let provider = HashEmbeddingProvider::default();
+        ingest_records(&mut conn, &fixture_records(), &provider, false).expect("fixture ingests");
+        let query = "today agenda inspect tasks";
+        let query_vector = provider
+            .embed(&[query.to_string()])
+            .expect("query embeds")
+            .pop()
+            .expect("query vector exists");
+        let negative_query_vector = query_vector.iter().map(|value| -*value).collect::<Vec<_>>();
+        conn.execute(
+            "UPDATE chunk_embeddings SET vector = ?",
+            [pack_vector(&negative_query_vector)],
+        )
+        .expect("embedding vectors update");
+
+        let results = dense_search(&conn, query, 10, &provider).expect("dense search");
+
+        assert!(!results.is_empty());
+        assert!(results.iter().all(|result| result.scores.dense == 0.0));
+        assert!(
+            results
+                .iter()
+                .all(|result| result.scores.final_score == 0.0)
+        );
+    }
+
+    #[test]
+    fn dense_search_handles_zero_query_vectors_without_panics() {
+        let (_tempdir, path) = db_path();
+        let mut conn = connect(&path).expect("connect initializes database");
+        let ingest_provider = HashEmbeddingProvider::default();
+        ingest_records(&mut conn, &fixture_records(), &ingest_provider, false)
+            .expect("fixture ingests");
+        let zero_provider = StaticEmbeddingProvider {
+            model_name: "hashing-v1".to_string(),
+            dimension: 384,
+            vector: vec![0.0; 384],
+        };
+
+        let results =
+            dense_search(&conn, "non-empty query", 10, &zero_provider).expect("dense search");
+
+        assert!(!results.is_empty());
+        assert!(results.iter().all(|result| result.scores.dense == 0.0));
+    }
+
+    struct StaticEmbeddingProvider {
+        model_name: String,
+        dimension: usize,
+        vector: Vec<f32>,
+    }
+
+    impl EmbeddingProvider for StaticEmbeddingProvider {
+        fn model_name(&self) -> &str {
+            &self.model_name
+        }
+
+        fn dimension(&self) -> usize {
+            self.dimension
+        }
+
+        fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>> {
+            Ok(vec![self.vector.clone(); texts.len()])
+        }
     }
 }

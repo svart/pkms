@@ -9,7 +9,7 @@ pub mod org_export;
 pub mod schema;
 
 pub use chunking::{CONTENT_HASH_PREFIX, ChunkNoteInput, chunk_note, content_hash};
-pub use db::{build_fts_query, connect, ingest_records, search, status};
+pub use db::{build_fts_query, connect, dense_search, ingest_records, search, status};
 pub use embeddings::{
     DEFAULT_EMBEDDING_MAX_BODY_CHARS, DEFAULT_HASH_EMBEDDING_DIMENSION, EmbeddingProvider,
     HashEmbeddingProvider, cosine_similarity, embedding_text, pack_vector, unpack_vector,
