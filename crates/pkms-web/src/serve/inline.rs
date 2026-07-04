@@ -1,6 +1,6 @@
 use super::assets;
 use super::page::heading_anchor;
-use crate::config::WebCommandConfig;
+use crate::WebConfig;
 use pkms_org::graph::{Graph, Node, resolve_file_link_path};
 use pkms_org::parser::LINK_RE;
 use regex::Regex;
@@ -33,7 +33,7 @@ impl<'a> AssetRef<'a> {
         None
     }
 
-    fn resolve_path(self, config: &WebCommandConfig, node: &Node) -> PathBuf {
+    fn resolve_path(self, config: &WebConfig, node: &Node) -> PathBuf {
         match self.kind {
             assets::AssetKind::File => {
                 resolve_file_link_path(self.target, &node.path, config.resolved_db_root())
@@ -47,12 +47,7 @@ impl<'a> AssetRef<'a> {
     }
 }
 
-pub(super) fn render_inline(
-    graph: &Graph,
-    config: &WebCommandConfig,
-    node: &Node,
-    text: &str,
-) -> String {
+pub(super) fn render_inline(graph: &Graph, config: &WebConfig, node: &Node, text: &str) -> String {
     let mut html = String::new();
     let mut last = 0;
     for cap in LINK_RE.captures_iter(text) {
@@ -73,7 +68,7 @@ pub(super) fn render_inline(
 
 fn render_link(
     graph: &Graph,
-    config: &WebCommandConfig,
+    config: &WebConfig,
     node: &Node,
     target: &str,
     desc: Option<&str>,
@@ -131,7 +126,7 @@ fn render_link(
 }
 
 pub(super) fn render_standalone_image(
-    config: &WebCommandConfig,
+    config: &WebConfig,
     node: &Node,
     text: &str,
     caption: &str,
@@ -147,7 +142,7 @@ pub(super) fn render_standalone_image(
 }
 
 fn render_image_link(
-    config: &WebCommandConfig,
+    config: &WebConfig,
     node: &Node,
     target: &str,
     desc: Option<&str>,

@@ -2012,15 +2012,14 @@ dependencies = [
  "dirs",
  "glob",
  "insta",
- "katex",
  "pkms-db",
  "pkms-org",
  "pkms-task",
+ "pkms-web",
  "proptest",
  "regex",
  "serde",
  "serde_json",
- "syntect",
  "tabled",
  "tempfile",
  "terminal_size",
@@ -2086,6 +2085,20 @@ dependencies = [
  "tracing",
  "ureq",
  "uuid",
+]
+
+[[package]]
+name = "pkms-web"
+version = "1.12.3"
+dependencies = [
+ "anyhow",
+ "katex",
+ "pkms-org",
+ "regex",
+ "serde",
+ "syntect",
+ "tempfile",
+ "tracing",
 ]
 
 [[package]]

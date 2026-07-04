@@ -36,31 +36,14 @@ pub struct DbCommandConfig {
     pub ssh: Option<SshConfig>,
 }
 
-#[derive(Debug, Clone)]
-pub struct WebCommandConfig {
-    pub org: pkms_org::OrgConfig,
-    pub task_states: pkms_org::graph::tasks::TaskStateConfig,
-}
+#[cfg(feature = "web")]
+pub type WebCommandConfig = pkms_web::WebConfig;
 
 #[derive(Debug, Clone)]
 pub struct TaskCommandConfig {
     pub org: pkms_org::OrgConfig,
     pub task_states: pkms_org::graph::tasks::TaskStateConfig,
     pub columns: Option<ColumnsConfig>,
-}
-
-impl WebCommandConfig {
-    pub fn resolved_db_root(&self) -> &Path {
-        &self.org.db_root
-    }
-
-    pub fn open_todo_states(&self) -> &[String] {
-        &self.task_states.open_states
-    }
-
-    pub fn closed_todo_states(&self) -> &[String] {
-        &self.task_states.closed_states
-    }
 }
 
 impl TaskCommandConfig {
@@ -320,8 +303,9 @@ impl ResolvedConfig {
         }
     }
 
+    #[cfg(feature = "web")]
     pub fn web_command_config(&self) -> WebCommandConfig {
-        WebCommandConfig {
+        pkms_web::WebConfig {
             org: self.org_config(),
             task_states: self.task_state_config(),
         }

@@ -1,0 +1,22 @@
+[package]
+name = "pkms-web"
+version = "1.12.3"
+description = "Local web viewer for pkms notes"
+edition = "2024"
+license = "MIT"
+
+[features]
+default = ["web"]
+web = []
+
+[dependencies]
+anyhow = "1"
+katex = "0.4.6"
+pkms-org = { path = "../pkms-org" }
+regex = "1"
+serde = { version = "1", features = ["derive"] }
+syntect = "5.3.0"
+tracing = "0.1"
+
+[dev-dependencies]
+tempfile = "3"

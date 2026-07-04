@@ -1,12 +1,14 @@
 use super::inline::{escape_html, render_display_math, render_inline, render_standalone_image};
 use super::page::{heading_anchor, render_heading_dates, render_heading_tags};
-use crate::config::WebCommandConfig;
+use crate::WebConfig;
 use pkms_org::graph::{Graph, Node};
 use pkms_org::parser::{DEADLINE_RE, HEADING_RE, Heading, SCHEDULED_RE, parse_note};
 use std::collections::BTreeMap;
 use std::fmt::Write as FmtWrite;
 
+#[path = "org_html/blocks.rs"]
 mod blocks;
+#[path = "org_html/lists.rs"]
 mod lists;
 
 use blocks::{read_org_block, render_org_block, render_table};
@@ -17,7 +19,7 @@ use lists::{
 
 pub(super) fn render_org_body(
     graph: &Graph,
-    config: &WebCommandConfig,
+    config: &WebConfig,
     node: &Node,
     content: &str,
 ) -> String {
@@ -35,12 +37,7 @@ struct OrgBodyRenderer<'a> {
 }
 
 impl<'a> OrgBodyRenderer<'a> {
-    fn new(
-        graph: &'a Graph,
-        config: &'a WebCommandConfig,
-        node: &'a Node,
-        content: &'a str,
-    ) -> Self {
+    fn new(graph: &'a Graph, config: &'a WebConfig, node: &'a Node, content: &'a str) -> Self {
         let parsed = parse_note(content);
         let headings_by_line = parsed
             .headings
@@ -238,7 +235,7 @@ impl<'a> OrgBodyRenderer<'a> {
 
 pub(super) struct OrgRenderContext<'a> {
     graph: &'a Graph,
-    config: &'a WebCommandConfig,
+    config: &'a WebConfig,
     node: &'a Node,
 }
 
@@ -340,7 +337,7 @@ fn render_heading_line(
     html
 }
 
-fn is_closed_todo_state(config: &WebCommandConfig, state: &str) -> bool {
+fn is_closed_todo_state(config: &WebConfig, state: &str) -> bool {
     !state.is_empty()
         && config
             .closed_todo_states()
@@ -348,7 +345,7 @@ fn is_closed_todo_state(config: &WebCommandConfig, state: &str) -> bool {
             .any(|closed| closed.eq_ignore_ascii_case(state))
 }
 
-pub(super) fn is_configured_todo_state(config: &WebCommandConfig, state: &str) -> bool {
+pub(super) fn is_configured_todo_state(config: &WebConfig, state: &str) -> bool {
     !state.is_empty()
         && (config
             .open_todo_states()

@@ -1,6 +1,5 @@
 use super::{assets, inline::percent_decode, render_note_html, render_preview_html};
-use crate::commands::open;
-use crate::config::WebCommandConfig;
+use crate::{OpenTargetFn, WebConfig};
 use anyhow::{Context, Result};
 use pkms_org::domain::NoteId;
 use pkms_org::graph::{Graph, Node, resolve_file_link_path};
@@ -10,9 +9,11 @@ use std::net::TcpStream;
 use std::path::{Path, PathBuf};
 
 pub(super) struct ServeState<'a> {
-    pub(super) config: &'a WebCommandConfig,
+    pub(super) config: &'a WebConfig,
     pub(super) graph: Graph,
     pub(super) initial_uuid: NoteId,
+    pub(super) open_target: OpenTargetFn,
+    pub(super) default_editor: &'a str,
 }
 
 enum Route<'a> {
@@ -129,7 +130,7 @@ fn response_for_request(state: &ServeState<'_>, request: &HttpRequest<'_>) -> Re
     let route = route_for_path(request.path);
     match request.method {
         HttpMethod::Post => match route {
-            Route::Open => open_response(state, request.query, open::DEFAULT_EDITOR),
+            Route::Open => open_response(state, request.query),
             _ => Ok(HttpResponse::method_not_allowed("Method not allowed")),
         },
         HttpMethod::Get | HttpMethod::Head => match route {
@@ -337,20 +338,16 @@ fn note_declares_asset_link(
         }))
 }
 
-pub(super) fn open_response(
-    state: &ServeState<'_>,
-    query: Option<&str>,
-    editor: &str,
-) -> Result<HttpResponse> {
+pub(super) fn open_response(state: &ServeState<'_>, query: Option<&str>) -> Result<HttpResponse> {
     let Some(note_uuid) = query_param(query, "id") else {
         return Ok(HttpResponse::not_found("Missing id"));
     };
     let node = state.graph.resolve_target(&note_uuid)?;
-    open::open_target(
+    (state.open_target)(
         &state.graph,
         &state.config.task_states,
         &node.uuid,
-        editor,
+        state.default_editor,
         Some(1),
     )?;
     Ok(HttpResponse::text(format!("Opened {}", node.title)))

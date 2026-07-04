@@ -1,4 +1,4 @@
-use crate::util;
+use pkms_org::attachments::resolve_attachment_path;
 use std::fmt;
 use std::path::{Path, PathBuf};
 
@@ -129,7 +129,7 @@ pub(super) fn font_response(name: &str) -> super::HttpResponse {
 }
 
 pub(super) fn resolve_existing_attachment(db_root: &Path, uuid: &str, target: &str) -> PathBuf {
-    let bucketed = util::resolve_attachment_path(db_root, uuid, target);
+    let bucketed = resolve_attachment_path(db_root, uuid, target);
     if bucketed.exists() {
         bucketed
     } else {

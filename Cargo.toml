@@ -1,4 +1,10 @@
 [workspace]
-members = ["crates/pkms", "crates/pkms-db", "crates/pkms-org", "crates/pkms-task"]
+members = [
+    "crates/pkms",
+    "crates/pkms-db",
+    "crates/pkms-org",
+    "crates/pkms-task",
+    "crates/pkms-web",
+]
 default-members = ["crates/pkms"]
 resolver = "3"
