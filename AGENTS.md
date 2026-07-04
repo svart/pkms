@@ -1,8 +1,9 @@
 # AGENTS.md - pkms Project Guide for AI Agents
 
 This file is the compact operating guide for agents working in this repository.
-Keep detailed command recipes and contributor workflows in
-[docs/development.md](docs/development.md).
+Start from [docs/index.md](docs/index.md) for the full documentation map. Keep
+detailed command recipes, contributor workflows, and crate-specific architecture
+in `docs/`.
 
 ## Project Target
 
@@ -39,8 +40,31 @@ directly; do not suppress lints unless the user explicitly asks.
 
 ## Project Map
 
-The filesystem structure is documented in
-[docs/development.md#project-structure](docs/development.md#project-structure).
+Use these docs to route work before opening source files:
+
+- [Documentation Index](docs/index.md): full user, agent, scenario, and crate
+  documentation map.
+- [Architecture](docs/architecture.md): runtime shape, crate boundaries,
+  command flow, data flows, and feature flags.
+- [Project Structure](docs/development.md#project-structure): filesystem map
+  and local development layout.
+- [Scenario Guide](docs/scenarios.md): user and agent workflows for note
+  database commands, task commands, web, RAG, and pipelines.
+
+Crate-specific docs:
+
+- [pkms](docs/crates/pkms.md): CLI parsing, config, dispatch, output, and
+  command adapters.
+- [pkms-org](docs/crates/pkms-org.md): org discovery, parsing, graph, workspace,
+  and edit primitives.
+- [pkms-db](docs/crates/pkms-db.md): note database commands and link checks.
+- [pkms-task](docs/crates/pkms-task.md): task IDs, filters, providers, and
+  mutations.
+- [pkms-rag](docs/crates/pkms-rag.md): retrieval index, embeddings, search,
+  retrieval, and RAG HTTP API.
+- [pkms-web](docs/crates/pkms-web.md): local web viewer, rendering, routes, and
+  assets.
+
 Prefer checking the current source over trusting any map when a file has moved
 or behavior has changed.
 
@@ -68,8 +92,9 @@ or behavior has changed.
 - Put umbrella command wiring/output in `crates/pkms/src/commands/<name>.rs`, or
   `crates/pkms/src/commands/<name>/` for a namespace with subcommands.
 - Put reusable domain behavior in `pkms-org`, `pkms-db`, `pkms-task`, or
-  `pkms-web` according to the crate boundary documented in
-  `docs/development.md`.
+  `pkms-rag`, or `pkms-web` according to the crate boundary documented in
+  [docs/architecture.md](docs/architecture.md) and
+  [crate-specific docs](docs/index.md#crate-documentation).
 - Use option structs for command input when arguments are more than trivial.
 - Command implementations usually accept `&ResolvedConfig` and `&OutputContext`;
   use `&CommandContext` when shared graph/workspace loader helpers are useful.
@@ -120,12 +145,28 @@ Feature flags:
 |---------|---------|-------------|
 | `todoist` | off | Enables Todoist task reads and writes through `ureq`. |
 | `web` | off | Enables the local `serve` web viewer and static rendering through `katex` and `syntect`. |
+| `ssh` | off | Enables remote SSH `file:` link checks. |
 
 ## Scenario Guide
+
+Use [docs/scenarios.md](docs/scenarios.md) to choose the right command family.
 
 Bug reports: first reproduce with the binary built from the current checkout.
 Use the workflow in [Bug reproduction](docs/development.md#bug-reproduction).
 Do not rely on an installed `pkms` binary unless the user asks to debug it.
+
+Note database commands: use
+[Note Database Commands](docs/note-database-commands.md) for scenarios and
+[Command Reference](docs/commands.md) for flags.
+
+Task commands: use [TODO and Agenda](docs/todo-agenda.md) for user workflows
+and [Task System Design](docs/task-system.md) before changing task internals.
+
+RAG commands: use [RAG Retrieval](docs/rag.md) for run instructions and
+[pkms-rag](docs/crates/pkms-rag.md) for implementation boundaries.
+
+Web viewer commands: use [Web Viewer](docs/web.md) for run instructions and
+[pkms-web](docs/crates/pkms-web.md) for implementation boundaries.
 
 Normal code changes: keep the edit narrow, add focused tests near the changed
 behavior, and use [Local development loop](docs/development.md#local-development-loop).

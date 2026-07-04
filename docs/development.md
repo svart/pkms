@@ -160,15 +160,20 @@ crates/pkms/                # umbrella binary crate
   tests/integration/        # binary-level integration tests with mock databases
 crates/pkms-org/            # org discovery, parsing, graph, workspace, org edits
 crates/pkms-db/             # note database command logic and link checks
+crates/pkms-rag/            # local retrieval, SQLite index, embeddings, RAG API
 crates/pkms-task/           # task domain logic, providers, mutations, Todoist integration
 crates/pkms-web/            # local HTTP viewer, HTML rendering, assets, fonts
-docs/                       # detailed user and contributor docs
+docs/                       # detailed user, agent, architecture, scenario, and crate docs
+  index.md                  # documentation map
+  architecture.md           # workspace architecture and data flows
+  crates/                   # one architecture page per workspace crate
 skills/                     # agent skills for note and pkms workflows
 ```
 
 Dependency direction is intentionally one-way: `pkms` may depend on all domain
-crates; `pkms-db`, `pkms-task`, and `pkms-web` may depend on `pkms-org`; domain
-crates must not depend on each other or on the umbrella `pkms` crate. Run
+crates; `pkms-db`, `pkms-rag`, `pkms-task`, and `pkms-web` may depend on
+`pkms-org`; domain crates must not depend on each other or on the umbrella
+`pkms` crate unless `scripts/check-crate-boundaries.sh` explicitly allows it. Run
 `scripts/check-crate-boundaries.sh` after changing manifests.
 
 ## Adding or Changing Commands
@@ -213,9 +218,10 @@ the split useful.
 
 Command domain behavior should live in the focused crates when possible:
 `pkms-org` for org syntax, graph, workspace, and raw org edits; `pkms-db` for
-note database commands; `pkms-task` for task workflows; and `pkms-web` for the
-local viewer. The umbrella `pkms` crate should keep CLI parsing, config mapping,
-output formatting, and cross-domain orchestration.
+note database commands; `pkms-task` for task workflows; `pkms-rag` for
+retrieval indexing/search/API behavior; and `pkms-web` for the local viewer. The
+umbrella `pkms` crate should keep CLI parsing, config mapping, output
+formatting, and cross-domain orchestration.
 
 Task command boundaries are stricter because local org edits and Todoist
 network actions both mutate user data:
@@ -297,12 +303,23 @@ content, or descriptions.
 Documentation boundaries:
 
 - `README.md`: short project overview, quick start, core examples, links.
-- `docs/`: detailed installation, configuration, commands, database format,
-  TODO/agenda behavior, pipelining, JSON/NDJSON, workflows, development.
+- `AGENTS.md`: compact agent routing guide that points to detailed docs.
+- `docs/index.md`: documentation map and first stop after root docs.
+- `docs/architecture.md`: runtime shape, crate boundaries, command flow, data
+  flows, feature flags.
+- `docs/crates/`: one implementation-oriented architecture page per workspace
+  crate.
+- `docs/scenarios.md`: scenario routing for note database commands, task
+  commands, web, RAG, and pipelines.
+- `docs/`: detailed installation, configuration, commands, note database
+  commands, database format, TODO/agenda behavior, web, RAG, pipelining,
+  JSON/NDJSON, workflows, development.
 - `skills/pkms-manager/`: agent workflow knowledge for operating `pkms`.
 
 When changing CLI behavior, update the command reference and any affected
 workflow docs. When changing agent workflows, update the relevant skill.
+When changing crate responsibilities or dependency boundaries, update
+[Architecture](architecture.md) and the affected page under `docs/crates/`.
 
 Only commit when the user asks for a commit. Before committing:
 

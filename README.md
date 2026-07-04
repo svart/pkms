@@ -112,16 +112,24 @@ The workspace is split into focused crates:
 - `pkms`: the umbrella binary crate for CLI parsing, config mapping, dispatch,
   and output formatting.
 
+See [Architecture](docs/architecture.md) for the command flow, dependency
+boundaries, data flows, feature flags, and per-crate documentation.
+
 ## Documentation
 
+- [Documentation Index](docs/index.md)
 - [Installation](docs/installation.md)
 - [Configuration](docs/configuration.md)
 - [Notes Database Format](docs/database-format.md)
 - [Command Reference](docs/commands.md)
+- [Scenario Guide](docs/scenarios.md)
+- [Note Database Commands](docs/note-database-commands.md)
 - [TODO and Agenda](docs/todo-agenda.md)
 - [Task System Design](docs/task-system.md)
+- [Web Viewer](docs/web.md)
 - [Pipelining](docs/pipelining.md)
 - [JSON and NDJSON Output](docs/json-output.md)
 - [RAG Retrieval](docs/rag.md)
+- [Architecture](docs/architecture.md)
 - [Maintenance Workflows](docs/workflows.md)
 - [Development](docs/development.md)

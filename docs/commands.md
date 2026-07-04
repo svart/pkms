@@ -3,6 +3,10 @@
 Run `pkms <command> --help` for the authoritative flag list. This page groups
 the main commands and common options.
 
+For task-oriented recipes, start with [Scenario Guide](scenarios.md). For
+database maintenance workflows, see
+[Note Database Commands](note-database-commands.md).
+
 ## Global Flags
 
 | Flag | Description |
@@ -85,6 +89,9 @@ When built with `--features web`:
 pkms serve <target>
 pkms serve <target> --port 0
 ```
+
+See [Web Viewer](web.md) for build/run instructions and local file-serving
+rules.
 
 `serve` starts a foreground local HTTP server and renders the selected note as
 HTML:
@@ -201,6 +208,8 @@ pkms suggest <uuid> --exclude-orphans
 ```
 
 ## Tasks
+
+See [TODO and Agenda](todo-agenda.md) for the full task guide.
 
 ```bash
 pkms task list

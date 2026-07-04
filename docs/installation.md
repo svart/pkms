@@ -38,6 +38,11 @@ Run directly from the checkout:
 cargo run -- <args>
 ```
 
+`pkms rag` is included in normal builds. The RAG crate uses FastEmbed by
+default, so first indexing or dense retrieval may download model files. Use
+`PKMS_RAG_EMBEDDING_PROVIDER=hash` for deterministic local runs that avoid
+FastEmbed model setup.
+
 ## Todoist Feature
 
 The `todoist` feature enables Todoist-backed task reads and writes through the
