@@ -3,6 +3,9 @@
 This checklist captures the current behavior of the Python reference service
 before the Rust `pkms-rag` crate is introduced.
 
+Final Rust/Python comparison and migration recommendation:
+[`docs/rag-parity-review.md`](rag-parity-review.md).
+
 Reference repository: `/home/svart/work/my-projects/pkms-rag-service`
 Reference commit: `0b506c7`
 Fixture copied from: `examples/retrieval-export.ndjson`
