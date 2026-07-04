@@ -107,6 +107,9 @@ HTML:
 
 ## RAG Retrieval
 
+See [RAG Retrieval](rag.md) for architecture, index storage, embedding provider
+configuration, and HTTP API details.
+
 ```bash
 pkms rag status
 pkms rag ingest retrieval-export.ndjson
@@ -133,7 +136,7 @@ scoring. Text output is concise; JSON returns the full response, and NDJSON emit
 one result per line.
 
 `pkms rag serve` starts a foreground local HTTP server with the browser UI and
-the preserved service endpoints:
+HTTP API:
 
 - `GET /health` returns service liveness.
 - `GET /status` returns SQLite index counts and embedding model names.
@@ -143,11 +146,8 @@ the preserved service endpoints:
 - `POST /search` accepts `{"query":"...","limit":10}`.
 - `POST /retrieve` accepts `{"query":"...","limit":10,"mode":"hybrid"}`.
 
-FastEmbed is the default embedding provider. It downloads model files on first
-use and then runs offline from its cache. FastEmbed defaults to
-`./.fastembed_cache`; set `FASTEMBED_CACHE_DIR` to move that cache, or set
-`HF_HOME` to use the Hugging Face cache location. `HF_HOME` takes precedence.
-For deterministic local tests, set `PKMS_RAG_EMBEDDING_PROVIDER=hash`.
+FastEmbed is the default embedding provider. For deterministic local tests, set
+`PKMS_RAG_EMBEDDING_PROVIDER=hash`.
 
 ## Statistics and Discovery
 

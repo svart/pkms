@@ -1,7 +1,7 @@
 # TODO and Agenda
 
-This page is the user-facing guide for task commands. For implementation
-guardrails and source-model decisions, see
+This page is the user-facing guide for task commands. For implementation rules
+and source-model decisions, see
 [Task System Design](task-system.md).
 
 `task list`, `task agenda`, and task ID actions share one canonical task ID
@@ -309,8 +309,8 @@ Structured creation uses Todoist API fields and is the safer mode for assistant
 workflows:
 
 ```bash
-pkms task add source:todoist title:"Call Alice" due:2026-05-24 deadline:2026-05-30 project:inbox tag:phone,migration priority:B desc:"Discuss migration plan"
-pkms task add source:todoist title:"Call Alice" sch:tod dead:tom project:inbox tag:phone,migration prio:B desc:"Discuss migration plan"
+pkms task add source:todoist title:"Call Alice" due:2026-05-24 deadline:2026-05-30 project:inbox tag:phone,followup priority:B desc:"Discuss project scope"
+pkms task add source:todoist title:"Call Alice" sch:tod dead:tom project:inbox tag:phone,followup prio:B desc:"Discuss project scope"
 ```
 
 Add modifiers mirror task filters where practical:

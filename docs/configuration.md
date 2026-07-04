@@ -69,8 +69,7 @@ are resolved under `db_root`; absolute paths are used as written.
 
 `daily_notes_dir` controls where `pkms` creates daily notes when `[tasks].inbox`
 is set to `daily`. Relative paths are resolved under `db_root`; absolute paths
-are used as written. When unset, daily notes use `new_notes_dir` for backward
-compatibility.
+are used as written. When unset, daily notes use `new_notes_dir`.
 
 ## Ignore Patterns
 
@@ -94,15 +93,16 @@ or empty, `[todoist].token` is used.
 
 ```toml
 [todoist]
+enabled = false
 token_env = "TODOIST_API_TOKEN"
 token = "..." # optional; prefer an environment variable
 default_filter = "today | overdue"
 ```
 
 `default_filter` is used for Todoist task list requests when no
-`todoist.filter:<query>` filter is provided. `enabled` is accepted in the config
-file for compatibility with generated configs, but current Todoist commands are
-gated by the feature build and token availability.
+`todoist.filter:<query>` filter is provided. `enabled` is parsed as part of the
+Todoist config. Current Todoist commands are gated by the feature build and
+token availability.
 
 Keep config files containing `[todoist].token` private. `pkms info` does not
 print token values.

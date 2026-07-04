@@ -54,8 +54,7 @@ integration suite has a chainable `TestDb` builder for notes and tasks.
 
 ## Fast Pre-Commit Gate
 
-Before committing or handing work off for review, run the fast full-feature
-gate:
+Before committing or handing work off, run the fast full-feature gate:
 
 ```bash
 cargo fmt --all -- --check
@@ -144,7 +143,7 @@ cargo build --all-features
 ```text
 Cargo.toml                  # virtual workspace root
 scripts/
-  check-crate-boundaries.sh # workspace dependency boundary guard
+  check-crate-boundaries.sh # workspace dependency boundary check
 crates/pkms/                # umbrella binary crate
   src/main.rs               # thin binary wrapper
   src/lib.rs                # umbrella library surface used by tests

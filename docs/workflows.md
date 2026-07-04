@@ -88,7 +88,7 @@ Use positional filters such as `scope:`, `state:`, `tags:`, and `type:` for
 scoped task views. Use `task list --group` for grouped TODO output.
 
 When built with Todoist support, phone-captured Todoist tasks can be included in
-terminal task review:
+terminal task views:
 
 ```bash
 pkms task list source:todoist 'todoist.filter:today | overdue'

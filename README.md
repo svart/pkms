@@ -122,6 +122,6 @@ The workspace is split into focused crates:
 - [Task System Design](docs/task-system.md)
 - [Pipelining](docs/pipelining.md)
 - [JSON and NDJSON Output](docs/json-output.md)
-- [RAG Parity Review](docs/rag-parity-review.md)
+- [RAG Retrieval](docs/rag.md)
 - [Maintenance Workflows](docs/workflows.md)
 - [Development](docs/development.md)

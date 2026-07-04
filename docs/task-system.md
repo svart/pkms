@@ -1,9 +1,7 @@
 # Task System Design
 
-This note records the current task design, implementation guardrails, and
-maintenance checklist for the `pkms task` namespace. It replaces older planning
-notes and documentation for removed top-level task command drafts; task
-workflows now live under `pkms task`.
+This note records the current task design, implementation rules, and
+maintenance checklist for the `pkms task` namespace.
 
 User-facing command details belong in `docs/todo-agenda.md`,
 `docs/commands.md`, and `skills/pkms-manager/references/task.md`. Keep this
@@ -55,14 +53,6 @@ pkms task todoist:<remote-id> mod sch:
 pkms task todoist:<remote-id> mod dl:
 ```
 
-Removed or obsolete surfaces:
-
-- No top-level `todo`, `agenda`, `show`, or `open` commands.
-- No `task report`, `task plan`, or `task clarify` commands.
-- No view-local Todoist IDs as mutation targets.
-- No flag-style task creation such as `task add --source todoist --title ...`.
-  Task creation uses positional text plus `key:value` add modifiers.
-
 ## Philosophy
 
 `pkms` remains a stateless, terminal-first CLI over an org-roam database, with
@@ -84,8 +74,8 @@ The task system should stay:
   and pipelines.
 
 Todoist is a source integration, not a sync layer. Taskwarrior remains a useful
-UX reference for terminal filtering, but Taskwarrior grammar or storage
-compatibility is not a goal.
+UX reference for terminal filtering, but Taskwarrior grammar and storage are
+outside the current `pkms task` surface.
 
 ## Source Model
 
@@ -410,7 +400,7 @@ database.
 
 ## Non-Goals
 
-Do not add these without a new explicit design:
+The task namespace does not include:
 
 - TUI or prompt-driven task processing.
 - Persistent caches, daemons, watch mode, background sync, or hidden state.
@@ -423,7 +413,7 @@ Do not add these without a new explicit design:
 - Recurrence semantics beyond displaying source data and postponing recurring
   tasks with source-native recurrence.
 
-## Future-Change Checklist
+## Maintenance Checklist
 
 When changing task behavior:
 
