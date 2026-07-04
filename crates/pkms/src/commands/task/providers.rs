@@ -1,3 +1,4 @@
+use crate::commands::task_common::retain_upcoming_task_items_on;
 use crate::config::ResolvedConfig;
 use crate::tasks::clock::TaskClock;
 use crate::tasks::filter::{SourceSelection, TaskFilters};
@@ -146,11 +147,7 @@ impl TaskProvider for PkmsTaskProvider<'_> {
                     pkms::AgendaView::Upcoming,
                     query.clock,
                 )?;
-                super::execution::retain_upcoming_task_items_on(
-                    &mut items,
-                    days,
-                    query.clock.today,
-                );
+                retain_upcoming_task_items_on(&mut items, days, query.clock.today);
                 Ok(items)
             }
             TaskListView::Inbox => pkms::collect_inbox_items_on(self.context.config, query.clock),

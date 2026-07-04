@@ -5,7 +5,8 @@ use chrono::{NaiveDate, Timelike};
 use pkms_org::org_date::parse_org_date;
 pub use pkms_task::common::{
     AgendaWindow, TaskGroupField, TaskSortField, agenda_day_section_label, apply_limit,
-    date_in_agenda_window, parse_task_group_field, parse_task_sort_fields,
+    date_in_agenda_window, group_task_items, parse_task_group_field, parse_task_sort_fields,
+    retain_agenda_window_task_items_on, retain_upcoming_task_items_on, sort_task_items,
 };
 use std::collections::HashSet;
 use tabled::builder::Builder;
