@@ -335,6 +335,15 @@ impl ResolvedConfig {
         }
     }
 
+    pub fn pkms_task_config(&self) -> pkms_task::config::PkmsTaskConfig {
+        pkms_task::config::PkmsTaskConfig {
+            org: self.org_config(),
+            task_states: self.task_state_config(),
+            inbox: self.tasks.as_ref().and_then(|tasks| tasks.inbox.clone()),
+            daily_notes_dir_configured: self.daily_notes_dir.is_some(),
+        }
+    }
+
     pub fn task_state_config(&self) -> pkms_org::graph::tasks::TaskStateConfig {
         pkms_org::graph::tasks::TaskStateConfig {
             valid_states: self.todo_states(),

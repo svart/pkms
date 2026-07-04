@@ -9,6 +9,7 @@ pub mod model;
 pub mod modifiers;
 pub mod pkms;
 pub mod provider;
+pub mod providers;
 pub mod scope;
 pub mod task_index;
 #[cfg(feature = "todoist")]
