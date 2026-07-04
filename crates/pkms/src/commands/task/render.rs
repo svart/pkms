@@ -9,27 +9,14 @@ use crate::tasks::model::{TaskItem, TaskPriority, TaskProperty, TaskSourceKind};
 use crate::tasks::provider::TaskMetadataRow;
 use anyhow::Result;
 use chrono::{NaiveDate, NaiveDateTime};
-use pkms_task::mutation::TaskStateChangeOutput;
+#[cfg(feature = "todoist")]
+pub(super) use pkms_task::mutation::TaskModChange;
+pub(super) use pkms_task::mutation::{TaskModOutput, TaskStateChangeOutput};
 use serde::Serialize;
 use std::collections::BTreeMap;
 use std::process::ExitCode;
 use tabled::builder::Builder;
 use tabled::settings::Style;
-
-#[derive(Debug, Serialize)]
-pub(super) struct TaskModChange {
-    pub property: TaskProperty,
-    pub old: Option<String>,
-    pub new: Option<String>,
-}
-
-#[derive(Debug, Serialize)]
-pub(super) struct TaskModOutput {
-    pub changed: bool,
-    pub id: String,
-    pub changes: Vec<TaskModChange>,
-    pub item: Option<TaskItem>,
-}
 
 #[derive(Clone, Copy)]
 struct TaskRow<'a> {

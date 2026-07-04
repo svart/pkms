@@ -2,9 +2,11 @@ use crate::tasks::id::TaskId;
 use crate::tasks::model::TaskSourceKind;
 use crate::tasks::modifiers::TaskModifierSpec;
 use anyhow::Result;
+pub(super) use pkms_task::mutation::unsupported_task_source;
 #[cfg(feature = "todoist")]
-pub(super) use pkms_task::mutation::{mod_date, mod_optional_text, parse_mutation_due_date};
-pub(super) use pkms_task::mutation::{mod_title, unsupported_task_source, validate_mod_source};
+pub(super) use pkms_task::mutation::{
+    mod_date, mod_optional_text, mod_title, parse_mutation_due_date, validate_mod_source,
+};
 use std::process::ExitCode;
 
 use super::TaskRuntime;
