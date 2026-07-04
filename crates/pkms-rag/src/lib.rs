@@ -3,6 +3,7 @@
 pub mod chunking;
 pub mod db;
 pub mod embeddings;
+pub mod indexer;
 pub mod models;
 pub mod ndjson;
 pub mod org_export;
@@ -19,9 +20,10 @@ pub use embeddings::{
     HashEmbeddingProvider, cosine_similarity, embedding_text, pack_vector, provider_from_env,
     unpack_vector,
 };
+pub use indexer::BackgroundIndexer;
 pub use models::{
-    ChunkRecord, DeleteEntityType, DeleteRecord, IngestSummary, LinkRecord, NoteRecord,
-    RetrievalRecord, RetrieveMode, RetrieveRequest, RetrieveResponse, RetrieveResult,
+    ChunkRecord, DeleteEntityType, DeleteRecord, IndexProgress, IngestSummary, LinkRecord,
+    NoteRecord, RetrievalRecord, RetrieveMode, RetrieveRequest, RetrieveResponse, RetrieveResult,
     RetrieveWeights, SUPPORTED_SCHEMA_VERSION, ScoreBreakdown, SearchRequest, SearchResponse,
     SearchResult, StatusResponse,
 };

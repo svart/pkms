@@ -104,6 +104,80 @@ pub struct IngestSummary {
     pub embeddings_skipped: u64,
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct IndexProgress {
+    pub phase: String,
+    pub current_step: String,
+    pub message: String,
+    #[serde(default)]
+    pub source_path: Option<String>,
+    #[serde(default)]
+    pub notes_root: Option<String>,
+    #[serde(default)]
+    pub total_records: u64,
+    #[serde(default)]
+    pub processed_records: u64,
+    #[serde(default)]
+    pub started_at: Option<f64>,
+    #[serde(default)]
+    pub finished_at: Option<f64>,
+    #[serde(default)]
+    pub notes_seen: u64,
+    #[serde(default)]
+    pub notes_upserted: u64,
+    #[serde(default)]
+    pub chunks_seen: u64,
+    #[serde(default)]
+    pub chunks_upserted: u64,
+    #[serde(default)]
+    pub chunks_unchanged: u64,
+    #[serde(default)]
+    pub links_seen: u64,
+    #[serde(default)]
+    pub links_upserted: u64,
+    #[serde(default)]
+    pub deletes_seen: u64,
+    #[serde(default)]
+    pub notes_deleted: u64,
+    #[serde(default)]
+    pub chunks_deleted: u64,
+    #[serde(default)]
+    pub embeddings_computed: u64,
+    #[serde(default)]
+    pub embeddings_skipped: u64,
+    #[serde(default)]
+    pub error: Option<String>,
+}
+
+impl Default for IndexProgress {
+    fn default() -> Self {
+        Self {
+            phase: "idle".to_string(),
+            current_step: "idle".to_string(),
+            message: String::new(),
+            source_path: None,
+            notes_root: None,
+            total_records: 0,
+            processed_records: 0,
+            started_at: None,
+            finished_at: None,
+            notes_seen: 0,
+            notes_upserted: 0,
+            chunks_seen: 0,
+            chunks_upserted: 0,
+            chunks_unchanged: 0,
+            links_seen: 0,
+            links_upserted: 0,
+            deletes_seen: 0,
+            notes_deleted: 0,
+            chunks_deleted: 0,
+            embeddings_computed: 0,
+            embeddings_skipped: 0,
+            error: None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StatusResponse {
     pub schema_version: u8,
