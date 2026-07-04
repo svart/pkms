@@ -147,6 +147,7 @@ where
     let host = addr.ip().to_string();
     let port = addr.port();
     let url = format!("http://{}:{}/", url_host(addr.ip()), port);
+    let start_index_on_launch = opts.index_source.is_some() || opts.notes_root.is_some();
     let started_event = RagServeStarted {
         url,
         host,
@@ -162,6 +163,15 @@ where
         "serving RAG HTTP API"
     );
     started(&started_event)?;
+    if start_index_on_launch {
+        let progress = state.start_indexing();
+        tracing::info!(
+            event = "rag_api_startup_index",
+            phase = progress.phase,
+            current_step = progress.current_step,
+            "started RAG index rebuild from configured serve source"
+        );
+    }
     axum::serve(listener, router(state))
         .with_graceful_shutdown(shutdown)
         .await
@@ -557,46 +567,53 @@ Agents call /retrieve to search mounted PKMS notes.
             port: 0,
         };
         let state = test_state(options.db_path.clone(), None, None);
-        let (started_tx, started_rx) = tokio::sync::oneshot::channel();
-        let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
+        let (started, shutdown_tx, handle) = spawn_test_server(options, state).await;
 
-        let handle = tokio::spawn(async move {
-            serve_until(
-                options,
-                state,
-                |started| {
-                    started_tx
-                        .send(started.clone())
-                        .map_err(|_| anyhow::anyhow!("failed to send startup event"))?;
-                    Ok(())
-                },
-                async move {
-                    let _ = shutdown_rx.await;
-                },
-            )
-            .await
-        });
-
-        let started = started_rx.await.expect("server starts");
-        let host = started.host.clone();
-        let port = started.port;
-        let response = tokio::task::spawn_blocking(move || {
-            use std::io::{Read, Write};
-
-            let mut stream = std::net::TcpStream::connect((host.as_str(), port))?;
-            write!(
-                stream,
-                "GET /health HTTP/1.1\r\nHost: {host}\r\nConnection: close\r\n\r\n"
-            )?;
-            let mut response = String::new();
-            stream.read_to_string(&mut response)?;
-            Ok::<_, anyhow::Error>(response)
-        })
-        .await
-        .expect("client task joins")
-        .expect("health request succeeds");
+        let response = http_get(&started, "/health").await;
         assert!(response.starts_with("HTTP/1.1 200 OK"));
         assert!(response.contains("{\"status\":\"ok\"}"));
+
+        shutdown_tx.send(()).expect("shutdown sends");
+        handle
+            .await
+            .expect("server task joins")
+            .expect("server exits");
+    }
+
+    #[tokio::test]
+    async fn api_serve_starts_configured_indexer_on_launch() {
+        let tempdir = tempfile::tempdir().expect("tempdir");
+        let notes_root = tempdir.path().join("notes");
+        std::fs::create_dir(&notes_root).expect("notes root creates");
+        std::fs::write(
+            notes_root.join("startup-rag.org"),
+            "\
+#+title: Startup RAG
+:PROPERTIES:
+:ID: ffffffff-ffff-4fff-ffff-ffffffffffff
+:END:
+* Startup index
+Serve startup rebuilds the configured RAG index.
+",
+        )
+        .expect("note writes");
+        let options = RagServeOptions {
+            db_path: tempdir.path().join("api.sqlite3"),
+            index_source: None,
+            notes_root: Some(notes_root.clone()),
+            host: "127.0.0.1".to_string(),
+            port: 0,
+        };
+        let state = test_state(options.db_path.clone(), None, Some(notes_root))
+            .with_synchronous_indexing(true);
+        let (started, shutdown_tx, handle) = spawn_test_server(options, state).await;
+
+        let index_status = http_get(&started, "/index/status").await;
+        assert!(index_status.contains("\"phase\":\"complete\""));
+        assert!(index_status.contains("\"chunks_seen\":1"));
+        let status = http_get(&started, "/status").await;
+        assert!(status.contains("\"notes\":1"));
+        assert!(status.contains("\"chunks\":1"));
 
         shutdown_tx.send(()).expect("shutdown sends");
         handle
@@ -624,6 +641,56 @@ Agents call /retrieve to search mounted PKMS notes.
             notes_root,
             EmbeddingProviderConfig::Hash,
         )
+    }
+
+    async fn spawn_test_server(
+        options: RagServeOptions,
+        state: AppState,
+    ) -> (
+        RagServeStarted,
+        tokio::sync::oneshot::Sender<()>,
+        tokio::task::JoinHandle<Result<()>>,
+    ) {
+        let (started_tx, started_rx) = tokio::sync::oneshot::channel();
+        let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
+        let handle = tokio::spawn(async move {
+            serve_until(
+                options,
+                state,
+                |started| {
+                    started_tx
+                        .send(started.clone())
+                        .map_err(|_| anyhow::anyhow!("failed to send startup event"))?;
+                    Ok(())
+                },
+                async move {
+                    let _ = shutdown_rx.await;
+                },
+            )
+            .await
+        });
+        let started = started_rx.await.expect("server starts");
+        (started, shutdown_tx, handle)
+    }
+
+    async fn http_get(started: &RagServeStarted, path: &'static str) -> String {
+        let host = started.host.clone();
+        let port = started.port;
+        tokio::task::spawn_blocking(move || {
+            use std::io::{Read, Write};
+
+            let mut stream = std::net::TcpStream::connect((host.as_str(), port))?;
+            write!(
+                stream,
+                "GET {path} HTTP/1.1\r\nHost: {host}\r\nConnection: close\r\n\r\n"
+            )?;
+            let mut response = String::new();
+            stream.read_to_string(&mut response)?;
+            Ok::<_, anyhow::Error>(response)
+        })
+        .await
+        .expect("client task joins")
+        .expect("request succeeds")
     }
 
     async fn json_request(
