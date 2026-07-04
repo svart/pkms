@@ -11,6 +11,14 @@ pub struct PkmsTaskConfig {
     pub daily_notes_dir_configured: bool,
 }
 
+#[derive(Debug, Clone)]
+pub struct TodoistProviderConfig {
+    pub org: OrgConfig,
+    pub token: String,
+    pub api_base_url: String,
+    pub default_filter: Option<String>,
+}
+
 impl PkmsTaskConfig {
     pub fn resolved_db_root(&self) -> &Path {
         &self.org.db_root
