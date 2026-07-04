@@ -1,7 +1,39 @@
 use crate::org_edit::{heading_level, heading_level_at_index, heading_subtree_end_index};
-use crate::parser::HEADING_RE;
+use crate::parser::{HEADING_RE, OrgPriority, OrgTodoState};
 use anyhow::{Context, Result};
+use chrono::{NaiveDate, NaiveDateTime};
 use std::path::Path;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OrgTaskInsertSpec {
+    pub level: usize,
+    pub state: OrgTodoState,
+    pub title: String,
+    pub priority: Option<OrgPriority>,
+    pub tags: Vec<String>,
+    pub scheduled: Option<String>,
+    pub deadline: Option<String>,
+    pub description: Option<String>,
+}
+
+pub fn append_org_task(path: &Path, spec: &OrgTaskInsertSpec) -> Result<usize> {
+    let entry = format_org_task_entry(spec)?;
+    append_org_entry(path, &entry)
+}
+
+pub fn append_daily_inbox_task(path: &Path, spec: &OrgTaskInsertSpec) -> Result<usize> {
+    let entry = format_org_task_entry(spec)?;
+    append_daily_inbox_entry(path, &entry)
+}
+
+pub fn append_child_org_task(
+    path: &Path,
+    parent_line_number: usize,
+    spec: &OrgTaskInsertSpec,
+) -> Result<usize> {
+    let entry = format_org_task_entry(spec)?;
+    append_child_org_entry(path, parent_line_number, &entry)
+}
 
 pub fn append_org_entry(path: &Path, entry: &str) -> Result<usize> {
     let mut content = std::fs::read_to_string(path)
@@ -77,6 +109,76 @@ pub fn inbox_section_range(path: &Path) -> Result<Option<(usize, usize)>> {
     let content = std::fs::read_to_string(path)
         .with_context(|| format!("Failed to read daily note: {}", path.display()))?;
     Ok(inbox_section_range_from_content(&content))
+}
+
+fn format_org_task_entry(spec: &OrgTaskInsertSpec) -> Result<String> {
+    if spec.level == 0 {
+        anyhow::bail!("Org task heading level must be at least 1.");
+    }
+
+    let mut entry = format!("{}\n", format_org_task_heading(spec));
+    if let Some(planning) = format_org_task_planning(spec)? {
+        entry.push_str(&planning);
+        entry.push('\n');
+    }
+    if let Some(description) = format_org_task_description(spec.description.as_deref()) {
+        entry.push('\n');
+        entry.push_str(description);
+        entry.push('\n');
+    }
+
+    Ok(entry)
+}
+
+fn format_org_task_heading(spec: &OrgTaskInsertSpec) -> String {
+    let priority = spec
+        .priority
+        .map(|priority| format!(" [#{priority}]"))
+        .unwrap_or_default();
+    let tags = if spec.tags.is_empty() {
+        String::new()
+    } else {
+        format!(" :{}:", spec.tags.join(":"))
+    };
+    format!(
+        "{} {}{} {}{}",
+        "*".repeat(spec.level),
+        spec.state,
+        priority,
+        spec.title,
+        tags
+    )
+}
+
+fn format_org_task_planning(spec: &OrgTaskInsertSpec) -> Result<Option<String>> {
+    let mut planning = Vec::new();
+    if let Some(scheduled) = &spec.scheduled {
+        planning.push(format!(
+            "SCHEDULED: {}",
+            format_org_task_timestamp(scheduled)?
+        ));
+    }
+    if let Some(deadline) = &spec.deadline {
+        planning.push(format!(
+            "DEADLINE: {}",
+            format_org_task_timestamp(deadline)?
+        ));
+    }
+    Ok((!planning.is_empty()).then(|| planning.join(" ")))
+}
+
+fn format_org_task_description(description: Option<&str>) -> Option<&str> {
+    description
+        .map(str::trim)
+        .filter(|description| !description.is_empty())
+}
+
+fn format_org_task_timestamp(value: &str) -> Result<String> {
+    if let Ok(datetime) = NaiveDateTime::parse_from_str(value, "%Y-%m-%d %H:%M") {
+        return Ok(format!("<{}>", datetime.format("%Y-%m-%d %a %H:%M")));
+    }
+    let date = NaiveDate::parse_from_str(value, "%Y-%m-%d")?;
+    Ok(format!("<{}>", date.format("%Y-%m-%d %a")))
 }
 
 fn append_org_entry_to_content(content: &mut String, entry: &str) -> usize {
@@ -359,12 +461,72 @@ mod tests {
     }
 
     #[test]
+    fn formats_typed_regular_note_task_entries() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("inbox.org");
+        std::fs::write(&path, "#+title: Inbox\n").unwrap();
+
+        let line = append_org_task(
+            &path,
+            &OrgTaskInsertSpec {
+                level: 1,
+                state: OrgTodoState::new("TODO"),
+                title: "Call Alice".to_string(),
+                priority: Some(OrgPriority::A),
+                tags: vec!["phone".to_string(), "urgent".to_string()],
+                scheduled: Some("2026-05-27".to_string()),
+                deadline: Some("2026-05-28 09:30".to_string()),
+                description: Some("Discuss renewal".to_string()),
+            },
+        )
+        .unwrap();
+
+        assert_eq!(line, 3);
+        assert_eq!(
+            std::fs::read_to_string(&path).unwrap(),
+            "#+title: Inbox\n\n* TODO [#A] Call Alice :phone:urgent:\nSCHEDULED: <2026-05-27 Wed> DEADLINE: <2026-05-28 Thu 09:30>\n\nDiscuss renewal\n"
+        );
+    }
+
+    #[test]
     fn inserts_daily_entry_inside_existing_inbox_section() {
         let mut content = "#+title: Day\n\n* Inbox\n** TODO Existing\n* Later\n".to_string();
         let line = append_daily_inbox_entry_to_content(&mut content, "** TODO New\n");
         assert_eq!(line, 5);
         assert_eq!(
             content,
+            "#+title: Day\n\n* Inbox\n** TODO Existing\n** TODO New\n* Later\n"
+        );
+    }
+
+    #[test]
+    fn inserts_typed_daily_inbox_task_inside_existing_inbox_section() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("2026-05-27.org");
+        std::fs::write(
+            &path,
+            "#+title: Day\n\n* Inbox\n** TODO Existing\n* Later\n",
+        )
+        .unwrap();
+
+        let line = append_daily_inbox_task(
+            &path,
+            &OrgTaskInsertSpec {
+                level: 2,
+                state: OrgTodoState::new("TODO"),
+                title: "New".to_string(),
+                priority: None,
+                tags: Vec::new(),
+                scheduled: None,
+                deadline: None,
+                description: None,
+            },
+        )
+        .unwrap();
+
+        assert_eq!(line, 5);
+        assert_eq!(
+            std::fs::read_to_string(&path).unwrap(),
             "#+title: Day\n\n* Inbox\n** TODO Existing\n** TODO New\n* Later\n"
         );
     }
@@ -387,6 +549,39 @@ mod tests {
         assert_eq!(line, 8);
         assert_eq!(
             content,
+            "#+title: Tasks\n\n* Project\n** TODO Parent\nBody\n*** TODO Child\nChild body\n*** TODO New child\n* TODO Sibling\n"
+        );
+    }
+
+    #[test]
+    fn appends_typed_child_task_at_end_of_parent_subtree() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("tasks.org");
+        std::fs::write(
+            &path,
+            "#+title: Tasks\n\n* Project\n** TODO Parent\nBody\n*** TODO Child\nChild body\n* TODO Sibling\n",
+        )
+        .unwrap();
+
+        let line = append_child_org_task(
+            &path,
+            4,
+            &OrgTaskInsertSpec {
+                level: 3,
+                state: OrgTodoState::new("TODO"),
+                title: "New child".to_string(),
+                priority: None,
+                tags: Vec::new(),
+                scheduled: None,
+                deadline: None,
+                description: None,
+            },
+        )
+        .unwrap();
+
+        assert_eq!(line, 8);
+        assert_eq!(
+            std::fs::read_to_string(&path).unwrap(),
             "#+title: Tasks\n\n* Project\n** TODO Parent\nBody\n*** TODO Child\nChild body\n*** TODO New child\n* TODO Sibling\n"
         );
     }
