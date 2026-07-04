@@ -2,21 +2,21 @@ use crate::config::ResolvedConfig;
 use crate::output::OutputContext;
 use crate::tasks::clock::TaskClock;
 use crate::tasks::id::TaskId;
-use crate::tasks::model::{TaskDateValue, TaskPriority, TaskProperty};
+use crate::tasks::model::{TaskPriority, TaskProperty};
 use crate::tasks::modifiers::{
-    TaskDateArg, TaskDependencyArg, TaskModifierSpec, TaskPriorityArg, is_clear_value, org_date,
+    TaskDateArg, TaskDependencyArg, TaskModifierSpec, TaskPriorityArg, is_clear_value,
 };
-use crate::tasks::pkms::{self, PkmsInboxTarget};
+use crate::tasks::pkms;
 use anyhow::{Context, Result, bail};
 use pkms_org::Graph;
 use pkms_org::graph::tasks::TaskLocation as GraphTaskLocation;
 use pkms_org::org_task_mutation::{self, Change, OrgTaskProperty};
 use pkms_org::parser::{OrgPriority, OrgTodoState};
-use std::path::Path;
+use pkms_task::mutation::{add_pkms_task, postpone_pkms_task, set_pkms_state};
 use std::process::ExitCode;
 
 use super::super::render;
-use super::{mod_title, parse_mutation_due_date, validate_mod_source};
+use super::{mod_title, validate_mod_source};
 
 fn pkms_task_location(location: GraphTaskLocation) -> pkms::TaskLocation {
     pkms::TaskLocation {
@@ -233,47 +233,13 @@ pub(super) fn set_state(
     requested_state: &str,
     dry_run: bool,
 ) -> Result<()> {
-    let new_state = canonical_state(config, requested_state)?;
-    let graph = Graph::load(&config.org_config())?;
-    let location = graph.resolve_canonical_task_id(&config.task_state_config(), canonical_id)?;
-    let title =
-        task_title_in_graph(&graph, &location.path, location.line_number).with_context(|| {
-            format!(
-                "Resolved task but could not find title at {}:{}",
-                location.path, location.line_number
-            )
-        })?;
-    let output = org_task_mutation::replace_heading_state(
-        &location.path,
-        location.line_number,
-        &new_state,
+    let output = set_pkms_state(
+        &config.pkms_task_config(),
+        canonical_id,
+        requested_state,
         dry_run,
     )?;
-    render::print_state_change(
-        ctx,
-        &render::TaskStateChangeOutput {
-            id: TaskId::Pkms(canonical_id).display_id(),
-            title,
-            path: output.path,
-            line_number: output.line_number,
-            old_state: output.old_state,
-            new_state: output.new_state,
-            dry_run,
-        },
-    )
-}
-
-fn task_title_in_graph(graph: &Graph, path: &str, line_number: usize) -> Option<String> {
-    let path = Path::new(path);
-    graph
-        .results
-        .iter()
-        .find(|result| result.path == path)?
-        .parsed
-        .headings
-        .iter()
-        .find(|heading| heading.line_number == line_number)
-        .map(|heading| heading.title.clone())
+    render::print_state_change(ctx, &output)
 }
 
 fn canonical_state(config: &ResolvedConfig, requested_state: &str) -> Result<OrgTodoState> {
@@ -297,131 +263,8 @@ pub(super) fn add(
     spec: &TaskModifierSpec,
     clock: TaskClock,
 ) -> Result<()> {
-    if spec.dependency.is_some() && spec.note.is_some() {
-        bail!("note and dep cannot be used together for PKMS task creation.");
-    }
-
-    let location = match spec.dependency.as_ref() {
-        Some(TaskDependencyArg::Set(TaskId::Pkms(parent_id))) => {
-            add_dependency_task(config, spec, *parent_id)?
-        }
-        Some(TaskDependencyArg::Set(_)) => bail!("dep is available only for PKMS task IDs."),
-        Some(TaskDependencyArg::Clear) => bail!("dep requires a PKMS task ID for task creation."),
-        None => add_inbox_task(config, spec, clock)?,
-    };
-    let item = pkms::find_task_item_on(config, &location.path, location.line_number, clock)?
-        .with_context(|| {
-            format!(
-                "Created task but could not reload it from {}",
-                location.path.display()
-            )
-        })?;
+    let item = add_pkms_task(&config.pkms_task_config(), spec, clock)?;
     render::print_add_output(ctx, item)
-}
-
-fn add_inbox_task(
-    config: &ResolvedConfig,
-    spec: &TaskModifierSpec,
-    clock: TaskClock,
-) -> Result<pkms::TaskLocation> {
-    let inbox_target = match spec.note.as_deref() {
-        Some(note) => pkms::resolve_note_task_target(config, note)?,
-        None => pkms::resolve_inbox_target_on(config, true, clock.today)?,
-    };
-    let heading_level = match inbox_target {
-        PkmsInboxTarget::Note(_) => 1,
-        PkmsInboxTarget::Daily { .. } => 2,
-    };
-    let entry = format_task_entry(config, spec, heading_level)?;
-    pkms::append_inbox_entry(&inbox_target, &entry)
-}
-
-fn add_dependency_task(
-    config: &ResolvedConfig,
-    spec: &TaskModifierSpec,
-    canonical_id: usize,
-) -> Result<pkms::TaskLocation> {
-    let graph = Graph::load(&config.org_config())?;
-    let location = graph.resolve_canonical_task_id(&config.task_state_config(), canonical_id)?;
-    let location = pkms_task_location(location);
-    let parent_level = pkms::heading_level_at(&location)?;
-    let entry = format_task_entry(config, spec, parent_level + 1)?;
-    pkms::append_child_entry(&location, &entry)
-}
-
-fn format_task_entry(
-    config: &ResolvedConfig,
-    spec: &TaskModifierSpec,
-    heading_level: usize,
-) -> Result<String> {
-    let title = add_title(spec)?;
-    let state = match spec.state.as_deref() {
-        Some(state) => canonical_state(config, state)?.to_string(),
-        None => config
-            .open_todo_states()
-            .first()
-            .cloned()
-            .unwrap_or_else(|| "TODO".to_string()),
-    };
-    let priority = add_priority(spec)?;
-    let labels = spec.labels();
-    let tags = if labels.is_empty() {
-        String::new()
-    } else {
-        format!(" :{}:", labels.join(":"))
-    };
-
-    let level = "*".repeat(heading_level);
-    let mut entry = format!("{level} {state}{priority} {title}{tags}\n");
-    let due = add_date("due", spec.due.as_ref())?;
-    let deadline = add_date("deadline", spec.deadline.as_ref())?;
-    if due.is_some() || deadline.is_some() {
-        let mut planning = Vec::new();
-        if let Some(due) = due {
-            planning.push(format!("SCHEDULED: {}", org_date(due)?));
-        }
-        if let Some(deadline) = deadline {
-            planning.push(format!("DEADLINE: {}", org_date(deadline)?));
-        }
-        entry.push_str(&format!("{}\n", planning.join(" ")));
-    }
-    if let Some(description) = spec
-        .description
-        .as_deref()
-        .map(str::trim)
-        .filter(|d| !d.is_empty())
-    {
-        entry.push('\n');
-        entry.push_str(description);
-        entry.push('\n');
-    }
-
-    Ok(entry)
-}
-
-fn add_date<'a>(name: &str, value: Option<&'a TaskDateArg>) -> Result<Option<&'a TaskDateValue>> {
-    match value {
-        None => Ok(None),
-        Some(TaskDateArg::Set(date)) => Ok(Some(date)),
-        Some(TaskDateArg::Clear) => bail!("{name} cannot be cleared when creating a task."),
-    }
-}
-
-fn add_title(spec: &TaskModifierSpec) -> Result<&str> {
-    spec.title
-        .as_deref()
-        .or(spec.text.as_deref())
-        .map(str::trim)
-        .filter(|title| !title.is_empty())
-        .ok_or_else(|| anyhow::anyhow!("PKMS task creation requires task text or title:"))
-}
-
-fn add_priority(spec: &TaskModifierSpec) -> Result<String> {
-    match spec.priority {
-        None => Ok(String::new()),
-        Some(TaskPriorityArg::Set(priority)) => Ok(format!(" [#{priority}]")),
-        Some(TaskPriorityArg::Clear) => bail!("Invalid priority 'none'. Use A, B, or C."),
-    }
 }
 
 fn org_priority(priority: TaskPriority) -> OrgPriority {
@@ -452,21 +295,6 @@ pub(super) fn postpone(
     to: &str,
     clock: TaskClock,
 ) -> Result<()> {
-    let date = parse_mutation_due_date(to, clock.today)?;
-    let graph = Graph::load(&config.org_config())?;
-    let location = graph.resolve_canonical_task_id(&config.task_state_config(), canonical_id)?;
-    org_task_mutation::update_recurring_planning_date(&location.path, location.line_number, &date)?;
-    let item = pkms::find_task_item_on(
-        config,
-        Path::new(&location.path),
-        location.line_number,
-        clock,
-    )?
-    .with_context(|| {
-        format!(
-            "Changed task but could not reload it from {}:{}",
-            location.path, location.line_number
-        )
-    })?;
+    let item = postpone_pkms_task(&config.pkms_task_config(), canonical_id, to, clock)?;
     render::print_mutation_output(ctx, "postpone", item)
 }

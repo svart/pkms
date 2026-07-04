@@ -9,23 +9,12 @@ use crate::tasks::model::{TaskItem, TaskPriority, TaskProperty, TaskSourceKind};
 use crate::tasks::provider::TaskMetadataRow;
 use anyhow::Result;
 use chrono::{NaiveDate, NaiveDateTime};
+use pkms_task::mutation::TaskStateChangeOutput;
 use serde::Serialize;
 use std::collections::BTreeMap;
 use std::process::ExitCode;
 use tabled::builder::Builder;
 use tabled::settings::Style;
-
-#[derive(Debug, Serialize)]
-pub(super) struct TaskStateChangeOutput {
-    pub id: String,
-    #[serde(skip_serializing)]
-    pub title: String,
-    pub path: String,
-    pub line_number: usize,
-    pub old_state: String,
-    pub new_state: String,
-    pub dry_run: bool,
-}
 
 #[derive(Debug, Serialize)]
 pub(super) struct TaskModChange {

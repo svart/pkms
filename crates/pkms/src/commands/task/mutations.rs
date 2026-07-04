@@ -3,10 +3,8 @@ use crate::tasks::model::TaskSourceKind;
 use crate::tasks::modifiers::TaskModifierSpec;
 use anyhow::Result;
 #[cfg(feature = "todoist")]
-pub(super) use pkms_task::mutation::{mod_date, mod_optional_text};
-pub(super) use pkms_task::mutation::{
-    mod_title, parse_mutation_due_date, unsupported_task_source, validate_mod_source,
-};
+pub(super) use pkms_task::mutation::{mod_date, mod_optional_text, parse_mutation_due_date};
+pub(super) use pkms_task::mutation::{mod_title, unsupported_task_source, validate_mod_source};
 use std::process::ExitCode;
 
 use super::TaskRuntime;
