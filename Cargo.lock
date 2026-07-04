@@ -3082,6 +3082,7 @@ dependencies = [
  "insta",
  "pkms-db",
  "pkms-org",
+ "pkms-rag",
  "pkms-task",
  "pkms-web",
  "proptest",

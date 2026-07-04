@@ -83,6 +83,8 @@ pub enum Command {
     InitConfig(InitConfigArgs),
     #[command(about = "List, inspect, and update tasks across configured sources")]
     Task(TaskArgs),
+    #[command(about = "Local retrieval over org-roam notes")]
+    Rag(RagArgs),
     #[command(name = "path", about = "Find shortest path between two notes")]
     Path(PathArgs),
     #[cfg(feature = "web")]
@@ -107,11 +109,103 @@ impl Command {
             Command::Info => "info",
             Command::InitConfig(_) => "init-config",
             Command::Task(_) => "task",
+            Command::Rag(_) => "rag",
             Command::Path(_) => "path",
             #[cfg(feature = "web")]
             Command::Serve(_) => "serve",
         }
     }
+}
+
+#[derive(Debug, Args)]
+pub struct RagArgs {
+    #[command(subcommand)]
+    pub command: RagCommand,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum RagCommand {
+    #[command(about = "Show RAG index status")]
+    Status(RagStatusArgs),
+    #[command(about = "Ingest retrieval NDJSON into the RAG index")]
+    Ingest(RagIngestArgs),
+    #[command(about = "Rebuild the RAG index from org notes or NDJSON")]
+    Index(RagIndexArgs),
+    #[command(about = "Search the RAG index with SQLite FTS")]
+    Search(RagSearchArgs),
+    #[command(about = "Retrieve cited chunks with BM25, dense, or hybrid scoring")]
+    Retrieve(RagRetrieveArgs),
+    #[command(about = "Serve the RAG HTTP API")]
+    Serve(RagServeArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct RagStatusArgs {
+    #[arg(long, value_name = "PATH", help = "Path to RAG SQLite index")]
+    pub rag_db: Option<PathBuf>,
+}
+
+#[derive(Debug, Args)]
+pub struct RagIngestArgs {
+    #[arg(value_name = "PATH", help = "Retrieval NDJSON file to ingest")]
+    pub path: PathBuf,
+    #[arg(long, value_name = "PATH", help = "Path to RAG SQLite index")]
+    pub rag_db: Option<PathBuf>,
+}
+
+#[derive(Debug, Args)]
+pub struct RagIndexArgs {
+    #[arg(long, value_name = "PATH", help = "Org notes root to index")]
+    pub notes_root: Option<PathBuf>,
+    #[arg(long, value_name = "PATH", help = "Retrieval NDJSON source to index")]
+    pub index_source: Option<PathBuf>,
+    #[arg(long, value_name = "PATH", help = "Path to RAG SQLite index")]
+    pub rag_db: Option<PathBuf>,
+}
+
+#[derive(Debug, Args)]
+pub struct RagSearchArgs {
+    #[arg(help = "Search query")]
+    pub query: String,
+    #[arg(long, default_value_t = 10, help = "Maximum results")]
+    pub limit: usize,
+    #[arg(long, value_name = "PATH", help = "Path to RAG SQLite index")]
+    pub rag_db: Option<PathBuf>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum RagRetrieveMode {
+    Hybrid,
+    Bm25,
+    Dense,
+}
+
+#[derive(Debug, Args)]
+pub struct RagRetrieveArgs {
+    #[arg(help = "Retrieval query")]
+    pub query: String,
+    #[arg(long, default_value_t = 10, help = "Maximum results")]
+    pub limit: usize,
+    #[arg(long, value_enum, default_value_t = RagRetrieveMode::Hybrid, help = "Retrieval mode")]
+    pub mode: RagRetrieveMode,
+    #[arg(long, value_name = "N", help = "Maximum returned token budget")]
+    pub max_token_budget: Option<usize>,
+    #[arg(long, value_name = "PATH", help = "Path to RAG SQLite index")]
+    pub rag_db: Option<PathBuf>,
+}
+
+#[derive(Debug, Args)]
+pub struct RagServeArgs {
+    #[arg(long, value_name = "PATH", help = "Org notes root to index")]
+    pub notes_root: Option<PathBuf>,
+    #[arg(long, value_name = "PATH", help = "Retrieval NDJSON source to index")]
+    pub index_source: Option<PathBuf>,
+    #[arg(long, value_name = "PATH", help = "Path to RAG SQLite index")]
+    pub rag_db: Option<PathBuf>,
+    #[arg(long, value_name = "HOST", help = "HTTP bind host")]
+    pub host: Option<String>,
+    #[arg(long, value_name = "PORT", help = "HTTP bind port")]
+    pub port: Option<u16>,
 }
 
 #[derive(Debug, Args)]

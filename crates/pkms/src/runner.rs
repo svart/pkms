@@ -99,6 +99,7 @@ fn dispatch(cli: &Cli, command_ctx: &CommandContext<'_>) -> Result<ExitCode> {
             &commands::query::options_from_args(args)?,
         ))?,
         Command::Task(args) => commands::task::run(command_ctx, &args.command)?,
+        Command::Rag(args) => success(commands::rag::run(command_ctx, &args.command))?,
         Command::Path(args) => success(commands::path::run(
             command_ctx,
             &commands::path::options_from_args(args),

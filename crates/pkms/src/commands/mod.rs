@@ -17,6 +17,7 @@ pub mod open;
 pub mod orphans;
 pub mod path;
 pub mod query;
+pub mod rag;
 pub mod resolve;
 #[cfg(feature = "web")]
 pub mod serve;
