@@ -145,8 +145,7 @@ raw org task text or write org files directly.
 `pkms-org` owns org task syntax, typed task insertion, daily note creation, and
 raw org file writes. The umbrella `pkms` task modules parse CLI arguments, map
 configuration into task-provider config, dispatch cross-domain show/open
-commands, and render text, JSON, and NDJSON output. Use
-`scripts/check-task-boundaries.sh` after changing this boundary.
+commands, and render text, JSON, and NDJSON output.
 
 Clock-sensitive task behavior should use `TaskClock` from
 `crates/pkms-task/src/clock.rs` captured at the command boundary. Avoid direct

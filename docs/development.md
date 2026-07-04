@@ -60,7 +60,6 @@ gate:
 ```bash
 cargo fmt --all -- --check
 scripts/check-crate-boundaries.sh
-scripts/check-task-boundaries.sh
 cargo clippy --workspace --all-targets --all-features -- -D warnings
 cargo test --workspace --all-features
 cargo build --workspace --all-features
@@ -146,7 +145,6 @@ cargo build --all-features
 Cargo.toml                  # virtual workspace root
 scripts/
   check-crate-boundaries.sh # workspace dependency boundary guard
-  check-task-boundaries.sh  # task/org/Todoist source boundary guard
 crates/pkms/                # umbrella binary crate
   src/main.rs               # thin binary wrapper
   src/lib.rs                # umbrella library surface used by tests
@@ -231,9 +229,6 @@ network actions both mutate user data:
 - `pkms` task command modules own CLI argument adapters, config mapping, output
   rendering, and cross-domain show/open dispatch. They should not format raw org
   task text or call Todoist HTTP APIs directly.
-
-Run `scripts/check-task-boundaries.sh` after changing task mutations, providers,
-Todoist code, or org task edit APIs.
 
 The web viewer keeps its public command entry point in
 `crates/pkms/src/commands/serve.rs`, but HTTP routing, static/font assets, page
