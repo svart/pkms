@@ -6,7 +6,6 @@ use crate::commands::open::OpenOptions;
 use crate::commands::show::{HeadingTarget, ShowOptions};
 #[cfg(feature = "todoist")]
 use crate::commands::task_common::RowSeparatorMode;
-use crate::commands::task_common::{TaskSortField, sort_task_items};
 use crate::config::{ResolvedConfig, TaskCommandConfig};
 use crate::output::{OutputContext, terminal_markup};
 use anyhow::{Result, anyhow, bail};
@@ -14,11 +13,9 @@ use pkms_org::graph::tasks::CanonicalTaskEntry;
 use pkms_task::clock::TaskClock;
 #[cfg(feature = "todoist")]
 use pkms_task::filter::SourceSelection;
-use pkms_task::filter::parse_task_filters_on;
 use pkms_task::id::TaskId;
 use pkms_task::model::TaskSourceKind;
 use pkms_task::modifiers::TaskModifierSpec;
-use pkms_task::provider::TaskMetadataRow;
 #[cfg(feature = "todoist")]
 use pkms_task::todoist;
 use std::collections::HashMap;
@@ -127,9 +124,8 @@ fn run_shortcut(
     args: &TaskShortcutArgs,
     kind: ShortcutKind,
 ) -> Result<()> {
-    let (source, mut items) =
+    let (source, items) =
         execution::collect_shortcut_items_on(runtime.config, &args.filters, kind, runtime.clock)?;
-    sort_task_items(&mut items, &[TaskSortField::Priority]);
     let task_config = runtime.config.task_command_config();
     let columns = plan::resolve_task_table_columns(
         &task_config,
@@ -241,53 +237,23 @@ fn show_todoist_task(_config: &ResolvedConfig, _ctx: &OutputContext, _id: &str) 
 }
 
 fn run_projects(runtime: TaskRuntime<'_>, filters: &[String]) -> Result<()> {
-    let filters = parse_task_filters_on(filters, runtime.clock.today)?;
-    if filters.todoist_filter.is_some() {
-        bail!("Todoist metadata commands do not accept todoist.filter.");
-    }
-    if filters.has_criteria() {
-        bail!("Task metadata commands only accept source filters.");
-    }
-    let mut rows = providers::collect_task_metadata(
+    let rows = providers::collect_task_metadata(
         runtime.config,
-        filters.source,
+        filters,
         providers::MetadataKind::Projects,
+        runtime.clock,
     )?;
-    sort_metadata_rows(&mut rows);
     render::print_metadata_rows(runtime.output, "project", &rows)
 }
 
 fn run_tags(runtime: TaskRuntime<'_>, filters: &[String]) -> Result<()> {
-    let filters = parse_task_filters_on(filters, runtime.clock.today)?;
-    if filters.todoist_filter.is_some() {
-        bail!("Todoist metadata commands do not accept todoist.filter.");
-    }
-    if filters.has_criteria() {
-        bail!("Task metadata commands only accept source filters.");
-    }
-    let mut rows = providers::collect_task_metadata(
+    let rows = providers::collect_task_metadata(
         runtime.config,
-        filters.source,
+        filters,
         providers::MetadataKind::Tags,
+        runtime.clock,
     )?;
-    sort_metadata_rows(&mut rows);
     render::print_metadata_rows(runtime.output, "tag", &rows)
-}
-
-fn sort_metadata_rows(rows: &mut [TaskMetadataRow]) {
-    rows.sort_by(|a, b| {
-        source_sort_key(&a.source)
-            .cmp(&source_sort_key(&b.source))
-            .then_with(|| a.name.cmp(&b.name))
-            .then_with(|| a.id.cmp(&b.id))
-    });
-}
-
-fn source_sort_key(source: &TaskSourceKind) -> u8 {
-    match source {
-        TaskSourceKind::Pkms => 0,
-        TaskSourceKind::Todoist => 1,
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

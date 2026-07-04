@@ -6,7 +6,7 @@ use crate::model::{TaskItem, TaskSourceKind};
 use crate::pkms;
 use crate::provider::{TaskListView, TaskMetadataRow, TaskProvider, TaskQuery};
 use crate::todoist_provider;
-use anyhow::Result;
+use anyhow::{Result, bail};
 use std::collections::BTreeMap;
 
 pub trait TaskProviderEnvironment {
@@ -225,6 +225,40 @@ pub fn collect_task_metadata<E: TaskProviderEnvironment>(
     kind: MetadataKind,
 ) -> Result<Vec<TaskMetadataRow>> {
     TaskProviders::new(environment).metadata(source, kind)
+}
+
+pub fn collect_task_metadata_on<E: TaskProviderEnvironment>(
+    environment: &E,
+    raw_filters: &[String],
+    kind: MetadataKind,
+    clock: TaskClock,
+) -> Result<Vec<TaskMetadataRow>> {
+    let filters = crate::filter::parse_task_filters_on(raw_filters, clock.today)?;
+    if filters.todoist_filter.is_some() {
+        bail!("Todoist metadata commands do not accept todoist.filter.");
+    }
+    if filters.has_criteria() {
+        bail!("Task metadata commands only accept source filters.");
+    }
+    let mut rows = collect_task_metadata(environment, filters.source, kind)?;
+    sort_task_metadata_rows(&mut rows);
+    Ok(rows)
+}
+
+fn sort_task_metadata_rows(rows: &mut [TaskMetadataRow]) {
+    rows.sort_by(|a, b| {
+        source_sort_key(&a.source)
+            .cmp(&source_sort_key(&b.source))
+            .then_with(|| a.name.cmp(&b.name))
+            .then_with(|| a.id.cmp(&b.id))
+    });
+}
+
+fn source_sort_key(source: &TaskSourceKind) -> u8 {
+    match source {
+        TaskSourceKind::Pkms => 0,
+        TaskSourceKind::Todoist => 1,
+    }
 }
 
 fn pkms_project_rows(config: &PkmsTaskConfig) -> Result<Vec<TaskMetadataRow>> {

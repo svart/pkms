@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 
 use crate::clock::TaskClock;
 use crate::common::{
-    AgendaWindow, TaskGroupField, group_task_items, parse_task_sort_fields,
+    AgendaWindow, TaskGroupField, TaskSortField, group_task_items, parse_task_sort_fields,
     retain_agenda_window_task_items_on, sort_task_items,
 };
 use crate::config::PkmsTaskConfig;
@@ -106,6 +106,7 @@ pub fn collect_shortcut_items_on<E: TaskProviderEnvironment>(
     let source = filters.source;
     let mut items = providers::collect_task_items(environment, &filters, view, clock)?;
     apply_task_filter_criteria_on(config, &mut items, &filters.criteria, clock.today)?;
+    sort_task_items(&mut items, &[TaskSortField::Priority]);
     Ok((source, items))
 }
 
