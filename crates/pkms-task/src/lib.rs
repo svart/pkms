@@ -10,3 +10,5 @@ pub mod pkms;
 pub mod provider;
 pub mod scope;
 pub mod task_index;
+#[cfg(feature = "todoist")]
+pub mod todoist;

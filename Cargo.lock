@@ -2028,7 +2028,6 @@ dependencies = [
  "toml",
  "tracing",
  "tracing-subscriber",
- "ureq",
  "uuid",
  "walkdir",
 ]
@@ -2083,6 +2082,9 @@ dependencies = [
  "dirs",
  "pkms-org",
  "serde",
+ "serde_json",
+ "tracing",
+ "ureq",
  "uuid",
 ]
 

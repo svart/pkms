@@ -7,7 +7,7 @@ license = "MIT"
 
 [features]
 default = []
-todoist = ["dep:ureq", "ureq/platform-verifier"]
+todoist = ["pkms-task/todoist"]
 web = ["dep:katex", "dep:syntect"]
 ssh = ["pkms-db/ssh"]
 
@@ -31,7 +31,6 @@ tabled = { version = "0.20", default-features = false, features = ["std"] }
 terminal_size = "0.4"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", default-features = false, features = ["env-filter", "fmt", "json", "std"] }
-ureq = { version = "3.3.0", optional = true, features = ["json"] }
 katex = { version = "0.4.6", optional = true }
 syntect = { version = "5.3.0", optional = true }
 
