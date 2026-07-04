@@ -105,6 +105,50 @@ HTML:
 - Hovering over an internal note link opens a scrollable note preview after a
   short delay.
 
+## RAG Retrieval
+
+```bash
+pkms rag status
+pkms rag ingest retrieval-export.ndjson
+pkms rag index
+pkms rag index --notes-root ~/org
+pkms rag index --index-source retrieval-export.ndjson
+pkms rag search "externalHostname"
+pkms rag retrieve "agenda inspect tasks" --limit 5 --mode hybrid
+pkms rag serve --host 127.0.0.1 --port 7337
+```
+
+`pkms rag` builds and queries a local SQLite retrieval index. By default the
+index path is `.data/pkms-rag.sqlite3`; override it per command with `--rag-db`
+or globally with `PKMS_RAG_DB`.
+
+`pkms rag index` rebuilds the index from, in order:
+
+- `--notes-root` or `PKMS_RAG_NOTES_ROOT`.
+- `--index-source` or `PKMS_RAG_INDEX_SOURCE` for retrieval NDJSON.
+- The resolved `pkms` database root when neither source is set.
+
+`pkms rag retrieve` returns cited chunks with `hybrid`, `bm25`, or `dense`
+scoring. Text output is concise; JSON returns the full response, and NDJSON emits
+one result per line.
+
+`pkms rag serve` starts a foreground local HTTP server with the browser UI and
+the preserved service endpoints:
+
+- `GET /health` returns service liveness.
+- `GET /status` returns SQLite index counts and embedding model names.
+- `GET /index/status` returns background index progress.
+- `POST /index/start` starts a background rebuild from the configured source.
+- `POST /ingest` accepts `application/x-ndjson`.
+- `POST /search` accepts `{"query":"...","limit":10}`.
+- `POST /retrieve` accepts `{"query":"...","limit":10,"mode":"hybrid"}`.
+
+FastEmbed is the default embedding provider. It downloads model files on first
+use and then runs offline from its cache. FastEmbed defaults to
+`./.fastembed_cache`; set `FASTEMBED_CACHE_DIR` to move that cache, or set
+`HF_HOME` to use the Hugging Face cache location. `HF_HOME` takes precedence.
+For deterministic local tests, set `PKMS_RAG_EMBEDDING_PROVIDER=hash`.
+
 ## Statistics and Discovery
 
 ```bash

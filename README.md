@@ -74,6 +74,14 @@ The local web viewer is available in builds made with `--features web`:
 pkms serve <target>
 ```
 
+Local retrieval is exposed through `pkms rag`:
+
+```bash
+pkms rag index --rag-db .data/pkms-rag.sqlite3
+pkms rag retrieve "agenda inspect tasks" --limit 5
+pkms rag serve --rag-db .data/pkms-rag.sqlite3 --host 127.0.0.1 --port 7337
+```
+
 ```bash
 pkms query "rust" --output-format ndjson | pkms get --links --from-stdin
 ```
@@ -87,6 +95,8 @@ pkms query "rust" --output-format ndjson | pkms get --links --from-stdin
 - TODO headings get deterministic global IDs shared by `task list`,
   `task agenda`, and task ID actions such as `task p<ID> show`.
 - `serve` is available only when built with `--features web`.
+- `pkms rag` stores its retrieval index in SQLite and serves a foreground local
+  HTTP API/UI with `pkms rag serve`.
 
 ## Architecture
 
@@ -97,6 +107,7 @@ The workspace is split into focused crates:
 - `pkms-db`: note database commands and link checks.
 - `pkms-task`: task IDs, filtering, providers, mutations, typed org edit
   requests, and Todoist execution.
+- `pkms-rag`: local retrieval indexing, embeddings, search, and HTTP API.
 - `pkms-web`: the local `serve` HTTP viewer, HTML rendering, and static assets.
 - `pkms`: the umbrella binary crate for CLI parsing, config mapping, dispatch,
   and output formatting.

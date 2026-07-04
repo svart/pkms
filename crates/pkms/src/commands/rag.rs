@@ -1,4 +1,7 @@
-use std::path::{Path, PathBuf};
+use std::{
+    io::Write,
+    path::{Path, PathBuf},
+};
 
 use anyhow::{Context, Result, bail};
 
@@ -95,8 +98,8 @@ fn run_retrieve(ctx: &OutputContext, args: &RagRetrieveArgs) -> Result<()> {
 }
 
 fn run_serve(command_ctx: &CommandContext<'_>, args: &RagServeArgs) -> Result<()> {
-    let _options = RagServeOptions {
-        rag_db: resolve_rag_db(args.rag_db.as_ref()),
+    let options = pkms_rag::RagServeOptions {
+        db_path: resolve_rag_db(args.rag_db.as_ref()),
         notes_root: resolve_notes_root_for_serve(args.notes_root.as_ref(), command_ctx),
         index_source: args
             .index_source
@@ -107,25 +110,19 @@ fn run_serve(command_ctx: &CommandContext<'_>, args: &RagServeArgs) -> Result<()
             .clone()
             .or_else(|| non_empty_env(RAG_HOST_ENV))
             .unwrap_or_else(|| DEFAULT_RAG_HOST.to_string()),
-        port: args
-            .port
-            .or_else(|| env_u16(RAG_PORT_ENV))
-            .unwrap_or(DEFAULT_RAG_PORT),
+        port: resolve_rag_port(args.port)?,
     };
-    bail!("pkms rag serve is not implemented yet")
-}
-
-struct RagServeOptions {
-    #[allow(dead_code)]
-    rag_db: PathBuf,
-    #[allow(dead_code)]
-    notes_root: Option<PathBuf>,
-    #[allow(dead_code)]
-    index_source: Option<PathBuf>,
-    #[allow(dead_code)]
-    host: String,
-    #[allow(dead_code)]
-    port: u16,
+    let output = command_ctx.output();
+    pkms_rag::serve(options, |started| {
+        if output.is_structured() {
+            output.print_structured(started)?;
+        } else {
+            println!("Serving {}", started.url);
+            println!("RAG database: {}", started.db_path);
+        }
+        std::io::stdout().flush()?;
+        Ok(())
+    })
 }
 
 fn render_status(ctx: &OutputContext, status: &pkms_rag::StatusResponse) -> Result<()> {
@@ -314,13 +311,16 @@ fn non_empty_env(key: &str) -> Option<String> {
         .filter(|value| !value.is_empty())
 }
 
-fn env_u16(key: &str) -> Option<u16> {
-    non_empty_env(key).and_then(|value| {
-        value
+fn resolve_rag_port(port: Option<u16>) -> Result<u16> {
+    if let Some(port) = port {
+        return Ok(port);
+    }
+    if let Some(value) = non_empty_env(RAG_PORT_ENV) {
+        return value
             .parse::<u16>()
-            .with_context(|| format!("invalid {key} value '{value}'"))
-            .ok()
-    })
+            .with_context(|| format!("invalid {RAG_PORT_ENV} value '{value}'"));
+    }
+    Ok(DEFAULT_RAG_PORT)
 }
 
 fn text_snippet(text: &str, max_chars: usize) -> String {

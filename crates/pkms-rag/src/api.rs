@@ -1,4 +1,5 @@
 use std::{
+    future::Future,
     path::{Path, PathBuf},
     str,
 };
@@ -22,6 +23,7 @@ use crate::{
     models::IndexProgress,
     ndjson::parse_ndjson,
     retrieve::retrieve,
+    web::{INDEX_HTML, UI_JS},
 };
 
 pub const DEFAULT_RAG_DB: &str = ".data/pkms-rag.sqlite3";
@@ -29,36 +31,6 @@ pub const DEFAULT_RAG_DB: &str = ".data/pkms-rag.sqlite3";
 const RAG_DB_ENV: &str = "PKMS_RAG_DB";
 const RAG_INDEX_SOURCE_ENV: &str = "PKMS_RAG_INDEX_SOURCE";
 const RAG_NOTES_ROOT_ENV: &str = "PKMS_RAG_NOTES_ROOT";
-
-const INDEX_HTML: &str = r#"<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>PKMS Search</title>
-</head>
-<body>
-  <main>
-    <h1>PKMS Search</h1>
-    <section aria-live="polite">
-      <strong id="phase">Loading status</strong>
-      <p id="details"></p>
-    </section>
-  </main>
-  <script src="/ui.js"></script>
-</body>
-</html>"#;
-
-const UI_JS: &str = r#"async function refreshIndexStatus() {
-  const response = await fetch("/index/status");
-  const body = await response.json();
-  document.getElementById("phase").textContent = `${body.phase}: ${body.current_step || "idle"}`;
-  document.getElementById("details").textContent = `${body.message || ""} records: ${body.processed_records}/${body.total_records || "?"}`;
-}
-refreshIndexStatus().catch((error) => {
-  document.getElementById("phase").textContent = "error";
-  document.getElementById("details").textContent = error.message;
-});"#;
 
 #[derive(Debug, Clone)]
 pub struct AppState {
@@ -119,6 +91,81 @@ impl AppState {
                 .start_with_provider_config(self.embedding_provider_config.clone())
         }
     }
+}
+
+#[derive(Debug, Clone)]
+pub struct RagServeOptions {
+    pub db_path: PathBuf,
+    pub index_source: Option<PathBuf>,
+    pub notes_root: Option<PathBuf>,
+    pub host: String,
+    pub port: u16,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct RagServeStarted {
+    pub url: String,
+    pub host: String,
+    pub port: u16,
+    pub db_path: String,
+    pub index_source: Option<String>,
+    pub notes_root: Option<String>,
+}
+
+pub fn serve(
+    opts: RagServeOptions,
+    started: impl FnOnce(&RagServeStarted) -> Result<()>,
+) -> Result<()> {
+    let embedding_provider_config = embedding_provider_config_from_env()
+        .context("failed to read RAG embedding provider configuration")?;
+    let state = AppState::with_embedding_provider_config(
+        opts.db_path.clone(),
+        opts.index_source.clone(),
+        opts.notes_root.clone(),
+        embedding_provider_config,
+    );
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .context("failed to initialize RAG HTTP runtime")?;
+    runtime.block_on(serve_until(opts, state, started, std::future::pending()))
+}
+
+async fn serve_until<S>(
+    opts: RagServeOptions,
+    state: AppState,
+    started: impl FnOnce(&RagServeStarted) -> Result<()>,
+    shutdown: S,
+) -> Result<()>
+where
+    S: Future<Output = ()> + Send + 'static,
+{
+    let listener = tokio::net::TcpListener::bind((opts.host.as_str(), opts.port))
+        .await
+        .map_err(|err| anyhow::anyhow!("failed to bind {}:{}: {err}", opts.host, opts.port))?;
+    let addr = listener.local_addr()?;
+    let host = addr.ip().to_string();
+    let port = addr.port();
+    let url = format!("http://{}:{}/", url_host(addr.ip()), port);
+    let started_event = RagServeStarted {
+        url,
+        host,
+        port,
+        db_path: display_path(&opts.db_path),
+        index_source: opts.index_source.as_deref().map(display_path),
+        notes_root: opts.notes_root.as_deref().map(display_path),
+    };
+    tracing::info!(
+        event = "rag_api_serve_start",
+        url = %started_event.url,
+        db_path = %started_event.db_path,
+        "serving RAG HTTP API"
+    );
+    started(&started_event)?;
+    axum::serve(listener, router(state))
+        .with_graceful_shutdown(shutdown)
+        .await
+        .context("RAG HTTP server failed")
 }
 
 pub fn router(state: AppState) -> Router {
@@ -309,6 +356,13 @@ fn display_path(path: &Path) -> String {
     path.to_string_lossy().into_owned()
 }
 
+fn url_host(host: std::net::IpAddr) -> String {
+    match host {
+        std::net::IpAddr::V4(host) => host.to_string(),
+        std::net::IpAddr::V6(host) => format!("[{host}]"),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -336,6 +390,7 @@ mod tests {
         let script = text_request(app.clone(), Method::GET, "/ui.js", Body::empty()).await;
         assert_eq!(script.0, StatusCode::OK);
         assert!(script.1.contains("fetch(\"/index/status\")"));
+        assert!(script.1.contains("fetch(\"/retrieve\""));
 
         let index_status =
             json_request(app, Method::GET, "/index/status", Body::empty(), None).await;
@@ -489,6 +544,65 @@ Agents call /retrieve to search mounted PKMS notes.
         assert_eq!(status.0, StatusCode::OK);
         assert_eq!(status.1["notes"], 0);
         assert_eq!(status.1["chunks"], 0);
+    }
+
+    #[tokio::test]
+    async fn api_serve_binds_tcp_listener_and_serves_health() {
+        let tempdir = tempfile::tempdir().expect("tempdir");
+        let options = RagServeOptions {
+            db_path: tempdir.path().join("api.sqlite3"),
+            index_source: None,
+            notes_root: None,
+            host: "127.0.0.1".to_string(),
+            port: 0,
+        };
+        let state = test_state(options.db_path.clone(), None, None);
+        let (started_tx, started_rx) = tokio::sync::oneshot::channel();
+        let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
+
+        let handle = tokio::spawn(async move {
+            serve_until(
+                options,
+                state,
+                |started| {
+                    started_tx
+                        .send(started.clone())
+                        .map_err(|_| anyhow::anyhow!("failed to send startup event"))?;
+                    Ok(())
+                },
+                async move {
+                    let _ = shutdown_rx.await;
+                },
+            )
+            .await
+        });
+
+        let started = started_rx.await.expect("server starts");
+        let host = started.host.clone();
+        let port = started.port;
+        let response = tokio::task::spawn_blocking(move || {
+            use std::io::{Read, Write};
+
+            let mut stream = std::net::TcpStream::connect((host.as_str(), port))?;
+            write!(
+                stream,
+                "GET /health HTTP/1.1\r\nHost: {host}\r\nConnection: close\r\n\r\n"
+            )?;
+            let mut response = String::new();
+            stream.read_to_string(&mut response)?;
+            Ok::<_, anyhow::Error>(response)
+        })
+        .await
+        .expect("client task joins")
+        .expect("health request succeeds");
+        assert!(response.starts_with("HTTP/1.1 200 OK"));
+        assert!(response.contains("{\"status\":\"ok\"}"));
+
+        shutdown_tx.send(()).expect("shutdown sends");
+        handle
+            .await
+            .expect("server task joins")
+            .expect("server exits");
     }
 
     fn test_router(
