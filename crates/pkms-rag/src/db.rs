@@ -308,7 +308,7 @@ fn row_to_search_result(row: &rusqlite::Row<'_>) -> rusqlite::Result<SearchResul
     )
 }
 
-fn row_to_stored_search_result(
+pub(crate) fn row_to_stored_search_result(
     row: &rusqlite::Row<'_>,
     scores: ScoreBreakdown,
 ) -> rusqlite::Result<SearchResult> {

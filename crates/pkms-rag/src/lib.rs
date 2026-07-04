@@ -6,6 +6,7 @@ pub mod embeddings;
 pub mod models;
 pub mod ndjson;
 pub mod org_export;
+pub mod retrieve;
 pub mod schema;
 
 pub use chunking::{CONTENT_HASH_PREFIX, ChunkNoteInput, chunk_note, content_hash};
@@ -21,3 +22,4 @@ pub use models::{
     SearchResult, StatusResponse,
 };
 pub use org_export::{export_org_notes, export_org_notes_with_ignore};
+pub use retrieve::{retrieve, retrieve_results};
