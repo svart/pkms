@@ -63,9 +63,13 @@ or behavior has changed.
 
 ## Command and Output Conventions
 
-- Define CLI args in `src/cli.rs` and dispatch from `src/runner.rs`.
-- Put behavior in `src/commands/<name>.rs`, or `src/commands/<name>/` for a
-  namespace with subcommands.
+- Define CLI args in `crates/pkms/src/cli.rs` and dispatch from
+  `crates/pkms/src/runner.rs`.
+- Put umbrella command wiring/output in `crates/pkms/src/commands/<name>.rs`, or
+  `crates/pkms/src/commands/<name>/` for a namespace with subcommands.
+- Put reusable domain behavior in `pkms-org`, `pkms-db`, `pkms-task`, or
+  `pkms-web` according to the crate boundary documented in
+  `docs/development.md`.
 - Use option structs for command input when arguments are more than trivial.
 - Command implementations usually accept `&ResolvedConfig` and `&OutputContext`;
   use `&CommandContext` when shared graph/workspace loader helpers are useful.

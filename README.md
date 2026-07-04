@@ -88,6 +88,18 @@ pkms query "rust" --output-format ndjson | pkms get --links --from-stdin
   `task agenda`, and task ID actions such as `task p<ID> show`.
 - `serve` is available only when built with `--features web`.
 
+## Architecture
+
+The workspace is split into focused crates:
+
+- `pkms-org`: org discovery, parsing, graph construction, workspace loading, and
+  raw org edit primitives.
+- `pkms-db`: note database commands and link checks.
+- `pkms-task`: task IDs, filtering, providers, mutations, and Todoist support.
+- `pkms-web`: the local `serve` HTTP viewer, HTML rendering, and static assets.
+- `pkms`: the umbrella binary crate for CLI parsing, config mapping, dispatch,
+  and output formatting.
+
 ## Documentation
 
 - [Installation](docs/installation.md)

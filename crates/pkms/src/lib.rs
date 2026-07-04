@@ -4,7 +4,6 @@ pub mod command_context;
 pub mod commands;
 pub mod config;
 pub mod input;
-pub mod link_check;
 pub mod logging;
 pub mod output;
 pub mod runner;

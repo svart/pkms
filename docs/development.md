@@ -46,7 +46,7 @@ to the relevant integration tests before moving to the pre-commit gate.
 
 Unit tests live next to module code under `#[cfg(test)]`. Integration tests
 spawn `target/debug/pkms` with temporary mock databases from
-`tests/integration/`.
+`crates/pkms/tests/integration/`.
 
 Use the existing small fixtures instead of open-coded setup when they fit:
 `ResolvedConfig::for_test_db(...)` is available for unit tests, and the
@@ -59,9 +59,10 @@ gate:
 
 ```bash
 cargo fmt --all -- --check
-cargo clippy --all-targets --all-features -- -D warnings
-cargo test --all-features
-cargo build --all-features
+scripts/check-crate-boundaries.sh
+cargo clippy --workspace --all-targets --all-features -- -D warnings
+cargo test --workspace --all-features
+cargo build --workspace --all-features
 ```
 
 This gate covers the complete feature set in a single pass. It catches
@@ -141,44 +142,44 @@ cargo build --all-features
 ## Project Structure
 
 ```text
-src/
-  main.rs             # thin binary wrapper: logging, CLI parse, runner call
-  lib.rs              # library crate surface used by the binary and tests
-  runner.rs           # App setup, CommandContext construction, command dispatch
-  command_context.rs  # shared config/output access plus graph/workspace loaders
-  app.rs              # App construction, output context, error formatting
-  cli.rs              # clap derive structs and Command enum
-  config.rs           # config loading, db_root resolution, ResolvedConfig
-  logging.rs          # PKMS_LOG and PKMS_LOG_FORMAT setup
-  discovery.rs        # recursive .org discovery with ignore patterns
-  parser.rs           # org parser for note metadata, links, headings, tasks
-  org_date.rs         # org timestamp parser
-  org_edit.rs         # local org file editing helpers
-  graph/              # in-memory graph build, search, traversal, validation
-  commands/           # one module per subcommand; task/ and serve/ own helpers
-  commands/task/      # task ID parsing, source-neutral providers/execution, rendering
-  commands/serve/     # HTTP, assets, page, org HTML, inline, highlighting
-  tasks/              # source-neutral task model, filters, providers, mutations
-  input.rs            # target/stdin/date/column parsing helpers
-  output.rs           # OutputContext and output format helpers
-  output/table.rs     # adaptive table layout
-  corpus.rs           # text corpus helpers
-  tokens.rs           # token counting and truncation
-  util.rs             # small shared utility helpers
-  workspace.rs        # workspace/path helpers
-tests/integration/    # binary-level integration tests with mock databases
-docs/                 # detailed user and contributor docs
-skills/               # Codex skills for note and pkms workflows
+Cargo.toml                  # virtual workspace root
+scripts/check-crate-boundaries.sh
+crates/pkms/                # umbrella binary crate
+  src/main.rs               # thin binary wrapper
+  src/lib.rs                # umbrella library surface used by tests
+  src/runner.rs             # CommandContext construction and command dispatch
+  src/command_context.rs    # shared config/output access plus loaders
+  src/app.rs                # app construction and error formatting
+  src/cli.rs                # clap derive structs and Command enum
+  src/config.rs             # config loading, db_root resolution, per-crate config mapping
+  src/logging.rs            # PKMS_LOG and PKMS_LOG_FORMAT setup
+  src/commands/             # thin command wrappers and output rendering
+  src/commands/task/        # task CLI planning/orchestration/rendering
+  src/input.rs              # target/stdin/date/column parsing helpers
+  src/output.rs             # OutputContext and output format helpers
+  tests/integration/        # binary-level integration tests with mock databases
+crates/pkms-org/            # org discovery, parsing, graph, workspace, org edits
+crates/pkms-db/             # note database command logic and link checks
+crates/pkms-task/           # task domain logic, providers, mutations, Todoist integration
+crates/pkms-web/            # local HTTP viewer, HTML rendering, assets, fonts
+docs/                       # detailed user and contributor docs
+skills/                     # agent skills for note and pkms workflows
 ```
+
+Dependency direction is intentionally one-way: `pkms` may depend on all domain
+crates; `pkms-db`, `pkms-task`, and `pkms-web` may depend on `pkms-org`; domain
+crates must not depend on each other or on the umbrella `pkms` crate. Run
+`scripts/check-crate-boundaries.sh` after changing manifests.
 
 ## Adding or Changing Commands
 
 Follow the existing command shape:
 
-1. Define CLI args in `src/cli.rs`.
-2. Dispatch from `src/runner.rs`.
-3. Put behavior in `src/commands/<name>.rs`, or in `src/commands/<name>/` when
-   the command is a namespace with subcommands.
+1. Define CLI args in `crates/pkms/src/cli.rs`.
+2. Dispatch from `crates/pkms/src/runner.rs`.
+3. Put CLI wiring and output rendering in `crates/pkms/src/commands/<name>.rs`,
+   or in `crates/pkms/src/commands/<name>/` when the command is a namespace with
+   subcommands.
 4. Use option structs for command input when more than trivial args are needed.
 5. Accept `&ResolvedConfig` and `&OutputContext`, or `&CommandContext` when the
    command benefits from shared graph/workspace loader helpers.
@@ -188,7 +189,7 @@ Follow the existing command shape:
    command needs both parsed files and graph data.
 7. Dispatch structured output through `OutputContext` helpers:
    `print_json`, `print_ndjson`, or `print_json_adaptive`.
-8. Add or update integration tests under `tests/integration/`.
+8. Add or update integration tests under `crates/pkms/tests/integration/`.
 9. Update user docs and `skills/pkms-manager/` references when behavior changes.
 
 Commands should return `anyhow::Result`; `check` may return an `ExitCode` to
@@ -210,11 +211,16 @@ shape onto side-effect-first commands such as `open`, `new`, `fix`, task
 mutations, or the long-running `serve` command unless a concrete change makes
 the split useful.
 
-The web viewer keeps its public command entry point in `src/commands/serve.rs`.
-Keep responsibility-specific helpers in `src/commands/serve/`: HTTP routing and
-responses in `http.rs`, static/font assets in `assets.rs`, page shell and panels
-in `page.rs`, org body rendering in `org_html.rs`, inline markup and percent
-codec helpers in `inline.rs`, and syntax highlighting in `highlight.rs`.
+Command domain behavior should live in the focused crates when possible:
+`pkms-org` for org syntax, graph, workspace, and raw org edits; `pkms-db` for
+note database commands; `pkms-task` for task workflows; and `pkms-web` for the
+local viewer. The umbrella `pkms` crate should keep CLI parsing, config mapping,
+output formatting, and cross-domain orchestration.
+
+The web viewer keeps its public command entry point in
+`crates/pkms/src/commands/serve.rs`, but HTTP routing, static/font assets, page
+shell, org body rendering, inline markup, KaTeX, and syntax highlighting live in
+`crates/pkms-web/src/`.
 
 ## Output Contracts
 
