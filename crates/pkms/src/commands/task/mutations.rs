@@ -3,10 +3,6 @@ use pkms_task::id::TaskId;
 use pkms_task::model::TaskSourceKind;
 use pkms_task::modifiers::TaskModifierSpec;
 pub(super) use pkms_task::mutation::unsupported_task_source;
-#[cfg(feature = "todoist")]
-pub(super) use pkms_task::mutation::{
-    mod_date, mod_optional_text, mod_title, parse_mutation_due_date, validate_mod_source,
-};
 use std::process::ExitCode;
 
 use super::TaskRuntime;

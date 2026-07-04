@@ -8,8 +8,6 @@ use anyhow::Result;
 use chrono::{NaiveDate, NaiveDateTime};
 use pkms_task::filter::SourceSelection;
 use pkms_task::model::{TaskItem, TaskPriority, TaskProperty, TaskSourceKind};
-#[cfg(feature = "todoist")]
-pub(super) use pkms_task::mutation::TaskModChange;
 pub(super) use pkms_task::mutation::{TaskModOutput, TaskStateChangeOutput};
 use pkms_task::provider::TaskMetadataRow;
 use serde::Serialize;
