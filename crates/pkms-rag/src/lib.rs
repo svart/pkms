@@ -11,9 +11,13 @@ pub mod schema;
 
 pub use chunking::{CONTENT_HASH_PREFIX, ChunkNoteInput, chunk_note, content_hash};
 pub use db::{build_fts_query, connect, dense_search, ingest_records, search, status};
+#[cfg(feature = "fastembed")]
+pub use embeddings::FastEmbeddingProvider;
 pub use embeddings::{
-    DEFAULT_EMBEDDING_MAX_BODY_CHARS, DEFAULT_HASH_EMBEDDING_DIMENSION, EmbeddingProvider,
-    HashEmbeddingProvider, cosine_similarity, embedding_text, pack_vector, unpack_vector,
+    DEFAULT_EMBEDDING_MAX_BODY_CHARS, DEFAULT_FASTEMBED_BATCH_SIZE, DEFAULT_FASTEMBED_MODEL,
+    DEFAULT_HASH_EMBEDDING_DIMENSION, EmbeddingProvider, EmbeddingProviderConfig,
+    HashEmbeddingProvider, cosine_similarity, embedding_text, pack_vector, provider_from_env,
+    unpack_vector,
 };
 pub use models::{
     ChunkRecord, DeleteEntityType, DeleteRecord, IngestSummary, LinkRecord, NoteRecord,

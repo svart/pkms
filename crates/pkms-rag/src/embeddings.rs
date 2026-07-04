@@ -1,21 +1,48 @@
 use std::mem::{size_of, size_of_val};
 
+#[cfg(feature = "fastembed")]
+use anyhow::Context;
 use anyhow::{Result, bail};
 use blake2::{
     Blake2bVar,
     digest::{Update, VariableOutput},
 };
+#[cfg(feature = "fastembed")]
+use fastembed::{EmbeddingModel, TextEmbedding, TextInitOptions};
+#[cfg(feature = "fastembed")]
+use std::sync::Mutex;
 
 use crate::models::ChunkRecord;
 
 pub const DEFAULT_HASH_EMBEDDING_MODEL: &str = "hashing-v1";
 pub const DEFAULT_HASH_EMBEDDING_DIMENSION: usize = 384;
 pub const DEFAULT_EMBEDDING_MAX_BODY_CHARS: usize = 8000;
+pub const DEFAULT_FASTEMBED_MODEL: &str =
+    "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2";
+pub const DEFAULT_FASTEMBED_BATCH_SIZE: usize = 256;
+
+#[cfg(feature = "fastembed")]
+const DEFAULT_FASTEMBED_MODEL_CODE: &str = "Xenova/paraphrase-multilingual-MiniLM-L12-v2";
+
+const HASH_PROVIDER_NAME: &str = "hash";
+const FASTEMBED_PROVIDER_NAME: &str = "fastembed";
+const EMBEDDING_PROVIDER_ENV: &str = "PKMS_RAG_EMBEDDING_PROVIDER";
+const EMBEDDING_MODEL_ENV: &str = "PKMS_RAG_EMBEDDING_MODEL";
+const EMBEDDING_BATCH_SIZE_ENV: &str = "PKMS_RAG_EMBEDDING_BATCH_SIZE";
 
 pub trait EmbeddingProvider {
     fn model_name(&self) -> &str;
     fn dimension(&self) -> usize;
     fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>>;
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum EmbeddingProviderConfig {
+    Hash,
+    FastEmbed {
+        model_name: String,
+        batch_size: usize,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -72,6 +99,110 @@ impl EmbeddingProvider for HashEmbeddingProvider {
     }
 }
 
+#[cfg(feature = "fastembed")]
+pub struct FastEmbeddingProvider {
+    model_name: String,
+    dimension: usize,
+    batch_size: usize,
+    model: Mutex<TextEmbedding>,
+}
+
+#[cfg(feature = "fastembed")]
+impl FastEmbeddingProvider {
+    pub fn try_new(model_name: &str, batch_size: usize) -> Result<Self> {
+        anyhow::ensure!(batch_size > 0, "FastEmbed batch size must be positive");
+        let model = parse_fastembed_model(model_name)?;
+        let info = TextEmbedding::get_model_info(&model)
+            .with_context(|| format!("failed to read FastEmbed model info for {model_name}"))?;
+        let normalized_model_name = info.model_code.clone();
+        let dimension = info.dim;
+        let model = TextEmbedding::try_new(TextInitOptions::new(model)).with_context(|| {
+            format!("failed to initialize FastEmbed model {normalized_model_name}")
+        })?;
+        Ok(Self {
+            model_name: normalized_model_name,
+            dimension,
+            batch_size,
+            model: Mutex::new(model),
+        })
+    }
+}
+
+#[cfg(feature = "fastembed")]
+impl EmbeddingProvider for FastEmbeddingProvider {
+    fn model_name(&self) -> &str {
+        &self.model_name
+    }
+
+    fn dimension(&self) -> usize {
+        self.dimension
+    }
+
+    fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>> {
+        let mut model = self
+            .model
+            .lock()
+            .map_err(|_| anyhow::anyhow!("FastEmbed model lock is poisoned"))?;
+        model.embed(texts, Some(self.batch_size)).with_context(|| {
+            format!(
+                "failed to embed texts with FastEmbed model {}",
+                self.model_name
+            )
+        })
+    }
+}
+
+pub fn embedding_provider_config_from_env() -> Result<EmbeddingProviderConfig> {
+    let provider = std::env::var(EMBEDDING_PROVIDER_ENV)
+        .unwrap_or_else(|_| FASTEMBED_PROVIDER_NAME.to_string())
+        .to_ascii_lowercase();
+    match provider.as_str() {
+        HASH_PROVIDER_NAME | "hashing-v1" => Ok(EmbeddingProviderConfig::Hash),
+        FASTEMBED_PROVIDER_NAME => Ok(EmbeddingProviderConfig::FastEmbed {
+            model_name: std::env::var(EMBEDDING_MODEL_ENV)
+                .unwrap_or_else(|_| DEFAULT_FASTEMBED_MODEL.to_string()),
+            batch_size: embedding_batch_size_from_env(),
+        }),
+        _ => bail!(
+            "unsupported embedding provider '{}'; expected '{}' or '{}'",
+            provider,
+            HASH_PROVIDER_NAME,
+            FASTEMBED_PROVIDER_NAME
+        ),
+    }
+}
+
+pub fn provider_from_env() -> Result<Box<dyn EmbeddingProvider>> {
+    match embedding_provider_config_from_env()? {
+        EmbeddingProviderConfig::Hash => Ok(Box::new(HashEmbeddingProvider::default())),
+        EmbeddingProviderConfig::FastEmbed {
+            model_name,
+            batch_size,
+        } => fastembed_provider_boxed(&model_name, batch_size),
+    }
+}
+
+#[cfg(feature = "fastembed")]
+fn fastembed_provider_boxed(
+    model_name: &str,
+    batch_size: usize,
+) -> Result<Box<dyn EmbeddingProvider>> {
+    Ok(Box::new(FastEmbeddingProvider::try_new(
+        model_name, batch_size,
+    )?))
+}
+
+#[cfg(not(feature = "fastembed"))]
+fn fastembed_provider_boxed(
+    model_name: &str,
+    _batch_size: usize,
+) -> Result<Box<dyn EmbeddingProvider>> {
+    bail!(
+        "FastEmbed provider requested for model '{}', but pkms-rag was built without the 'fastembed' feature",
+        model_name
+    )
+}
+
 pub fn embedding_text(chunk: &ChunkRecord) -> String {
     embedding_text_with_max_body_chars(chunk, embedding_max_body_chars_from_env())
 }
@@ -97,6 +228,38 @@ fn embedding_max_body_chars_from_env() -> usize {
         .and_then(|value| value.parse().ok())
         .filter(|value| *value > 0)
         .unwrap_or(DEFAULT_EMBEDDING_MAX_BODY_CHARS)
+}
+
+fn embedding_batch_size_from_env() -> usize {
+    std::env::var(EMBEDDING_BATCH_SIZE_ENV)
+        .ok()
+        .and_then(|value| value.parse().ok())
+        .filter(|value| *value > 0)
+        .unwrap_or(DEFAULT_FASTEMBED_BATCH_SIZE)
+}
+
+#[cfg(feature = "fastembed")]
+fn parse_fastembed_model(model_name: &str) -> Result<EmbeddingModel> {
+    if let Ok(model) = model_name.parse::<EmbeddingModel>() {
+        return Ok(model);
+    }
+    let model_name = fastembed_model_alias(model_name).unwrap_or(model_name);
+    TextEmbedding::list_supported_models()
+        .into_iter()
+        .find(|info| info.model_code.eq_ignore_ascii_case(model_name))
+        .map(|info| info.model)
+        .ok_or_else(|| anyhow::anyhow!("unsupported FastEmbed model '{}'", model_name))
+}
+
+#[cfg(feature = "fastembed")]
+fn fastembed_model_alias(model_name: &str) -> Option<&'static str> {
+    match model_name {
+        "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2" => {
+            Some(DEFAULT_FASTEMBED_MODEL_CODE)
+        }
+        "BAAI/bge-small-en-v1.5" => Some("Xenova/bge-small-en-v1.5"),
+        _ => None,
+    }
 }
 
 pub fn pack_vector(vector: &[f32]) -> Vec<u8> {
@@ -238,6 +401,80 @@ mod tests {
         assert!(!text.contains("de"));
     }
 
+    #[test]
+    fn embeddings_provider_config_defaults_to_fastembed() {
+        let _guard = ENV_LOCK.lock().expect("env lock");
+        let _snapshot = EnvSnapshot::capture();
+        clear_embedding_env();
+
+        let config = embedding_provider_config_from_env().expect("config reads");
+
+        assert_eq!(
+            config,
+            EmbeddingProviderConfig::FastEmbed {
+                model_name: DEFAULT_FASTEMBED_MODEL.to_string(),
+                batch_size: DEFAULT_FASTEMBED_BATCH_SIZE,
+            }
+        );
+    }
+
+    #[test]
+    fn embeddings_provider_config_selects_hash_provider() {
+        let _guard = ENV_LOCK.lock().expect("env lock");
+        let _snapshot = EnvSnapshot::capture();
+        clear_embedding_env();
+        set_env(EMBEDDING_PROVIDER_ENV, "hash");
+
+        let config = embedding_provider_config_from_env().expect("config reads");
+        let provider = provider_from_env().expect("hash provider builds");
+
+        assert_eq!(config, EmbeddingProviderConfig::Hash);
+        assert_eq!(provider.model_name(), DEFAULT_HASH_EMBEDDING_MODEL);
+        assert_eq!(provider.dimension(), DEFAULT_HASH_EMBEDDING_DIMENSION);
+    }
+
+    #[test]
+    fn embeddings_provider_config_reads_fastembed_model_and_batch_size() {
+        let _guard = ENV_LOCK.lock().expect("env lock");
+        let _snapshot = EnvSnapshot::capture();
+        clear_embedding_env();
+        set_env(EMBEDDING_PROVIDER_ENV, "fastembed");
+        set_env(EMBEDDING_MODEL_ENV, "Xenova/all-MiniLM-L12-v2");
+        set_env(EMBEDDING_BATCH_SIZE_ENV, "7");
+
+        let config = embedding_provider_config_from_env().expect("config reads");
+
+        assert_eq!(
+            config,
+            EmbeddingProviderConfig::FastEmbed {
+                model_name: "Xenova/all-MiniLM-L12-v2".to_string(),
+                batch_size: 7,
+            }
+        );
+    }
+
+    #[test]
+    fn embeddings_provider_config_rejects_unknown_provider() {
+        let _guard = ENV_LOCK.lock().expect("env lock");
+        let _snapshot = EnvSnapshot::capture();
+        clear_embedding_env();
+        set_env(EMBEDDING_PROVIDER_ENV, "unknown");
+
+        let err = embedding_provider_config_from_env().expect_err("provider is rejected");
+
+        assert!(err.to_string().contains("unsupported embedding provider"));
+    }
+
+    #[cfg(feature = "fastembed")]
+    #[test]
+    fn embeddings_fastembed_model_info_reads_without_model_instantiation() {
+        let model = parse_fastembed_model(DEFAULT_FASTEMBED_MODEL).expect("model parses");
+        let info = TextEmbedding::get_model_info(&model).expect("model info reads");
+
+        assert_eq!(info.model_code, DEFAULT_FASTEMBED_MODEL_CODE);
+        assert!(info.dim > 0);
+    }
+
     fn sample_chunk(body: &str) -> ChunkRecord {
         ChunkRecord {
             schema_version: SUPPORTED_SCHEMA_VERSION,
@@ -270,6 +507,57 @@ mod tests {
                 }
             })
             .collect()
+    }
+
+    static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    struct EnvSnapshot {
+        values: Vec<(&'static str, Option<String>)>,
+    }
+
+    impl EnvSnapshot {
+        fn capture() -> Self {
+            Self {
+                values: vec![
+                    (
+                        EMBEDDING_PROVIDER_ENV,
+                        std::env::var(EMBEDDING_PROVIDER_ENV).ok(),
+                    ),
+                    (EMBEDDING_MODEL_ENV, std::env::var(EMBEDDING_MODEL_ENV).ok()),
+                    (
+                        EMBEDDING_BATCH_SIZE_ENV,
+                        std::env::var(EMBEDDING_BATCH_SIZE_ENV).ok(),
+                    ),
+                ],
+            }
+        }
+    }
+
+    impl Drop for EnvSnapshot {
+        fn drop(&mut self) {
+            for (key, value) in &self.values {
+                match value {
+                    Some(value) => set_env(key, value),
+                    None => remove_env(key),
+                }
+            }
+        }
+    }
+
+    fn clear_embedding_env() {
+        remove_env(EMBEDDING_PROVIDER_ENV);
+        remove_env(EMBEDDING_MODEL_ENV);
+        remove_env(EMBEDDING_BATCH_SIZE_ENV);
+    }
+
+    fn set_env(key: &str, value: &str) {
+        // SAFETY: these tests serialize environment changes with ENV_LOCK and restore values.
+        unsafe { std::env::set_var(key, value) };
+    }
+
+    fn remove_env(key: &str) {
+        // SAFETY: these tests serialize environment changes with ENV_LOCK and restore values.
+        unsafe { std::env::remove_var(key) };
     }
 }
 
