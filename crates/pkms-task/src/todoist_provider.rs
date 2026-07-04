@@ -58,6 +58,32 @@ pub fn list_items(
 }
 
 #[cfg(feature = "todoist")]
+pub fn get_item(config: &TodoistProviderConfig, id: &str) -> Result<TaskItem> {
+    let client = crate::todoist::TodoistClient::with_base_url(
+        config.api_base_url.clone(),
+        config.token.clone(),
+    );
+    let task = client.get_task(id)?;
+    let metadata = if task.project_id.is_some() {
+        Some(crate::todoist::TodoistMetadata::new(
+            client.list_projects()?,
+        ))
+    } else {
+        None
+    };
+    let mut item = crate::todoist::task_to_item_with_metadata(task, metadata.as_ref());
+    crate::todoist::enrich_items_with_pkms_notes(&config.org, std::slice::from_mut(&mut item))?;
+    Ok(item)
+}
+
+#[cfg(not(feature = "todoist"))]
+pub fn get_item(_config: &TodoistProviderConfig, _id: &str) -> Result<TaskItem> {
+    anyhow::bail!(
+        "Todoist support is not available in this build. Rebuild with --features todoist."
+    )
+}
+
+#[cfg(feature = "todoist")]
 pub fn project_rows(config: &TodoistProviderConfig) -> Result<Vec<TaskMetadataRow>> {
     let client = crate::todoist::TodoistClient::with_base_url(
         config.api_base_url.clone(),

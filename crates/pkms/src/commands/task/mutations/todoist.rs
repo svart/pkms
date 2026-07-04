@@ -10,12 +10,10 @@ use crate::cli::OutputFormat;
 #[cfg(not(feature = "todoist"))]
 use anyhow::bail;
 #[cfg(feature = "todoist")]
-use pkms_task::config::TodoistProviderConfig;
-#[cfg(feature = "todoist")]
 use pkms_task::todoist_mutation::{self, TodoistDoneOutput, TodoistStateOutput};
 
 #[cfg(feature = "todoist")]
-use super::super::render;
+use super::super::{providers, render};
 
 #[cfg(feature = "todoist")]
 pub(super) fn set_state(
@@ -26,7 +24,7 @@ pub(super) fn set_state(
     dry_run: bool,
 ) -> Result<()> {
     match todoist_mutation::set_todoist_state(
-        &todoist_config(config)?,
+        &providers::todoist_config(config)?,
         id,
         requested_state,
         dry_run,
@@ -58,7 +56,7 @@ pub(super) fn add(
     spec: &TaskModifierSpec,
     _clock: TaskClock,
 ) -> Result<()> {
-    let item = todoist_mutation::add_todoist_task(&todoist_config(config)?, spec)?;
+    let item = todoist_mutation::add_todoist_task(&providers::todoist_config(config)?, spec)?;
     render::print_add_output(ctx, item)
 }
 
@@ -83,7 +81,7 @@ pub(super) fn mod_task(
     spec: &TaskModifierSpec,
     clock: TaskClock,
 ) -> Result<ExitCode> {
-    let output = todoist_mutation::mod_todoist_task(&todoist_config(config)?, id, spec)?;
+    let output = todoist_mutation::mod_todoist_task(&providers::todoist_config(config)?, id, spec)?;
     render::print_mod_output(ctx, output, clock.today)
 }
 
@@ -106,7 +104,12 @@ pub(super) fn postpone(
     to: &str,
     clock: TaskClock,
 ) -> Result<()> {
-    let item = todoist_mutation::postpone_todoist_task(&todoist_config(config)?, id, to, clock)?;
+    let item = todoist_mutation::postpone_todoist_task(
+        &providers::todoist_config(config)?,
+        id,
+        to,
+        clock,
+    )?;
     render::print_mutation_output(ctx, "postpone", item)
 }
 
@@ -128,7 +131,8 @@ pub(super) fn close(
     id: &str,
     dry_run: bool,
 ) -> Result<()> {
-    let output = todoist_mutation::close_todoist_task(&todoist_config(config)?, id, dry_run)?;
+    let output =
+        todoist_mutation::close_todoist_task(&providers::todoist_config(config)?, id, dry_run)?;
     print_done_output(ctx, &output)
 }
 
@@ -140,16 +144,6 @@ pub(super) fn close(
     _dry_run: bool,
 ) -> Result<()> {
     bail!("Todoist support is not available in this build. Rebuild with --features todoist.")
-}
-
-#[cfg(feature = "todoist")]
-fn todoist_config(config: &ResolvedConfig) -> Result<TodoistProviderConfig> {
-    Ok(TodoistProviderConfig {
-        org: config.org_config(),
-        token: config.todoist_token()?,
-        api_base_url: config.todoist_api_base_url(),
-        default_filter: config.todoist_default_filter().map(str::to_string),
-    })
 }
 
 #[cfg(feature = "todoist")]

@@ -14,12 +14,7 @@ impl TaskProviderEnvironment for ResolvedConfig {
 
     #[cfg(feature = "todoist")]
     fn todoist_config(&self) -> Result<TodoistProviderConfig> {
-        Ok(TodoistProviderConfig {
-            org: self.org_config(),
-            token: self.todoist_token()?,
-            api_base_url: self.todoist_api_base_url(),
-            default_filter: self.todoist_default_filter().map(str::to_string),
-        })
+        todoist_config(self)
     }
 
     #[cfg(not(feature = "todoist"))]
@@ -31,6 +26,18 @@ impl TaskProviderEnvironment for ResolvedConfig {
             default_filter: None,
         })
     }
+}
+
+#[cfg(feature = "todoist")]
+pub(in crate::commands::task) fn todoist_config(
+    config: &ResolvedConfig,
+) -> Result<TodoistProviderConfig> {
+    Ok(TodoistProviderConfig {
+        org: config.org_config(),
+        token: config.todoist_token()?,
+        api_base_url: config.todoist_api_base_url(),
+        default_filter: config.todoist_default_filter().map(str::to_string),
+    })
 }
 
 pub(super) fn collect_task_metadata(

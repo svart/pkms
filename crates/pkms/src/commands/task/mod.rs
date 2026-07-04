@@ -16,8 +16,6 @@ use pkms_task::filter::SourceSelection;
 use pkms_task::id::TaskId;
 use pkms_task::model::TaskSourceKind;
 use pkms_task::modifiers::TaskModifierSpec;
-#[cfg(feature = "todoist")]
-use pkms_task::todoist;
 use std::collections::HashMap;
 use std::io::{self, Write};
 use std::process::ExitCode;
@@ -206,16 +204,7 @@ pub(super) fn run_open(
 
 #[cfg(feature = "todoist")]
 fn show_todoist_task(config: &ResolvedConfig, ctx: &OutputContext, id: &str) -> Result<()> {
-    let token = config.todoist_token()?;
-    let client = todoist::TodoistClient::with_base_url(config.todoist_api_base_url(), token);
-    let task = client.get_task(id)?;
-    let metadata = if task.project_id.is_some() {
-        Some(todoist::TodoistMetadata::new(client.list_projects()?))
-    } else {
-        None
-    };
-    let mut item = todoist::task_to_item_with_metadata(task, metadata.as_ref());
-    todoist::enrich_items_with_pkms_notes(&config.org_config(), std::slice::from_mut(&mut item))?;
+    let item = pkms_task::todoist_provider::get_item(&providers::todoist_config(config)?, id)?;
     match ctx.format {
         OutputFormat::Text => render::print_task_table(
             &[item],
