@@ -1,8 +1,8 @@
 use crate::config::ResolvedConfig;
-use crate::tasks::filter::SourceSelection;
-use crate::tasks::provider::TaskMetadataRow;
 use anyhow::Result;
 use pkms_task::config::{PkmsTaskConfig, TodoistProviderConfig};
+use pkms_task::filter::SourceSelection;
+use pkms_task::provider::TaskMetadataRow;
 use pkms_task::providers::TaskProviderEnvironment;
 
 pub(super) use pkms_task::providers::MetadataKind;

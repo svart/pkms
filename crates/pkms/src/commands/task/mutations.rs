@@ -1,7 +1,7 @@
-use crate::tasks::id::TaskId;
-use crate::tasks::model::TaskSourceKind;
-use crate::tasks::modifiers::TaskModifierSpec;
 use anyhow::Result;
+use pkms_task::id::TaskId;
+use pkms_task::model::TaskSourceKind;
+use pkms_task::modifiers::TaskModifierSpec;
 pub(super) use pkms_task::mutation::unsupported_task_source;
 #[cfg(feature = "todoist")]
 pub(super) use pkms_task::mutation::{

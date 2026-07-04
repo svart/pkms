@@ -8,5 +8,4 @@ pub mod link_check;
 pub mod logging;
 pub mod output;
 pub mod runner;
-pub mod tasks;
 pub mod util;

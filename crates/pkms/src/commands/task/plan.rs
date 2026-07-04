@@ -5,11 +5,11 @@ use crate::commands::task_common::{AgendaWindow, RowSeparatorMode};
 use crate::config::{ColumnSource, ColumnView, TaskCommandConfig};
 use crate::input;
 use crate::output::Column;
-use crate::tasks::clock::TaskClock;
-use crate::tasks::filter::{SourceSelection, TaskFilters, parse_task_filters_on};
-use crate::tasks::provider::TaskListView;
 use crate::util;
 use anyhow::{Result, bail};
+use pkms_task::clock::TaskClock;
+use pkms_task::filter::{SourceSelection, TaskFilters, parse_task_filters_on};
+use pkms_task::provider::TaskListView;
 
 #[derive(Debug, Clone, Copy)]
 pub(super) enum ShortcutKind {

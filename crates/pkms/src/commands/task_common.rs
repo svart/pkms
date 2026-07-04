@@ -1,8 +1,8 @@
 use crate::output::table::{TableLayout, adaptive_table_layout, table_padding_width};
 use crate::output::{ALL_COLUMNS, Column, terminal_markup};
-use crate::tasks::clock::TaskClock;
 use chrono::{NaiveDate, Timelike};
 use pkms_org::org_date::parse_org_date;
+use pkms_task::clock::TaskClock;
 pub use pkms_task::common::{
     AgendaWindow, TaskGroupField, TaskSortField, agenda_day_section_label, apply_limit,
     date_in_agenda_window, group_task_items, parse_task_group_field, parse_task_sort_fields,

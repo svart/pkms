@@ -9,16 +9,18 @@ use crate::commands::task_common::RowSeparatorMode;
 use crate::commands::task_common::{TaskSortField, sort_task_items};
 use crate::config::{ResolvedConfig, TaskCommandConfig};
 use crate::output::{OutputContext, terminal_markup};
-use crate::tasks::clock::TaskClock;
-#[cfg(feature = "todoist")]
-use crate::tasks::filter::SourceSelection;
-use crate::tasks::filter::parse_task_filters_on;
-use crate::tasks::id::TaskId;
-use crate::tasks::model::TaskSourceKind;
-use crate::tasks::modifiers::TaskModifierSpec;
-use crate::tasks::provider::TaskMetadataRow;
 use anyhow::{Result, anyhow, bail};
 use pkms_org::graph::tasks::CanonicalTaskEntry;
+use pkms_task::clock::TaskClock;
+#[cfg(feature = "todoist")]
+use pkms_task::filter::SourceSelection;
+use pkms_task::filter::parse_task_filters_on;
+use pkms_task::id::TaskId;
+use pkms_task::model::TaskSourceKind;
+use pkms_task::modifiers::TaskModifierSpec;
+use pkms_task::provider::TaskMetadataRow;
+#[cfg(feature = "todoist")]
+use pkms_task::todoist;
 use std::collections::HashMap;
 use std::io::{self, Write};
 use std::process::ExitCode;
@@ -208,22 +210,16 @@ pub(super) fn run_open(
 
 #[cfg(feature = "todoist")]
 fn show_todoist_task(config: &ResolvedConfig, ctx: &OutputContext, id: &str) -> Result<()> {
-    let token = crate::tasks::todoist::ensure_enabled(config)?;
-    let client =
-        crate::tasks::todoist::TodoistClient::with_base_url(config.todoist_api_base_url(), token);
+    let token = config.todoist_token()?;
+    let client = todoist::TodoistClient::with_base_url(config.todoist_api_base_url(), token);
     let task = client.get_task(id)?;
     let metadata = if task.project_id.is_some() {
-        Some(crate::tasks::todoist::TodoistMetadata::new(
-            client.list_projects()?,
-        ))
+        Some(todoist::TodoistMetadata::new(client.list_projects()?))
     } else {
         None
     };
-    let mut item = crate::tasks::todoist::task_to_item_with_metadata(task, metadata.as_ref());
-    crate::tasks::todoist::enrich_items_with_pkms_notes(
-        &config.org_config(),
-        std::slice::from_mut(&mut item),
-    )?;
+    let mut item = todoist::task_to_item_with_metadata(task, metadata.as_ref());
+    todoist::enrich_items_with_pkms_notes(&config.org_config(), std::slice::from_mut(&mut item))?;
     match ctx.format {
         OutputFormat::Text => render::print_task_table(
             &[item],

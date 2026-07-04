@@ -2,11 +2,11 @@ use super::plan;
 use crate::commands::task_common::{AgendaWindow, RowSeparatorMode};
 use crate::config::ResolvedConfig;
 use crate::output::Column;
-use crate::tasks::clock::TaskClock;
-use crate::tasks::filter::SourceSelection;
-use crate::tasks::model::TaskItem;
 use anyhow::Result;
 use chrono::NaiveDate;
+use pkms_task::clock::TaskClock;
+use pkms_task::filter::SourceSelection;
+use pkms_task::model::TaskItem;
 
 pub(super) use pkms_task::execution::TaskListItems;
 

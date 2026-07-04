@@ -1,18 +1,20 @@
 use crate::config::ResolvedConfig;
 use crate::output::OutputContext;
-use crate::tasks::clock::TaskClock;
-use crate::tasks::modifiers::TaskModifierSpec;
 use anyhow::{Result, bail};
+use pkms_task::clock::TaskClock;
+use pkms_task::modifiers::TaskModifierSpec;
 use std::process::ExitCode;
 
 #[cfg(feature = "todoist")]
 use crate::cli::OutputFormat;
 #[cfg(feature = "todoist")]
-use crate::tasks::model::{TaskPriority, TaskProperty};
-#[cfg(feature = "todoist")]
-use crate::tasks::modifiers::{TaskDateArg, TaskPriorityArg, org_date};
-#[cfg(feature = "todoist")]
 use anyhow::Context;
+#[cfg(feature = "todoist")]
+use pkms_task::model::{TaskPriority, TaskProperty};
+#[cfg(feature = "todoist")]
+use pkms_task::modifiers::{TaskDateArg, TaskPriorityArg, org_date};
+#[cfg(feature = "todoist")]
+use pkms_task::todoist;
 #[cfg(feature = "todoist")]
 use serde::Serialize;
 
@@ -36,17 +38,14 @@ pub(super) fn set_state(
                 println!("Would reopen Todoist task todoist:{id}");
                 return Ok(());
             }
-            let token = crate::tasks::todoist::ensure_enabled(config)?;
-            let client = crate::tasks::todoist::TodoistClient::with_base_url(
-                config.todoist_api_base_url(),
-                token,
-            );
+            let token = config.todoist_token()?;
+            let client =
+                todoist::TodoistClient::with_base_url(config.todoist_api_base_url(), token);
             client.reopen_task(id)?;
             let task = client.get_task(id)?;
             let metadata = metadata_for_task(&client, &task)?;
-            let mut item =
-                crate::tasks::todoist::task_to_item_with_metadata(task, metadata.as_ref());
-            crate::tasks::todoist::enrich_items_with_pkms_notes(
+            let mut item = todoist::task_to_item_with_metadata(task, metadata.as_ref());
+            todoist::enrich_items_with_pkms_notes(
                 &config.org_config(),
                 std::slice::from_mut(&mut item),
             )?;
@@ -131,16 +130,15 @@ fn create_structured_task(
     let due_date = add_date("due", spec.due.as_ref())?;
     let deadline_date = add_date("deadline", spec.deadline.as_ref())?;
     let priority = spec.priority.map(add_priority).transpose()?;
-    let token = crate::tasks::todoist::ensure_enabled(config)?;
-    let client =
-        crate::tasks::todoist::TodoistClient::with_base_url(config.todoist_api_base_url(), token);
-    let metadata = crate::tasks::todoist::TodoistMetadata::new(client.list_projects()?);
+    let token = config.todoist_token()?;
+    let client = todoist::TodoistClient::with_base_url(config.todoist_api_base_url(), token);
+    let metadata = todoist::TodoistMetadata::new(client.list_projects()?);
     let project_id = spec
         .project
         .as_deref()
         .map(|project| metadata.resolve_project_id(project))
         .transpose()?;
-    let request = crate::tasks::todoist::TodoistCreateTaskRequest {
+    let request = todoist::TodoistCreateTaskRequest {
         content: title.to_string(),
         description,
         project_id,
@@ -151,11 +149,8 @@ fn create_structured_task(
     };
 
     let task = client.create_task(&request)?;
-    let mut item = crate::tasks::todoist::task_to_item_with_metadata(task, Some(&metadata));
-    crate::tasks::todoist::enrich_items_with_pkms_notes(
-        &config.org_config(),
-        std::slice::from_mut(&mut item),
-    )?;
+    let mut item = todoist::task_to_item_with_metadata(task, Some(&metadata));
+    todoist::enrich_items_with_pkms_notes(&config.org_config(), std::slice::from_mut(&mut item))?;
     render::print_add_output(ctx, item)
 }
 
@@ -170,19 +165,15 @@ fn quick_add_task(
         .as_deref()
         .filter(|text| !text.trim().is_empty())
         .ok_or_else(|| anyhow::anyhow!("Todoist Quick Add requires task text or title:"))?;
-    let token = crate::tasks::todoist::ensure_enabled(config)?;
-    let client =
-        crate::tasks::todoist::TodoistClient::with_base_url(config.todoist_api_base_url(), token);
+    let token = config.todoist_token()?;
+    let client = todoist::TodoistClient::with_base_url(config.todoist_api_base_url(), token);
     let text = quick_add_text(text, spec.project.as_deref());
     let response = client.quick_add(&text)?;
     let id = created_task_id(&response)?;
     let task = client.get_task(&id)?;
-    let metadata = crate::tasks::todoist::TodoistMetadata::new(client.list_projects()?);
-    let mut item = crate::tasks::todoist::task_to_item_with_metadata(task, Some(&metadata));
-    crate::tasks::todoist::enrich_items_with_pkms_notes(
-        &config.org_config(),
-        std::slice::from_mut(&mut item),
-    )?;
+    let metadata = todoist::TodoistMetadata::new(client.list_projects()?);
+    let mut item = todoist::task_to_item_with_metadata(task, Some(&metadata));
+    todoist::enrich_items_with_pkms_notes(&config.org_config(), std::slice::from_mut(&mut item))?;
     render::print_add_output(ctx, item)
 }
 
@@ -205,20 +196,16 @@ pub(super) fn mod_task(
         bail!("dep is available only for PKMS task creation.");
     }
 
-    let token = crate::tasks::todoist::ensure_enabled(config)?;
-    let client =
-        crate::tasks::todoist::TodoistClient::with_base_url(config.todoist_api_base_url(), token);
+    let token = config.todoist_token()?;
+    let client = todoist::TodoistClient::with_base_url(config.todoist_api_base_url(), token);
     let existing = client.get_task(id)?;
     let needs_metadata = existing.project_id.is_some() || spec.project.is_some();
     let metadata = if needs_metadata {
-        Some(crate::tasks::todoist::TodoistMetadata::new(
-            client.list_projects()?,
-        ))
+        Some(todoist::TodoistMetadata::new(client.list_projects()?))
     } else {
         None
     };
-    let old_item =
-        crate::tasks::todoist::task_to_item_with_metadata(existing.clone(), metadata.as_ref());
+    let old_item = todoist::task_to_item_with_metadata(existing.clone(), metadata.as_ref());
     let mut request = serde_json::Map::new();
     let mut changes = Vec::new();
 
@@ -335,11 +322,8 @@ pub(super) fn mod_task(
     client.update_task(id, &serde_json::Value::Object(request))?;
     let task = client.get_task(id)?;
     let metadata = metadata_for_task(&client, &task)?.or(metadata);
-    let mut item = crate::tasks::todoist::task_to_item_with_metadata(task, metadata.as_ref());
-    crate::tasks::todoist::enrich_items_with_pkms_notes(
-        &config.org_config(),
-        std::slice::from_mut(&mut item),
-    )?;
+    let mut item = todoist::task_to_item_with_metadata(task, metadata.as_ref());
+    todoist::enrich_items_with_pkms_notes(&config.org_config(), std::slice::from_mut(&mut item))?;
     render::print_mod_output(
         ctx,
         render::TaskModOutput {
@@ -391,9 +375,8 @@ pub(super) fn postpone(
     to: &str,
     clock: TaskClock,
 ) -> Result<()> {
-    let token = crate::tasks::todoist::ensure_enabled(config)?;
-    let client =
-        crate::tasks::todoist::TodoistClient::with_base_url(config.todoist_api_base_url(), token);
+    let token = config.todoist_token()?;
+    let client = todoist::TodoistClient::with_base_url(config.todoist_api_base_url(), token);
     let existing = client.get_task(id)?;
     let is_recurring = existing
         .due
@@ -409,11 +392,8 @@ pub(super) fn postpone(
     )?;
     let task = client.get_task(id)?;
     let metadata = metadata_for_task(&client, &task)?;
-    let mut item = crate::tasks::todoist::task_to_item_with_metadata(task, metadata.as_ref());
-    crate::tasks::todoist::enrich_items_with_pkms_notes(
-        &config.org_config(),
-        std::slice::from_mut(&mut item),
-    )?;
+    let mut item = todoist::task_to_item_with_metadata(task, metadata.as_ref());
+    todoist::enrich_items_with_pkms_notes(&config.org_config(), std::slice::from_mut(&mut item))?;
     render::print_mutation_output(ctx, "postpone", item)
 }
 
@@ -430,13 +410,11 @@ pub(super) fn postpone(
 
 #[cfg(feature = "todoist")]
 fn metadata_for_task(
-    client: &crate::tasks::todoist::TodoistClient,
-    task: &crate::tasks::todoist::TodoistTask,
-) -> Result<Option<crate::tasks::todoist::TodoistMetadata>> {
+    client: &todoist::TodoistClient,
+    task: &todoist::TodoistTask,
+) -> Result<Option<todoist::TodoistMetadata>> {
     if task.project_id.is_some() {
-        Ok(Some(crate::tasks::todoist::TodoistMetadata::new(
-            client.list_projects()?,
-        )))
+        Ok(Some(todoist::TodoistMetadata::new(client.list_projects()?)))
     } else {
         Ok(None)
     }
@@ -497,11 +475,8 @@ pub(super) fn close(
     }
 
     if !dry_run {
-        let token = crate::tasks::todoist::ensure_enabled(config)?;
-        let client = crate::tasks::todoist::TodoistClient::with_base_url(
-            config.todoist_api_base_url(),
-            token,
-        );
+        let token = config.todoist_token()?;
+        let client = todoist::TodoistClient::with_base_url(config.todoist_api_base_url(), token);
         client.close_task(id)?;
     }
 

@@ -1,8 +1,8 @@
 use crate::config::ResolvedConfig;
 use crate::output::OutputContext;
-use crate::tasks::clock::TaskClock;
-use crate::tasks::modifiers::TaskModifierSpec;
 use anyhow::Result;
+use pkms_task::clock::TaskClock;
+use pkms_task::modifiers::TaskModifierSpec;
 use pkms_task::mutation::{add_pkms_task, mod_pkms_task, postpone_pkms_task, set_pkms_state};
 use std::process::ExitCode;
 
