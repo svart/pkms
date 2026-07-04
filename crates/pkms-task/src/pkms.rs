@@ -5,7 +5,7 @@ use crate::model::{TaskDate, TaskItem, TaskSourceKind, TaskStatus};
 use crate::task_index::{
     TaskRecord, TaskRecordQuery, assign_canonical_ids, collect_agenda_records, collect_todo_records,
 };
-use anyhow::{Context, Result};
+use anyhow::Result;
 use chrono::NaiveDate;
 use pkms_org::graph::tasks::TaskStateConfig;
 use pkms_org::org_task_edit;
@@ -190,24 +190,11 @@ fn resolve_daily_inbox_target(
 }
 
 fn ensure_daily_note_exists(path: &Path, today: chrono::NaiveDate) -> Result<()> {
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent).with_context(|| {
-            format!(
-                "Failed to create daily note directory: {}",
-                parent.display()
-            )
-        })?;
-    }
-    if !path.exists() {
-        let title = today.format("%Y-%m-%d").to_string();
-        let uuid = uuid::Uuid::new_v4();
-        std::fs::write(
-            path,
-            format!(":PROPERTIES:\n:ID:       {uuid}\n:END:\n#+title: {title}\n\n"),
-        )
-        .with_context(|| format!("Failed to create daily note: {}", path.display()))?;
-    }
-    Ok(())
+    org_task_edit::ensure_daily_note_exists(&org_task_edit::OrgDailyNoteSpec {
+        path: path.to_path_buf(),
+        date: today,
+        uuid: uuid::Uuid::new_v4().to_string(),
+    })
 }
 
 pub fn append_inbox_entry(target: &PkmsInboxTarget, entry: &str) -> Result<TaskLocation> {

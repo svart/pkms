@@ -2,7 +2,7 @@ use crate::org_edit::{heading_level, heading_level_at_index, heading_subtree_end
 use crate::parser::{HEADING_RE, OrgPriority, OrgTodoState};
 use anyhow::{Context, Result};
 use chrono::{NaiveDate, NaiveDateTime};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OrgTaskInsertSpec {
@@ -14,6 +14,13 @@ pub struct OrgTaskInsertSpec {
     pub scheduled: Option<String>,
     pub deadline: Option<String>,
     pub description: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OrgDailyNoteSpec {
+    pub path: PathBuf,
+    pub date: NaiveDate,
+    pub uuid: String,
 }
 
 pub fn append_org_task(path: &Path, spec: &OrgTaskInsertSpec) -> Result<usize> {
@@ -33,6 +40,29 @@ pub fn append_child_org_task(
 ) -> Result<usize> {
     let entry = format_org_task_entry(spec)?;
     append_child_org_entry(path, parent_line_number, &entry)
+}
+
+pub fn ensure_daily_note_exists(spec: &OrgDailyNoteSpec) -> Result<()> {
+    if let Some(parent) = spec.path.parent() {
+        std::fs::create_dir_all(parent).with_context(|| {
+            format!(
+                "Failed to create daily note directory: {}",
+                parent.display()
+            )
+        })?;
+    }
+    if !spec.path.exists() {
+        let title = spec.date.format("%Y-%m-%d").to_string();
+        std::fs::write(
+            &spec.path,
+            format!(
+                ":PROPERTIES:\n:ID:       {}\n:END:\n#+title: {title}\n\n",
+                spec.uuid
+            ),
+        )
+        .with_context(|| format!("Failed to create daily note: {}", spec.path.display()))?;
+    }
+    Ok(())
 }
 
 pub fn append_org_entry(path: &Path, entry: &str) -> Result<usize> {
@@ -537,6 +567,44 @@ mod tests {
         let line = append_daily_inbox_entry_to_content(&mut content, "** TODO New\n");
         assert_eq!(line, 4);
         assert_eq!(content, "#+title: Day\n\n* Inbox\n** TODO New\n");
+    }
+
+    #[test]
+    fn creates_daily_note_with_parent_directory() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("daily/2026-05-27.org");
+
+        ensure_daily_note_exists(&OrgDailyNoteSpec {
+            path: path.clone(),
+            date: chrono::NaiveDate::from_ymd_opt(2026, 5, 27).unwrap(),
+            uuid: "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa".to_string(),
+        })
+        .unwrap();
+
+        assert_eq!(
+            std::fs::read_to_string(&path).unwrap(),
+            ":PROPERTIES:\n:ID:       aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa\n:END:\n#+title: 2026-05-27\n\n"
+        );
+    }
+
+    #[test]
+    fn keeps_existing_daily_note_content() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("daily/2026-05-27.org");
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, "#+title: Existing\n\n* Inbox\n").unwrap();
+
+        ensure_daily_note_exists(&OrgDailyNoteSpec {
+            path: path.clone(),
+            date: chrono::NaiveDate::from_ymd_opt(2026, 5, 27).unwrap(),
+            uuid: "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa".to_string(),
+        })
+        .unwrap();
+
+        assert_eq!(
+            std::fs::read_to_string(&path).unwrap(),
+            "#+title: Existing\n\n* Inbox\n"
+        );
     }
 
     #[test]
