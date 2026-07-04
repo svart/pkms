@@ -15,6 +15,10 @@ inbox = "Inbox"
 open_todo_states = ["TODO", "WAITING", "IN-PROGRESS"]
 closed_todo_states = ["DONE"]
 
+[rag]
+rag_db = ".data/pkms-rag.sqlite3"
+notes_root = "/home/user/Documents/org"
+
 [ssh]
 identity_file = "~/.ssh/id_ed25519"
 known_hosts = "~/.ssh/known_hosts"
@@ -106,6 +110,23 @@ token availability.
 
 Keep config files containing `[todoist].token` private. `pkms info` does not
 print token values.
+
+## RAG Retrieval
+
+The `[rag]` section configures persistent defaults for `pkms rag`:
+
+```toml
+[rag]
+rag_db = ".data/pkms-rag.sqlite3"
+notes_root = "/home/user/Documents/org"
+# index_source = "retrieval-export.ndjson"
+```
+
+`--rag-db` overrides `[rag].rag_db`; `PKMS_RAG_DB` also overrides the config
+value. When no CLI or environment source is set, `pkms rag index` and
+`pkms rag serve` use `[rag].notes_root` or `[rag].index_source`; if neither is
+configured, they fall back to the resolved `db_root`. Relative `[rag]` paths are
+resolved under `db_root`.
 
 ## SSH File-Link Checks
 

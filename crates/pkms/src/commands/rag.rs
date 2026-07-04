@@ -1,7 +1,4 @@
-use std::{
-    io::Write,
-    path::{Path, PathBuf},
-};
+use std::{io::Write, path::PathBuf};
 
 use anyhow::{Context, Result, bail};
 
@@ -11,6 +8,7 @@ use crate::{
         RagServeArgs, RagStatusArgs,
     },
     command_context::CommandContext,
+    config::ResolvedConfig,
     output::OutputContext,
 };
 
@@ -24,37 +22,37 @@ const DEFAULT_RAG_PORT: u16 = 7337;
 
 pub fn run(command_ctx: &CommandContext<'_>, command: &RagCommand) -> Result<()> {
     match command {
-        RagCommand::Status(args) => run_status(command_ctx.output(), args),
-        RagCommand::Ingest(args) => run_ingest(command_ctx.output(), args),
+        RagCommand::Status(args) => run_status(command_ctx, args),
+        RagCommand::Ingest(args) => run_ingest(command_ctx, args),
         RagCommand::Index(args) => run_index(command_ctx, args),
-        RagCommand::Search(args) => run_search(command_ctx.output(), args),
-        RagCommand::Retrieve(args) => run_retrieve(command_ctx.output(), args),
+        RagCommand::Search(args) => run_search(command_ctx, args),
+        RagCommand::Retrieve(args) => run_retrieve(command_ctx, args),
         RagCommand::Serve(args) => run_serve(command_ctx, args),
     }
 }
 
-fn run_status(ctx: &OutputContext, args: &RagStatusArgs) -> Result<()> {
-    let db_path = resolve_rag_db(args.rag_db.as_ref());
+fn run_status(command_ctx: &CommandContext<'_>, args: &RagStatusArgs) -> Result<()> {
+    let db_path = resolve_rag_db(args.rag_db.as_ref(), command_ctx.config());
     let conn = pkms_rag::connect(&db_path)?;
     let status = pkms_rag::status(&conn, &db_path)?;
-    render_status(ctx, &status)
+    render_status(command_ctx.output(), &status)
 }
 
-fn run_ingest(ctx: &OutputContext, args: &RagIngestArgs) -> Result<()> {
-    let db_path = resolve_rag_db(args.rag_db.as_ref());
+fn run_ingest(command_ctx: &CommandContext<'_>, args: &RagIngestArgs) -> Result<()> {
+    let db_path = resolve_rag_db(args.rag_db.as_ref(), command_ctx.config());
     let records = pkms_rag::ndjson::load_ndjson(&args.path)?;
     let provider = pkms_rag::provider_from_env()?;
     let mut conn = pkms_rag::connect(&db_path)?;
     let summary = pkms_rag::ingest_records(&mut conn, &records, provider.as_ref(), false)?;
-    render_ingest_summary(ctx, &summary)
+    render_ingest_summary(command_ctx.output(), &summary)
 }
 
 fn run_index(command_ctx: &CommandContext<'_>, args: &RagIndexArgs) -> Result<()> {
-    let db_path = resolve_rag_db(args.rag_db.as_ref());
+    let db_path = resolve_rag_db(args.rag_db.as_ref(), command_ctx.config());
     let (notes_root, index_source) = resolve_index_sources(
         args.notes_root.as_ref(),
         args.index_source.as_ref(),
-        Some(command_ctx.config().resolved_db_root()),
+        command_ctx.config(),
     );
     let provider_config = pkms_rag::embedding_provider_config_from_env()?;
     let indexer = pkms_rag::BackgroundIndexer::new(db_path, index_source, notes_root);
@@ -71,19 +69,19 @@ fn run_index(command_ctx: &CommandContext<'_>, args: &RagIndexArgs) -> Result<()
     render_index_progress(command_ctx.output(), &progress)
 }
 
-fn run_search(ctx: &OutputContext, args: &RagSearchArgs) -> Result<()> {
-    let db_path = resolve_rag_db(args.rag_db.as_ref());
+fn run_search(command_ctx: &CommandContext<'_>, args: &RagSearchArgs) -> Result<()> {
+    let db_path = resolve_rag_db(args.rag_db.as_ref(), command_ctx.config());
     let conn = pkms_rag::connect(&db_path)?;
     let results = pkms_rag::search(&conn, &args.query, args.limit)?;
     let response = pkms_rag::SearchResponse {
         query: args.query.clone(),
         results,
     };
-    render_search_response(ctx, &response)
+    render_search_response(command_ctx.output(), &response)
 }
 
-fn run_retrieve(ctx: &OutputContext, args: &RagRetrieveArgs) -> Result<()> {
-    let db_path = resolve_rag_db(args.rag_db.as_ref());
+fn run_retrieve(command_ctx: &CommandContext<'_>, args: &RagRetrieveArgs) -> Result<()> {
+    let db_path = resolve_rag_db(args.rag_db.as_ref(), command_ctx.config());
     let conn = pkms_rag::connect(&db_path)?;
     let provider = pkms_rag::provider_from_env()?;
     let request = pkms_rag::RetrieveRequest {
@@ -94,17 +92,19 @@ fn run_retrieve(ctx: &OutputContext, args: &RagRetrieveArgs) -> Result<()> {
         weights: pkms_rag::RetrieveWeights::default(),
     };
     let response = pkms_rag::retrieve(&conn, &request, provider.as_ref())?;
-    render_retrieve_response(ctx, &response)
+    render_retrieve_response(command_ctx.output(), &response)
 }
 
 fn run_serve(command_ctx: &CommandContext<'_>, args: &RagServeArgs) -> Result<()> {
+    let (notes_root, index_source) = resolve_index_sources(
+        args.notes_root.as_ref(),
+        args.index_source.as_ref(),
+        command_ctx.config(),
+    );
     let options = pkms_rag::RagServeOptions {
-        db_path: resolve_rag_db(args.rag_db.as_ref()),
-        notes_root: resolve_notes_root_for_serve(args.notes_root.as_ref(), command_ctx),
-        index_source: args
-            .index_source
-            .clone()
-            .or_else(|| env_path(RAG_INDEX_SOURCE_ENV)),
+        db_path: resolve_rag_db(args.rag_db.as_ref(), command_ctx.config()),
+        notes_root,
+        index_source,
         host: args
             .host
             .clone()
@@ -264,17 +264,18 @@ fn retrieve_mode(mode: RagRetrieveMode) -> pkms_rag::RetrieveMode {
     }
 }
 
-fn resolve_rag_db(rag_db: Option<&PathBuf>) -> PathBuf {
+fn resolve_rag_db(rag_db: Option<&PathBuf>, config: &ResolvedConfig) -> PathBuf {
     rag_db
         .cloned()
         .or_else(|| env_path(RAG_DB_ENV))
+        .or_else(|| config.resolve_rag_db())
         .unwrap_or_else(|| PathBuf::from(pkms_rag::DEFAULT_RAG_DB))
 }
 
 fn resolve_index_sources(
     notes_root_arg: Option<&PathBuf>,
     index_source_arg: Option<&PathBuf>,
-    fallback_notes_root: Option<&Path>,
+    config: &ResolvedConfig,
 ) -> (Option<PathBuf>, Option<PathBuf>) {
     let notes_root = notes_root_arg
         .cloned()
@@ -282,22 +283,17 @@ fn resolve_index_sources(
     let index_source = index_source_arg
         .cloned()
         .or_else(|| env_path(RAG_INDEX_SOURCE_ENV));
-    let notes_root = if notes_root.is_none() && index_source.is_none() {
-        fallback_notes_root.map(Path::to_path_buf)
-    } else {
-        notes_root
-    };
-    (notes_root, index_source)
-}
+    if notes_root.is_some() || index_source.is_some() {
+        return (notes_root, index_source);
+    }
 
-fn resolve_notes_root_for_serve(
-    notes_root_arg: Option<&PathBuf>,
-    command_ctx: &CommandContext<'_>,
-) -> Option<PathBuf> {
-    notes_root_arg
-        .cloned()
-        .or_else(|| env_path(RAG_NOTES_ROOT_ENV))
-        .or_else(|| Some(command_ctx.config().resolved_db_root().to_path_buf()))
+    let notes_root = config.resolve_rag_notes_root();
+    let index_source = config.resolve_rag_index_source();
+    if notes_root.is_some() || index_source.is_some() {
+        return (notes_root, index_source);
+    }
+
+    (Some(config.resolved_db_root().to_path_buf()), None)
 }
 
 fn env_path(key: &str) -> Option<PathBuf> {

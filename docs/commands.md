@@ -128,14 +128,15 @@ pkms rag retrieve "agenda inspect tasks" --limit 5 --mode hybrid
 pkms rag serve --host 127.0.0.1 --port 7337
 ```
 
-`pkms rag` builds and queries a local SQLite retrieval index. By default the
-index path is `.data/pkms-rag.sqlite3`; override it per command with `--rag-db`
-or globally with `PKMS_RAG_DB`.
+`pkms rag` builds and queries a local SQLite retrieval index. The RAG database
+path resolves from `--rag-db`, `PKMS_RAG_DB`, `[rag].rag_db`, then the default
+`.data/pkms-rag.sqlite3`.
 
-`pkms rag index` rebuilds the index from, in order:
+`pkms rag index` and `pkms rag serve` rebuild from, in order:
 
 - `--notes-root` or `PKMS_RAG_NOTES_ROOT`.
 - `--index-source` or `PKMS_RAG_INDEX_SOURCE` for retrieval NDJSON.
+- `[rag].notes_root` or `[rag].index_source` from `~/.config/pkms.toml`.
 - The resolved `pkms` database root when neither source is set.
 
 `pkms rag retrieve` returns cited chunks with `hybrid`, `bm25`, or `dense`
@@ -152,6 +153,8 @@ HTTP API:
 - `POST /ingest` accepts `application/x-ndjson`.
 - `POST /search` accepts `{"query":"...","limit":10}`.
 - `POST /retrieve` accepts `{"query":"...","limit":10,"mode":"hybrid"}`.
+
+On startup, `pkms rag serve` starts a rebuild from the resolved source.
 
 FastEmbed is the default embedding provider. For deterministic local tests, set
 `PKMS_RAG_EMBEDDING_PROVIDER=hash`.

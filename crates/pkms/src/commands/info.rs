@@ -74,6 +74,7 @@ mod tests {
             agenda: None,
             todoist: None,
             ssh: None,
+            rag: None,
         }
     }
 

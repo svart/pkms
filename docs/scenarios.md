@@ -76,11 +76,11 @@ source citations, search output for another tool, or a local retrieval HTTP
 API/UI.
 
 ```bash
-pkms rag index --rag-db .data/pkms-rag.sqlite3
-pkms rag status --rag-db .data/pkms-rag.sqlite3
+pkms rag index
+pkms rag status
 pkms rag search "agenda inspect tasks" --limit 5
 pkms rag retrieve "agenda inspect tasks" --limit 5 --mode hybrid
-pkms rag serve --rag-db .data/pkms-rag.sqlite3 --host 127.0.0.1 --port 7337
+pkms rag serve --host 127.0.0.1 --port 7337
 ```
 
 Start with [RAG Retrieval](rag.md). Implementation details live in the
@@ -97,4 +97,3 @@ pkms resolve --tags "project" --output-format ndjson | pkms task list --from-std
 ```
 
 See [Pipelining](pipelining.md) and [JSON and NDJSON Output](json-output.md).
-

@@ -13,10 +13,9 @@ Use the configured `pkms` database root:
 
 ```bash
 pkms init-config --db ~/Documents/org
-pkms rag index --rag-db .data/pkms-rag.sqlite3
-pkms rag status --rag-db .data/pkms-rag.sqlite3
-pkms rag retrieve "agenda inspect tasks" --limit 5 --mode hybrid \
-  --rag-db .data/pkms-rag.sqlite3
+pkms rag index
+pkms rag status
+pkms rag retrieve "agenda inspect tasks" --limit 5 --mode hybrid
 ```
 
 Or pass the notes root directly:
@@ -40,7 +39,7 @@ pkms rag retrieve "agenda inspect tasks" --rag-db /tmp/pkms-rag.sqlite3
 Serve the local browser UI and HTTP API:
 
 ```bash
-pkms rag serve --rag-db .data/pkms-rag.sqlite3 --host 127.0.0.1 --port 7337
+pkms rag serve --host 127.0.0.1 --port 7337
 ```
 
 Then open the printed URL. The process stays in the foreground. When a notes
@@ -54,9 +53,9 @@ umbrella `pkms` binary through the `rag` command namespace.
 
 The current data flow is:
 
-1. `pkms rag index` resolves a source from `--notes-root`,
-   `PKMS_RAG_NOTES_ROOT`, `--index-source`, `PKMS_RAG_INDEX_SOURCE`, or the
-   configured `pkms` database root.
+1. `pkms rag index` resolves a source from CLI/env source flags,
+   `[rag].notes_root`, `[rag].index_source`, or the configured `pkms` database
+   root.
 2. Org notes are exported through `pkms-org` parsing, including note metadata,
    headings, tags, links, aliases, and source locations.
 3. Exported notes are chunked and written as retrieval records.
@@ -70,17 +69,20 @@ from the selected source and removes stale indexed rows for records no longer in
 the source. `pkms rag serve` starts a foreground HTTP server and starts a
 background rebuild when a notes root or index source is configured.
 
-The default index path is `.data/pkms-rag.sqlite3`. Override it with `--rag-db`
-or `PKMS_RAG_DB`. The index is derived local state; source notes remain the
-authority.
+The default index path is `.data/pkms-rag.sqlite3`. Override it with `--rag-db`,
+`PKMS_RAG_DB`, or `[rag].rag_db` in `~/.config/pkms.toml`. Relative `[rag]`
+paths are resolved under `db_root`. The index is derived local state; source
+notes remain the authority.
 
 ## Source Selection
 
-`pkms rag index` selects an input source in this order:
+`pkms rag index` and `pkms rag serve` select an input source in this order:
 
 1. `--notes-root` or `PKMS_RAG_NOTES_ROOT`.
 2. `--index-source` or `PKMS_RAG_INDEX_SOURCE`.
-3. The resolved `pkms` database root.
+3. `[rag].notes_root` from `~/.config/pkms.toml`.
+4. `[rag].index_source` from `~/.config/pkms.toml`.
+5. The resolved `pkms` database root.
 
 Examples:
 
@@ -89,6 +91,15 @@ pkms rag index --notes-root ~/Documents/org
 pkms rag index --index-source retrieval-export.ndjson
 PKMS_RAG_NOTES_ROOT=~/Documents/org pkms rag index
 PKMS_RAG_INDEX_SOURCE=retrieval-export.ndjson pkms rag index
+```
+
+Persistent RAG defaults live under `[rag]`:
+
+```toml
+[rag]
+rag_db = ".data/pkms-rag.sqlite3"
+notes_root = "/home/user/Documents/org"
+# index_source = "retrieval-export.ndjson"
 ```
 
 `pkms rag ingest` reads retrieval NDJSON and upserts it into the selected RAG
@@ -167,7 +178,8 @@ pkms rag retrieve "RAG HTTP API" --limit 5 --output-format ndjson
 
 The server is a foreground local process. It does not add a daemon, watcher, or
 persistent service beyond the SQLite index selected by `--rag-db` or
-`PKMS_RAG_DB`.
+`PKMS_RAG_DB` or `[rag].rag_db`. On startup it begins a rebuild from the
+resolved source.
 
 Example API calls:
 
@@ -190,4 +202,4 @@ curl -X POST http://127.0.0.1:7337/retrieve \
   `/index/status` and `pkms rag status --rag-db <path>` to confirm the rebuild
   completed and chunks were indexed.
 - If two commands appear to use different indexes, pass the same `--rag-db`
-  path explicitly or set `PKMS_RAG_DB`.
+  path explicitly, set `PKMS_RAG_DB`, or configure `[rag].rag_db`.

@@ -14,6 +14,7 @@ pub struct Config {
     pub agenda: Option<AgendaConfig>,
     pub todoist: Option<TodoistConfig>,
     pub ssh: Option<SshConfig>,
+    pub rag: Option<RagConfig>,
 }
 
 #[derive(Debug, Clone)]
@@ -27,6 +28,7 @@ pub struct ResolvedConfig {
     pub agenda: Option<AgendaConfig>,
     pub todoist: Option<TodoistConfig>,
     pub ssh: Option<SshConfig>,
+    pub rag: Option<RagConfig>,
 }
 
 #[derive(Debug, Clone)]
@@ -90,6 +92,14 @@ pub struct SshConfig {
 #[serde(deny_unknown_fields)]
 pub struct TaskConfig {
     pub inbox: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RagConfig {
+    pub rag_db: Option<PathBuf>,
+    pub notes_root: Option<PathBuf>,
+    pub index_source: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -194,6 +204,7 @@ impl Config {
                 agenda: None,
                 todoist: None,
                 ssh: None,
+                rag: None,
             })
         }
     }
@@ -221,6 +232,7 @@ impl Config {
             agenda: self.agenda,
             todoist: self.todoist,
             ssh: self.ssh,
+            rag: self.rag,
         };
         tracing::debug!(
             db_root = %resolved.db_root.display(),
@@ -251,6 +263,7 @@ impl ResolvedConfig {
             agenda: None,
             todoist: None,
             ssh: None,
+            rag: None,
         }
     }
 
@@ -276,6 +289,16 @@ impl ResolvedConfig {
             }
             None => self.db_root.join(default),
         }
+    }
+
+    fn resolve_optional_configured_path(&self, path: Option<&PathBuf>) -> Option<PathBuf> {
+        path.map(|path| {
+            if path.is_absolute() {
+                path.clone()
+            } else {
+                self.db_root.join(path)
+            }
+        })
     }
 
     pub fn resolve_ignore_patterns(&self) -> Vec<String> {
@@ -326,6 +349,22 @@ impl ResolvedConfig {
             inbox: self.tasks.as_ref().and_then(|tasks| tasks.inbox.clone()),
             daily_notes_dir_configured: self.daily_notes_dir.is_some(),
         }
+    }
+
+    pub fn resolve_rag_db(&self) -> Option<PathBuf> {
+        self.resolve_optional_configured_path(self.rag.as_ref().and_then(|rag| rag.rag_db.as_ref()))
+    }
+
+    pub fn resolve_rag_notes_root(&self) -> Option<PathBuf> {
+        self.resolve_optional_configured_path(
+            self.rag.as_ref().and_then(|rag| rag.notes_root.as_ref()),
+        )
+    }
+
+    pub fn resolve_rag_index_source(&self) -> Option<PathBuf> {
+        self.resolve_optional_configured_path(
+            self.rag.as_ref().and_then(|rag| rag.index_source.as_ref()),
+        )
     }
 
     pub fn task_state_config(&self) -> pkms_org::graph::tasks::TaskStateConfig {
@@ -514,6 +553,12 @@ pub fn generate_default_config(db_root: Option<&std::path::Path>) -> String {
 # token_env = "TODOIST_API_TOKEN"
 # default_filter = "today | overdue"
 
+# RAG retrieval index configuration. Relative paths are resolved under db_root.
+# [rag]
+# rag_db = ".data/pkms-rag.sqlite3"
+# notes_root = "/path/to/org/notes"
+# index_source = "retrieval-export.ndjson"
+
 # SSH file-link checks are disabled unless pkms is built with --features ssh and
 # `pkms check --remote-file-links` is passed. Password prompts are not used.
 # [ssh]
@@ -550,6 +595,7 @@ mod tests {
             agenda: None,
             todoist: None,
             ssh: None,
+            rag: None,
         };
         assert_eq!(
             config.resolve_new_notes_dir(),
@@ -569,6 +615,7 @@ mod tests {
             agenda: None,
             todoist: None,
             ssh: None,
+            rag: None,
         };
         assert_eq!(config.resolve_new_notes_dir(), PathBuf::from("/abs/path"));
     }
@@ -585,6 +632,7 @@ mod tests {
             agenda: None,
             todoist: None,
             ssh: None,
+            rag: None,
         };
         assert_eq!(
             config.resolve_new_notes_dir(),
@@ -604,6 +652,7 @@ mod tests {
             agenda: None,
             todoist: None,
             ssh: None,
+            rag: None,
         };
         assert_eq!(
             config.resolve_daily_notes_dir(),
@@ -623,6 +672,7 @@ mod tests {
             agenda: None,
             todoist: None,
             ssh: None,
+            rag: None,
         };
         assert_eq!(
             config.resolve_daily_notes_dir(),
@@ -642,6 +692,7 @@ mod tests {
             agenda: None,
             todoist: None,
             ssh: None,
+            rag: None,
         };
         assert_eq!(
             config.resolve_daily_notes_dir(),
@@ -661,6 +712,7 @@ mod tests {
             agenda: None,
             todoist: None,
             ssh: None,
+            rag: None,
         };
         let patterns = config.resolve_ignore_patterns();
         assert_eq!(patterns.len(), 2);
@@ -679,6 +731,7 @@ mod tests {
             agenda: None,
             todoist: None,
             ssh: None,
+            rag: None,
         };
         let patterns = config.resolve_ignore_patterns();
         assert!(patterns.is_empty());
@@ -721,6 +774,7 @@ mod tests {
             agenda: None,
             todoist: None,
             ssh: None,
+            rag: None,
         };
         let info = config.resolved_info();
         assert_eq!(info.db_root, PathBuf::from("/actual/db"));
@@ -745,6 +799,11 @@ enabled = true
 token = "config-token"
 token_env = "PKMS_TEST_TODOIST_TOKEN"
 default_filter = "today | overdue"
+
+[rag]
+rag_db = ".data/rag.sqlite3"
+notes_root = "rag-notes"
+index_source = "exports/retrieval.ndjson"
 
 [ssh]
 identity_file = "~/.ssh/id_ed25519"
@@ -774,6 +833,13 @@ agent = false
             Some("PKMS_TEST_TODOIST_TOKEN")
         );
         assert_eq!(todoist.default_filter.as_deref(), Some("today | overdue"));
+        let rag = config.rag.unwrap();
+        assert_eq!(rag.rag_db.as_deref(), Some(Path::new(".data/rag.sqlite3")));
+        assert_eq!(rag.notes_root.as_deref(), Some(Path::new("rag-notes")));
+        assert_eq!(
+            rag.index_source.as_deref(),
+            Some(Path::new("exports/retrieval.ndjson"))
+        );
         let ssh = config.ssh.unwrap();
         assert_eq!(
             ssh.identity_file.as_deref(),
@@ -844,9 +910,56 @@ unk = "value"
     }
 
     #[test]
+    fn test_rag_config_rejects_unknown_fields() {
+        assert_unknown_config_field_rejected(
+            r#"
+db_root = "/test/db"
+
+[rag]
+rag_db = ".data/rag.sqlite3"
+rag_database = "typo.sqlite3"
+"#,
+            "rag_database",
+        );
+    }
+
+    #[test]
     fn test_generate_default_config_is_valid_config() {
         let content = generate_default_config(Some(Path::new("/my/notes")));
         toml::from_str::<Config>(&content).unwrap();
+    }
+
+    #[test]
+    fn test_resolve_rag_paths_from_config_relative_to_db_root() {
+        let config = ResolvedConfig {
+            db_root: PathBuf::from("/test/root"),
+            new_notes_dir: None,
+            daily_notes_dir: None,
+            ignore_patterns: None,
+            columns: None,
+            tasks: None,
+            agenda: None,
+            todoist: None,
+            ssh: None,
+            rag: Some(RagConfig {
+                rag_db: Some(PathBuf::from(".data/rag.sqlite3")),
+                notes_root: Some(PathBuf::from("rag-notes")),
+                index_source: Some(PathBuf::from("exports/retrieval.ndjson")),
+            }),
+        };
+
+        assert_eq!(
+            config.resolve_rag_db(),
+            Some(PathBuf::from("/test/root/.data/rag.sqlite3"))
+        );
+        assert_eq!(
+            config.resolve_rag_notes_root(),
+            Some(PathBuf::from("/test/root/rag-notes"))
+        );
+        assert_eq!(
+            config.resolve_rag_index_source(),
+            Some(PathBuf::from("/test/root/exports/retrieval.ndjson"))
+        );
     }
 
     #[test]
@@ -943,6 +1056,7 @@ tasks = ["Id", "Project", "Heading"]
             agenda: None,
             todoist: None,
             ssh: None,
+            rag: None,
         };
         assert!(!config.todoist_enabled());
         assert_eq!(config.todoist_token_env(), "TODOIST_API_TOKEN");
@@ -966,6 +1080,7 @@ tasks = ["Id", "Project", "Heading"]
                 default_filter: None,
             }),
             ssh: None,
+            rag: None,
         };
         let error = config.todoist_token().unwrap_err().to_string();
         assert!(error.contains("PKMS_TEST_MISSING_TODOIST_TOKEN"));
@@ -988,6 +1103,7 @@ tasks = ["Id", "Project", "Heading"]
                 default_filter: None,
             }),
             ssh: None,
+            rag: None,
         };
         assert_eq!(config.todoist_token().unwrap(), "config-token");
     }

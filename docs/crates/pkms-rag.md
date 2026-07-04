@@ -47,10 +47,12 @@ search and retrieval, and serves the RAG HTTP API/UI.
 
 ## Configuration Surface
 
-- `--rag-db` or `PKMS_RAG_DB`: SQLite index path. Default:
+- `--rag-db`, `PKMS_RAG_DB`, or `[rag].rag_db`: SQLite index path. Default:
   `.data/pkms-rag.sqlite3`.
-- `--notes-root` or `PKMS_RAG_NOTES_ROOT`: org notes root to export.
-- `--index-source` or `PKMS_RAG_INDEX_SOURCE`: retrieval NDJSON source.
+- `--notes-root`, `PKMS_RAG_NOTES_ROOT`, or `[rag].notes_root`: org notes root
+  to export.
+- `--index-source`, `PKMS_RAG_INDEX_SOURCE`, or `[rag].index_source`: retrieval
+  NDJSON source.
 - `--host`/`--port` or `PKMS_RAG_HOST`/`PKMS_RAG_PORT`: HTTP bind settings for
   `pkms rag serve`.
 - `PKMS_RAG_EMBEDDING_PROVIDER`: `fastembed` or `hash`.
@@ -71,4 +73,3 @@ belong in `pkms`.
 - [Architecture](../architecture.md)
 - [Command Reference](../commands.md#rag-retrieval)
 - [JSON and NDJSON Output](../json-output.md)
-

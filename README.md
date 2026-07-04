@@ -77,10 +77,13 @@ pkms serve <target>
 Local retrieval is exposed through `pkms rag`:
 
 ```bash
-pkms rag index --rag-db .data/pkms-rag.sqlite3
+pkms rag index
 pkms rag retrieve "agenda inspect tasks" --limit 5
-pkms rag serve --rag-db .data/pkms-rag.sqlite3 --host 127.0.0.1 --port 7337
+pkms rag serve --host 127.0.0.1 --port 7337
 ```
+
+Set `[rag].rag_db` in `~/.config/pkms.toml` when the RAG SQLite index should
+live somewhere other than the default `.data/pkms-rag.sqlite3`.
 
 ```bash
 pkms query "rust" --output-format ndjson | pkms get --links --from-stdin
