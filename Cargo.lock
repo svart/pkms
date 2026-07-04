@@ -2073,6 +2073,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "pkms-rag"
+version = "1.12.3"
+dependencies = [
+ "anyhow",
+ "pkms-org",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "pkms-task"
 version = "1.12.3"
 dependencies = [

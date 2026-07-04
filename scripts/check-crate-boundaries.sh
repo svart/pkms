@@ -58,6 +58,10 @@ reject_forbidden pkms-org "$org_tree" pkms pkms-db pkms-task pkms-web
 db_tree="$(tree_for pkms-db)"
 reject_forbidden pkms-db "$db_tree" pkms pkms-task pkms-web
 
+rag_tree="$(tree_for pkms-rag)"
+require_present pkms-rag pkms-org "$rag_tree"
+reject_forbidden pkms-rag "$rag_tree" pkms pkms-db pkms-task pkms-web
+
 task_tree="$(tree_for pkms-task)"
 reject_forbidden pkms-task "$task_tree" pkms pkms-db pkms-web
 

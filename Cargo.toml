@@ -3,6 +3,7 @@ members = [
     "crates/pkms",
     "crates/pkms-db",
     "crates/pkms-org",
+    "crates/pkms-rag",
     "crates/pkms-task",
     "crates/pkms-web",
 ]
