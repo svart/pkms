@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+cd "$(dirname "$0")/.."
+
 tree_for() {
   cargo tree -p "$1" --all-features --prefix none
 }

@@ -60,6 +60,7 @@ gate:
 ```bash
 cargo fmt --all -- --check
 scripts/check-crate-boundaries.sh
+scripts/check-task-boundaries.sh
 cargo clippy --workspace --all-targets --all-features -- -D warnings
 cargo test --workspace --all-features
 cargo build --workspace --all-features
@@ -143,7 +144,9 @@ cargo build --all-features
 
 ```text
 Cargo.toml                  # virtual workspace root
-scripts/check-crate-boundaries.sh
+scripts/
+  check-crate-boundaries.sh # workspace dependency boundary guard
+  check-task-boundaries.sh  # task/org/Todoist source boundary guard
 crates/pkms/                # umbrella binary crate
   src/main.rs               # thin binary wrapper
   src/lib.rs                # umbrella library surface used by tests
@@ -216,6 +219,21 @@ Command domain behavior should live in the focused crates when possible:
 note database commands; `pkms-task` for task workflows; and `pkms-web` for the
 local viewer. The umbrella `pkms` crate should keep CLI parsing, config mapping,
 output formatting, and cross-domain orchestration.
+
+Task command boundaries are stricter because local org edits and Todoist
+network actions both mutate user data:
+
+- `pkms-org` owns org task syntax, typed task insertion, daily note creation,
+  and raw org file writes.
+- `pkms-task` owns canonical task IDs, source selection, filtering, provider
+  collection, task mutations, Todoist API execution, and typed requests into
+  `pkms-org`.
+- `pkms` task command modules own CLI argument adapters, config mapping, output
+  rendering, and cross-domain show/open dispatch. They should not format raw org
+  task text or call Todoist HTTP APIs directly.
+
+Run `scripts/check-task-boundaries.sh` after changing task mutations, providers,
+Todoist code, or org task edit APIs.
 
 The web viewer keeps its public command entry point in
 `crates/pkms/src/commands/serve.rs`, but HTTP routing, static/font assets, page
