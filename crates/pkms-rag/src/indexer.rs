@@ -9,7 +9,9 @@ use anyhow::{Context, Result, bail};
 
 use crate::{
     db::{connect, ingest_records},
-    embeddings::{EmbeddingProvider, provider_from_env},
+    embeddings::{
+        EmbeddingProvider, EmbeddingProviderConfig, provider_from_config, provider_from_env,
+    },
     models::{IndexProgress, IngestSummary, RetrievalRecord},
     ndjson::load_ndjson,
     org_export::export_org_notes,
@@ -49,6 +51,12 @@ impl BackgroundIndexer {
         progress
     }
 
+    pub fn start_with_provider_config(&self, config: EmbeddingProviderConfig) -> IndexProgress {
+        let (progress, _handle) =
+            self.start_with_provider_factory(move || provider_from_config(&config));
+        progress
+    }
+
     pub fn run_sync_with_provider(&self, provider: &dyn EmbeddingProvider) -> IndexProgress {
         if !self.has_index_source() {
             self.set_no_source();
@@ -60,6 +68,24 @@ impl BackgroundIndexer {
             return self.status();
         }
         self.run_rebuild_with_provider(started_at, provider);
+        self.finish_rebuild();
+        self.status()
+    }
+
+    pub fn run_sync_with_provider_config(&self, config: &EmbeddingProviderConfig) -> IndexProgress {
+        if !self.has_index_source() {
+            self.set_no_source();
+            return self.status();
+        }
+
+        let started_at = unix_timestamp_seconds();
+        if !self.begin_rebuild(started_at) {
+            return self.status();
+        }
+        match provider_from_config(config) {
+            Ok(provider) => self.run_rebuild_with_provider(started_at, provider.as_ref()),
+            Err(err) => self.set_error(err.to_string()),
+        }
         self.finish_rebuild();
         self.status()
     }

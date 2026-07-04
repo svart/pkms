@@ -173,12 +173,19 @@ pub fn embedding_provider_config_from_env() -> Result<EmbeddingProviderConfig> {
 }
 
 pub fn provider_from_env() -> Result<Box<dyn EmbeddingProvider>> {
-    match embedding_provider_config_from_env()? {
+    let config = embedding_provider_config_from_env()?;
+    provider_from_config(&config)
+}
+
+pub fn provider_from_config(
+    config: &EmbeddingProviderConfig,
+) -> Result<Box<dyn EmbeddingProvider>> {
+    match config {
         EmbeddingProviderConfig::Hash => Ok(Box::new(HashEmbeddingProvider::default())),
         EmbeddingProviderConfig::FastEmbed {
             model_name,
             batch_size,
-        } => fastembed_provider_boxed(&model_name, batch_size),
+        } => fastembed_provider_boxed(model_name, *batch_size),
     }
 }
 
