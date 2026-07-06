@@ -12,20 +12,19 @@ use anyhow::{Result, anyhow, bail};
 #[cfg(feature = "todoist")]
 use pkms_task::SourceSelection;
 use pkms_task::{
-    CanonicalTaskEntry, TaskClock, TaskId, TaskLocation, TaskModifierSpec, TaskSourceKind,
+    CanonicalTaskEntry, TaskClock, TaskId, TaskListItems, TaskLocation, TaskModifierSpec,
+    TaskSourceKind,
 };
 use std::collections::HashMap;
 use std::io::{self, Write};
 use std::process::ExitCode;
 
-mod execution;
 mod id_command;
 mod mutations;
 mod plan;
 mod providers;
 mod render;
 
-use execution::{AgendaExecution, TaskListExecution, TaskListItems};
 use mutations::{run_add, run_done, run_postpone, run_state, unsupported_task_source};
 use plan::{
     ShortcutKind, TaskListMode, plan_agenda_request, plan_task_list_request, split_task_list_mode,
@@ -76,16 +75,22 @@ fn run_list(runtime: TaskRuntime<'_>, args: &TaskListArgs) -> Result<()> {
     match mode {
         TaskListMode::Tasks => {
             let task_config = runtime.config.task_command_config();
-            let request = plan_task_list_request(&task_config, args, &filters, runtime.clock)?;
-            let output = execution::execute_task_list(runtime.config, &request)?;
-            render_task_list(runtime.output, output)
+            let planned = plan_task_list_request(&task_config, args, &filters, runtime.clock)?;
+            let task_config = runtime.config.pkms_task_config();
+            let output =
+                pkms_task::execute_task_list(runtime.config, &task_config, &planned.execution)?;
+            render_task_list(runtime.output, output, &planned.table)
         }
         TaskListMode::Projects => run_projects(runtime, &filters),
         TaskListMode::Tags => run_tags(runtime, &filters),
     }
 }
 
-fn render_task_list(ctx: &OutputContext, output: TaskListExecution) -> Result<()> {
+fn render_task_list(
+    ctx: &OutputContext,
+    output: pkms_task::TaskListExecution,
+    table: &plan::TaskTableOptions,
+) -> Result<()> {
     match output.items {
         TaskListItems::Flat { items, limit } => render::print_task_items(
             ctx,
@@ -93,8 +98,8 @@ fn render_task_list(ctx: &OutputContext, output: TaskListExecution) -> Result<()
             items,
             limit,
             render::TaskTableRenderOptions {
-                columns: output.columns.as_deref(),
-                row_separators: output.row_separators,
+                columns: table.columns.as_deref(),
+                row_separators: table.row_separators,
             },
         ),
         TaskListItems::Grouped {
@@ -108,8 +113,8 @@ fn render_task_list(ctx: &OutputContext, output: TaskListExecution) -> Result<()
             groups,
             total,
             render::TaskTableRenderOptions {
-                columns: output.columns.as_deref(),
-                row_separators: output.row_separators,
+                columns: table.columns.as_deref(),
+                row_separators: table.row_separators,
             },
         ),
     }
@@ -120,8 +125,14 @@ fn run_shortcut(
     args: &TaskShortcutArgs,
     kind: ShortcutKind,
 ) -> Result<()> {
-    let (source, items) =
-        execution::collect_shortcut_items_on(runtime.config, &args.filters, kind, runtime.clock)?;
+    let task_config = runtime.config.pkms_task_config();
+    let (source, items) = pkms_task::collect_shortcut_items_on(
+        runtime.config,
+        &task_config,
+        &args.filters,
+        plan::shortcut_task_view(kind),
+        runtime.clock,
+    )?;
     let task_config = runtime.config.task_command_config();
     let columns = plan::resolve_task_table_columns(
         &task_config,
@@ -143,12 +154,17 @@ fn run_shortcut(
 
 fn run_agenda(runtime: TaskRuntime<'_>, args: &TaskAgendaArgs) -> Result<()> {
     let task_config = runtime.config.task_command_config();
-    let request = plan_agenda_request(&task_config, args, runtime.clock)?;
-    let output = execution::execute_task_agenda(runtime.config, &request)?;
-    render_task_agenda(runtime.output, output)
+    let planned = plan_agenda_request(&task_config, args, runtime.clock)?;
+    let task_config = runtime.config.pkms_task_config();
+    let output = pkms_task::execute_task_agenda(runtime.config, &task_config, &planned.execution)?;
+    render_task_agenda(runtime.output, output, &planned.table)
 }
 
-fn render_task_agenda(ctx: &OutputContext, output: AgendaExecution) -> Result<()> {
+fn render_task_agenda(
+    ctx: &OutputContext,
+    output: pkms_task::AgendaExecution,
+    table: &plan::TaskTableOptions,
+) -> Result<()> {
     render::print_agenda_task_items(
         ctx,
         output.source,
@@ -156,8 +172,8 @@ fn render_task_agenda(ctx: &OutputContext, output: AgendaExecution) -> Result<()
         output.limit,
         render::AgendaTaskRenderOptions {
             table: render::TaskTableRenderOptions {
-                columns: output.columns.as_deref(),
-                row_separators: output.row_separators,
+                columns: table.columns.as_deref(),
+                row_separators: table.row_separators,
             },
             today: output.today,
             window: output.window,

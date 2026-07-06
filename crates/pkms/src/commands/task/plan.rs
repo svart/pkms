@@ -7,7 +7,7 @@ use crate::input;
 use crate::output::Column;
 use crate::util;
 use anyhow::{Result, bail};
-use pkms_task::{SourceSelection, TaskClock, TaskFilters, TaskListView, parse_task_filters_on};
+use pkms_task::{SourceSelection, TaskClock, TaskListView, parse_task_filters_on};
 
 #[derive(Debug, Clone, Copy)]
 pub(super) enum ShortcutKind {
@@ -21,26 +21,20 @@ pub(super) enum TaskListMode {
     Tags,
 }
 
-pub(super) struct TaskListRequest {
-    pub(super) filters: TaskFilters,
-    pub(super) scope: Vec<String>,
-    pub(super) sort: Option<String>,
-    pub(super) limit: Option<usize>,
-    pub(super) group: Option<String>,
+#[derive(Debug, Clone)]
+pub(super) struct TaskTableOptions {
     pub(super) row_separators: RowSeparatorMode,
     pub(super) columns: Option<Vec<Column>>,
-    pub(super) clock: TaskClock,
 }
 
-pub(super) struct AgendaRequest {
-    pub(super) filters: TaskFilters,
-    pub(super) sort: Option<String>,
-    pub(super) limit: Option<usize>,
-    pub(super) window: AgendaWindow,
-    pub(super) row_separators: RowSeparatorMode,
-    pub(super) columns: Option<Vec<Column>>,
-    pub(super) clock: TaskClock,
-    pub(super) view: TaskListView,
+pub(super) struct PlannedTaskList {
+    pub(super) execution: pkms_task::TaskListRequest,
+    pub(super) table: TaskTableOptions,
+}
+
+pub(super) struct PlannedAgenda {
+    pub(super) execution: pkms_task::AgendaRequest,
+    pub(super) table: TaskTableOptions,
 }
 
 fn column_source(source: SourceSelection) -> ColumnSource {
@@ -67,7 +61,7 @@ pub(super) fn plan_task_list_request(
     args: &TaskListArgs,
     raw_filters: &[String],
     clock: TaskClock,
-) -> Result<TaskListRequest> {
+) -> Result<PlannedTaskList> {
     let filters = parse_task_filters_on(raw_filters, clock.today)?;
     tracing::debug!(
         source = ?filters.source,
@@ -91,15 +85,19 @@ pub(super) fn plan_task_list_request(
         args.table.columns.as_deref(),
     )?;
 
-    Ok(TaskListRequest {
-        filters,
-        scope,
-        sort: args.sort.clone(),
-        limit: args.limit,
-        group: args.group.clone(),
-        row_separators: args.table.line_sep.into(),
-        columns,
-        clock,
+    Ok(PlannedTaskList {
+        execution: pkms_task::TaskListRequest {
+            filters,
+            scope,
+            sort: args.sort.clone(),
+            limit: args.limit,
+            group: args.group.clone(),
+            clock,
+        },
+        table: TaskTableOptions {
+            row_separators: args.table.line_sep.into(),
+            columns,
+        },
     })
 }
 
@@ -145,7 +143,7 @@ pub(super) fn plan_agenda_request(
     config: &TaskCommandConfig,
     args: &TaskAgendaArgs,
     clock: TaskClock,
-) -> Result<AgendaRequest> {
+) -> Result<PlannedAgenda> {
     match &args.command {
         Some(TaskAgendaCommand::Today(args)) => {
             return plan_agenda_date_shortcut_request(config, args, "today", clock);
@@ -190,7 +188,7 @@ fn plan_agenda_request_from_filters(
     days: Option<i64>,
     table: &TaskTableArgs,
     clock: TaskClock,
-) -> Result<AgendaRequest> {
+) -> Result<PlannedAgenda> {
     let filters = parse_task_filters_on(raw_filters, clock.today)?;
     tracing::debug!(
         source = ?filters.source,
@@ -205,15 +203,19 @@ fn plan_agenda_request_from_filters(
         ColumnView::Agenda,
         table.columns.as_deref(),
     )?;
-    Ok(AgendaRequest {
-        filters,
-        sort: raw_sort.map(str::to_string),
-        limit,
-        window: AgendaWindow::from_days(days),
-        row_separators: table.line_sep.into(),
-        columns,
-        clock,
-        view: TaskListView::Agenda,
+    Ok(PlannedAgenda {
+        execution: pkms_task::AgendaRequest {
+            filters,
+            sort: raw_sort.map(str::to_string),
+            limit,
+            window: AgendaWindow::from_days(days),
+            clock,
+            view: TaskListView::Agenda,
+        },
+        table: TaskTableOptions {
+            row_separators: table.line_sep.into(),
+            columns,
+        },
     })
 }
 
@@ -222,7 +224,7 @@ fn plan_agenda_date_shortcut_request(
     args: &TaskShortcutArgs,
     date_filter: &str,
     clock: TaskClock,
-) -> Result<AgendaRequest> {
+) -> Result<PlannedAgenda> {
     let filters = agenda_date_shortcut_filters(&args.filters, date_filter);
     plan_agenda_request_from_filters(config, &filters, None, args.limit, None, &args.table, clock)
 }
