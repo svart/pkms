@@ -53,10 +53,6 @@ pub fn list_items_on(config: &PkmsTaskConfig, clock: TaskClock) -> Result<Vec<Ta
         .collect())
 }
 
-pub fn collect_inbox_items(config: &PkmsTaskConfig) -> Result<Vec<TaskItem>> {
-    collect_inbox_items_on(config, TaskClock::now())
-}
-
 pub fn collect_inbox_items_on(config: &PkmsTaskConfig, clock: TaskClock) -> Result<Vec<TaskItem>> {
     let target = resolve_inbox_target_on(config, false, clock.today)?;
     let workspace = Workspace::load(&config.org)?;
@@ -91,13 +87,6 @@ pub fn collect_inbox_items_on(config: &PkmsTaskConfig, clock: TaskClock) -> Resu
         .into_iter()
         .map(|record| record_to_task_item(task_states, record))
         .collect())
-}
-
-pub fn resolve_inbox_target(
-    config: &PkmsTaskConfig,
-    create_daily: bool,
-) -> Result<PkmsInboxTarget> {
-    resolve_inbox_target_on(config, create_daily, TaskClock::now().today)
 }
 
 pub fn resolve_inbox_target_on(
@@ -264,14 +253,6 @@ pub fn remove_subtree_dependency(
     })
 }
 
-pub fn find_task_item(
-    config: &PkmsTaskConfig,
-    path: &Path,
-    line_number: usize,
-) -> Result<Option<TaskItem>> {
-    find_task_item_on(config, path, line_number, TaskClock::now())
-}
-
 pub fn find_task_item_on(
     config: &PkmsTaskConfig,
     path: &Path,
@@ -292,22 +273,6 @@ pub fn find_task_item_on(
             record.path == path.display().to_string() && record.line_number == line_number
         })
         .map(|record| record_to_task_item(task_states, record)))
-}
-
-pub fn agenda_items(config: &PkmsTaskConfig) -> Result<Vec<TaskItem>> {
-    agenda_items_for(config, AgendaView::All)
-}
-
-pub fn agenda_items_for(config: &PkmsTaskConfig, view: AgendaView) -> Result<Vec<TaskItem>> {
-    agenda_items_for_on(config, view, TaskClock::now().today)
-}
-
-pub fn agenda_items_for_on(
-    config: &PkmsTaskConfig,
-    view: AgendaView,
-    today: NaiveDate,
-) -> Result<Vec<TaskItem>> {
-    agenda_items_for_clock(config, view, TaskClock::at_start_of_day(today))
 }
 
 pub fn agenda_items_for_clock(

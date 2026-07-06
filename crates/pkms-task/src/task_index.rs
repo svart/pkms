@@ -82,12 +82,6 @@ impl TaskRecord {
             .or_else(|| self.deadline_date.as_ref().map(TaskDateValue::as_str))
             .or_else(|| self.implicit_daily_file_date())
     }
-
-    pub fn has_effective_date(&self, date: &str) -> bool {
-        self.scheduled_date.as_ref().map(TaskDateValue::as_str) == Some(date)
-            || self.deadline_date.as_ref().map(TaskDateValue::as_str) == Some(date)
-            || self.implicit_daily_file_date() == Some(date)
-    }
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -126,11 +120,6 @@ impl<'a> TaskRecordQuery<'a> {
             filters: RecordFilters::default(),
             clock,
         }
-    }
-
-    pub fn with_filters(mut self, filters: RecordFilters<'a>) -> Self {
-        self.filters = filters;
-        self
     }
 }
 

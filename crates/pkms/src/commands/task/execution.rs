@@ -4,11 +4,9 @@ use crate::config::ResolvedConfig;
 use crate::output::Column;
 use anyhow::Result;
 use chrono::NaiveDate;
-use pkms_task::clock::TaskClock;
-use pkms_task::filter::SourceSelection;
-use pkms_task::model::TaskItem;
+use pkms_task::{SourceSelection, TaskClock, TaskItem};
 
-pub(super) use pkms_task::execution::TaskListItems;
+pub(super) use pkms_task::TaskListItems;
 
 pub(super) struct TaskListExecution {
     pub(super) source: SourceSelection,
@@ -32,10 +30,10 @@ pub(super) fn execute_task_list(
     request: &plan::TaskListRequest,
 ) -> Result<TaskListExecution> {
     let task_config = config.pkms_task_config();
-    let output = pkms_task::execution::execute_task_list(
+    let output = pkms_task::execute_task_list(
         config,
         &task_config,
-        &pkms_task::execution::TaskListRequest {
+        &pkms_task::TaskListRequest {
             filters: request.filters.clone(),
             scope: request.scope.clone(),
             sort: request.sort.clone(),
@@ -58,7 +56,7 @@ pub(super) fn collect_shortcut_items_on(
     kind: plan::ShortcutKind,
     clock: TaskClock,
 ) -> Result<(SourceSelection, Vec<TaskItem>)> {
-    pkms_task::execution::collect_shortcut_items_on(
+    pkms_task::collect_shortcut_items_on(
         config,
         &config.pkms_task_config(),
         raw_filters,
@@ -72,10 +70,10 @@ pub(super) fn execute_task_agenda(
     request: &plan::AgendaRequest,
 ) -> Result<AgendaExecution> {
     let task_config = config.pkms_task_config();
-    let output = pkms_task::execution::execute_task_agenda(
+    let output = pkms_task::execute_task_agenda(
         config,
         &task_config,
-        &pkms_task::execution::AgendaRequest {
+        &pkms_task::AgendaRequest {
             filters: request.filters.clone(),
             sort: request.sort.clone(),
             limit: request.limit,

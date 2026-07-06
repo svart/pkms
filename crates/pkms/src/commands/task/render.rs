@@ -6,10 +6,10 @@ use crate::commands::task_common::{
 use crate::output::{ALL_COLUMNS, Column, OutputContext, terminal_markup};
 use anyhow::Result;
 use chrono::{NaiveDate, NaiveDateTime};
-use pkms_task::filter::SourceSelection;
-use pkms_task::model::{TaskItem, TaskPriority, TaskProperty, TaskSourceKind};
-pub(super) use pkms_task::mutation::{TaskModOutput, TaskStateChangeOutput};
-use pkms_task::provider::TaskMetadataRow;
+use pkms_task::{
+    SourceSelection, TaskItem, TaskMetadataRow, TaskPriority, TaskProperty, TaskSourceKind,
+};
+pub(super) use pkms_task::{TaskModOutput, TaskStateChangeOutput};
 use serde::Serialize;
 use std::collections::BTreeMap;
 use std::process::ExitCode;

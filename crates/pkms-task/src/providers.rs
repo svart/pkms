@@ -113,10 +113,6 @@ impl<'a, E: TaskProviderEnvironment> TaskProviders<'a, E> {
 }
 
 impl TaskProvider for PkmsTaskProvider {
-    fn source(&self) -> TaskSourceKind {
-        TaskSourceKind::Pkms
-    }
-
     fn list(&self, query: &TaskQuery) -> Result<Vec<TaskItem>> {
         match query.view {
             TaskListView::All => pkms::list_items_on(&self.config, query.clock),
@@ -155,10 +151,6 @@ impl TaskProvider for PkmsTaskProvider {
 }
 
 impl<E: TaskProviderEnvironment> TaskProvider for TodoistTaskProvider<'_, E> {
-    fn source(&self) -> TaskSourceKind {
-        TaskSourceKind::Todoist
-    }
-
     fn list(&self, query: &TaskQuery) -> Result<Vec<TaskItem>> {
         let filters = match query.view {
             TaskListView::All => query.filters.clone(),

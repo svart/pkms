@@ -9,13 +9,11 @@ use crate::commands::task_common::RowSeparatorMode;
 use crate::config::{ResolvedConfig, TaskCommandConfig};
 use crate::output::{OutputContext, terminal_markup};
 use anyhow::{Result, anyhow, bail};
-use pkms_task::clock::TaskClock;
 #[cfg(feature = "todoist")]
-use pkms_task::filter::SourceSelection;
-use pkms_task::id::TaskId;
-use pkms_task::model::TaskSourceKind;
-use pkms_task::modifiers::TaskModifierSpec;
-use pkms_task::task_index::{self, CanonicalTaskEntry};
+use pkms_task::SourceSelection;
+use pkms_task::{
+    CanonicalTaskEntry, TaskClock, TaskId, TaskLocation, TaskModifierSpec, TaskSourceKind,
+};
 use std::collections::HashMap;
 use std::io::{self, Write};
 use std::process::ExitCode;
@@ -222,7 +220,7 @@ pub(super) fn run_open(
 
 #[cfg(feature = "todoist")]
 fn show_todoist_task(config: &ResolvedConfig, ctx: &OutputContext, id: &str) -> Result<()> {
-    let item = pkms_task::todoist_provider::get_item(&providers::todoist_config(config)?, id)?;
+    let item = pkms_task::get_todoist_item(&providers::todoist_config(config)?, id)?;
     match ctx.format {
         OutputFormat::Text => render::print_task_table(
             &[item],
@@ -294,13 +292,13 @@ impl TaskIdSnapshot {
 
 fn load_canonical_task_entries(config: &TaskCommandConfig) -> Result<Vec<CanonicalTaskEntry>> {
     let graph = pkms_org::Graph::load(&config.org)?;
-    Ok(task_index::all_task_entries(&config.task_states, &graph))
+    Ok(pkms_task::all_task_entries(&config.task_states, &graph))
 }
 
 fn resolve_task_location_from_entries(
     entries: &[CanonicalTaskEntry],
     id: usize,
-) -> Result<task_index::TaskLocation> {
+) -> Result<TaskLocation> {
     if id == 0 || id > entries.len() {
         anyhow::bail!(
             "No task with canonical ID {}. Valid range is 1-{}",
@@ -309,7 +307,7 @@ fn resolve_task_location_from_entries(
         );
     }
     let entry = &entries[id - 1];
-    Ok(task_index::TaskLocation {
+    Ok(TaskLocation {
         path: entry.path.clone(),
         line_number: entry.line_number,
     })

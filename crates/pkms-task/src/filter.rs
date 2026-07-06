@@ -45,10 +45,6 @@ pub enum TaskDateFilter {
     Any(Vec<TaskDateFilter>),
 }
 
-pub fn parse_source_selection(filters: &[String]) -> Result<SourceSelection> {
-    Ok(parse_task_filters(filters)?.source)
-}
-
 pub fn parse_task_filters(filters: &[String]) -> Result<TaskFilters> {
     parse_task_filters_on(filters, TaskClock::now().today)
 }
@@ -499,17 +495,24 @@ mod tests {
 
     #[test]
     fn defaults_to_pkms_source() {
-        assert_eq!(parse_source_selection(&[]).unwrap(), SourceSelection::Pkms);
+        assert_eq!(
+            parse_task_filters(&[]).unwrap().source,
+            SourceSelection::Pkms
+        );
     }
 
     #[test]
     fn parses_source_aliases() {
         assert_eq!(
-            parse_source_selection(&["src:pkms".to_string()]).unwrap(),
+            parse_task_filters(&["src:pkms".to_string()])
+                .unwrap()
+                .source,
             SourceSelection::Pkms
         );
         assert_eq!(
-            parse_source_selection(&["source:todoist".to_string()]).unwrap(),
+            parse_task_filters(&["source:todoist".to_string()])
+                .unwrap()
+                .source,
             SourceSelection::Todoist
         );
     }
@@ -517,16 +520,17 @@ mod tests {
     #[test]
     fn repeated_sources_combine_to_all() {
         assert_eq!(
-            parse_source_selection(&["source:pkms".to_string(), "source:todoist".to_string()])
-                .unwrap(),
+            parse_task_filters(&["source:pkms".to_string(), "source:todoist".to_string()])
+                .unwrap()
+                .source,
             SourceSelection::All
         );
     }
 
     #[test]
     fn rejects_unknown_filters_initially() {
-        assert!(parse_source_selection(&["unknown:value".to_string()]).is_err());
-        assert!(parse_source_selection(&["source:remote".to_string()]).is_err());
+        assert!(parse_task_filters(&["unknown:value".to_string()]).is_err());
+        assert!(parse_task_filters(&["source:remote".to_string()]).is_err());
     }
 
     #[test]

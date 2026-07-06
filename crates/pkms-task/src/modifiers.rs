@@ -342,14 +342,6 @@ pub fn is_clear_value(value: &str) -> bool {
     value.is_empty() || value.eq_ignore_ascii_case("none")
 }
 
-pub fn pkms_priority(value: &str) -> Result<TaskPriority> {
-    TaskPriority::parse(value)
-}
-
-pub fn parse_task_date_arg(name: &str, value: &str) -> Result<TaskDateValue> {
-    parse_task_date_arg_on(name, value, TaskClock::now().today)
-}
-
 pub fn parse_task_date_arg_on(name: &str, value: &str, today: NaiveDate) -> Result<TaskDateValue> {
     if let Some(date) = parse_word_date(name, value, today)? {
         return Ok(TaskDateValue::new(date.format("%Y-%m-%d").to_string()));
@@ -641,12 +633,13 @@ mod tests {
 
     #[test]
     fn parses_explicit_add_dates() {
+        let today = NaiveDate::from_ymd_opt(2026, 5, 27).unwrap();
         assert_eq!(
-            parse_task_date_arg("due", "2026-05-27").unwrap(),
+            parse_task_date_arg_on("due", "2026-05-27", today).unwrap(),
             "2026-05-27"
         );
         assert_eq!(
-            parse_task_date_arg("due", "2026-05-27 09:30").unwrap(),
+            parse_task_date_arg_on("due", "2026-05-27 09:30", today).unwrap(),
             "2026-05-27 09:30"
         );
     }

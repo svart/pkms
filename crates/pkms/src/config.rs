@@ -342,8 +342,8 @@ impl ResolvedConfig {
         }
     }
 
-    pub fn pkms_task_config(&self) -> pkms_task::config::PkmsTaskConfig {
-        pkms_task::config::PkmsTaskConfig {
+    pub fn pkms_task_config(&self) -> pkms_task::PkmsTaskConfig {
+        pkms_task::PkmsTaskConfig {
             org: self.org_config(),
             task_states: self.task_state_config(),
             inbox: self.tasks.as_ref().and_then(|tasks| tasks.inbox.clone()),

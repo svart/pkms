@@ -7,7 +7,6 @@ use pkms_org::domain::NoteId;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-const DEFAULT_BASE_URL: &str = "https://api.todoist.com/api/v1";
 const HTTP_LOG_TARGET: &str = "pkms::tasks::todoist::http";
 const PKMS_NOTE_MARKER_PREFIX: &str = "pkms:id:";
 
@@ -35,8 +34,6 @@ pub struct TodoistTask {
     pub deadline: Option<TodoistDeadline>,
     #[serde(default)]
     pub url: Option<String>,
-    #[serde(default)]
-    pub created_at: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -173,10 +170,6 @@ struct Paginated<T> {
 }
 
 impl TodoistClient {
-    pub fn new(token: String) -> Self {
-        Self::with_base_url(DEFAULT_BASE_URL, token)
-    }
-
     pub fn with_base_url(base_url: impl Into<String>, token: String) -> Self {
         TodoistClient {
             base_url: base_url.into().trim_end_matches('/').to_string(),
@@ -351,10 +344,6 @@ fn todoist_agent() -> ureq::Agent {
         .tls_config(tls_config)
         .build()
         .new_agent()
-}
-
-pub fn task_to_item(task: TodoistTask) -> TaskItem {
-    task_to_item_with_metadata(task, None)
 }
 
 pub fn task_to_item_with_metadata(

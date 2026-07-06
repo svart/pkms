@@ -7,9 +7,7 @@ use crate::input;
 use crate::output::Column;
 use crate::util;
 use anyhow::{Result, bail};
-use pkms_task::clock::TaskClock;
-use pkms_task::filter::{SourceSelection, TaskFilters, parse_task_filters_on};
-use pkms_task::provider::TaskListView;
+use pkms_task::{SourceSelection, TaskClock, TaskFilters, TaskListView, parse_task_filters_on};
 
 #[derive(Debug, Clone, Copy)]
 pub(super) enum ShortcutKind {

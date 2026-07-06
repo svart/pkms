@@ -36,6 +36,7 @@ pub fn mod_title(spec: &TaskModifierSpec) -> Result<Option<String>> {
         .map(str::to_string))
 }
 
+#[cfg(feature = "todoist")]
 pub fn mod_optional_text(value: Option<&str>) -> Option<Option<String>> {
     value.map(|value| {
         let value = value.trim();
@@ -43,6 +44,7 @@ pub fn mod_optional_text(value: Option<&str>) -> Option<Option<String>> {
     })
 }
 
+#[cfg(feature = "todoist")]
 pub fn mod_date(value: Option<&TaskDateArg>) -> Option<Option<TaskDateValue>> {
     value.map(|date| date.as_value().cloned())
 }

@@ -1,8 +1,7 @@
 use crate::config::ResolvedConfig;
 use crate::output::OutputContext;
 use anyhow::Result;
-use pkms_task::clock::TaskClock;
-use pkms_task::modifiers::TaskModifierSpec;
+use pkms_task::{TaskClock, TaskModifierSpec};
 use std::process::ExitCode;
 
 #[cfg(feature = "todoist")]
@@ -10,7 +9,7 @@ use crate::cli::OutputFormat;
 #[cfg(not(feature = "todoist"))]
 use anyhow::bail;
 #[cfg(feature = "todoist")]
-use pkms_task::todoist_mutation::{self, TodoistDoneOutput, TodoistStateOutput};
+use pkms_task::{TodoistDoneOutput, TodoistStateOutput};
 
 #[cfg(feature = "todoist")]
 use super::super::{providers, render};
@@ -23,7 +22,7 @@ pub(super) fn set_state(
     requested_state: &str,
     dry_run: bool,
 ) -> Result<()> {
-    match todoist_mutation::set_todoist_state(
+    match pkms_task::set_todoist_state(
         &providers::todoist_config(config)?,
         id,
         requested_state,
@@ -56,7 +55,7 @@ pub(super) fn add(
     spec: &TaskModifierSpec,
     _clock: TaskClock,
 ) -> Result<()> {
-    let item = todoist_mutation::add_todoist_task(&providers::todoist_config(config)?, spec)?;
+    let item = pkms_task::add_todoist_task(&providers::todoist_config(config)?, spec)?;
     render::print_add_output(ctx, item)
 }
 
@@ -81,7 +80,7 @@ pub(super) fn mod_task(
     spec: &TaskModifierSpec,
     clock: TaskClock,
 ) -> Result<ExitCode> {
-    let output = todoist_mutation::mod_todoist_task(&providers::todoist_config(config)?, id, spec)?;
+    let output = pkms_task::mod_todoist_task(&providers::todoist_config(config)?, id, spec)?;
     render::print_mod_output(ctx, output, clock.today)
 }
 
@@ -104,12 +103,8 @@ pub(super) fn postpone(
     to: &str,
     clock: TaskClock,
 ) -> Result<()> {
-    let item = todoist_mutation::postpone_todoist_task(
-        &providers::todoist_config(config)?,
-        id,
-        to,
-        clock,
-    )?;
+    let item =
+        pkms_task::postpone_todoist_task(&providers::todoist_config(config)?, id, to, clock)?;
     render::print_mutation_output(ctx, "postpone", item)
 }
 
@@ -131,8 +126,7 @@ pub(super) fn close(
     id: &str,
     dry_run: bool,
 ) -> Result<()> {
-    let output =
-        todoist_mutation::close_todoist_task(&providers::todoist_config(config)?, id, dry_run)?;
+    let output = pkms_task::close_todoist_task(&providers::todoist_config(config)?, id, dry_run)?;
     print_done_output(ctx, &output)
 }
 

@@ -1,11 +1,10 @@
 use crate::config::ResolvedConfig;
 use anyhow::Result;
-use pkms_task::clock::TaskClock;
-use pkms_task::config::{PkmsTaskConfig, TodoistProviderConfig};
-use pkms_task::provider::TaskMetadataRow;
-use pkms_task::providers::TaskProviderEnvironment;
+use pkms_task::{
+    PkmsTaskConfig, TaskClock, TaskMetadataRow, TaskProviderEnvironment, TodoistProviderConfig,
+};
 
-pub(super) use pkms_task::providers::MetadataKind;
+pub(super) use pkms_task::MetadataKind;
 
 impl TaskProviderEnvironment for ResolvedConfig {
     fn pkms_config(&self) -> PkmsTaskConfig {
@@ -46,5 +45,5 @@ pub(super) fn collect_task_metadata(
     kind: MetadataKind,
     clock: TaskClock,
 ) -> Result<Vec<TaskMetadataRow>> {
-    pkms_task::providers::collect_task_metadata_on(config, raw_filters, kind, clock)
+    pkms_task::collect_task_metadata_on(config, raw_filters, kind, clock)
 }

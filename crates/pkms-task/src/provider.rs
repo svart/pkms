@@ -23,7 +23,6 @@ pub struct TaskQuery {
 }
 
 pub trait TaskProvider {
-    fn source(&self) -> TaskSourceKind;
     fn list(&self, query: &TaskQuery) -> Result<Vec<TaskItem>>;
     fn projects(&self) -> Result<Vec<TaskMetadataRow>>;
     fn tags(&self) -> Result<Vec<TaskMetadataRow>>;
