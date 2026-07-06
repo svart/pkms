@@ -1,16 +1,16 @@
 //! Local retrieval models and indexing primitives for pkms.
 
-pub mod api;
-pub mod chunking;
-pub mod db;
-pub mod embeddings;
-pub mod indexer;
-pub mod models;
-pub mod ndjson;
-pub mod org_export;
-pub mod retrieve;
-pub mod schema;
-pub mod web;
+mod api;
+mod chunking;
+mod db;
+mod embeddings;
+mod indexer;
+mod models;
+mod ndjson;
+mod org_export;
+mod retrieve;
+mod schema;
+mod web;
 
 pub use api::{
     AppState, DEFAULT_RAG_DB, NoteViewer, NoteViewerMethod, NoteViewerRequest, NoteViewerResponse,
@@ -33,5 +33,6 @@ pub use models::{
     RetrieveWeights, SUPPORTED_SCHEMA_VERSION, ScoreBreakdown, SearchRequest, SearchResponse,
     SearchResult, StatusResponse,
 };
+pub use ndjson::{NdjsonError, load_ndjson, parse_ndjson};
 pub use org_export::{export_org_notes, export_org_notes_with_ignore};
 pub use retrieve::{retrieve, retrieve_results};

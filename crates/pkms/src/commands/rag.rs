@@ -44,7 +44,7 @@ fn run_status(command_ctx: &CommandContext<'_>, args: &RagStatusArgs) -> Result<
 
 fn run_ingest(command_ctx: &CommandContext<'_>, args: &RagIngestArgs) -> Result<()> {
     let db_path = resolve_rag_db(args.rag_db.as_ref(), command_ctx.config());
-    let records = pkms_rag::ndjson::load_ndjson(&args.path)?;
+    let records = pkms_rag::load_ndjson(&args.path)?;
     let provider = pkms_rag::provider_from_env()?;
     let mut conn = pkms_rag::connect(&db_path)?;
     let summary = pkms_rag::ingest_records(&mut conn, &records, provider.as_ref(), false)?;
