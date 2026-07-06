@@ -20,6 +20,17 @@ use crate::{
     schema::SCHEMA_SQL,
 };
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct IngestProgress {
+    pub current_step: String,
+    pub message: String,
+    pub total_records: u64,
+    pub processed_records: u64,
+    pub total_embeddings: u64,
+    pub processed_embeddings: u64,
+    pub summary: IngestSummary,
+}
+
 pub fn connect(db_path: impl AsRef<Path>) -> Result<Connection> {
     let db_path = db_path.as_ref();
     create_parent_dir(db_path)?;
@@ -46,19 +57,40 @@ pub fn ingest_records(
     embedding_provider: &dyn EmbeddingProvider,
     full_rebuild: bool,
 ) -> Result<IngestSummary> {
+    ingest_records_with_progress(conn, records, embedding_provider, full_rebuild, |_| {})
+}
+
+pub(crate) fn ingest_records_with_progress(
+    conn: &mut Connection,
+    records: &[RetrievalRecord],
+    embedding_provider: &dyn EmbeddingProvider,
+    full_rebuild: bool,
+    mut on_progress: impl FnMut(&IngestProgress),
+) -> Result<IngestSummary> {
     let tx = conn
         .transaction()
         .context("failed to start RAG ingest transaction")?;
     let mut summary = IngestSummary::default();
     let mut changed_chunks = Vec::new();
     let mut seen_note_ids = HashSet::new();
+    let total_records = records.len() as u64;
 
     if full_rebuild {
         tx.execute("UPDATE chunks SET stale = 1", [])
             .context("failed to mark chunks stale for full rebuild")?;
     }
 
-    for record in records {
+    on_progress(&IngestProgress {
+        current_step: "ingest-records".to_string(),
+        message: format!("Processing {total_records} records."),
+        total_records,
+        processed_records: 0,
+        total_embeddings: 0,
+        processed_embeddings: 0,
+        summary: summary.clone(),
+    });
+
+    for (index, record) in records.iter().enumerate() {
         match record {
             RetrievalRecord::Note(record) => {
                 seen_note_ids.insert(record.note_id.clone());
@@ -88,16 +120,51 @@ pub fn ingest_records(
                 summary.chunks_deleted += chunks_deleted;
             }
         }
+        on_progress(&IngestProgress {
+            current_step: "ingest-records".to_string(),
+            message: format!("Processing {total_records} records."),
+            total_records,
+            processed_records: index as u64 + 1,
+            total_embeddings: 0,
+            processed_embeddings: 0,
+            summary: summary.clone(),
+        });
     }
 
-    let (embeddings_computed, embeddings_skipped) =
-        refresh_embeddings(&tx, &changed_chunks, embedding_provider)?;
+    let (embeddings_computed, embeddings_skipped) = refresh_embeddings_with_progress(
+        &tx,
+        &changed_chunks,
+        embedding_provider,
+        |processed_embeddings, total_embeddings, embeddings_skipped| {
+            let mut progress_summary = summary.clone();
+            progress_summary.embeddings_computed = processed_embeddings;
+            progress_summary.embeddings_skipped = embeddings_skipped;
+            on_progress(&IngestProgress {
+                current_step: "embed-chunks".to_string(),
+                message: format!("Embedding {total_embeddings} changed chunks."),
+                total_records,
+                processed_records: total_records,
+                total_embeddings,
+                processed_embeddings,
+                summary: progress_summary,
+            });
+        },
+    )?;
     summary.embeddings_computed += embeddings_computed;
     summary.embeddings_skipped += embeddings_skipped;
 
     if full_rebuild {
         summary.chunks_deleted += delete_stale_chunks(&tx)?;
         summary.notes_deleted += delete_missing_notes(&tx, &seen_note_ids)?;
+        on_progress(&IngestProgress {
+            current_step: "cleanup-stale".to_string(),
+            message: "Removing stale index rows.".to_string(),
+            total_records,
+            processed_records: total_records,
+            total_embeddings: embeddings_computed,
+            processed_embeddings: embeddings_computed,
+            summary: summary.clone(),
+        });
     }
 
     tx.commit()
@@ -700,10 +767,11 @@ fn delete_missing_notes(tx: &Transaction<'_>, seen_note_ids: &HashSet<String>) -
     Ok(notes_deleted)
 }
 
-fn refresh_embeddings(
+fn refresh_embeddings_with_progress(
     tx: &Transaction<'_>,
     chunks: &[ChunkRecord],
     provider: &dyn EmbeddingProvider,
+    mut on_progress: impl FnMut(u64, u64, u64),
 ) -> Result<(u64, u64)> {
     let mut chunks_to_embed = Vec::new();
     let mut skipped = 0;
@@ -730,54 +798,63 @@ fn refresh_embeddings(
         chunks_to_embed.push(chunk.clone());
     }
 
+    let total_embeddings = chunks_to_embed.len() as u64;
+    on_progress(0, total_embeddings, skipped);
+
     if chunks_to_embed.is_empty() {
         return Ok((0, skipped));
     }
 
-    let texts = chunks_to_embed
-        .iter()
-        .map(embedding_text)
-        .collect::<Vec<_>>();
-    let vectors = provider.embed(&texts).context("failed to embed chunks")?;
-    anyhow::ensure!(
-        vectors.len() == chunks_to_embed.len(),
-        "embedding provider returned {} vectors for {} chunks",
-        vectors.len(),
-        chunks_to_embed.len()
-    );
     let created_at = unix_timestamp()?;
-    for (chunk, vector) in chunks_to_embed.iter().zip(vectors) {
+    let batch_size = provider
+        .preferred_batch_size()
+        .filter(|batch_size| *batch_size > 0)
+        .unwrap_or(chunks_to_embed.len());
+    let mut processed_embeddings = 0;
+    for chunk_batch in chunks_to_embed.chunks(batch_size) {
+        let texts = chunk_batch.iter().map(embedding_text).collect::<Vec<_>>();
+        let vectors = provider.embed(&texts).context("failed to embed chunks")?;
         anyhow::ensure!(
-            vector.len() == provider.dimension(),
-            "embedding provider returned dimension {} for model {}; expected {}",
-            vector.len(),
-            provider.model_name(),
-            provider.dimension()
+            vectors.len() == chunk_batch.len(),
+            "embedding provider returned {} vectors for {} chunks",
+            vectors.len(),
+            chunk_batch.len()
         );
-        tx.execute(
-            r#"
-            INSERT INTO chunk_embeddings (
-                chunk_id, model_name, dimension, content_hash, vector, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?)
-            ON CONFLICT(chunk_id, model_name) DO UPDATE SET
-                dimension = excluded.dimension,
-                content_hash = excluded.content_hash,
-                vector = excluded.vector,
-                created_at = excluded.created_at
-            "#,
-            params![
-                chunk.chunk_id,
+        for (chunk, vector) in chunk_batch.iter().zip(vectors) {
+            anyhow::ensure!(
+                vector.len() == provider.dimension(),
+                "embedding provider returned dimension {} for model {}; expected {}",
+                vector.len(),
                 provider.model_name(),
-                provider.dimension() as i64,
-                chunk.content_hash,
-                pack_vector(&vector),
-                created_at
-            ],
-        )
-        .context("failed to upsert chunk embedding")?;
+                provider.dimension()
+            );
+            tx.execute(
+                r#"
+                INSERT INTO chunk_embeddings (
+                    chunk_id, model_name, dimension, content_hash, vector, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT(chunk_id, model_name) DO UPDATE SET
+                    dimension = excluded.dimension,
+                    content_hash = excluded.content_hash,
+                    vector = excluded.vector,
+                    created_at = excluded.created_at
+                "#,
+                params![
+                    chunk.chunk_id,
+                    provider.model_name(),
+                    provider.dimension() as i64,
+                    chunk.content_hash,
+                    pack_vector(&vector),
+                    created_at
+                ],
+            )
+            .context("failed to upsert chunk embedding")?;
+        }
+        processed_embeddings += chunk_batch.len() as u64;
+        on_progress(processed_embeddings, total_embeddings, skipped);
     }
 
-    Ok((chunks_to_embed.len() as u64, skipped))
+    Ok((total_embeddings, skipped))
 }
 
 fn query_strings(tx: &Transaction<'_>, query: &str) -> Result<Vec<String>> {

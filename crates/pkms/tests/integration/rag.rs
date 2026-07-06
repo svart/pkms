@@ -137,6 +137,35 @@ Agents call retrieve to search mounted PKMS notes.
 }
 
 #[test]
+fn test_rag_index_text_reports_progress_on_stderr() {
+    let db = TestDb::clean();
+    let rag_db = db.root().join("rag.sqlite3");
+    let fixture = rag_fixture();
+
+    let (stdout, stderr, status) = run_hash(&[
+        "--db",
+        db.root().to_str().unwrap(),
+        "rag",
+        "index",
+        "--index-source",
+        fixture.to_str().unwrap(),
+        "--rag-db",
+        rag_db.to_str().unwrap(),
+    ]);
+
+    assert!(status.success());
+    assert!(stdout.contains("Index phase: complete"));
+    assert!(
+        stderr.contains("RAG index: Processing records"),
+        "stderr should include record progress\nstderr: {stderr}"
+    );
+    assert!(
+        stderr.contains("RAG index: Embedding chunks"),
+        "stderr should include embedding progress\nstderr: {stderr}"
+    );
+}
+
+#[test]
 fn test_rag_index_uses_configured_rag_db_and_notes_root() {
     let db = TestDb::clean();
     let notes_root = db.root().join("configured-notes");

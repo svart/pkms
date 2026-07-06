@@ -33,6 +33,9 @@ const EMBEDDING_BATCH_SIZE_ENV: &str = "PKMS_RAG_EMBEDDING_BATCH_SIZE";
 pub trait EmbeddingProvider {
     fn model_name(&self) -> &str;
     fn dimension(&self) -> usize;
+    fn preferred_batch_size(&self) -> Option<usize> {
+        None
+    }
     fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>>;
 }
 
@@ -136,6 +139,10 @@ impl EmbeddingProvider for FastEmbeddingProvider {
 
     fn dimension(&self) -> usize {
         self.dimension
+    }
+
+    fn preferred_batch_size(&self) -> Option<usize> {
+        Some(self.batch_size)
     }
 
     fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>> {

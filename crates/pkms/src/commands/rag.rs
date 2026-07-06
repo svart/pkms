@@ -1,4 +1,4 @@
-use std::{io::Write, path::PathBuf};
+use std::{cell::RefCell, io::Write, path::PathBuf};
 
 use anyhow::{Context, Result, bail};
 
@@ -56,7 +56,14 @@ fn run_index(command_ctx: &CommandContext<'_>, args: &RagIndexArgs) -> Result<()
     );
     let provider_config = pkms_rag::embedding_provider_config_from_env()?;
     let indexer = pkms_rag::BackgroundIndexer::new(db_path, index_source, notes_root);
-    let progress = indexer.run_sync_with_provider_config(&provider_config);
+    let progress = if command_ctx.output().is_structured() {
+        indexer.run_sync_with_provider_config(&provider_config)
+    } else {
+        let progress_printer = RefCell::new(RagIndexProgressPrinter::default());
+        indexer.run_sync_with_provider_config_and_progress(&provider_config, |progress| {
+            progress_printer.borrow_mut().render(progress);
+        })
+    };
     if progress.phase == "error" {
         bail!(
             "{}",
@@ -193,6 +200,81 @@ fn render_index_progress(ctx: &OutputContext, progress: &pkms_rag::IndexProgress
         progress.embeddings_computed, progress.embeddings_skipped
     );
     Ok(())
+}
+
+#[derive(Default)]
+struct RagIndexProgressPrinter {
+    last_step: Option<String>,
+    last_bucket: Option<u64>,
+}
+
+impl RagIndexProgressPrinter {
+    fn render(&mut self, progress: &pkms_rag::IndexProgress) {
+        let bucket = progress_bucket(progress);
+        let step_changed = self.last_step.as_deref() != Some(progress.current_step.as_str());
+        let bucket_changed = self.last_bucket != bucket;
+        let terminal = matches!(progress.phase.as_str(), "complete" | "error" | "idle");
+        if !step_changed && !bucket_changed && !terminal {
+            return;
+        }
+        eprintln!("{}", format_index_progress_line(progress));
+        self.last_step = Some(progress.current_step.clone());
+        self.last_bucket = bucket;
+    }
+}
+
+fn progress_bucket(progress: &pkms_rag::IndexProgress) -> Option<u64> {
+    if progress.current_step == "embed-chunks" && progress.total_embeddings > 0 {
+        return progress
+            .processed_embeddings
+            .saturating_mul(20)
+            .checked_div(progress.total_embeddings);
+    }
+    progress
+        .processed_records
+        .saturating_mul(20)
+        .checked_div(progress.total_records)
+}
+
+fn format_index_progress_line(progress: &pkms_rag::IndexProgress) -> String {
+    match progress.current_step.as_str() {
+        "ingest-records" if progress.total_records == 0 => {
+            "RAG index: Processing records: none found.".to_string()
+        }
+        "ingest-records" => format!(
+            "RAG index: Processing records {}/{} ({})",
+            progress.processed_records,
+            progress.total_records,
+            percent(progress.processed_records, progress.total_records)
+        ),
+        "embed-chunks" if progress.total_embeddings == 0 => {
+            "RAG index: Embedding chunks: none needed.".to_string()
+        }
+        "embed-chunks" => {
+            format!(
+                "RAG index: Embedding chunks {}/{} ({})",
+                progress.processed_embeddings,
+                progress.total_embeddings,
+                percent(progress.processed_embeddings, progress.total_embeddings)
+            )
+        }
+        "cleanup-stale" => "RAG index: Removing stale index rows.".to_string(),
+        "complete" => format!(
+            "RAG index: Complete ({} records, {} chunks, {} embeddings computed).",
+            progress.processed_records, progress.chunks_seen, progress.embeddings_computed
+        ),
+        "error" => format!("RAG index: Error: {}", progress.message),
+        _ if !progress.message.is_empty() => format!("RAG index: {}", progress.message),
+        _ => format!("RAG index: {}", progress.current_step),
+    }
+}
+
+fn percent(processed: u64, total: u64) -> String {
+    let percent = processed
+        .saturating_mul(100)
+        .checked_div(total)
+        .unwrap_or(0);
+    format!("{percent}%")
 }
 
 fn render_search_response(ctx: &OutputContext, response: &pkms_rag::SearchResponse) -> Result<()> {

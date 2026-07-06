@@ -8,7 +8,7 @@ use std::{
 use anyhow::{Context, Result, bail};
 
 use crate::{
-    db::{connect, ingest_records},
+    db::{IngestProgress, connect, ingest_records_with_progress},
     embeddings::{
         EmbeddingProvider, EmbeddingProviderConfig, provider_from_config, provider_from_env,
     },
@@ -16,6 +16,8 @@ use crate::{
     ndjson::load_ndjson,
     org_export::export_org_notes,
 };
+
+type ProgressCallback<'a> = dyn Fn(&IndexProgress) + 'a;
 
 #[derive(Debug, Clone)]
 pub struct BackgroundIndexer {
@@ -58,33 +60,76 @@ impl BackgroundIndexer {
     }
 
     pub fn run_sync_with_provider(&self, provider: &dyn EmbeddingProvider) -> IndexProgress {
+        self.run_sync_with_provider_internal(provider, None)
+    }
+
+    pub fn run_sync_with_provider_and_progress(
+        &self,
+        provider: &dyn EmbeddingProvider,
+        on_progress: impl Fn(&IndexProgress),
+    ) -> IndexProgress {
+        self.run_sync_with_provider_internal(provider, Some(&on_progress))
+    }
+
+    fn run_sync_with_provider_internal(
+        &self,
+        provider: &dyn EmbeddingProvider,
+        on_progress: Option<&ProgressCallback<'_>>,
+    ) -> IndexProgress {
         if !self.has_index_source() {
             self.set_no_source();
+            self.emit_progress(on_progress);
             return self.status();
         }
 
         let started_at = unix_timestamp_seconds();
         if !self.begin_rebuild(started_at) {
+            self.emit_progress(on_progress);
             return self.status();
         }
-        self.run_rebuild_with_provider(started_at, provider);
+        self.emit_progress(on_progress);
+        self.run_rebuild_with_provider(started_at, provider, on_progress);
         self.finish_rebuild();
         self.status()
     }
 
     pub fn run_sync_with_provider_config(&self, config: &EmbeddingProviderConfig) -> IndexProgress {
+        self.run_sync_with_provider_config_internal(config, None)
+    }
+
+    pub fn run_sync_with_provider_config_and_progress(
+        &self,
+        config: &EmbeddingProviderConfig,
+        on_progress: impl Fn(&IndexProgress),
+    ) -> IndexProgress {
+        self.run_sync_with_provider_config_internal(config, Some(&on_progress))
+    }
+
+    fn run_sync_with_provider_config_internal(
+        &self,
+        config: &EmbeddingProviderConfig,
+        on_progress: Option<&ProgressCallback<'_>>,
+    ) -> IndexProgress {
         if !self.has_index_source() {
             self.set_no_source();
+            self.emit_progress(on_progress);
             return self.status();
         }
 
         let started_at = unix_timestamp_seconds();
         if !self.begin_rebuild(started_at) {
+            self.emit_progress(on_progress);
             return self.status();
         }
+        self.emit_progress(on_progress);
         match provider_from_config(config) {
-            Ok(provider) => self.run_rebuild_with_provider(started_at, provider.as_ref()),
-            Err(err) => self.set_error(err.to_string()),
+            Ok(provider) => {
+                self.run_rebuild_with_provider(started_at, provider.as_ref(), on_progress)
+            }
+            Err(err) => {
+                self.set_error(err.to_string());
+                self.emit_progress(on_progress);
+            }
         }
         self.finish_rebuild();
         self.status()
@@ -131,46 +176,71 @@ impl BackgroundIndexer {
     where
         F: FnOnce() -> Result<Box<dyn EmbeddingProvider>>,
     {
+        self.run_rebuild_with_provider_factory_with_progress(started_at, provider_factory, None);
+    }
+
+    fn run_rebuild_with_provider_factory_with_progress<F>(
+        &self,
+        started_at: f64,
+        provider_factory: F,
+        on_progress: Option<&ProgressCallback<'_>>,
+    ) where
+        F: FnOnce() -> Result<Box<dyn EmbeddingProvider>>,
+    {
         let result = (|| {
-            let records = self.load_records(started_at)?;
+            let records = self.load_records(started_at, on_progress)?;
             self.set(
                 "indexing",
                 "init-embedding-model",
                 "Preparing embedding model.",
                 Some(records.len() as u64),
             );
+            self.emit_progress(on_progress);
             let provider =
                 provider_factory().context("failed to initialize RAG embedding provider")?;
-            self.ingest_records(&records, provider.as_ref())
+            self.ingest_records(&records, provider.as_ref(), on_progress)
         })();
         if let Err(err) = result {
             self.set_error(err.to_string());
+            self.emit_progress(on_progress);
         }
     }
 
-    fn run_rebuild_with_provider(&self, started_at: f64, provider: &dyn EmbeddingProvider) {
+    fn run_rebuild_with_provider(
+        &self,
+        started_at: f64,
+        provider: &dyn EmbeddingProvider,
+        on_progress: Option<&ProgressCallback<'_>>,
+    ) {
         let result = (|| {
-            let records = self.load_records(started_at)?;
+            let records = self.load_records(started_at, on_progress)?;
             self.set(
                 "indexing",
                 "init-embedding-model",
                 "Preparing embedding model.",
                 Some(records.len() as u64),
             );
-            self.ingest_records(&records, provider)
+            self.emit_progress(on_progress);
+            self.ingest_records(&records, provider, on_progress)
         })();
         if let Err(err) = result {
             self.set_error(err.to_string());
+            self.emit_progress(on_progress);
         }
     }
 
-    fn load_records(&self, started_at: f64) -> Result<Vec<RetrievalRecord>> {
+    fn load_records(
+        &self,
+        started_at: f64,
+        on_progress: Option<&ProgressCallback<'_>>,
+    ) -> Result<Vec<RetrievalRecord>> {
         if let Some(notes_root) = &self.notes_root {
             self.set_loading(
                 "export-notes-root",
                 format!("Exporting org notes from {}", display_path(notes_root)),
                 started_at,
             );
+            self.emit_progress(on_progress);
             return export_org_notes(notes_root);
         }
 
@@ -185,6 +255,7 @@ impl BackgroundIndexer {
             format!("Reading {}", display_path(source_path)),
             started_at,
         );
+        self.emit_progress(on_progress);
         load_ndjson(source_path)
     }
 
@@ -192,6 +263,7 @@ impl BackgroundIndexer {
         &self,
         records: &[RetrievalRecord],
         provider: &dyn EmbeddingProvider,
+        on_progress: Option<&ProgressCallback<'_>>,
     ) -> Result<()> {
         self.set(
             "indexing",
@@ -199,10 +271,16 @@ impl BackgroundIndexer {
             format!("Rebuilding index from {} records.", records.len()),
             None,
         );
+        self.emit_progress(on_progress);
         let mut conn = connect(&self.db_path)?;
-        let summary = ingest_records(&mut conn, records, provider, true)?;
-        self.add_summary(&summary, records.len() as u64);
+        let summary =
+            ingest_records_with_progress(&mut conn, records, provider, true, |progress| {
+                self.set_ingest_progress(progress);
+                self.emit_progress(on_progress);
+            })?;
+        self.set_summary(&summary, records.len() as u64);
         self.set_complete(records.len() as u64);
+        self.emit_progress(on_progress);
         Ok(())
     }
 
@@ -281,21 +359,28 @@ impl BackgroundIndexer {
         progress.finished_at = Some(unix_timestamp_seconds());
     }
 
-    fn add_summary(&self, summary: &IngestSummary, processed_records: u64) {
+    fn set_ingest_progress(&self, ingest_progress: &IngestProgress) {
+        let mut progress = self.progress();
+        progress.phase = "indexing".to_string();
+        progress.current_step = ingest_progress.current_step.clone();
+        progress.message = ingest_progress.message.clone();
+        progress.total_records = ingest_progress.total_records;
+        progress.processed_records = ingest_progress.processed_records;
+        progress.total_embeddings = ingest_progress.total_embeddings;
+        progress.processed_embeddings = ingest_progress.processed_embeddings;
+        apply_summary(&mut progress, &ingest_progress.summary);
+    }
+
+    fn set_summary(&self, summary: &IngestSummary, processed_records: u64) {
         let mut progress = self.progress();
         progress.processed_records = processed_records;
-        progress.notes_seen += summary.notes_seen;
-        progress.notes_upserted += summary.notes_upserted;
-        progress.chunks_seen += summary.chunks_seen;
-        progress.chunks_upserted += summary.chunks_upserted;
-        progress.chunks_unchanged += summary.chunks_unchanged;
-        progress.links_seen += summary.links_seen;
-        progress.links_upserted += summary.links_upserted;
-        progress.deletes_seen += summary.deletes_seen;
-        progress.notes_deleted += summary.notes_deleted;
-        progress.chunks_deleted += summary.chunks_deleted;
-        progress.embeddings_computed += summary.embeddings_computed;
-        progress.embeddings_skipped += summary.embeddings_skipped;
+        apply_summary(&mut progress, summary);
+    }
+
+    fn emit_progress(&self, on_progress: Option<&ProgressCallback<'_>>) {
+        if let Some(on_progress) = on_progress {
+            on_progress(&self.status());
+        }
     }
 
     fn progress(&self) -> MutexGuard<'_, IndexProgress> {
@@ -320,6 +405,21 @@ fn unix_timestamp_seconds() -> f64 {
 
 fn display_path(path: &Path) -> String {
     path.to_string_lossy().into_owned()
+}
+
+fn apply_summary(progress: &mut IndexProgress, summary: &IngestSummary) {
+    progress.notes_seen = summary.notes_seen;
+    progress.notes_upserted = summary.notes_upserted;
+    progress.chunks_seen = summary.chunks_seen;
+    progress.chunks_upserted = summary.chunks_upserted;
+    progress.chunks_unchanged = summary.chunks_unchanged;
+    progress.links_seen = summary.links_seen;
+    progress.links_upserted = summary.links_upserted;
+    progress.deletes_seen = summary.deletes_seen;
+    progress.notes_deleted = summary.notes_deleted;
+    progress.chunks_deleted = summary.chunks_deleted;
+    progress.embeddings_computed = summary.embeddings_computed;
+    progress.embeddings_skipped = summary.embeddings_skipped;
 }
 
 #[cfg(test)]
@@ -393,6 +493,44 @@ mod tests {
         assert_eq!(current.notes, 2);
         assert_eq!(current.chunks, 2);
         assert_eq!(current.links, 1);
+    }
+
+    #[test]
+    fn indexer_reports_sync_rebuild_progress() {
+        let tempdir = tempfile::tempdir().expect("tempdir");
+        let db_path = tempdir.path().join("rag.sqlite3");
+        let source = fixture_path();
+        let indexer = BackgroundIndexer::new(db_path, Some(source), None);
+        let provider = HashEmbeddingProvider::default();
+        let events = Mutex::new(Vec::new());
+
+        let progress = indexer.run_sync_with_provider_and_progress(&provider, |progress| {
+            events.lock().expect("events lock").push(progress.clone());
+        });
+
+        let events = events.lock().expect("events lock");
+        assert_eq!(progress.phase, "complete");
+        assert!(
+            events.iter().any(|event| {
+                event.current_step == "ingest-records"
+                    && event.total_records == 5
+                    && event.processed_records > 0
+                    && event.processed_records < event.total_records
+            }),
+            "expected a partial record ingest progress event, got {events:#?}"
+        );
+        assert!(
+            events.iter().any(|event| {
+                event.current_step == "embed-chunks"
+                    && event.total_embeddings == 2
+                    && event.processed_embeddings > 0
+            }),
+            "expected an embedding progress event, got {events:#?}"
+        );
+        assert_eq!(
+            events.last().expect("at least one progress event").phase,
+            "complete"
+        );
     }
 
     #[test]

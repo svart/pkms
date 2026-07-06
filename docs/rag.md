@@ -69,6 +69,10 @@ from the selected source and removes stale indexed rows for records no longer in
 the source. `pkms rag serve` starts a foreground HTTP server and starts a
 background rebuild when a notes root or index source is configured.
 
+With text output, `pkms rag index` reports foreground rebuild progress to
+stderr while keeping the final index summary on stdout. JSON and NDJSON output
+remain structured stdout only and emit the final progress object.
+
 The default index path is `.data/pkms-rag.sqlite3`. Override it with `--rag-db`,
 `PKMS_RAG_DB`, or `[rag].rag_db` in `~/.config/pkms.toml`. Relative `[rag]`
 paths are resolved under `db_root`. The index is derived local state; source

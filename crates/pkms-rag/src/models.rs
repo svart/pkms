@@ -118,6 +118,10 @@ pub struct IndexProgress {
     #[serde(default)]
     pub processed_records: u64,
     #[serde(default)]
+    pub total_embeddings: u64,
+    #[serde(default)]
+    pub processed_embeddings: u64,
+    #[serde(default)]
     pub started_at: Option<f64>,
     #[serde(default)]
     pub finished_at: Option<f64>,
@@ -159,6 +163,8 @@ impl Default for IndexProgress {
             notes_root: None,
             total_records: 0,
             processed_records: 0,
+            total_embeddings: 0,
+            processed_embeddings: 0,
             started_at: None,
             finished_at: None,
             notes_seen: 0,

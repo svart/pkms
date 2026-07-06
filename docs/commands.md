@@ -139,6 +139,10 @@ path resolves from `--rag-db`, `PKMS_RAG_DB`, `[rag].rag_db`, then the default
 - `[rag].notes_root` or `[rag].index_source` from `~/.config/pkms.toml`.
 - The resolved `pkms` database root when neither source is set.
 
+For text output, `pkms rag index` writes rebuild progress to stderr and the
+final summary to stdout. Structured output stays parseable on stdout and emits
+only the final progress object.
+
 `pkms rag retrieve` returns cited chunks with `hybrid`, `bm25`, or `dense`
 scoring. Text output is concise; JSON returns the full response, and NDJSON emits
 one result per line.
