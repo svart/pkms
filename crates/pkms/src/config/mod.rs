@@ -2,6 +2,18 @@ use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
+mod columns;
+mod defaults;
+mod paths;
+
+use columns::default_columns_for;
+pub use columns::{
+    ColumnMatrixConfig, ColumnSource, ColumnView, ColumnsConfig, SourceColumnConfig,
+};
+pub use defaults::generate_default_config;
+use defaults::{default_closed_todo_states, default_open_todo_states};
+pub use paths::canonicalize_or_abs;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
@@ -100,85 +112,6 @@ pub struct RagConfig {
     pub rag_db: Option<PathBuf>,
     pub notes_root: Option<PathBuf>,
     pub index_source: Option<PathBuf>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(untagged)]
-pub enum ColumnsConfig {
-    Global(Vec<String>),
-    Matrix(ColumnMatrixConfig),
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(deny_unknown_fields)]
-pub struct ColumnMatrixConfig {
-    pub pkms: Option<SourceColumnConfig>,
-    pub todoist: Option<SourceColumnConfig>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(deny_unknown_fields)]
-pub struct SourceColumnConfig {
-    pub tasks: Option<Vec<String>>,
-    pub agenda: Option<Vec<String>>,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ColumnSource {
-    Pkms,
-    Todoist,
-    All,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ColumnView {
-    Tasks,
-    Agenda,
-}
-
-impl ColumnsConfig {
-    pub fn default_for(&self, source: ColumnSource, view: ColumnView) -> Result<Option<&[String]>> {
-        match self {
-            ColumnsConfig::Global(columns) => Ok(Some(columns.as_slice())),
-            ColumnsConfig::Matrix(matrix) => matrix.default_for(source, view),
-        }
-    }
-}
-
-impl ColumnMatrixConfig {
-    fn default_for(&self, source: ColumnSource, view: ColumnView) -> Result<Option<&[String]>> {
-        match source {
-            ColumnSource::Pkms => Ok(source_default(self.pkms.as_ref(), view)),
-            ColumnSource::Todoist => Ok(source_default(self.todoist.as_ref(), view)),
-            ColumnSource::All => {
-                let pkms = source_default(self.pkms.as_ref(), view);
-                let todoist = source_default(self.todoist.as_ref(), view);
-                if pkms == todoist {
-                    Ok(pkms)
-                } else {
-                    anyhow::bail!(
-                        "Ambiguous default columns for source:all. Configure matching pkms and \
-                         todoist defaults for this view or pass --columns explicitly."
-                    )
-                }
-            }
-        }
-    }
-}
-
-fn source_default(source: Option<&SourceColumnConfig>, view: ColumnView) -> Option<&[String]> {
-    source.and_then(|source| match view {
-        ColumnView::Tasks => source.tasks.as_deref(),
-        ColumnView::Agenda => source.agenda.as_deref(),
-    })
-}
-
-fn default_open_todo_states() -> Vec<String> {
-    vec!["TODO".to_string()]
-}
-
-fn default_closed_todo_states() -> Vec<String> {
-    vec!["DONE".to_string()]
 }
 
 impl Config {
@@ -472,17 +405,6 @@ impl ResolvedConfig {
     }
 }
 
-fn default_columns_for(
-    columns: Option<&ColumnsConfig>,
-    source: ColumnSource,
-    view: ColumnView,
-) -> Result<Option<&[String]>> {
-    columns
-        .map(|columns| columns.default_for(source, view))
-        .transpose()
-        .map(Option::flatten)
-}
-
 #[derive(Debug, Clone, Serialize)]
 pub struct ConfigInfo {
     pub db_root: PathBuf,
@@ -490,86 +412,6 @@ pub struct ConfigInfo {
     pub daily_notes_dir: PathBuf,
     pub ignore_patterns: Vec<String>,
     pub has_config_file: bool,
-}
-
-pub fn canonicalize_or_abs(path: &std::path::Path) -> PathBuf {
-    std::fs::canonicalize(path).unwrap_or_else(|_| {
-        if path.is_absolute() {
-            path.to_path_buf()
-        } else {
-            std::env::current_dir()
-                .unwrap_or(PathBuf::from("."))
-                .join(path)
-        }
-    })
-}
-
-pub fn generate_default_config(db_root: Option<&std::path::Path>) -> String {
-    let root_line = match db_root {
-        Some(p) => format!(r#"db_root = "{}""#, p.display()),
-        None => r#"# db_root = "/path/to/your/org/directory""#.to_string(),
-    };
-
-    format!(
-        r#"# pkms configuration
-{root_line}
-
-# Directory where new notes are created (relative to db_root or absolute)
-# new_notes_dir = "roam"
-
-# Directory where daily notes are created (defaults to new_notes_dir)
-# daily_notes_dir = "roam/daily"
-
-# Glob patterns to ignore during file discovery
-# ignore_patterns = [".attach", "*.bak"]
-
-# Default task table columns (overridable by --columns flag)
-# Available: Id, Date, State, Type, Prio, Tags, Project, Note, Heading
-# Global default:
-# columns = ["Id", "Date", "State", "Type", "Prio", "Tags", "Project", "Note", "Heading"]
-#
-# Source/view-specific defaults:
-# [columns.pkms]
-# tasks = ["Id", "State", "Prio", "Tags", "Note", "Heading"]
-# agenda = ["Id", "Date", "State", "Type", "Prio", "Tags", "Note", "Heading"]
-#
-# [columns.todoist]
-# tasks = ["Id", "State", "Prio", "Tags", "Project", "Heading"]
-# agenda = ["Id", "Date", "State", "Type", "Prio", "Tags", "Project", "Heading"]
-
-# Task section: configure the PKMS inbox note used by `pkms task inbox` and `pkms task add`
-# [tasks]
-# inbox = "Inbox"
-
-# Agenda section: configure TODO state keyword lists
-# [agenda]
-# open_todo_states = ["TODO"]
-# closed_todo_states = ["DONE"]
-
-# Todoist is disabled by default. Prefer storing the token in the environment.
-# [todoist]
-# enabled = false
-# token = "..." # optional; env var below takes precedence
-# token_env = "TODOIST_API_TOKEN"
-# default_filter = "today | overdue"
-
-# RAG retrieval index configuration. Relative paths are resolved under db_root.
-# [rag]
-# rag_db = ".data/pkms-rag.sqlite3"
-# notes_root = "/path/to/org/notes"
-# index_source = "retrieval-export.ndjson"
-
-# SSH file-link checks are disabled unless pkms is built with --features ssh and
-# `pkms check --remote-file-links` is passed. Password prompts are not used.
-# [ssh]
-# identity_file = "~/.ssh/id_ed25519"
-# known_hosts = "~/.ssh/known_hosts"
-# connect_timeout_ms = 5000
-# operation_timeout_ms = 5000
-# max_connections = 4
-# agent = true
-"#,
-    )
 }
 
 #[cfg(test)]
