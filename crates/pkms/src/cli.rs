@@ -83,6 +83,7 @@ pub enum Command {
     InitConfig(InitConfigArgs),
     #[command(about = "List, inspect, and update tasks across configured sources")]
     Task(TaskArgs),
+    #[cfg(feature = "rag")]
     #[command(about = "Local retrieval over org-roam notes")]
     Rag(RagArgs),
     #[command(name = "path", about = "Find shortest path between two notes")]
@@ -109,6 +110,7 @@ impl Command {
             Command::Info => "info",
             Command::InitConfig(_) => "init-config",
             Command::Task(_) => "task",
+            #[cfg(feature = "rag")]
             Command::Rag(_) => "rag",
             Command::Path(_) => "path",
             #[cfg(feature = "web")]
@@ -117,12 +119,14 @@ impl Command {
     }
 }
 
+#[cfg(feature = "rag")]
 #[derive(Debug, Args)]
 pub struct RagArgs {
     #[command(subcommand)]
     pub command: RagCommand,
 }
 
+#[cfg(feature = "rag")]
 #[derive(Debug, Subcommand)]
 pub enum RagCommand {
     #[command(about = "Show RAG index status")]
@@ -139,12 +143,14 @@ pub enum RagCommand {
     Serve(RagServeArgs),
 }
 
+#[cfg(feature = "rag")]
 #[derive(Debug, Args)]
 pub struct RagStatusArgs {
     #[arg(long, value_name = "PATH", help = "Path to RAG SQLite index")]
     pub rag_db: Option<PathBuf>,
 }
 
+#[cfg(feature = "rag")]
 #[derive(Debug, Args)]
 pub struct RagIngestArgs {
     #[arg(value_name = "PATH", help = "Retrieval NDJSON file to ingest")]
@@ -153,6 +159,7 @@ pub struct RagIngestArgs {
     pub rag_db: Option<PathBuf>,
 }
 
+#[cfg(feature = "rag")]
 #[derive(Debug, Args)]
 pub struct RagIndexArgs {
     #[arg(long, value_name = "PATH", help = "Org notes root to index")]
@@ -163,6 +170,7 @@ pub struct RagIndexArgs {
     pub rag_db: Option<PathBuf>,
 }
 
+#[cfg(feature = "rag")]
 #[derive(Debug, Args)]
 pub struct RagSearchArgs {
     #[arg(help = "Search query")]
@@ -173,6 +181,7 @@ pub struct RagSearchArgs {
     pub rag_db: Option<PathBuf>,
 }
 
+#[cfg(feature = "rag")]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 pub enum RagRetrieveMode {
     Hybrid,
@@ -180,6 +189,7 @@ pub enum RagRetrieveMode {
     Dense,
 }
 
+#[cfg(feature = "rag")]
 #[derive(Debug, Args)]
 pub struct RagRetrieveArgs {
     #[arg(help = "Retrieval query")]
@@ -194,6 +204,7 @@ pub struct RagRetrieveArgs {
     pub rag_db: Option<PathBuf>,
 }
 
+#[cfg(feature = "rag")]
 #[derive(Debug, Args)]
 pub struct RagServeArgs {
     #[arg(long, value_name = "PATH", help = "Org notes root to index")]

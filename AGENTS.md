@@ -146,6 +146,7 @@ Feature flags:
 | `todoist` | off | Enables Todoist task reads and writes through `ureq`. |
 | `web` | off | Enables the local `serve` web viewer and static rendering through `katex` and `syntect`. |
 | `ssh` | off | Enables remote SSH `file:` link checks. |
+| `rag` | off | Enables `pkms rag` local retrieval and the optional `pkms-rag` dependency. |
 
 ## Scenario Guide
 

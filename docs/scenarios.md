@@ -71,9 +71,9 @@ Start with [Web Viewer](web.md). Implementation details live in the
 
 ## RAG Retrieval
 
-Use `pkms rag` when the workflow needs local retrieval over note chunks,
-source citations, search output for another tool, or a local retrieval HTTP
-API/UI.
+Use `pkms rag` in builds made with `--features rag` when the workflow needs
+local retrieval over note chunks, source citations, search output for another
+tool, or a local retrieval HTTP API/UI.
 
 ```bash
 pkms rag index

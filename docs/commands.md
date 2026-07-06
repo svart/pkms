@@ -117,6 +117,8 @@ HTML:
 See [RAG Retrieval](rag.md) for architecture, index storage, embedding provider
 configuration, and HTTP API details.
 
+When built with `--features rag`:
+
 ```bash
 pkms rag status
 pkms rag ingest retrieval-export.ndjson

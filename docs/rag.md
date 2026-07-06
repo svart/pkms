@@ -1,13 +1,21 @@
 # RAG Retrieval
 
-`pkms rag` provides local retrieval over an org-roam notes database. It builds a
-SQLite index from current notes or retrieval NDJSON, stores sparse and dense
-retrieval data locally, and exposes the same data through CLI commands, JSON or
-NDJSON output, and a foreground local HTTP server.
+`pkms rag` is available in builds made with `--features rag`. It provides local
+retrieval over an org-roam notes database, builds a SQLite index from current
+notes or retrieval NDJSON, stores sparse and dense retrieval data locally, and
+exposes the same data through CLI commands, JSON or NDJSON output, and a
+foreground local HTTP server.
 
 For implementation boundaries, see the [pkms-rag crate docs](crates/pkms-rag.md).
 
 ## Quick Start
+
+Install or run with the feature enabled:
+
+```bash
+cargo install --path . --features rag
+cargo run --features rag -- --db ~/Documents/org rag status
+```
 
 Use the configured `pkms` database root:
 

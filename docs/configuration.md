@@ -113,7 +113,8 @@ print token values.
 
 ## RAG Retrieval
 
-The `[rag]` section configures persistent defaults for `pkms rag`:
+The `[rag]` section configures persistent defaults for `pkms rag`, which
+requires a binary built with `--features rag`:
 
 ```toml
 [rag]

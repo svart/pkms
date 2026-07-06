@@ -19,6 +19,39 @@ fn test_context_command_is_removed_from_help() {
     );
 }
 
+#[cfg(not(feature = "rag"))]
+#[test]
+fn test_rag_command_is_removed_from_default_build_help() {
+    let (stdout, stderr, status) = run(&["--help"]);
+
+    assert!(
+        status.success(),
+        "Expected help to succeed\nstdout: {}\nstderr: {}",
+        stdout,
+        stderr
+    );
+    assert!(
+        !stdout
+            .lines()
+            .any(|line| line.trim_start().starts_with("rag ")),
+        "rag command should not appear in default build help:\n{}",
+        stdout
+    );
+
+    let (stdout, stderr, status) = run(&["rag", "--help"]);
+    assert!(
+        !status.success(),
+        "rag command should be rejected without the rag feature\nstdout: {}\nstderr: {}",
+        stdout,
+        stderr
+    );
+    assert!(
+        stderr.contains("unrecognized subcommand 'rag'"),
+        "rag command should be an unknown subcommand without the rag feature\nstderr: {}",
+        stderr
+    );
+}
+
 #[test]
 fn test_all_commands_json() {
     let (_dir, root) = setup_db();

@@ -14,8 +14,8 @@ cross-domain orchestration.
 - Render text, JSON, and NDJSON through `src/output.rs` and `src/output/`.
 - Keep command adapter modules under `src/commands/` thin.
 - Map `ResolvedConfig` into domain-specific config structs for `pkms-org`,
-  `pkms-db`, `pkms-task`, and `pkms-web`, and wire RAG CLI/env options into
-  `pkms-rag`.
+  `pkms-db`, `pkms-task`, and `pkms-web`, and, when the `rag` feature is
+  enabled, wire RAG CLI/env options into `pkms-rag`.
 
 ## Main Modules
 

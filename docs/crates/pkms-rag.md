@@ -4,6 +4,9 @@
 notes, chunks them, stores sparse and dense retrieval data in SQLite, performs
 search and retrieval, and serves the RAG HTTP API/UI.
 
+The umbrella `pkms` binary exposes this crate through `pkms rag` only when built
+with `--features rag`.
+
 ## Responsibilities
 
 - Export notes from `pkms-org` parsed data into retrieval records.

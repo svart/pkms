@@ -13,6 +13,7 @@ mod orphans;
 mod path;
 mod pipe;
 mod query;
+#[cfg(feature = "rag")]
 mod rag;
 mod resolve;
 #[cfg(feature = "web")]

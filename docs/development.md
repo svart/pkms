@@ -115,6 +115,15 @@ cargo test --features ssh --test integration <test-name>
 cargo build --features ssh
 ```
 
+RAG retrieval changes:
+
+```bash
+cargo clippy --features rag -- -D warnings
+cargo test --features rag <test-name>
+cargo test --features rag --test integration <test-name>
+cargo build --features rag
+```
+
 An optional ignored live SSH check can verify a real server without making the
 normal local gate depend on external network state:
 
@@ -134,7 +143,7 @@ When feature interactions are relevant during implementation, prefer an
 explicit combined-feature build:
 
 ```bash
-cargo build --features todoist,web,ssh
+cargo build --features todoist,web,ssh,rag
 cargo build --all-features
 ```
 

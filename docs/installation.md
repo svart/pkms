@@ -26,10 +26,16 @@ Build with SSH-backed remote file-link checks:
 cargo install --path . --features ssh
 ```
 
+Build with local RAG retrieval:
+
+```bash
+cargo install --path . --features rag
+```
+
 Features can be combined when needed:
 
 ```bash
-cargo install --path . --features todoist,web,ssh
+cargo install --path . --features todoist,web,ssh,rag
 ```
 
 Run directly from the checkout:
@@ -37,11 +43,6 @@ Run directly from the checkout:
 ```bash
 cargo run -- <args>
 ```
-
-`pkms rag` is included in normal builds. The RAG crate uses FastEmbed by
-default, so first indexing or dense retrieval may download model files. Use
-`PKMS_RAG_EMBEDDING_PROVIDER=hash` for deterministic local runs that avoid
-FastEmbed model setup.
 
 ## Todoist Feature
 
@@ -61,3 +62,10 @@ Syntect for source block highlighting.
 The `ssh` feature enables explicit remote `file:` link checks for TRAMP-style
 SSH targets such as `/ssh:host:/absolute/path`. Default builds keep
 `--remote-file-links` visible but reject it with setup guidance.
+
+## RAG Feature
+
+The `rag` feature enables `pkms rag` and the optional `pkms-rag` dependency.
+The RAG crate uses FastEmbed by default, so first indexing or dense retrieval
+may download model files. Use `PKMS_RAG_EMBEDDING_PROVIDER=hash` for
+deterministic local runs that avoid FastEmbed model setup.

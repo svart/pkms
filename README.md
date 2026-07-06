@@ -6,8 +6,9 @@
 It reads org files from disk, builds an in-memory graph, performs one command,
 prints output, and exits. It does not keep a cache, database, daemon, or watch
 process. When built with the `web` feature, the `serve` command is an explicit
-foreground local web viewer; it still builds from the current files and keeps no
-persistent derived state.
+foreground local web viewer; when built with the `rag` feature, `pkms rag`
+manages an explicit local retrieval index. Both still build from current files
+and keep no hidden persistent state.
 
 ## Quick Start
 
@@ -74,7 +75,7 @@ The local web viewer is available in builds made with `--features web`:
 pkms serve <target>
 ```
 
-Local retrieval is exposed through `pkms rag`:
+Local retrieval is available in builds made with `--features rag`:
 
 ```bash
 pkms rag index
@@ -98,8 +99,9 @@ pkms query "rust" --output-format ndjson | pkms get --links --from-stdin
 - TODO headings get deterministic global IDs shared by `task list`,
   `task agenda`, and task ID actions such as `task p<ID> show`.
 - `serve` is available only when built with `--features web`.
-- `pkms rag` stores its retrieval index in SQLite and serves a foreground local
-  HTTP API/UI with `pkms rag serve`.
+- `pkms rag` is available only when built with `--features rag`; it stores its
+  retrieval index in SQLite and serves a foreground local HTTP API/UI with
+  `pkms rag serve`.
 
 ## Architecture
 

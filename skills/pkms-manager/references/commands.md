@@ -3,6 +3,10 @@
 Use `pkms <command> --help` for exact current flags. This page is a compact map
 for choosing commands.
 
+Optional command surfaces depend on build features: `pkms serve` requires
+`web`, `pkms rag` requires `rag`, SSH remote file-link checks require `ssh`, and
+Todoist-backed task sources require `todoist`.
+
 ## Health
 
 ```bash
@@ -57,6 +61,9 @@ they resolve to allowed local paths. The initial target may be a UUID, title, or
 file path. The viewer shows collapsible floating
 contents and backlinks panels by default, plus hover previews for internal note
 links.
+
+`pkms rag` exists only in builds made with the `rag` feature. Use it for local
+retrieval indexing, search, cited retrieval, and the RAG HTTP API/UI.
 
 ## Create and Repair
 

@@ -11,14 +11,15 @@ and preserving user note data over background state.
 2. Configuration resolves once from `--db`, then `PKMS_DB_ROOT`, then
    `~/.config/pkms.toml`.
 3. Commands load only the data they need: configuration only, a graph, a
-   workspace, task providers, a RAG SQLite index, or a foreground HTTP server.
+   workspace, task providers, an optional RAG SQLite index, or a foreground HTTP
+   server.
 4. Output is rendered as text, JSON, or NDJSON through shared output helpers.
-5. The process exits, except for explicit foreground servers: `pkms serve` and
-   `pkms rag serve`.
+5. The process exits, except for explicit foreground servers: `pkms serve` when
+   built with `web` and `pkms rag serve` when built with `rag`.
 
 Do not add implicit caches, daemons, watchers, or hidden persistent derived
 state. The RAG SQLite index is explicit derived local state owned by
-`pkms rag`; source org files remain authoritative.
+`pkms rag` in `rag` builds; source org files remain authoritative.
 
 ## Workspace Crates
 
@@ -89,7 +90,7 @@ not create persistent derived state. See [Web Viewer](web.md).
 
 ### RAG Retrieval
 
-`pkms rag` is always part of the umbrella binary. It uses `pkms-rag` to export
+`pkms rag` is compiled only with `--features rag`. It uses `pkms-rag` to export
 notes through `pkms-org`, chunk them, embed chunks, persist a local SQLite
 retrieval index, search with FTS, retrieve with BM25/dense/hybrid scoring, and
 serve a foreground local HTTP API/UI. See [RAG Retrieval](rag.md).
@@ -110,8 +111,8 @@ See [JSON and NDJSON Output](json-output.md) and [Pipelining](pipelining.md).
 | `todoist` | off | Enables Todoist task reads and writes through `pkms-task`. |
 | `web` | off | Enables `pkms serve` and the optional `pkms-web` dependency. |
 | `ssh` | off | Enables remote SSH `file:` link checks in `pkms-db`. |
+| `rag` | off | Enables `pkms rag` and the optional `pkms-rag` dependency. |
 
 `pkms-rag` has a crate-level default `fastembed` feature. The umbrella `pkms`
-crate depends on `pkms-rag` with its defaults, so normal builds use FastEmbed
-unless the dependency configuration changes.
-
+crate enables `pkms-rag` only through the `rag` feature; RAG builds use
+FastEmbed unless the dependency configuration changes.
