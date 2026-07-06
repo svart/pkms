@@ -1,6 +1,5 @@
 use anyhow::Result;
 use pkms_org::OrgConfig;
-use pkms_org::graph::tasks::TaskStateConfig;
 use pkms_org::graph::{FileScanResult, Graph, Node};
 use pkms_org::org_edit::parsed_heading_subtree_end_index;
 use pkms_org::parser::{Heading, Link, strip_org_links};
@@ -51,11 +50,18 @@ pub struct ShowOutput {
 
 pub struct ShowOptions {
     pub targets: Vec<HeadingTarget>,
+    pub task_ids: Vec<TaskIdEntry>,
 }
 
 pub enum HeadingTarget {
     Note(String),
-    CanonicalTaskId(usize),
+    Location { path: PathBuf, line_number: usize },
+}
+
+pub struct TaskIdEntry {
+    pub id: usize,
+    pub path: String,
+    pub line_number: usize,
 }
 
 type TaskIdMap = HashMap<(String, usize), usize>;
@@ -240,11 +246,10 @@ fn show_heading_by_line(ctx: HeadingShowContext<'_>, line_number: usize) -> Resu
 
 fn process_one_show(
     graph: &Graph,
-    task_states: &TaskStateConfig,
     target: &HeadingTarget,
     task_ids: &TaskIdMap,
 ) -> Result<ShowOutput> {
-    let resolved = resolve_heading_target(graph, task_states, target)?;
+    let resolved = resolve_heading_target(graph, target)?;
 
     show_heading_by_line(
         HeadingShowContext {
@@ -262,30 +267,27 @@ fn process_one_show(
 
 fn resolve_heading_target<'a>(
     graph: &'a Graph,
-    task_states: &TaskStateConfig,
     target: &HeadingTarget,
 ) -> Result<ResolvedHeadingTarget<'a>> {
     match target {
-        HeadingTarget::CanonicalTaskId(id) => {
-            resolve_canonical_heading_target(graph, task_states, *id)
+        HeadingTarget::Location { path, line_number } => {
+            resolve_location_heading_target(graph, path, *line_number)
         }
         HeadingTarget::Note(note_target) => resolve_note_heading_target(graph, note_target),
     }
 }
 
-fn resolve_canonical_heading_target<'a>(
+fn resolve_location_heading_target<'a>(
     graph: &'a Graph,
-    task_states: &TaskStateConfig,
-    id: usize,
+    path: &Path,
+    line_number: usize,
 ) -> Result<ResolvedHeadingTarget<'a>> {
-    let location = graph.resolve_canonical_task_id(task_states, id)?;
-    let path = PathBuf::from(&location.path);
     let content = std::fs::read_to_string(&path)?;
 
-    let result = graph.results.iter().find(|r| r.path == path);
+    let result = graph.results.iter().find(|r| r.path.as_path() == path);
     let parsed = match result {
         Some(r) => &r.parsed,
-        None => anyhow::bail!("No parsed data for path: {}", location.path),
+        None => anyhow::bail!("No parsed data for path: {}", path.display()),
     };
 
     Ok(ResolvedHeadingTarget {
@@ -298,8 +300,8 @@ fn resolve_canonical_heading_target<'a>(
             .first()
             .map(ToString::to_string)
             .unwrap_or_default(),
-        path,
-        line_number: location.line_number,
+        path: path.to_path_buf(),
+        line_number,
     })
 }
 
@@ -423,21 +425,17 @@ fn resolve_outgoing_titles(output: &mut ShowOutput, graph: &Graph) {
     }
 }
 
-pub fn execute(
-    org_config: &OrgConfig,
-    task_states: &TaskStateConfig,
-    opts: &ShowOptions,
-) -> Result<Vec<ShowOutput>> {
+pub fn execute(org_config: &OrgConfig, opts: &ShowOptions) -> Result<Vec<ShowOutput>> {
     let graph = Graph::load(org_config)?;
-    let task_ids: TaskIdMap = graph
-        .all_task_entries(task_states)
-        .into_iter()
-        .map(|entry| ((entry.path, entry.line_number), entry.id))
+    let task_ids: TaskIdMap = opts
+        .task_ids
+        .iter()
+        .map(|entry| ((entry.path.clone(), entry.line_number), entry.id))
         .collect();
     opts.targets
         .iter()
         .map(|target| {
-            let mut output = process_one_show(&graph, task_states, target, &task_ids)?;
+            let mut output = process_one_show(&graph, target, &task_ids)?;
             resolve_outgoing_titles(&mut output, &graph);
             Ok(output)
         })

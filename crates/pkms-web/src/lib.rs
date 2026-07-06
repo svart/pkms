@@ -63,7 +63,7 @@ pub struct ServeStarted {
     pub uuid: String,
 }
 
-pub type OpenTargetFn = fn(&Graph, &TaskStateConfig, &str, &str, Option<usize>) -> Result<()>;
+pub type OpenTargetFn = fn(&Graph, &str, &str, Option<usize>) -> Result<()>;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ViewerMethod {
@@ -219,7 +219,6 @@ mod tests {
 
     fn noop_open_target(
         _graph: &Graph,
-        _task_states: &TaskStateConfig,
         _target: &str,
         _editor: &str,
         _line: Option<usize>,

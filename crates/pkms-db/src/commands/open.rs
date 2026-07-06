@@ -1,9 +1,13 @@
 use anyhow::Result;
-use pkms_org::graph::tasks::{TaskLocation, TaskStateConfig};
 use pkms_org::{Graph, OrgConfig};
 
+pub enum OpenTarget {
+    Note(String),
+    Location { path: String, line_number: usize },
+}
+
 pub struct OpenOptions {
-    pub targets: Vec<String>,
+    pub targets: Vec<OpenTarget>,
     pub editor: String,
     pub line: Option<usize>,
 }
@@ -25,25 +29,23 @@ fn find_line_for_node(graph: &Graph, path: &std::path::Path) -> usize {
         .unwrap_or(1)
 }
 
-pub fn open_target(
+pub fn open_target(graph: &Graph, target: &str, editor: &str, line: Option<usize>) -> Result<()> {
+    let node = graph.resolve_target(target)?;
+    let path = node.path.display().to_string();
+    let line_number = line.unwrap_or_else(|| find_line_for_node(graph, &node.path));
+    open_location(graph, &path, line_number, editor, line)
+}
+
+fn open_location(
     graph: &Graph,
-    task_states: &TaskStateConfig,
-    target: &str,
+    path: &str,
+    line_number: usize,
     editor: &str,
     line: Option<usize>,
 ) -> Result<()> {
-    let location = if let Ok(id) = target.parse::<usize>() {
-        graph.resolve_canonical_task_id(task_states, id)?
-    } else {
-        let node = graph.resolve_target(target)?;
-        let path = node.path.display().to_string();
-        let line_number = line.unwrap_or_else(|| find_line_for_node(graph, &node.path));
-        TaskLocation { path, line_number }
-    };
+    let actual_line = line.unwrap_or(line_number);
 
-    let actual_line = line.unwrap_or(location.line_number);
-
-    let path_ref = std::path::Path::new(&location.path);
+    let path_ref = std::path::Path::new(path);
     let title = graph
         .results
         .iter()
@@ -68,7 +70,7 @@ pub fn open_target(
         cmd.args(rest);
     }
     cmd.arg(format!("+{actual_line}"));
-    cmd.arg(&location.path);
+    cmd.arg(path);
 
     let status = cmd.status();
     match status {
@@ -80,15 +82,16 @@ pub fn open_target(
     Ok(())
 }
 
-pub fn execute(
-    org_config: &OrgConfig,
-    task_states: &TaskStateConfig,
-    opts: &OpenOptions,
-) -> Result<()> {
+pub fn execute(org_config: &OrgConfig, opts: &OpenOptions) -> Result<()> {
     let graph = Graph::load(org_config)?;
 
     for target in &opts.targets {
-        open_target(&graph, task_states, target, &opts.editor, opts.line)?;
+        match target {
+            OpenTarget::Note(target) => open_target(&graph, target, &opts.editor, opts.line)?,
+            OpenTarget::Location { path, line_number } => {
+                open_location(&graph, path, *line_number, &opts.editor, opts.line)?;
+            }
+        }
     }
 
     Ok(())

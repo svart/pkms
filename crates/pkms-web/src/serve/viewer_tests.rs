@@ -24,7 +24,6 @@ fn web_config(db_root: PathBuf) -> WebConfig {
 
 fn noop_open_target(
     _graph: &Graph,
-    _task_states: &TaskStateConfig,
     _target: &str,
     _editor: &str,
     _line: Option<usize>,

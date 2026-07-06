@@ -4,11 +4,11 @@ use crate::output::{OutputContext, terminal_markup};
 use anyhow::Result;
 use pkms_db::commands::show::{self, ShowOutput};
 
-pub use pkms_db::commands::show::{HeadingTarget, ShowOptions};
+pub use pkms_db::commands::show::{HeadingTarget, ShowOptions, TaskIdEntry};
 
 pub fn run(ctx: &CommandContext<'_>, opts: &ShowOptions) -> Result<()> {
     let config = ctx.config().db_command_config();
-    let outputs = show::execute(&config.org, &config.task_states, opts)?;
+    let outputs = show::execute(&config.org, opts)?;
     render(ctx.output(), &outputs)
 }
 

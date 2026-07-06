@@ -2,20 +2,20 @@
 use crate::cli::OutputFormat;
 use crate::cli::{TaskAgendaArgs, TaskCommand, TaskListArgs, TaskShortcutArgs};
 use crate::command_context::CommandContext;
-use crate::commands::open::OpenOptions;
-use crate::commands::show::{HeadingTarget, ShowOptions};
+use crate::commands::open::{OpenOptions, OpenTarget};
+use crate::commands::show::{HeadingTarget, ShowOptions, TaskIdEntry};
 #[cfg(feature = "todoist")]
 use crate::commands::task_common::RowSeparatorMode;
 use crate::config::{ResolvedConfig, TaskCommandConfig};
 use crate::output::{OutputContext, terminal_markup};
 use anyhow::{Result, anyhow, bail};
-use pkms_org::graph::tasks::CanonicalTaskEntry;
 use pkms_task::clock::TaskClock;
 #[cfg(feature = "todoist")]
 use pkms_task::filter::SourceSelection;
 use pkms_task::id::TaskId;
 use pkms_task::model::TaskSourceKind;
 use pkms_task::modifiers::TaskModifierSpec;
+use pkms_task::task_index::{self, CanonicalTaskEntry};
 use std::collections::HashMap;
 use std::io::{self, Write};
 use std::process::ExitCode;
@@ -171,12 +171,21 @@ pub(super) fn run_show(ctx: &CommandContext<'_>, id: &str) -> Result<()> {
     let config = ctx.config();
     let output = ctx.output();
     match id.parse::<TaskId>()? {
-        TaskId::Pkms(id) => crate::commands::show::run(
-            ctx,
-            &ShowOptions {
-                targets: vec![HeadingTarget::CanonicalTaskId(id)],
-            },
-        ),
+        TaskId::Pkms(id) => {
+            let task_config = config.task_command_config();
+            let entries = load_canonical_task_entries(&task_config)?;
+            let location = resolve_task_location_from_entries(&entries, id)?;
+            crate::commands::show::run(
+                ctx,
+                &ShowOptions {
+                    targets: vec![HeadingTarget::Location {
+                        path: location.path.into(),
+                        line_number: location.line_number,
+                    }],
+                    task_ids: show_task_id_entries(&entries),
+                },
+            )
+        }
         TaskId::Todoist(id) => show_todoist_task(config, output, &id),
         TaskId::External { source, .. } => unsupported_task_source(&source),
     }
@@ -188,15 +197,24 @@ pub(super) fn run_open(
     editor: &str,
     line: Option<usize>,
 ) -> Result<()> {
+    let config = ctx.config();
     match id.parse::<TaskId>()? {
-        TaskId::Pkms(id) => crate::commands::open::run(
-            ctx,
-            &OpenOptions {
-                targets: vec![id.to_string()],
-                editor: editor.to_string(),
-                line,
-            },
-        ),
+        TaskId::Pkms(id) => {
+            let task_config = config.task_command_config();
+            let entries = load_canonical_task_entries(&task_config)?;
+            let location = resolve_task_location_from_entries(&entries, id)?;
+            crate::commands::open::run(
+                ctx,
+                &OpenOptions {
+                    targets: vec![OpenTarget::Location {
+                        path: location.path,
+                        line_number: location.line_number,
+                    }],
+                    editor: editor.to_string(),
+                    line,
+                },
+            )
+        }
         TaskId::Todoist(_) => bail!("Todoist task source is not implemented yet"),
         TaskId::External { source, .. } => unsupported_task_source(&source),
     }
@@ -256,8 +274,7 @@ struct TaskIdentity {
 
 impl TaskIdSnapshot {
     fn capture(config: &TaskCommandConfig) -> Result<Self> {
-        let graph = pkms_org::Graph::load(&config.org)?;
-        let entries = graph.all_task_entries(&config.task_states);
+        let entries = load_canonical_task_entries(config)?;
         let identities = task_identities_by_location(&entries);
         let mut ordered = Vec::new();
         for entry in entries {
@@ -273,6 +290,40 @@ impl TaskIdSnapshot {
         }
         Ok(Self(ordered))
     }
+}
+
+fn load_canonical_task_entries(config: &TaskCommandConfig) -> Result<Vec<CanonicalTaskEntry>> {
+    let graph = pkms_org::Graph::load(&config.org)?;
+    Ok(task_index::all_task_entries(&config.task_states, &graph))
+}
+
+fn resolve_task_location_from_entries(
+    entries: &[CanonicalTaskEntry],
+    id: usize,
+) -> Result<task_index::TaskLocation> {
+    if id == 0 || id > entries.len() {
+        anyhow::bail!(
+            "No task with canonical ID {}. Valid range is 1-{}",
+            id,
+            entries.len()
+        );
+    }
+    let entry = &entries[id - 1];
+    Ok(task_index::TaskLocation {
+        path: entry.path.clone(),
+        line_number: entry.line_number,
+    })
+}
+
+fn show_task_id_entries(entries: &[CanonicalTaskEntry]) -> Vec<TaskIdEntry> {
+    entries
+        .iter()
+        .map(|entry| TaskIdEntry {
+            id: entry.id,
+            path: entry.path.clone(),
+            line_number: entry.line_number,
+        })
+        .collect()
 }
 
 fn task_identities_by_location(
