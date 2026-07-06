@@ -12,7 +12,10 @@ pub mod retrieve;
 pub mod schema;
 pub mod web;
 
-pub use api::{AppState, DEFAULT_RAG_DB, RagServeOptions, RagServeStarted, router, serve};
+pub use api::{
+    AppState, DEFAULT_RAG_DB, NoteViewer, NoteViewerMethod, NoteViewerRequest, NoteViewerResponse,
+    RagServeOptions, RagServeStarted, router, serve, serve_with_note_viewer,
+};
 pub use chunking::{CONTENT_HASH_PREFIX, ChunkNoteInput, chunk_note, content_hash};
 pub use db::{build_fts_query, connect, dense_search, ingest_records, search, status};
 #[cfg(feature = "fastembed")]

@@ -159,6 +159,9 @@ HTTP API:
 - `POST /retrieve` accepts `{"query":"...","limit":10,"mode":"hybrid"}`.
 
 On startup, `pkms rag serve` starts a rebuild from the resolved source.
+In builds with the `web` feature, result titles in the browser UI open notes
+through the same rendered viewer routes as `pkms serve`; without that feature,
+titles remain plain text.
 
 FastEmbed is the default embedding provider. For deterministic local tests, set
 `PKMS_RAG_EMBEDDING_PROVIDER=hash`.

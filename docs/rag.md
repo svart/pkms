@@ -44,7 +44,9 @@ pkms rag serve --host 127.0.0.1 --port 7337
 
 Then open the printed URL. The process stays in the foreground. When a notes
 root or index source is configured, `pkms rag serve` starts a background rebuild
-on launch; use `GET /index/status` or the UI to watch progress.
+on launch; use `GET /index/status` or the UI to watch progress. In builds with
+the `web` feature, result titles open the rendered note viewer using the same
+routes as `pkms serve`; without that feature, result titles remain plain text.
 
 ## Architecture
 
@@ -179,6 +181,11 @@ pkms rag retrieve "RAG HTTP API" --limit 5 --output-format ndjson
 - `POST /ingest` accepts retrieval NDJSON with `application/x-ndjson`.
 - `POST /search` accepts `{"query":"...","limit":10}`.
 - `POST /retrieve` accepts `{"query":"...","limit":10,"mode":"hybrid"}`.
+
+In the browser UI, each result title links to `/?id=<note-id>` so the note opens
+with the same rendered viewer used by `pkms serve` when the binary includes the
+`web` feature. Without that feature, the UI leaves titles unlinked and direct
+`/?id=<note-id>` requests fall back to the search UI.
 
 The server is a foreground local process. It does not add a daemon, watcher, or
 persistent service beyond the SQLite index selected by `--rag-db` or

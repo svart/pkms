@@ -65,6 +65,77 @@ pub struct ServeStarted {
 
 pub type OpenTargetFn = fn(&Graph, &TaskStateConfig, &str, &str, Option<usize>) -> Result<()>;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ViewerMethod {
+    Get,
+    Head,
+    Post,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ViewerRequest {
+    pub method: ViewerMethod,
+    pub path: String,
+    pub query: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ViewerResponse {
+    pub status: u16,
+    pub content_type: String,
+    pub body: Vec<u8>,
+}
+
+impl From<HttpResponse> for ViewerResponse {
+    fn from(value: HttpResponse) -> Self {
+        Self {
+            status: value.status,
+            content_type: value.content_type.as_str().to_string(),
+            body: value.body,
+        }
+    }
+}
+
+pub struct NoteViewer {
+    config: WebConfig,
+    graph: Graph,
+    open_target: OpenTargetFn,
+    default_editor: String,
+}
+
+impl NoteViewer {
+    pub fn new(
+        config: WebConfig,
+        open_target: OpenTargetFn,
+        default_editor: impl Into<String>,
+    ) -> Result<Self> {
+        let graph = Graph::load(&config.org)?;
+        Ok(Self {
+            config,
+            graph,
+            open_target,
+            default_editor: default_editor.into(),
+        })
+    }
+
+    pub fn respond(&self, request: ViewerRequest) -> Result<ViewerResponse> {
+        let state = ServeState {
+            config: &self.config,
+            graph: &self.graph,
+            initial_uuid: None,
+            open_target: self.open_target,
+            default_editor: &self.default_editor,
+        };
+        Ok(http::response_for_viewer_request(
+            &state,
+            request.method,
+            &request.path,
+            request.query.as_deref(),
+        )?
+        .into())
+    }
+}
+
 pub fn serve(
     config: &WebConfig,
     opts: &ServeOptions,
@@ -89,8 +160,8 @@ pub fn serve(
 
     let state = ServeState {
         config,
-        graph,
-        initial_uuid,
+        graph: &graph,
+        initial_uuid: Some(&initial_uuid),
         open_target,
         default_editor,
     };
@@ -117,6 +188,10 @@ fn page_css() -> String {
 fn page_js() -> &'static str {
     include_str!("serve/page.js")
 }
+
+#[cfg(test)]
+#[path = "serve/viewer_tests.rs"]
+mod viewer_tests;
 
 #[cfg(test)]
 mod tests {
@@ -356,10 +431,11 @@ Body.
         let config = web_config(root);
         let corpus = Corpus::load(&config.org).unwrap();
         let graph = Graph::from_corpus(&corpus);
+        let initial_uuid: pkms_org::domain::NoteId = "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa".into();
         let state = ServeState {
             config: &config,
-            graph,
-            initial_uuid: "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa".into(),
+            graph: &graph,
+            initial_uuid: Some(&initial_uuid),
             open_target: noop_open_target,
             default_editor: "true",
         };

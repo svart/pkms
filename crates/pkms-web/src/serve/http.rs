@@ -1,5 +1,5 @@
 use super::{assets, inline::percent_decode, render_note_html, render_preview_html};
-use crate::{OpenTargetFn, WebConfig};
+use crate::{OpenTargetFn, ViewerMethod, WebConfig};
 use anyhow::{Context, Result};
 use pkms_org::domain::NoteId;
 use pkms_org::graph::{Graph, Node, resolve_file_link_path};
@@ -10,8 +10,8 @@ use std::path::{Path, PathBuf};
 
 pub(super) struct ServeState<'a> {
     pub(super) config: &'a WebConfig,
-    pub(super) graph: Graph,
-    pub(super) initial_uuid: NoteId,
+    pub(super) graph: &'a Graph,
+    pub(super) initial_uuid: Option<&'a NoteId>,
     pub(super) open_target: OpenTargetFn,
     pub(super) default_editor: &'a str,
 }
@@ -40,6 +40,16 @@ impl HttpMethod {
             "HEAD" => Some(Self::Head),
             "POST" => Some(Self::Post),
             _ => None,
+        }
+    }
+}
+
+impl From<ViewerMethod> for HttpMethod {
+    fn from(value: ViewerMethod) -> Self {
+        match value {
+            ViewerMethod::Get => Self::Get,
+            ViewerMethod::Head => Self::Head,
+            ViewerMethod::Post => Self::Post,
         }
     }
 }
@@ -124,6 +134,20 @@ pub(super) fn handle_connection(mut stream: TcpStream, state: &ServeState<'_>) -
             &response.body,
         )
     }
+}
+
+pub(super) fn response_for_viewer_request(
+    state: &ServeState<'_>,
+    method: ViewerMethod,
+    path: &str,
+    query: Option<&str>,
+) -> Result<HttpResponse> {
+    let request = HttpRequest {
+        method: method.into(),
+        path,
+        query,
+    };
+    response_for_request(state, &request)
 }
 
 fn response_for_request(state: &ServeState<'_>, request: &HttpRequest<'_>) -> Result<HttpResponse> {
@@ -259,7 +283,11 @@ impl AssetRequest {
 }
 
 fn render_response(state: &ServeState<'_>, query: Option<&str>) -> Result<HttpResponse> {
-    let requested = query_param(query, "id").unwrap_or_else(|| state.initial_uuid.to_string());
+    let Some(requested) =
+        query_param(query, "id").or_else(|| state.initial_uuid.map(NoteId::to_string))
+    else {
+        return Ok(HttpResponse::not_found("Missing id"));
+    };
     let node = state.graph.resolve_target(&requested)?;
     let node = if let Some(primary_uuid) = state.graph.primary_uuid_for_heading(&node.uuid) {
         state.graph.resolve_target(primary_uuid)?
@@ -269,7 +297,7 @@ fn render_response(state: &ServeState<'_>, query: Option<&str>) -> Result<HttpRe
     let content = std::fs::read_to_string(&node.path)
         .with_context(|| format!("Failed to read {}", node.path.display()))?;
     Ok(HttpResponse::html(render_note_html(
-        &state.graph,
+        state.graph,
         state.config,
         node,
         &content,
@@ -284,7 +312,7 @@ fn preview_response(state: &ServeState<'_>, query: Option<&str>) -> Result<HttpR
     let content = std::fs::read_to_string(&node.path)
         .with_context(|| format!("Failed to read {}", node.path.display()))?;
     Ok(HttpResponse::html(render_preview_html(
-        &state.graph,
+        state.graph,
         state.config,
         node,
         &content,
@@ -344,7 +372,7 @@ pub(super) fn open_response(state: &ServeState<'_>, query: Option<&str>) -> Resu
     };
     let node = state.graph.resolve_target(&note_uuid)?;
     (state.open_target)(
-        &state.graph,
+        state.graph,
         &state.config.task_states,
         &node.uuid,
         state.default_editor,

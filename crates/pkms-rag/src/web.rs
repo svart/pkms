@@ -183,9 +183,18 @@ pub(crate) const INDEX_HTML: &str = r##"<!doctype html>
 
     .title {
       min-width: 0;
+      color: var(--text);
       font-size: 16px;
       font-weight: 750;
+      text-decoration: none;
       overflow-wrap: anywhere;
+    }
+
+    .title-link:hover,
+    .title-link:focus {
+      color: var(--accent-strong);
+      text-decoration: underline;
+      text-underline-offset: 3px;
     }
 
     .score {
@@ -295,6 +304,7 @@ const queryEl = document.querySelector("#query");
 const modeEl = document.querySelector("#mode");
 const limitEl = document.querySelector("#limit");
 const numberFormat = new Intl.NumberFormat(undefined, { maximumFractionDigits: 4 });
+let noteViewerAvailable = false;
 
 function setMessage(text, level = "info") {
   messageEl.textContent = text;
@@ -303,6 +313,10 @@ function setMessage(text, level = "info") {
 
 function text(value) {
   return value === null || value === undefined ? "" : String(value);
+}
+
+function noteHref(noteId) {
+  return `/?id=${encodeURIComponent(text(noteId))}`;
 }
 
 function addMetric(label, value) {
@@ -327,6 +341,7 @@ async function refreshStatus() {
   }
   const indexBody = await indexResponse.json();
   const statusBody = await statusResponse.json();
+  noteViewerAvailable = statusBody.note_viewer_available === true;
   phaseEl.textContent = indexBody.phase || "unknown";
   indexMessageEl.textContent = indexBody.message || indexBody.current_step || "idle";
   summaryEl.replaceChildren();
@@ -357,8 +372,11 @@ function renderResults(response) {
 
     const header = document.createElement("div");
     header.className = "result-header";
-    const title = document.createElement("div");
-    title.className = "title";
+    const title = document.createElement(noteViewerAvailable && item.note_id ? "a" : "div");
+    title.className = title instanceof HTMLAnchorElement ? "title title-link" : "title";
+    if (title instanceof HTMLAnchorElement) {
+      title.href = noteHref(item.note_id);
+    }
     title.textContent = item.title || item.note_id || "Untitled";
     const score = document.createElement("div");
     score.className = "score";

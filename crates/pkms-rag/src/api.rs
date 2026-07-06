@@ -2,14 +2,15 @@ use std::{
     future::Future,
     path::{Path, PathBuf},
     str,
+    sync::Arc,
 };
 
 use anyhow::{Context, Result};
 use axum::{
     Json, Router,
     body::Bytes,
-    extract::{State, rejection::JsonRejection},
-    http::{StatusCode, header},
+    extract::{Path as AxumPath, RawQuery, State, rejection::JsonRejection},
+    http::{HeaderValue, StatusCode, header},
     response::{Html, IntoResponse, Response},
     routing::{get, post},
 };
@@ -32,12 +33,38 @@ const RAG_DB_ENV: &str = "PKMS_RAG_DB";
 const RAG_INDEX_SOURCE_ENV: &str = "PKMS_RAG_INDEX_SOURCE";
 const RAG_NOTES_ROOT_ENV: &str = "PKMS_RAG_NOTES_ROOT";
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NoteViewerMethod {
+    Get,
+    Head,
+    Post,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NoteViewerRequest {
+    pub method: NoteViewerMethod,
+    pub path: String,
+    pub query: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NoteViewerResponse {
+    pub status: u16,
+    pub content_type: String,
+    pub body: Vec<u8>,
+}
+
+pub trait NoteViewer: Send + Sync {
+    fn respond(&self, request: NoteViewerRequest) -> Result<NoteViewerResponse>;
+}
+
+#[derive(Clone)]
 pub struct AppState {
     db_path: PathBuf,
     indexer: BackgroundIndexer,
     embedding_provider_config: EmbeddingProviderConfig,
     synchronous_indexing: bool,
+    note_viewer: Option<Arc<dyn NoteViewer>>,
 }
 
 impl AppState {
@@ -70,11 +97,17 @@ impl AppState {
             indexer,
             embedding_provider_config,
             synchronous_indexing: false,
+            note_viewer: None,
         }
     }
 
     pub fn with_synchronous_indexing(mut self, synchronous_indexing: bool) -> Self {
         self.synchronous_indexing = synchronous_indexing;
+        self
+    }
+
+    pub fn with_note_viewer(mut self, note_viewer: Arc<dyn NoteViewer>) -> Self {
+        self.note_viewer = Some(note_viewer);
         self
     }
 
@@ -116,14 +149,33 @@ pub fn serve(
     opts: RagServeOptions,
     started: impl FnOnce(&RagServeStarted) -> Result<()>,
 ) -> Result<()> {
+    serve_with_state(opts, None, started)
+}
+
+pub fn serve_with_note_viewer(
+    opts: RagServeOptions,
+    note_viewer: Arc<dyn NoteViewer>,
+    started: impl FnOnce(&RagServeStarted) -> Result<()>,
+) -> Result<()> {
+    serve_with_state(opts, Some(note_viewer), started)
+}
+
+fn serve_with_state(
+    opts: RagServeOptions,
+    note_viewer: Option<Arc<dyn NoteViewer>>,
+    started: impl FnOnce(&RagServeStarted) -> Result<()>,
+) -> Result<()> {
     let embedding_provider_config = embedding_provider_config_from_env()
         .context("failed to read RAG embedding provider configuration")?;
-    let state = AppState::with_embedding_provider_config(
+    let mut state = AppState::with_embedding_provider_config(
         opts.db_path.clone(),
         opts.index_source.clone(),
         opts.notes_root.clone(),
         embedding_provider_config,
     );
+    if let Some(note_viewer) = note_viewer {
+        state = state.with_note_viewer(note_viewer);
+    }
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
@@ -187,6 +239,11 @@ pub fn router(state: AppState) -> Router {
     Router::new()
         .route("/", get(index))
         .route("/ui.js", get(ui_js))
+        .route("/preview", get(note_preview))
+        .route("/asset", get(note_asset))
+        .route("/open", post(note_open))
+        .route("/favicon.svg", get(note_favicon))
+        .route("/font/{font_name}", get(note_font))
         .route("/health", get(health))
         .route("/status", get(get_status))
         .route("/index/status", get(index_status))
@@ -197,8 +254,14 @@ pub fn router(state: AppState) -> Router {
         .with_state(state)
 }
 
-async fn index() -> Html<&'static str> {
-    Html(INDEX_HTML)
+async fn index(
+    State(state): State<AppState>,
+    RawQuery(query): RawQuery,
+) -> Result<Response, ApiError> {
+    if query_has_param(query.as_deref(), "id") && state.note_viewer.is_some() {
+        return note_viewer_response(&state, NoteViewerMethod::Get, "/", query);
+    }
+    Ok(Html(INDEX_HTML).into_response())
 }
 
 async fn ui_js() -> impl IntoResponse {
@@ -211,20 +274,94 @@ async fn ui_js() -> impl IntoResponse {
     )
 }
 
+async fn note_preview(
+    State(state): State<AppState>,
+    RawQuery(query): RawQuery,
+) -> Result<Response, ApiError> {
+    note_viewer_response(&state, NoteViewerMethod::Get, "/preview", query)
+}
+
+async fn note_asset(
+    State(state): State<AppState>,
+    RawQuery(query): RawQuery,
+) -> Result<Response, ApiError> {
+    note_viewer_response(&state, NoteViewerMethod::Get, "/asset", query)
+}
+
+async fn note_open(
+    State(state): State<AppState>,
+    RawQuery(query): RawQuery,
+) -> Result<Response, ApiError> {
+    note_viewer_response(&state, NoteViewerMethod::Post, "/open", query)
+}
+
+async fn note_favicon(State(state): State<AppState>) -> Result<Response, ApiError> {
+    note_viewer_response(&state, NoteViewerMethod::Get, "/favicon.svg", None)
+}
+
+async fn note_font(
+    State(state): State<AppState>,
+    AxumPath(font_name): AxumPath<String>,
+) -> Result<Response, ApiError> {
+    note_viewer_response(
+        &state,
+        NoteViewerMethod::Get,
+        format!("/font/{font_name}"),
+        None,
+    )
+}
+
+fn note_viewer_response(
+    state: &AppState,
+    method: NoteViewerMethod,
+    path: impl Into<String>,
+    query: Option<String>,
+) -> Result<Response, ApiError> {
+    let Some(note_viewer) = &state.note_viewer else {
+        return Err(ApiError::not_found("Note viewer unavailable"));
+    };
+    let viewer_response = note_viewer
+        .respond(NoteViewerRequest {
+            method,
+            path: path.into(),
+            query,
+        })
+        .map_err(|err| ApiError::internal("note_viewer", err))?;
+    let status = StatusCode::from_u16(viewer_response.status)
+        .map_err(|err| ApiError::internal("note_viewer_status", anyhow::Error::new(err)))?;
+    let content_type = HeaderValue::from_str(&viewer_response.content_type)
+        .map_err(|err| ApiError::internal("note_viewer_content_type", anyhow::Error::new(err)))?;
+    let mut response = (status, viewer_response.body).into_response();
+    response
+        .headers_mut()
+        .insert(header::CONTENT_TYPE, content_type);
+    Ok(response)
+}
+
 #[derive(Debug, Serialize)]
 struct HealthResponse {
     status: &'static str,
+}
+
+#[derive(Debug, Serialize)]
+struct ApiStatusResponse {
+    #[serde(flatten)]
+    status: StatusResponse,
+    note_viewer_available: bool,
 }
 
 async fn health() -> Json<HealthResponse> {
     Json(HealthResponse { status: "ok" })
 }
 
-async fn get_status(State(state): State<AppState>) -> Result<Json<StatusResponse>, ApiError> {
+async fn get_status(State(state): State<AppState>) -> Result<Json<ApiStatusResponse>, ApiError> {
     let conn = connect(&state.db_path).map_err(|err| ApiError::internal("status", err))?;
     let status =
         db_status(&conn, &state.db_path).map_err(|err| ApiError::internal("status", err))?;
-    Ok(Json(status))
+    Ok(Json(ApiStatusResponse {
+        status,
+        note_viewer_available: state.note_viewer.is_some(),
+    }))
 }
 
 async fn index_status(State(state): State<AppState>) -> Json<IndexProgress> {
@@ -318,6 +455,13 @@ struct ErrorResponse {
 }
 
 impl ApiError {
+    fn not_found(detail: impl Into<String>) -> Self {
+        Self {
+            status: StatusCode::NOT_FOUND,
+            detail: detail.into(),
+        }
+    }
+
     fn bad_request(detail: String) -> Self {
         Self {
             status: StatusCode::BAD_REQUEST,
@@ -373,6 +517,15 @@ fn url_host(host: std::net::IpAddr) -> String {
     }
 }
 
+fn query_has_param(query: Option<&str>, key: &str) -> bool {
+    query.is_some_and(|query| {
+        query.split('&').any(|part| {
+            part.split_once('=')
+                .is_some_and(|(candidate, _)| candidate == key)
+        })
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -382,6 +535,7 @@ mod tests {
     };
     use serde::de::DeserializeOwned;
     use serde_json::{Value, json};
+    use std::sync::Arc;
     use tower::ServiceExt;
 
     #[tokio::test]
@@ -401,6 +555,17 @@ mod tests {
         assert_eq!(script.0, StatusCode::OK);
         assert!(script.1.contains("fetch(\"/index/status\")"));
         assert!(script.1.contains("fetch(\"/retrieve\""));
+        assert!(script.1.contains("let noteViewerAvailable = false;"));
+        assert!(
+            script
+                .1
+                .contains("noteViewerAvailable = statusBody.note_viewer_available === true;")
+        );
+        assert!(script.1.contains(
+            "document.createElement(noteViewerAvailable && item.note_id ? \"a\" : \"div\")"
+        ));
+        assert!(script.1.contains("noteHref(item.note_id)"));
+        assert!(script.1.contains("title.href = noteHref(item.note_id)"));
 
         let index_status =
             json_request(app, Method::GET, "/index/status", Body::empty(), None).await;
@@ -429,6 +594,7 @@ mod tests {
         assert_eq!(status.0, StatusCode::OK);
         assert_eq!(status.1["chunks"], 2);
         assert_eq!(status.1["embeddings"], 2);
+        assert_eq!(status.1["note_viewer_available"], false);
 
         let search = json_request(
             app.clone(),
@@ -462,6 +628,84 @@ mod tests {
                 .unwrap()
                 > 0.0
         );
+    }
+
+    #[tokio::test]
+    async fn api_renders_search_ui_for_note_url_when_viewer_unavailable() {
+        let tempdir = tempfile::tempdir().expect("tempdir");
+        let app = test_router(tempdir.path().join("api.sqlite3"), None, None);
+
+        let page = text_request(
+            app,
+            Method::GET,
+            "/?id=aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa",
+            Body::empty(),
+        )
+        .await;
+
+        assert_eq!(page.0, StatusCode::OK);
+        assert!(page.1.contains("PKMS Search"));
+        assert!(!page.1.contains("Note viewer unavailable"));
+    }
+
+    #[tokio::test]
+    async fn api_delegates_note_viewer_routes_when_configured() {
+        let tempdir = tempfile::tempdir().expect("tempdir");
+        let state = test_state(tempdir.path().join("api.sqlite3"), None, None)
+            .with_note_viewer(Arc::new(FakeNoteViewer));
+        let app = router(state);
+
+        let status = json_request(app.clone(), Method::GET, "/status", Body::empty(), None).await;
+        assert_eq!(status.0, StatusCode::OK);
+        assert_eq!(status.1["note_viewer_available"], true);
+
+        let note = text_request(
+            app.clone(),
+            Method::GET,
+            "/?id=aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa",
+            Body::empty(),
+        )
+        .await;
+        assert_eq!(note.0, StatusCode::OK);
+        assert!(
+            note.1
+                .contains("viewer Get / id=aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa")
+        );
+
+        let preview = text_request(
+            app.clone(),
+            Method::GET,
+            "/preview?id=bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb",
+            Body::empty(),
+        )
+        .await;
+        assert_eq!(preview.0, StatusCode::OK);
+        assert!(
+            preview
+                .1
+                .contains("viewer Get /preview id=bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb")
+        );
+
+        let open = text_request(
+            app.clone(),
+            Method::POST,
+            "/open?id=cccccccc-cccc-4ccc-cccc-cccccccccccc",
+            Body::empty(),
+        )
+        .await;
+        assert_eq!(open.0, StatusCode::OK);
+        assert!(
+            open.1
+                .contains("viewer Post /open id=cccccccc-cccc-4ccc-cccc-cccccccccccc")
+        );
+
+        let favicon = text_request(app.clone(), Method::GET, "/favicon.svg", Body::empty()).await;
+        assert_eq!(favicon.0, StatusCode::OK);
+        assert!(favicon.1.contains("viewer Get /favicon.svg"));
+
+        let font = text_request(app, Method::GET, "/font/Alegreya.ttf", Body::empty()).await;
+        assert_eq!(font.0, StatusCode::OK);
+        assert!(font.1.contains("viewer Get /font/Alegreya.ttf"));
     }
 
     #[tokio::test]
@@ -641,6 +885,24 @@ Serve startup rebuilds the configured RAG index.
             notes_root,
             EmbeddingProviderConfig::Hash,
         )
+    }
+
+    struct FakeNoteViewer;
+
+    impl NoteViewer for FakeNoteViewer {
+        fn respond(&self, request: NoteViewerRequest) -> Result<NoteViewerResponse> {
+            Ok(NoteViewerResponse {
+                status: 200,
+                content_type: "text/html; charset=utf-8".to_string(),
+                body: format!(
+                    "viewer {:?} {} {}",
+                    request.method,
+                    request.path,
+                    request.query.unwrap_or_default()
+                )
+                .into_bytes(),
+            })
+        }
     }
 
     async fn spawn_test_server(

@@ -1,7 +1,11 @@
+#[cfg(feature = "web")]
+use std::sync::Arc;
 use std::{cell::RefCell, io::Write, path::PathBuf};
 
 use anyhow::{Context, Result, bail};
 
+#[cfg(feature = "web")]
+use crate::commands::open;
 use crate::{
     cli::{
         RagCommand, RagIndexArgs, RagIngestArgs, RagRetrieveArgs, RagRetrieveMode, RagSearchArgs,
@@ -120,16 +124,74 @@ fn run_serve(command_ctx: &CommandContext<'_>, args: &RagServeArgs) -> Result<()
         port: resolve_rag_port(args.port)?,
     };
     let output = command_ctx.output();
-    pkms_rag::serve(options, |started| {
-        if output.is_structured() {
-            output.print_structured(started)?;
-        } else {
-            println!("Serving {}", started.url);
-            println!("RAG database: {}", started.db_path);
-        }
-        std::io::stdout().flush()?;
-        Ok(())
-    })
+    #[cfg(feature = "web")]
+    {
+        let note_viewer = rag_note_viewer(command_ctx, options.notes_root.as_ref())?;
+        pkms_rag::serve_with_note_viewer(options, note_viewer, |started| {
+            render_serve_started(output, started)
+        })
+    }
+    #[cfg(not(feature = "web"))]
+    pkms_rag::serve(options, |started| render_serve_started(output, started))
+}
+
+fn render_serve_started(output: &OutputContext, started: &pkms_rag::RagServeStarted) -> Result<()> {
+    if output.is_structured() {
+        output.print_structured(started)?;
+    } else {
+        println!("Serving {}", started.url);
+        println!("RAG database: {}", started.db_path);
+    }
+    std::io::stdout().flush()?;
+    Ok(())
+}
+
+#[cfg(feature = "web")]
+fn rag_note_viewer(
+    command_ctx: &CommandContext<'_>,
+    notes_root: Option<&PathBuf>,
+) -> Result<Arc<dyn pkms_rag::NoteViewer>> {
+    let mut config = command_ctx.config().web_command_config();
+    if let Some(notes_root) = notes_root {
+        config.org.db_root = notes_root.clone();
+        config.org.new_notes_dir = Some(notes_root.join("roam"));
+        config.org.daily_notes_dir = Some(notes_root.join("roam"));
+    }
+    let viewer = pkms_web::NoteViewer::new(config, open::open_target, open::DEFAULT_EDITOR)?;
+    Ok(Arc::new(RagWebNoteViewer { viewer }))
+}
+
+#[cfg(feature = "web")]
+struct RagWebNoteViewer {
+    viewer: pkms_web::NoteViewer,
+}
+
+#[cfg(feature = "web")]
+impl pkms_rag::NoteViewer for RagWebNoteViewer {
+    fn respond(
+        &self,
+        request: pkms_rag::NoteViewerRequest,
+    ) -> Result<pkms_rag::NoteViewerResponse> {
+        let response = self.viewer.respond(pkms_web::ViewerRequest {
+            method: web_viewer_method(request.method),
+            path: request.path,
+            query: request.query,
+        })?;
+        Ok(pkms_rag::NoteViewerResponse {
+            status: response.status,
+            content_type: response.content_type,
+            body: response.body,
+        })
+    }
+}
+
+#[cfg(feature = "web")]
+fn web_viewer_method(method: pkms_rag::NoteViewerMethod) -> pkms_web::ViewerMethod {
+    match method {
+        pkms_rag::NoteViewerMethod::Get => pkms_web::ViewerMethod::Get,
+        pkms_rag::NoteViewerMethod::Head => pkms_web::ViewerMethod::Head,
+        pkms_rag::NoteViewerMethod::Post => pkms_web::ViewerMethod::Post,
+    }
 }
 
 fn render_status(ctx: &OutputContext, status: &pkms_rag::StatusResponse) -> Result<()> {

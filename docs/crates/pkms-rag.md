@@ -17,6 +17,9 @@ search and retrieval, and serves the RAG HTTP API/UI.
 - Retrieve cited chunks with BM25, dense, or hybrid scoring.
 - Track background index progress.
 - Serve the local HTTP API and browser UI used by `pkms rag serve`.
+- Expose note-viewer delegation hooks so the umbrella `pkms` crate can wire
+  RAG UI result links to `pkms-web` without making `pkms-rag` depend on
+  `pkms-web`.
 
 ## Main Modules
 

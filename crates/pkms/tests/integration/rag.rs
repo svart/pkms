@@ -1,4 +1,10 @@
 use super::*;
+#[cfg(feature = "web")]
+use std::io::{BufRead, BufReader, Read, Write};
+#[cfg(feature = "web")]
+use std::net::TcpStream;
+#[cfg(feature = "web")]
+use std::process::{Command, Stdio};
 
 #[test]
 fn test_rag_help_works() {
@@ -263,6 +269,69 @@ index_source = "{}"
     );
 }
 
+#[cfg(feature = "web")]
+#[test]
+fn test_rag_serve_note_route_uses_pkms_serve_viewer() {
+    let db = TestDb::clean();
+    db.write_roam(
+        "rag-viewer.org",
+        r#":PROPERTIES:
+:ID:       aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa
+:END:
+#+title: RAG Viewer Note
+
+* Viewer section
+RAG result titles open the rendered note viewer.
+"#,
+    );
+    let rag_db = db.root().join("rag.sqlite3");
+    let config_home = setup_test_config_home();
+    let mut child = Command::new(pkms_binary())
+        .args([
+            "--db",
+            db.root().to_str().unwrap(),
+            "rag",
+            "serve",
+            "--rag-db",
+            rag_db.to_str().unwrap(),
+            "--port",
+            "0",
+        ])
+        .env("XDG_CONFIG_HOME", config_home.path())
+        .env_remove("PKMS_DB_ROOT")
+        .env_remove("PKMS_RAG_DB")
+        .env_remove("PKMS_RAG_NOTES_ROOT")
+        .env_remove("PKMS_RAG_INDEX_SOURCE")
+        .env_remove("PKMS_RAG_HOST")
+        .env_remove("PKMS_RAG_PORT")
+        .env("PKMS_RAG_EMBEDDING_PROVIDER", "hash")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("failed to spawn pkms rag serve");
+
+    let stdout = child.stdout.take().unwrap();
+    let mut reader = BufReader::new(stdout);
+    let mut line = String::new();
+    reader.read_line(&mut line).unwrap();
+    assert!(
+        line.starts_with("Serving http://"),
+        "unexpected line: {line}"
+    );
+    let url = line.trim().strip_prefix("Serving ").unwrap();
+    let (_, rest) = url.split_once("://").unwrap();
+    let (host_port, _) = rest.split_once('/').unwrap();
+
+    let response = http_get(host_port, "/?id=aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa");
+    assert!(response.contains("HTTP/1.1 200 OK"));
+    assert!(response.contains("<h1>RAG Viewer Note</h1>"));
+    assert!(response.contains("data-preview-url=\"/preview\""));
+    assert!(response.contains("Open in Emacs"));
+
+    child.kill().unwrap();
+    let _ = child.wait();
+}
+
 fn run_hash_json(args: &[&str]) -> (serde_json::Value, ExitStatus) {
     let (stdout, _stderr, status) = run_hash(args);
     let value = assert_json_output(args, &stdout);
@@ -314,4 +383,17 @@ fn run_hash_with_config_home(
 fn rag_fixture() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../pkms-rag/tests/fixtures/retrieval-export.ndjson")
+}
+
+#[cfg(feature = "web")]
+fn http_get(host_port: &str, path: &str) -> String {
+    let mut stream = TcpStream::connect(host_port).unwrap();
+    write!(
+        stream,
+        "GET {path} HTTP/1.1\r\nHost: {host_port}\r\nConnection: close\r\n\r\n"
+    )
+    .unwrap();
+    let mut response = String::new();
+    stream.read_to_string(&mut response).unwrap();
+    response
 }
