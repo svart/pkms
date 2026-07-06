@@ -1,10 +1,9 @@
-use pkms_org::attachments::attachment_target_exists;
-pub use pkms_org::link_check::{
-    LinkCheckBackend, LinkCheckJob, LinkCheckKind, LinkCheckTarget, LinkSource, is_ssh_file_target,
-    local_file_link_target_exists, sort_link_check_jobs, split_file_link_line_spec,
-};
+use super::{LinkCheckJob, split_file_link_line_spec};
+use crate::link_check::model::{LinkCheckErrorKind, LinkCheckResults, link_check_error};
+#[cfg(feature = "ssh")]
+use crate::link_check::model::{SshErrorKind, link_check_broken};
+#[cfg(feature = "ssh")]
 use rayon::prelude::*;
-use std::cmp::Ordering;
 #[cfg(feature = "ssh")]
 use std::collections::BTreeMap;
 use std::env;
@@ -16,48 +15,6 @@ use std::time::Duration;
 const DEFAULT_SSH_CONNECT_TIMEOUT_MS: u64 = 5_000;
 const DEFAULT_SSH_OPERATION_TIMEOUT_MS: u32 = 5_000;
 const DEFAULT_SSH_MAX_CONNECTIONS: usize = 4;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SshErrorKind {
-    Auth,
-    HostKey,
-    Network,
-    Timeout,
-}
-
-impl SshErrorKind {
-    pub fn as_str(self) -> &'static str {
-        match self {
-            SshErrorKind::Auth => "auth",
-            SshErrorKind::HostKey => "hostkey",
-            SshErrorKind::Network => "network",
-            SshErrorKind::Timeout => "timeout",
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum LinkCheckErrorKind {
-    Ssh(SshErrorKind),
-    Unsupported,
-    UnsupportedBackend,
-}
-
-impl LinkCheckErrorKind {
-    pub fn as_str(self) -> &'static str {
-        match self {
-            LinkCheckErrorKind::Ssh(kind) => kind.as_str(),
-            LinkCheckErrorKind::Unsupported => "unsupported",
-            LinkCheckErrorKind::UnsupportedBackend => "unsupported_backend",
-        }
-    }
-}
-
-impl From<SshErrorKind> for LinkCheckErrorKind {
-    fn from(kind: SshErrorKind) -> Self {
-        LinkCheckErrorKind::Ssh(kind)
-    }
-}
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct SshConnectionKey {
@@ -145,55 +102,6 @@ pub struct SshFileTargetParseError {
     pub message: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum LinkCheckOutcome {
-    Ok,
-    Broken(LinkCheckBrokenTarget),
-    Error(LinkCheckErrorTarget),
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct LinkCheckBrokenTarget {
-    pub source: LinkSource,
-    pub target: LinkCheckTarget,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct LinkCheckErrorTarget {
-    pub backend: LinkCheckBackend,
-    pub source: LinkSource,
-    pub target: LinkCheckTarget,
-    pub error_kind: LinkCheckErrorKind,
-    pub message: String,
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct LinkCheckResults {
-    pub broken: Vec<LinkCheckBrokenTarget>,
-    pub errors: Vec<LinkCheckErrorTarget>,
-}
-
-impl LinkCheckResults {
-    pub fn extend(&mut self, mut other: Self) {
-        self.broken.append(&mut other.broken);
-        self.errors.append(&mut other.errors);
-        self.sort();
-    }
-
-    pub fn sort(&mut self) {
-        sort_broken_targets(&mut self.broken);
-        sort_link_check_errors(&mut self.errors);
-    }
-}
-
-pub fn sort_broken_targets(targets: &mut [LinkCheckBrokenTarget]) {
-    targets.sort_by(compare_broken_targets);
-}
-
-pub fn sort_link_check_errors(errors: &mut [LinkCheckErrorTarget]) {
-    errors.sort_by(compare_error_targets);
-}
-
 pub fn parse_ssh_file_target(
     target: &str,
     default_user: &str,
@@ -262,49 +170,6 @@ pub fn parse_ssh_file_target(
     }))
 }
 
-pub fn check_local_link_job(job: LinkCheckJob, db_root: &Path) -> LinkCheckOutcome {
-    let exists = match job.backend {
-        LinkCheckBackend::Local => match job.target.kind {
-            LinkCheckKind::File => {
-                local_file_link_target_exists(job.target.as_str(), &job.source.path, db_root)
-            }
-            LinkCheckKind::Attachment => {
-                attachment_target_exists(db_root, &job.source.uuid, job.target.as_str())
-            }
-        },
-        LinkCheckBackend::Ssh => {
-            return LinkCheckOutcome::Error(link_check_error(
-                job,
-                LinkCheckErrorKind::UnsupportedBackend,
-                "SSH link jobs cannot be checked by the local checker",
-            ));
-        }
-    };
-
-    if exists {
-        LinkCheckOutcome::Ok
-    } else {
-        LinkCheckOutcome::Broken(link_check_broken(job))
-    }
-}
-
-pub fn run_local_link_checks(jobs: Vec<LinkCheckJob>, db_root: &Path) -> LinkCheckResults {
-    let outcomes: Vec<LinkCheckOutcome> = jobs
-        .into_par_iter()
-        .map(|job| check_local_link_job(job, db_root))
-        .collect();
-    let mut results = LinkCheckResults::default();
-    for outcome in outcomes {
-        match outcome {
-            LinkCheckOutcome::Ok => {}
-            LinkCheckOutcome::Broken(target) => results.broken.push(target),
-            LinkCheckOutcome::Error(target) => results.errors.push(target),
-        }
-    }
-    results.sort();
-    results
-}
-
 #[cfg(not(feature = "ssh"))]
 pub fn run_ssh_link_checks(
     jobs: Vec<LinkCheckJob>,
@@ -360,69 +225,6 @@ pub fn run_ssh_link_checks(
     }
     results.sort();
     results
-}
-
-fn compare_broken_targets(a: &LinkCheckBrokenTarget, b: &LinkCheckBrokenTarget) -> Ordering {
-    broken_target_sort_key(a).cmp(&broken_target_sort_key(b))
-}
-
-fn compare_error_targets(a: &LinkCheckErrorTarget, b: &LinkCheckErrorTarget) -> Ordering {
-    error_target_sort_key(a).cmp(&error_target_sort_key(b))
-}
-
-fn broken_target_sort_key(
-    broken: &LinkCheckBrokenTarget,
-) -> (LinkCheckKind, &str, &str, &Path, &str) {
-    (
-        broken.target.kind,
-        broken.source.uuid.as_str(),
-        broken.source.title.as_str(),
-        broken.source.path.as_path(),
-        broken.target.as_str(),
-    )
-}
-
-fn error_target_sort_key(
-    error: &LinkCheckErrorTarget,
-) -> (
-    LinkCheckKind,
-    LinkCheckBackend,
-    &str,
-    &str,
-    &Path,
-    &str,
-    &str,
-) {
-    (
-        error.target.kind,
-        error.backend,
-        error.source.uuid.as_str(),
-        error.source.title.as_str(),
-        error.source.path.as_path(),
-        error.target.as_str(),
-        error.error_kind.as_str(),
-    )
-}
-
-fn link_check_error(
-    job: LinkCheckJob,
-    error_kind: impl Into<LinkCheckErrorKind>,
-    message: impl Into<String>,
-) -> LinkCheckErrorTarget {
-    LinkCheckErrorTarget {
-        backend: job.backend,
-        source: job.source,
-        target: job.target,
-        error_kind: error_kind.into(),
-        message: message.into(),
-    }
-}
-
-fn link_check_broken(job: LinkCheckJob) -> LinkCheckBrokenTarget {
-    LinkCheckBrokenTarget {
-        source: job.source,
-        target: job.target,
-    }
 }
 
 #[cfg(feature = "ssh")]
@@ -1082,177 +884,5 @@ fn ssh_parse_error(
     SshFileTargetParseError {
         kind,
         message: message.into(),
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn link_check_error_kind_strings_match_output_contract() {
-        assert_eq!(LinkCheckErrorKind::Ssh(SshErrorKind::Auth).as_str(), "auth");
-        assert_eq!(
-            LinkCheckErrorKind::Ssh(SshErrorKind::HostKey).as_str(),
-            "hostkey"
-        );
-        assert_eq!(
-            LinkCheckErrorKind::Ssh(SshErrorKind::Network).as_str(),
-            "network"
-        );
-        assert_eq!(
-            LinkCheckErrorKind::Ssh(SshErrorKind::Timeout).as_str(),
-            "timeout"
-        );
-        assert_eq!(LinkCheckErrorKind::Unsupported.as_str(), "unsupported");
-        assert_eq!(
-            LinkCheckErrorKind::UnsupportedBackend.as_str(),
-            "unsupported_backend"
-        );
-    }
-
-    #[test]
-    fn file_jobs_use_existing_line_spec_semantics() {
-        let dir = tempfile::tempdir().unwrap();
-        let db_root = dir.path();
-        let source_path = db_root.join("source.org");
-        let target_path = db_root.join("target.org");
-        std::fs::write(&source_path, "#+title: Source\n").unwrap();
-        std::fs::write(&target_path, "first line\nneedle line\n").unwrap();
-
-        let ok = check_local_link_job(
-            LinkCheckJob::new(
-                LinkCheckKind::File,
-                LinkCheckBackend::Local,
-                LinkSource::new("source", "Source", source_path.clone()),
-                "target.org::needle",
-            ),
-            db_root,
-        );
-        let line_number_ok = check_local_link_job(
-            LinkCheckJob::new(
-                LinkCheckKind::File,
-                LinkCheckBackend::Local,
-                LinkSource::new("source", "Source", source_path.clone()),
-                "target.org::2",
-            ),
-            db_root,
-        );
-        let broken = check_local_link_job(
-            LinkCheckJob::new(
-                LinkCheckKind::File,
-                LinkCheckBackend::Local,
-                LinkSource::new("source", "Source", source_path.clone()),
-                "target.org::missing",
-            ),
-            db_root,
-        );
-
-        assert_eq!(ok, LinkCheckOutcome::Ok);
-        assert_eq!(line_number_ok, LinkCheckOutcome::Ok);
-        assert_eq!(
-            broken,
-            LinkCheckOutcome::Broken(LinkCheckBrokenTarget {
-                source: LinkSource::new("source", "Source", source_path),
-                target: LinkCheckTarget::new(LinkCheckKind::File, "target.org::missing"),
-            })
-        );
-    }
-
-    #[test]
-    fn attachment_jobs_use_hashed_org_attach_layout() {
-        let dir = tempfile::tempdir().unwrap();
-        let db_root = dir.path();
-        let source_path = db_root.join("source.org");
-        let uuid = "aaaaaaaa-aaaa-4aaa-aaaa-bbbbbbbbbbbb";
-        let attach_dir = db_root.join(".attach").join(&uuid[..2]).join(&uuid[2..]);
-        std::fs::create_dir_all(&attach_dir).unwrap();
-        std::fs::write(attach_dir.join("image.png"), b"image").unwrap();
-
-        let ok = check_local_link_job(
-            LinkCheckJob::new(
-                LinkCheckKind::Attachment,
-                LinkCheckBackend::Local,
-                LinkSource::new(uuid, "Source", source_path.clone()),
-                "image.png",
-            ),
-            db_root,
-        );
-        let broken = check_local_link_job(
-            LinkCheckJob::new(
-                LinkCheckKind::Attachment,
-                LinkCheckBackend::Local,
-                LinkSource::new(uuid, "Source", source_path.clone()),
-                "missing.png",
-            ),
-            db_root,
-        );
-
-        assert_eq!(ok, LinkCheckOutcome::Ok);
-        assert_eq!(
-            broken,
-            LinkCheckOutcome::Broken(LinkCheckBrokenTarget {
-                source: LinkSource::new(uuid, "Source", source_path),
-                target: LinkCheckTarget::new(LinkCheckKind::Attachment, "missing.png"),
-            })
-        );
-    }
-
-    #[test]
-    fn parses_tramp_ssh_file_targets() {
-        let target = parse_ssh_file_target(
-            "/ssh:alice@example.org#2222:/var/log/app.log::needle",
-            "local",
-        )
-        .unwrap()
-        .unwrap();
-
-        assert_eq!(
-            target,
-            SshFileTarget {
-                connection: SshConnectionKey {
-                    user: "alice".to_string(),
-                    host: "example.org".to_string(),
-                    port: 2222,
-                },
-                path: "/var/log/app.log".to_string(),
-                line_spec: Some("needle".to_string()),
-                raw_target: "/ssh:alice@example.org#2222:/var/log/app.log::needle".to_string(),
-            }
-        );
-    }
-
-    #[test]
-    fn parses_ssh_file_targets_with_default_user_and_port() {
-        let target = parse_ssh_file_target("org:/ssh:example.org:/tmp/file.txt", "local")
-            .unwrap()
-            .unwrap();
-
-        assert_eq!(target.connection.user, "local");
-        assert_eq!(target.connection.host, "example.org");
-        assert_eq!(target.connection.port, 22);
-        assert_eq!(target.path, "/tmp/file.txt");
-        assert_eq!(target.line_spec, None);
-    }
-
-    #[test]
-    fn rejects_unsupported_ssh_file_target_syntax() {
-        let error =
-            parse_ssh_file_target("/ssh:jump|example.org:/tmp/file.txt", "local").unwrap_err();
-
-        assert_eq!(error.kind, SshFileTargetParseErrorKind::UnsupportedSyntax);
-    }
-
-    #[test]
-    fn local_file_checks_skip_ssh_file_targets() {
-        let dir = tempfile::tempdir().unwrap();
-        let db_root = dir.path();
-        let source_path = db_root.join("source.org");
-
-        assert!(local_file_link_target_exists(
-            "/ssh:example.org:/missing/file.txt::needle",
-            &source_path,
-            db_root
-        ));
     }
 }
