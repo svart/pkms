@@ -282,7 +282,7 @@ fn resolve_location_heading_target<'a>(
     path: &Path,
     line_number: usize,
 ) -> Result<ResolvedHeadingTarget<'a>> {
-    let content = std::fs::read_to_string(&path)?;
+    let content = std::fs::read_to_string(path)?;
 
     let result = graph.results.iter().find(|r| r.path.as_path() == path);
     let parsed = match result {
@@ -294,7 +294,7 @@ fn resolve_location_heading_target<'a>(
         content,
         headings: &parsed.headings,
         filetags: &parsed.filetags,
-        note_title: note_title_from_parsed(&path, parsed.title.as_deref()),
+        note_title: note_title_from_parsed(path, parsed.title.as_deref()),
         note_uuid: parsed
             .uuids
             .first()
