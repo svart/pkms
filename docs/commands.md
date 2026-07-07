@@ -124,6 +124,7 @@ pkms rag status
 pkms rag ingest retrieval-export.ndjson
 pkms rag index
 pkms rag index --force-rebuild
+pkms rag index --embedding-batch-size 128 --embedding-max-body-chars 8000
 pkms rag search "externalHostname"
 pkms rag retrieve "agenda inspect tasks" --limit 5 --mode hybrid
 pkms rag serve --host 127.0.0.1 --port 7337
@@ -133,17 +134,18 @@ pkms rag serve --host 127.0.0.1 --port 7337
 path resolves from `--rag-db`, `PKMS_RAG_DB`, `[rag].rag_db`, then the default
 `.data/pkms-rag.sqlite3`.
 
-`pkms rag index` rebuilds from, in order:
+`pkms rag index` rebuilds from the resolved `pkms` database root. Use
+`pkms rag ingest retrieval-export.ndjson` to upsert retrieval NDJSON instead.
 
-- `PKMS_RAG_NOTES_ROOT`.
-- `PKMS_RAG_INDEX_SOURCE` for retrieval NDJSON.
-- The resolved `pkms` database root when neither source is set.
-
-`pkms rag serve` uses the same fallback order but also accepts `--notes-root`
-and `--index-source` for one foreground server run.
+`pkms rag serve` uses the resolved database root by default, and accepts
+`--notes-root` or `--index-source` for one foreground server run.
 
 `pkms rag index --force-rebuild` removes the selected SQLite index and sidecar
 files before rebuilding from scratch.
+
+`pkms rag index --embedding-batch-size N` controls FastEmbed batch size for one
+index run. `--embedding-max-body-chars N` controls how much chunk body text is
+included in embedding input for one index run.
 
 `pkms rag index` is text-only. It writes rebuild progress to stderr, prints the
 final summary to stdout, and rejects `--output-format`.

@@ -12,7 +12,8 @@ use rusqlite::{Connection, OptionalExtension, Transaction, params};
 
 use crate::{
     embeddings::{
-        EmbeddingProvider, cosine_similarity, embedding_text, pack_vector, unpack_vector,
+        DEFAULT_EMBEDDING_MAX_BODY_CHARS, EmbeddingProvider, cosine_similarity,
+        embedding_text_with_max_body_chars, pack_vector, unpack_vector,
     },
     models::{
         ChunkRecord, DeleteEntityType, DeleteRecord, IngestSummary, LinkRecord, RetrievalRecord,
@@ -77,7 +78,14 @@ pub fn ingest_records(
     embedding_provider: &dyn EmbeddingProvider,
     full_rebuild: bool,
 ) -> Result<IngestSummary> {
-    ingest_records_with_progress(conn, records, embedding_provider, full_rebuild, |_| {})
+    ingest_records_with_progress(
+        conn,
+        records,
+        embedding_provider,
+        full_rebuild,
+        DEFAULT_EMBEDDING_MAX_BODY_CHARS,
+        |_| {},
+    )
 }
 
 pub(crate) fn ingest_records_with_progress(
@@ -85,6 +93,7 @@ pub(crate) fn ingest_records_with_progress(
     records: &[RetrievalRecord],
     embedding_provider: &dyn EmbeddingProvider,
     full_rebuild: bool,
+    embedding_max_body_chars: usize,
     mut on_progress: impl FnMut(&IngestProgress),
 ) -> Result<IngestSummary> {
     let tx = conn
@@ -155,6 +164,7 @@ pub(crate) fn ingest_records_with_progress(
         &tx,
         &changed_chunks,
         embedding_provider,
+        embedding_max_body_chars,
         |processed_embeddings, total_embeddings, embeddings_skipped| {
             let mut progress_summary = summary.clone();
             progress_summary.embeddings_computed = processed_embeddings;
@@ -791,6 +801,7 @@ fn refresh_embeddings_with_progress(
     tx: &Transaction<'_>,
     chunks: &[ChunkRecord],
     provider: &dyn EmbeddingProvider,
+    embedding_max_body_chars: usize,
     mut on_progress: impl FnMut(u64, u64, u64),
 ) -> Result<(u64, u64)> {
     let mut chunks_to_embed = Vec::new();
@@ -832,7 +843,10 @@ fn refresh_embeddings_with_progress(
         .unwrap_or(chunks_to_embed.len());
     let mut processed_embeddings = 0;
     for chunk_batch in chunks_to_embed.chunks(batch_size) {
-        let texts = chunk_batch.iter().map(embedding_text).collect::<Vec<_>>();
+        let texts = chunk_batch
+            .iter()
+            .map(|chunk| embedding_text_with_max_body_chars(chunk, embedding_max_body_chars))
+            .collect::<Vec<_>>();
         let vectors = provider.embed(&texts).context("failed to embed chunks")?;
         anyhow::ensure!(
             vectors.len() == chunk_batch.len(),
@@ -961,8 +975,8 @@ fn sqlite_sidecar_path(db_path: &Path, suffix: &str) -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{embeddings::HashEmbeddingProvider, ndjson::load_ndjson};
-    use std::path::PathBuf;
+    use crate::{embeddings::HashEmbeddingProvider, models::NoteRecord, ndjson::load_ndjson};
+    use std::{path::PathBuf, sync::Mutex};
 
     fn db_path() -> (tempfile::TempDir, PathBuf) {
         let tempdir = tempfile::tempdir().expect("tempdir");
@@ -1213,6 +1227,50 @@ mod tests {
         assert_eq!(current.links, 1);
     }
 
+    #[test]
+    fn ingest_records_with_progress_uses_configured_embedding_max_body_chars() {
+        let (_tempdir, path) = db_path();
+        let mut conn = connect(&path).expect("connect initializes database");
+        let records = vec![
+            RetrievalRecord::Note(NoteRecord {
+                schema_version: SUPPORTED_SCHEMA_VERSION,
+                note_id: "note-1".to_string(),
+                path: "note.org".to_string(),
+                title: "Note".to_string(),
+                aliases: Vec::new(),
+                tags: Vec::new(),
+                updated_at: 1,
+                content_hash: "sha256:note".to_string(),
+            }),
+            RetrievalRecord::Chunk(ChunkRecord {
+                schema_version: SUPPORTED_SCHEMA_VERSION,
+                chunk_id: "chunk-1".to_string(),
+                note_id: "note-1".to_string(),
+                path: "note.org".to_string(),
+                title: "Note".to_string(),
+                aliases: Vec::new(),
+                tags: Vec::new(),
+                heading_path: Vec::new(),
+                heading_level: 1,
+                body: "abcdef".to_string(),
+                start_line: 1,
+                end_line: 1,
+                outgoing_ids: Vec::new(),
+                updated_at: 1,
+                content_hash: "sha256:chunk".to_string(),
+            }),
+        ];
+        let provider = RecordingEmbeddingProvider::default();
+
+        ingest_records_with_progress(&mut conn, &records, &provider, false, 3, |_| {})
+            .expect("records ingest");
+
+        let texts = provider.texts.lock().expect("texts lock");
+        assert_eq!(texts.len(), 1);
+        assert!(texts[0].ends_with("abc"));
+        assert!(!texts[0].contains("def"));
+    }
+
     fn fixture_records() -> Vec<RetrievalRecord> {
         load_ndjson(
             PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -1408,6 +1466,29 @@ mod tests {
 
         fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>> {
             Ok(vec![self.vector.clone(); texts.len()])
+        }
+    }
+
+    #[derive(Default)]
+    struct RecordingEmbeddingProvider {
+        texts: Mutex<Vec<String>>,
+    }
+
+    impl EmbeddingProvider for RecordingEmbeddingProvider {
+        fn model_name(&self) -> &str {
+            "recording"
+        }
+
+        fn dimension(&self) -> usize {
+            1
+        }
+
+        fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>> {
+            self.texts
+                .lock()
+                .expect("texts lock")
+                .extend(texts.iter().cloned());
+            Ok(vec![vec![0.0]; texts.len()])
         }
     }
 }

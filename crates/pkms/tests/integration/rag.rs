@@ -262,8 +262,18 @@ rag_db = "{}"
 }
 
 #[test]
-fn test_rag_index_uses_env_index_source() {
+fn test_rag_index_ignores_removed_env_index_source() {
     let db = TestDb::clean();
+    db.write_roam(
+        "removed-env-source.org",
+        r#":PROPERTIES:
+:ID:       cccccccc-cccc-4ccc-cccc-cccccccccccc
+:END:
+#+title: Removed Env Source
+* Removed env source
+The resolved database root wins over removed RAG source environment variables.
+"#,
+    );
     let rag_db = db.root().join("env-source.sqlite3");
     let fixture = rag_fixture();
     let config = format!(
@@ -285,12 +295,8 @@ rag_db = "{}"
     configure_test_command(&mut command, config_home.path());
     let output = command
         .env_remove("PKMS_RAG_DB")
-        .env_remove("PKMS_RAG_NOTES_ROOT")
         .env("PKMS_RAG_INDEX_SOURCE", fixture.as_os_str())
-        .env_remove("PKMS_RAG_HOST")
-        .env_remove("PKMS_RAG_PORT")
         .env_remove("PKMS_RAG_EMBEDDING_MODEL")
-        .env_remove("PKMS_RAG_EMBEDDING_BATCH_SIZE")
         .env("PKMS_RAG_EMBEDDING_PROVIDER", "hash")
         .args(["rag", "index"])
         .output()
@@ -303,7 +309,7 @@ rag_db = "{}"
         "index failed\nstdout: {index_stdout}\nstderr: {index_stderr}"
     );
     assert!(index_stdout.contains("Index phase: complete"));
-    assert!(index_stdout.contains("Chunks: 2 seen"));
+    assert!(index_stdout.contains("Chunks: 1 seen"));
 
     let (search, search_status) = run_hash_json_with_config(
         &[
@@ -311,14 +317,14 @@ rag_db = "{}"
             "json",
             "rag",
             "search",
-            "externalHostname",
+            "removed RAG source",
         ],
         &config,
     );
     assert!(search_status.success());
     assert_eq!(
-        search["results"][0]["title"],
-        "Media Library Migration to Jellyfin"
+        search["results"][0]["note_id"],
+        "cccccccc-cccc-4ccc-cccc-cccccccccccc"
     );
 }
 
@@ -430,10 +436,6 @@ RAG result titles open the rendered note viewer.
         .env("XDG_CONFIG_HOME", config_home.path())
         .env_remove("PKMS_DB_ROOT")
         .env_remove("PKMS_RAG_DB")
-        .env_remove("PKMS_RAG_NOTES_ROOT")
-        .env_remove("PKMS_RAG_INDEX_SOURCE")
-        .env_remove("PKMS_RAG_HOST")
-        .env_remove("PKMS_RAG_PORT")
         .env("PKMS_RAG_EMBEDDING_PROVIDER", "hash")
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -493,12 +495,7 @@ fn run_hash_with_config_home(
     configure_test_command(&mut command, config_home);
     let output = command
         .env_remove("PKMS_RAG_DB")
-        .env_remove("PKMS_RAG_NOTES_ROOT")
-        .env_remove("PKMS_RAG_INDEX_SOURCE")
-        .env_remove("PKMS_RAG_HOST")
-        .env_remove("PKMS_RAG_PORT")
         .env_remove("PKMS_RAG_EMBEDDING_MODEL")
-        .env_remove("PKMS_RAG_EMBEDDING_BATCH_SIZE")
         .env("PKMS_RAG_EMBEDDING_PROVIDER", "hash")
         .args(args)
         .output()

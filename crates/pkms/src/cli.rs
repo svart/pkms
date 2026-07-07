@@ -23,6 +23,16 @@ fn parse_encoding(value: &str) -> Result<tokens::Encoding, String> {
         .map_err(|()| format!("unknown token encoding '{value}'"))
 }
 
+fn parse_positive_usize(value: &str) -> Result<usize, String> {
+    let parsed = value
+        .parse::<usize>()
+        .map_err(|_| format!("expected a positive integer, got '{value}'"))?;
+    if parsed == 0 {
+        return Err("value must be greater than zero".to_string());
+    }
+    Ok(parsed)
+}
+
 #[derive(Parser)]
 #[command(
     name = "pkms",
@@ -166,6 +176,20 @@ pub struct RagIndexArgs {
     pub rag_db: Option<PathBuf>,
     #[arg(long, help = "Remove the current RAG SQLite index before rebuilding")]
     pub force_rebuild: bool,
+    #[arg(
+        long,
+        value_name = "N",
+        value_parser = parse_positive_usize,
+        help = "FastEmbed batch size for this index run"
+    )]
+    pub embedding_batch_size: Option<usize>,
+    #[arg(
+        long,
+        value_name = "N",
+        value_parser = parse_positive_usize,
+        help = "Maximum body characters included in embedding text for this index run"
+    )]
+    pub embedding_max_body_chars: Option<usize>,
     #[arg(
         long = "output-format",
         hide = true,
@@ -625,6 +649,41 @@ mod tests {
 
     #[cfg(feature = "rag")]
     #[test]
+    fn rag_index_parses_embedding_controls() {
+        let cli = parse(&[
+            "pkms",
+            "rag",
+            "index",
+            "--embedding-batch-size",
+            "8",
+            "--embedding-max-body-chars",
+            "4096",
+        ]);
+        let Command::Rag(rag) = cli.command else {
+            panic!("expected rag command");
+        };
+        let RagCommand::Index(args) = rag.command else {
+            panic!("expected rag index command");
+        };
+
+        assert_eq!(args.embedding_batch_size, Some(8));
+        assert_eq!(args.embedding_max_body_chars, Some(4096));
+    }
+
+    #[cfg(feature = "rag")]
+    #[test]
+    fn rag_index_rejects_zero_embedding_controls() {
+        assert!(
+            Cli::try_parse_from(["pkms", "rag", "index", "--embedding-batch-size", "0"]).is_err()
+        );
+        assert!(
+            Cli::try_parse_from(["pkms", "rag", "index", "--embedding-max-body-chars", "0"])
+                .is_err()
+        );
+    }
+
+    #[cfg(feature = "rag")]
+    #[test]
     fn rag_index_help_exposes_only_supported_local_flags() {
         let mut command = Cli::command();
         let index = command
@@ -637,6 +696,8 @@ mod tests {
 
         assert!(help.contains("--force-rebuild"));
         assert!(help.contains("--rag-db"));
+        assert!(help.contains("--embedding-batch-size"));
+        assert!(help.contains("--embedding-max-body-chars"));
         assert!(!help.contains("--notes-root"));
         assert!(!help.contains("--index-source"));
         assert!(!help.contains("--output-format"));

@@ -17,10 +17,6 @@ use crate::{
 };
 
 const RAG_DB_ENV: &str = "PKMS_RAG_DB";
-const RAG_NOTES_ROOT_ENV: &str = "PKMS_RAG_NOTES_ROOT";
-const RAG_INDEX_SOURCE_ENV: &str = "PKMS_RAG_INDEX_SOURCE";
-const RAG_HOST_ENV: &str = "PKMS_RAG_HOST";
-const RAG_PORT_ENV: &str = "PKMS_RAG_PORT";
 const DEFAULT_RAG_HOST: &str = "127.0.0.1";
 const DEFAULT_RAG_PORT: u16 = 7337;
 
@@ -61,8 +57,12 @@ fn run_index(command_ctx: &CommandContext<'_>, args: &RagIndexArgs) -> Result<()
         pkms_rag::remove_index_files(&db_path)?;
     }
     let (notes_root, index_source) = resolve_index_sources(None, None, command_ctx.config());
-    let provider_config = resolve_embedding_provider_config(command_ctx.config())?;
-    let indexer = pkms_rag::BackgroundIndexer::new(db_path, index_source, notes_root);
+    let provider_config = resolve_index_embedding_provider_config(command_ctx.config(), args)?;
+    let indexer = pkms_rag::BackgroundIndexer::new(db_path, index_source, notes_root)
+        .with_embedding_max_body_chars(
+            args.embedding_max_body_chars
+                .unwrap_or(pkms_rag::DEFAULT_EMBEDDING_MAX_BODY_CHARS),
+        );
     let progress_printer = RefCell::new(RagIndexProgressPrinter::default());
     let progress =
         indexer.run_sync_with_provider_config_and_progress(&provider_config, |progress| {
@@ -121,9 +121,8 @@ fn run_serve(command_ctx: &CommandContext<'_>, args: &RagServeArgs) -> Result<()
         host: args
             .host
             .clone()
-            .or_else(|| non_empty_env(RAG_HOST_ENV))
             .unwrap_or_else(|| DEFAULT_RAG_HOST.to_string()),
-        port: resolve_rag_port(args.port)?,
+        port: resolve_rag_port(args.port),
     };
     let output = command_ctx.output();
     #[cfg(feature = "web")]
@@ -423,12 +422,8 @@ fn resolve_index_sources(
     index_source_arg: Option<&PathBuf>,
     config: &ResolvedConfig,
 ) -> (Option<PathBuf>, Option<PathBuf>) {
-    let notes_root = notes_root_arg
-        .cloned()
-        .or_else(|| env_path(RAG_NOTES_ROOT_ENV));
-    let index_source = index_source_arg
-        .cloned()
-        .or_else(|| env_path(RAG_INDEX_SOURCE_ENV));
+    let notes_root = notes_root_arg.cloned();
+    let index_source = index_source_arg.cloned();
     if notes_root.is_some() || index_source.is_some() {
         (notes_root, index_source)
     } else {
@@ -447,6 +442,20 @@ fn resolve_embedding_provider_config(
     .context("failed to read RAG embedding provider configuration")
 }
 
+fn resolve_index_embedding_provider_config(
+    config: &ResolvedConfig,
+    args: &RagIndexArgs,
+) -> Result<pkms_rag::EmbeddingProviderConfig> {
+    let mut provider_config = resolve_embedding_provider_config(config)?;
+    if let Some(embedding_batch_size) = args.embedding_batch_size
+        && let pkms_rag::EmbeddingProviderConfig::FastEmbed { batch_size, .. } =
+            &mut provider_config
+    {
+        *batch_size = embedding_batch_size;
+    }
+    Ok(provider_config)
+}
+
 fn env_path(key: &str) -> Option<PathBuf> {
     non_empty_env(key).map(PathBuf::from)
 }
@@ -458,16 +467,8 @@ fn non_empty_env(key: &str) -> Option<String> {
         .filter(|value| !value.is_empty())
 }
 
-fn resolve_rag_port(port: Option<u16>) -> Result<u16> {
-    if let Some(port) = port {
-        return Ok(port);
-    }
-    if let Some(value) = non_empty_env(RAG_PORT_ENV) {
-        return value
-            .parse::<u16>()
-            .with_context(|| format!("invalid {RAG_PORT_ENV} value '{value}'"));
-    }
-    Ok(DEFAULT_RAG_PORT)
+fn resolve_rag_port(port: Option<u16>) -> u16 {
+    port.unwrap_or(DEFAULT_RAG_PORT)
 }
 
 fn text_snippet(text: &str, max_chars: usize) -> String {
@@ -509,6 +510,56 @@ mod tests {
         );
     }
 
+    #[test]
+    fn resolve_index_sources_ignores_removed_source_env_vars() {
+        let _guard = ENV_LOCK.lock().expect("env lock");
+        let _snapshot = EnvSnapshot::capture();
+        set_env("PKMS_RAG_NOTES_ROOT", "/env/notes");
+        set_env("PKMS_RAG_INDEX_SOURCE", "/env/source.ndjson");
+        let config = ResolvedConfig::for_test_db("/db");
+
+        let (notes_root, index_source) = resolve_index_sources(None, None, &config);
+
+        assert_eq!(notes_root, Some(PathBuf::from("/db")));
+        assert_eq!(index_source, None);
+    }
+
+    #[test]
+    fn resolve_rag_port_ignores_removed_port_env_var() {
+        let _guard = ENV_LOCK.lock().expect("env lock");
+        let _snapshot = EnvSnapshot::capture();
+        set_env("PKMS_RAG_PORT", "7444");
+
+        assert_eq!(resolve_rag_port(None), DEFAULT_RAG_PORT);
+    }
+
+    #[test]
+    fn resolve_index_embedding_provider_config_applies_cli_batch_size() {
+        let _guard = ENV_LOCK.lock().expect("env lock");
+        let _snapshot = EnvSnapshot::capture();
+        clear_embedding_env();
+        let config = ResolvedConfig::for_test_db("/db");
+        let args = RagIndexArgs {
+            rag_db: None,
+            force_rebuild: false,
+            embedding_batch_size: Some(8),
+            embedding_max_body_chars: None,
+            output_format: None,
+        };
+
+        let provider_config =
+            resolve_index_embedding_provider_config(&config, &args).expect("config resolves");
+
+        assert_eq!(
+            provider_config,
+            pkms_rag::EmbeddingProviderConfig::FastEmbed {
+                model_name: pkms_rag::DEFAULT_FASTEMBED_MODEL.to_string(),
+                batch_size: 8,
+                model_dir: None,
+            }
+        );
+    }
+
     static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
     struct EnvSnapshot {
@@ -535,6 +586,16 @@ mod tests {
                         "PKMS_RAG_FASTEMBED_MODEL_DIR",
                         std::env::var("PKMS_RAG_FASTEMBED_MODEL_DIR").ok(),
                     ),
+                    (
+                        "PKMS_RAG_NOTES_ROOT",
+                        std::env::var("PKMS_RAG_NOTES_ROOT").ok(),
+                    ),
+                    (
+                        "PKMS_RAG_INDEX_SOURCE",
+                        std::env::var("PKMS_RAG_INDEX_SOURCE").ok(),
+                    ),
+                    ("PKMS_RAG_HOST", std::env::var("PKMS_RAG_HOST").ok()),
+                    ("PKMS_RAG_PORT", std::env::var("PKMS_RAG_PORT").ok()),
                 ],
             }
         }
@@ -556,6 +617,10 @@ mod tests {
         remove_env("PKMS_RAG_EMBEDDING_MODEL");
         remove_env("PKMS_RAG_EMBEDDING_BATCH_SIZE");
         remove_env("PKMS_RAG_FASTEMBED_MODEL_DIR");
+        remove_env("PKMS_RAG_NOTES_ROOT");
+        remove_env("PKMS_RAG_INDEX_SOURCE");
+        remove_env("PKMS_RAG_HOST");
+        remove_env("PKMS_RAG_PORT");
     }
 
     fn set_env(key: &str, value: &str) {

@@ -59,21 +59,21 @@ with `--features rag`.
 
 - `--rag-db`, `PKMS_RAG_DB`, or `[rag].rag_db`: SQLite index path. Default:
   `.data/pkms-rag.sqlite3`.
-- `PKMS_RAG_NOTES_ROOT`: org notes root to export for `pkms rag index`.
-  `pkms rag serve` also accepts `--notes-root`. When no source override is set,
-  `pkms rag` uses the resolved `db_root`.
-- `PKMS_RAG_INDEX_SOURCE`: retrieval NDJSON source for `pkms rag index`.
-  `pkms rag serve` also accepts `--index-source`.
+- `pkms rag index` exports org notes from the resolved `db_root`.
+- `pkms rag ingest <path>` ingests retrieval NDJSON into the selected index.
+- `pkms rag serve --notes-root` and `--index-source`: one-run source overrides
+  for the foreground RAG server. When no source override is set, the server uses
+  the resolved `db_root`.
 - `--force-rebuild`: `pkms rag index` removes the selected SQLite index and
   SQLite sidecar files before rebuilding.
-- `--host`/`--port` or `PKMS_RAG_HOST`/`PKMS_RAG_PORT`: HTTP bind settings for
-  `pkms rag serve`.
+- `--host`/`--port`: HTTP bind settings for `pkms rag serve`.
 - `PKMS_RAG_EMBEDDING_PROVIDER`: `fastembed` or `hash`.
 - `PKMS_RAG_EMBEDDING_MODEL` or `[rag].embedding_model`: FastEmbed model name.
   The environment variable takes precedence.
-- `PKMS_RAG_EMBEDDING_BATCH_SIZE`: FastEmbed batch size.
-- `PKMS_RAG_EMBEDDING_MAX_BODY_CHARS`: body text budget used for embedding
-  text.
+- `pkms rag index --embedding-batch-size`: FastEmbed batch size for one index
+  run.
+- `pkms rag index --embedding-max-body-chars`: body text budget used for
+  embedding text for one index run.
 - `PKMS_RAG_FASTEMBED_MODEL_DIR` or `[rag].fastembed_model_dir`: local
   FastEmbed model files directory used instead of downloading from Hugging Face
   during model initialization. The environment variable takes precedence.

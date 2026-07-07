@@ -91,21 +91,17 @@ notes remain the authority.
 
 ## Source Selection
 
-`pkms rag index` selects an input source in this order:
+`pkms rag index` exports org notes from the resolved `pkms` database root.
 
-1. `PKMS_RAG_NOTES_ROOT`.
-2. `PKMS_RAG_INDEX_SOURCE`.
-3. The resolved `pkms` database root.
-
-Examples:
+Use `pkms rag ingest` when you already have retrieval NDJSON and want to upsert
+it into the selected RAG database:
 
 ```bash
-PKMS_RAG_NOTES_ROOT=~/Documents/org pkms rag index
-PKMS_RAG_INDEX_SOURCE=retrieval-export.ndjson pkms rag index
+pkms rag ingest retrieval-export.ndjson --rag-db .data/pkms-rag.sqlite3
 ```
 
-`pkms rag serve` uses the same fallback order but also accepts `--notes-root`
-and `--index-source` for one foreground server run.
+`pkms rag serve` uses the resolved database root by default, and accepts
+`--notes-root` or `--index-source` for one foreground server run.
 
 Persistent RAG defaults live under `[rag]`:
 
@@ -116,21 +112,12 @@ embedding_model = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
 # fastembed_model_dir = "models/paraphrase-multilingual-MiniLM-L12-v2"
 ```
 
-`pkms rag ingest` reads retrieval NDJSON and upserts it into the selected RAG
-database without selecting a notes root:
-
-```bash
-pkms rag ingest retrieval-export.ndjson --rag-db .data/pkms-rag.sqlite3
-```
-
 ## Embeddings
 
 FastEmbed is the default embedding provider. `pkms-rag` builds FastEmbed with
 rustls for Hugging Face model downloads and ONNX Runtime binary downloads. It
-downloads model files on first use and then runs from its local cache. FastEmbed
-uses `./.fastembed_cache` by default; set `FASTEMBED_CACHE_DIR` to move that
-cache, or set `HF_HOME` to use the Hugging Face cache location. `HF_HOME` takes
-precedence.
+downloads model files on first use and then runs from its dependency-managed
+local cache.
 
 Set `[rag].fastembed_model_dir` or `PKMS_RAG_FASTEMBED_MODEL_DIR` to load
 FastEmbed model files from a local directory and skip Hugging Face downloads
@@ -145,16 +132,21 @@ Use `PKMS_RAG_EMBEDDING_PROVIDER=hash` for deterministic local tests and
 fixtures. The hash provider exposes `hashing-v1` embeddings with a fixed
 dimension.
 
+`pkms rag index` accepts index-run embedding controls:
+
+```bash
+pkms rag index --embedding-batch-size 128 --embedding-max-body-chars 8000
+```
+
+`--embedding-batch-size` controls the FastEmbed batch size. The default is 256.
+`--embedding-max-body-chars` controls how much chunk body text is included in
+embedding input. The default is 8000 characters.
+
 Embedding-related environment variables:
 
 - `PKMS_RAG_EMBEDDING_PROVIDER`
 - `PKMS_RAG_EMBEDDING_MODEL` (overrides `[rag].embedding_model`)
-- `PKMS_RAG_EMBEDDING_BATCH_SIZE`
-- `PKMS_RAG_EMBEDDING_MAX_BODY_CHARS`
 - `PKMS_RAG_FASTEMBED_MODEL_DIR` (overrides `[rag].fastembed_model_dir`)
-- `FASTEMBED_CACHE_DIR`
-- `HF_HOME`
-- `HF_ENDPOINT`
 
 Use the same provider and compatible model when querying an index that was
 built with dense embeddings. `bm25` mode can search without using dense scores,
@@ -167,6 +159,7 @@ pkms rag status
 pkms rag ingest retrieval-export.ndjson
 pkms rag index
 pkms rag index --force-rebuild
+pkms rag index --embedding-batch-size 128 --embedding-max-body-chars 8000
 pkms rag search "externalHostname"
 pkms rag retrieve "agenda inspect tasks" --limit 5 --mode hybrid
 pkms rag serve --host 127.0.0.1 --port 7337
@@ -233,10 +226,8 @@ curl -X POST http://127.0.0.1:7337/retrieve \
   failures such as certificate verification errors, proxy connection errors,
   DNS errors, or HTTP status errors usually mean the process cannot reach the
   Hugging Face model repository from the current network.
-- In restricted networks, configure `HF_ENDPOINT` for an internal Hugging Face
-  mirror or pre-populate the FastEmbed cache in `HF_HOME` or
-  `FASTEMBED_CACHE_DIR` from a machine that can download the model. `HF_HOME`
-  takes precedence over `FASTEMBED_CACHE_DIR`.
+- In restricted networks, use `[rag].fastembed_model_dir` or
+  `PKMS_RAG_FASTEMBED_MODEL_DIR` with a locally downloaded model snapshot.
 - In corporate TLS interception environments, install the corporate root CA in
   the OS trust store first:
 
@@ -250,8 +241,7 @@ curl -X POST http://127.0.0.1:7337/retrieve \
   through dependency HTTP clients configured for rustls/webpki roots, so the OS
   trust store alone may still be insufficient for a corporate MITM root. If the
   download still fails, use `[rag].fastembed_model_dir` or
-  `PKMS_RAG_FASTEMBED_MODEL_DIR` with a locally downloaded model snapshot, or
-  use an internal mirror through `HF_ENDPOINT`.
+  `PKMS_RAG_FASTEMBED_MODEL_DIR` with a locally downloaded model snapshot.
 - For deterministic local tests or environments where dense embeddings are not
   required, set `PKMS_RAG_EMBEDDING_PROVIDER=hash` for both indexing and
   retrieval.

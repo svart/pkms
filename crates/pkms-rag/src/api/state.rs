@@ -11,8 +11,6 @@ use crate::{
 pub const DEFAULT_RAG_DB: &str = ".data/pkms-rag.sqlite3";
 
 const RAG_DB_ENV: &str = "PKMS_RAG_DB";
-const RAG_INDEX_SOURCE_ENV: &str = "PKMS_RAG_INDEX_SOURCE";
-const RAG_NOTES_ROOT_ENV: &str = "PKMS_RAG_NOTES_ROOT";
 
 #[derive(Clone)]
 pub struct AppState {
@@ -28,14 +26,12 @@ impl AppState {
         let db_path = std::env::var(RAG_DB_ENV)
             .map(PathBuf::from)
             .unwrap_or_else(|_| PathBuf::from(DEFAULT_RAG_DB));
-        let index_source = env_path(RAG_INDEX_SOURCE_ENV);
-        let notes_root = env_path(RAG_NOTES_ROOT_ENV);
         let embedding_provider_config = embedding_provider_config_from_env()
             .context("failed to read RAG embedding provider configuration")?;
         Ok(Self::with_embedding_provider_config(
             db_path,
-            index_source,
-            notes_root,
+            None,
+            None,
             embedding_provider_config,
         ))
     }
@@ -82,9 +78,71 @@ impl AppState {
     }
 }
 
-fn env_path(key: &str) -> Option<PathBuf> {
-    std::env::var(key)
-        .ok()
-        .filter(|value| !value.trim().is_empty())
-        .map(PathBuf::from)
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    #[test]
+    fn from_env_ignores_removed_source_env_vars() {
+        let _guard = ENV_LOCK.lock().expect("env lock");
+        let _snapshot = EnvSnapshot::capture();
+        set_env("PKMS_RAG_EMBEDDING_PROVIDER", "hash");
+        set_env("PKMS_RAG_INDEX_SOURCE", "/env/source.ndjson");
+        set_env("PKMS_RAG_NOTES_ROOT", "/env/notes");
+
+        let state = AppState::from_env().expect("state builds");
+
+        let progress = state.indexer.status();
+        assert_eq!(progress.source_path, None);
+        assert_eq!(progress.notes_root, None);
+    }
+
+    struct EnvSnapshot {
+        values: Vec<(&'static str, Option<String>)>,
+    }
+
+    impl EnvSnapshot {
+        fn capture() -> Self {
+            Self {
+                values: vec![
+                    ("PKMS_RAG_DB", std::env::var("PKMS_RAG_DB").ok()),
+                    (
+                        "PKMS_RAG_EMBEDDING_PROVIDER",
+                        std::env::var("PKMS_RAG_EMBEDDING_PROVIDER").ok(),
+                    ),
+                    (
+                        "PKMS_RAG_INDEX_SOURCE",
+                        std::env::var("PKMS_RAG_INDEX_SOURCE").ok(),
+                    ),
+                    (
+                        "PKMS_RAG_NOTES_ROOT",
+                        std::env::var("PKMS_RAG_NOTES_ROOT").ok(),
+                    ),
+                ],
+            }
+        }
+    }
+
+    impl Drop for EnvSnapshot {
+        fn drop(&mut self) {
+            for (key, value) in &self.values {
+                match value {
+                    Some(value) => set_env(key, value),
+                    None => remove_env(key),
+                }
+            }
+        }
+    }
+
+    fn set_env(key: &str, value: &str) {
+        // SAFETY: these tests serialize environment changes with ENV_LOCK and restore values.
+        unsafe { std::env::set_var(key, value) };
+    }
+
+    fn remove_env(key: &str) {
+        // SAFETY: these tests serialize environment changes with ENV_LOCK and restore values.
+        unsafe { std::env::remove_var(key) };
+    }
 }

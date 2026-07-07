@@ -10,7 +10,8 @@ use anyhow::{Context, Result, bail};
 use crate::{
     db::{IngestProgress, connect, ingest_records_with_progress},
     embeddings::{
-        EmbeddingProvider, EmbeddingProviderConfig, provider_from_config, provider_from_env,
+        DEFAULT_EMBEDDING_MAX_BODY_CHARS, EmbeddingProvider, EmbeddingProviderConfig,
+        provider_from_config, provider_from_env,
     },
     models::{IndexProgress, IngestSummary, RetrievalRecord},
     ndjson::load_ndjson,
@@ -24,6 +25,7 @@ pub struct BackgroundIndexer {
     db_path: PathBuf,
     source_path: Option<PathBuf>,
     notes_root: Option<PathBuf>,
+    embedding_max_body_chars: usize,
     progress: Arc<Mutex<IndexProgress>>,
     running: Arc<Mutex<bool>>,
 }
@@ -43,9 +45,15 @@ impl BackgroundIndexer {
             db_path: db_path.into(),
             source_path,
             notes_root,
+            embedding_max_body_chars: DEFAULT_EMBEDDING_MAX_BODY_CHARS,
             progress: Arc::new(Mutex::new(progress)),
             running: Arc::new(Mutex::new(false)),
         }
+    }
+
+    pub fn with_embedding_max_body_chars(mut self, max_body_chars: usize) -> Self {
+        self.embedding_max_body_chars = max_body_chars;
+        self
     }
 
     pub fn start(&self) -> IndexProgress {
@@ -275,11 +283,17 @@ impl BackgroundIndexer {
         );
         self.emit_progress(on_progress);
         let mut conn = connect(&self.db_path)?;
-        let summary =
-            ingest_records_with_progress(&mut conn, records, provider, true, |progress| {
+        let summary = ingest_records_with_progress(
+            &mut conn,
+            records,
+            provider,
+            true,
+            self.embedding_max_body_chars,
+            |progress| {
                 self.set_ingest_progress(progress);
                 self.emit_progress(on_progress);
-            })?;
+            },
+        )?;
         self.set_summary(&summary, records.len() as u64);
         self.set_complete(records.len() as u64);
         self.emit_progress(on_progress);

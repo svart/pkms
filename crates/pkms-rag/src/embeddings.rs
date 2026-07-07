@@ -34,7 +34,6 @@ const HASH_PROVIDER_NAME: &str = "hash";
 const FASTEMBED_PROVIDER_NAME: &str = "fastembed";
 const EMBEDDING_PROVIDER_ENV: &str = "PKMS_RAG_EMBEDDING_PROVIDER";
 const EMBEDDING_MODEL_ENV: &str = "PKMS_RAG_EMBEDDING_MODEL";
-const EMBEDDING_BATCH_SIZE_ENV: &str = "PKMS_RAG_EMBEDDING_BATCH_SIZE";
 const FASTEMBED_MODEL_DIR_ENV: &str = "PKMS_RAG_FASTEMBED_MODEL_DIR";
 
 pub trait EmbeddingProvider {
@@ -202,7 +201,7 @@ pub fn embedding_provider_config_from_env_with_model_and_dir(
                         .map(ToOwned::to_owned)
                 })
                 .unwrap_or_else(|| DEFAULT_FASTEMBED_MODEL.to_string()),
-            batch_size: embedding_batch_size_from_env(),
+            batch_size: DEFAULT_FASTEMBED_BATCH_SIZE,
             model_dir: std::env::var(FASTEMBED_MODEL_DIR_ENV)
                 .ok()
                 .map(|value| value.trim().to_string())
@@ -298,10 +297,13 @@ fn read_fastembed_model_file(model_dir: &Path, relative_path: &str) -> Result<Ve
 }
 
 pub fn embedding_text(chunk: &ChunkRecord) -> String {
-    embedding_text_with_max_body_chars(chunk, embedding_max_body_chars_from_env())
+    embedding_text_with_max_body_chars(chunk, DEFAULT_EMBEDDING_MAX_BODY_CHARS)
 }
 
-fn embedding_text_with_max_body_chars(chunk: &ChunkRecord, max_body_chars: usize) -> String {
+pub(crate) fn embedding_text_with_max_body_chars(
+    chunk: &ChunkRecord,
+    max_body_chars: usize,
+) -> String {
     let body = chunk.body.chars().take(max_body_chars).collect::<String>();
     [
         chunk.title.clone(),
@@ -314,22 +316,6 @@ fn embedding_text_with_max_body_chars(chunk: &ChunkRecord, max_body_chars: usize
     .filter(|part| !part.is_empty())
     .collect::<Vec<_>>()
     .join("\n")
-}
-
-fn embedding_max_body_chars_from_env() -> usize {
-    std::env::var("PKMS_RAG_EMBEDDING_MAX_BODY_CHARS")
-        .ok()
-        .and_then(|value| value.parse().ok())
-        .filter(|value| *value > 0)
-        .unwrap_or(DEFAULT_EMBEDDING_MAX_BODY_CHARS)
-}
-
-fn embedding_batch_size_from_env() -> usize {
-    std::env::var(EMBEDDING_BATCH_SIZE_ENV)
-        .ok()
-        .and_then(|value| value.parse().ok())
-        .filter(|value| *value > 0)
-        .unwrap_or(DEFAULT_FASTEMBED_BATCH_SIZE)
 }
 
 #[cfg(feature = "fastembed")]
@@ -496,6 +482,19 @@ mod tests {
     }
 
     #[test]
+    fn embeddings_text_ignores_removed_max_body_chars_env() {
+        let _guard = ENV_LOCK.lock().expect("env lock");
+        let _snapshot = EnvSnapshot::capture();
+        clear_embedding_env();
+        set_env("PKMS_RAG_EMBEDDING_MAX_BODY_CHARS", "3");
+        let chunk = sample_chunk("abcde");
+
+        let text = embedding_text(&chunk);
+
+        assert!(text.ends_with("abcde"));
+    }
+
+    #[test]
     fn embeddings_provider_config_defaults_to_fastembed() {
         let _guard = ENV_LOCK.lock().expect("env lock");
         let _snapshot = EnvSnapshot::capture();
@@ -529,13 +528,13 @@ mod tests {
     }
 
     #[test]
-    fn embeddings_provider_config_reads_fastembed_model_and_batch_size() {
+    fn embeddings_provider_config_reads_fastembed_model_and_dir() {
         let _guard = ENV_LOCK.lock().expect("env lock");
         let _snapshot = EnvSnapshot::capture();
         clear_embedding_env();
         set_env(EMBEDDING_PROVIDER_ENV, "fastembed");
         set_env(EMBEDDING_MODEL_ENV, "Xenova/all-MiniLM-L12-v2");
-        set_env(EMBEDDING_BATCH_SIZE_ENV, "7");
+        set_env("PKMS_RAG_EMBEDDING_BATCH_SIZE", "7");
         set_env(
             "PKMS_RAG_FASTEMBED_MODEL_DIR",
             "/opt/pkms/models/all-minilm",
@@ -547,7 +546,7 @@ mod tests {
             config,
             EmbeddingProviderConfig::FastEmbed {
                 model_name: "Xenova/all-MiniLM-L12-v2".to_string(),
-                batch_size: 7,
+                batch_size: DEFAULT_FASTEMBED_BATCH_SIZE,
                 model_dir: Some("/opt/pkms/models/all-minilm".into()),
             }
         );
@@ -734,8 +733,12 @@ mod tests {
                     ),
                     (EMBEDDING_MODEL_ENV, std::env::var(EMBEDDING_MODEL_ENV).ok()),
                     (
-                        EMBEDDING_BATCH_SIZE_ENV,
-                        std::env::var(EMBEDDING_BATCH_SIZE_ENV).ok(),
+                        "PKMS_RAG_EMBEDDING_BATCH_SIZE",
+                        std::env::var("PKMS_RAG_EMBEDDING_BATCH_SIZE").ok(),
+                    ),
+                    (
+                        "PKMS_RAG_EMBEDDING_MAX_BODY_CHARS",
+                        std::env::var("PKMS_RAG_EMBEDDING_MAX_BODY_CHARS").ok(),
                     ),
                     (
                         "PKMS_RAG_FASTEMBED_MODEL_DIR",
@@ -760,7 +763,8 @@ mod tests {
     fn clear_embedding_env() {
         remove_env(EMBEDDING_PROVIDER_ENV);
         remove_env(EMBEDDING_MODEL_ENV);
-        remove_env(EMBEDDING_BATCH_SIZE_ENV);
+        remove_env("PKMS_RAG_EMBEDDING_BATCH_SIZE");
+        remove_env("PKMS_RAG_EMBEDDING_MAX_BODY_CHARS");
         remove_env("PKMS_RAG_FASTEMBED_MODEL_DIR");
     }
 
