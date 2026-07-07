@@ -127,7 +127,9 @@ impl BackgroundIndexer {
                 self.run_rebuild_with_provider(started_at, provider.as_ref(), on_progress)
             }
             Err(err) => {
-                self.set_error(err.to_string());
+                self.set_error(format_error_chain(
+                    &err.context("failed to initialize RAG embedding provider"),
+                ));
                 self.emit_progress(on_progress);
             }
         }
@@ -201,7 +203,7 @@ impl BackgroundIndexer {
             self.ingest_records(&records, provider.as_ref(), on_progress)
         })();
         if let Err(err) = result {
-            self.set_error(err.to_string());
+            self.set_error(format_error_chain(&err));
             self.emit_progress(on_progress);
         }
     }
@@ -224,7 +226,7 @@ impl BackgroundIndexer {
             self.ingest_records(&records, provider, on_progress)
         })();
         if let Err(err) = result {
-            self.set_error(err.to_string());
+            self.set_error(format_error_chain(&err));
             self.emit_progress(on_progress);
         }
     }
@@ -407,6 +409,10 @@ fn display_path(path: &Path) -> String {
     path.to_string_lossy().into_owned()
 }
 
+fn format_error_chain(err: &anyhow::Error) -> String {
+    format!("{err:#}")
+}
+
 fn apply_summary(progress: &mut IndexProgress, summary: &IngestSummary) {
     progress.notes_seen = summary.notes_seen;
     progress.notes_upserted = summary.notes_upserted;
@@ -530,6 +536,32 @@ mod tests {
         assert_eq!(
             events.last().expect("at least one progress event").phase,
             "complete"
+        );
+    }
+
+    #[test]
+    fn indexer_reports_provider_initialization_error_chain() {
+        let tempdir = tempfile::tempdir().expect("tempdir");
+        let db_path = tempdir.path().join("rag.sqlite3");
+        let source = fixture_path();
+        let indexer = BackgroundIndexer::new(db_path, Some(source), None);
+
+        let (_progress, handle) = indexer.start_with_provider_factory(|| {
+            Err(anyhow::anyhow!("corporate CA rejected").context("download request failed"))
+        });
+        handle
+            .expect("provider factory starts in the background")
+            .join()
+            .expect("background thread joins");
+
+        let progress = indexer.status();
+        let error = progress.error.expect("error is recorded");
+        assert_eq!(progress.phase, "error");
+        assert!(
+            error.contains(
+                "failed to initialize RAG embedding provider: download request failed: corporate CA rejected"
+            ),
+            "error should preserve the provider error chain: {error}"
         );
     }
 

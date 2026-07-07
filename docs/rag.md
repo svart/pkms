@@ -140,6 +140,9 @@ Embedding-related environment variables:
 - `PKMS_RAG_EMBEDDING_MODEL`
 - `PKMS_RAG_EMBEDDING_BATCH_SIZE`
 - `PKMS_RAG_EMBEDDING_MAX_BODY_CHARS`
+- `FASTEMBED_CACHE_DIR`
+- `HF_HOME`
+- `HF_ENDPOINT`
 
 Use the same provider and compatible model when querying an index that was
 built with dense embeddings. `bm25` mode can search without using dense scores,
@@ -214,9 +217,18 @@ curl -X POST http://127.0.0.1:7337/retrieve \
 
 ## Troubleshooting
 
-- If indexing fails during embedding setup, first check whether the FastEmbed
-  model can be downloaded or use `PKMS_RAG_EMBEDDING_PROVIDER=hash` for a local
-  deterministic run.
+- If indexing fails during embedding setup, `pkms` prints the full error chain
+  from the embedding provider. FastEmbed downloads the model on first use, so
+  failures such as certificate verification errors, proxy connection errors,
+  DNS errors, or HTTP status errors usually mean the process cannot reach the
+  Hugging Face model repository from the current network.
+- In restricted networks, configure `HF_ENDPOINT` for an internal Hugging Face
+  mirror or pre-populate the FastEmbed cache in `HF_HOME` or
+  `FASTEMBED_CACHE_DIR` from a machine that can download the model. `HF_HOME`
+  takes precedence over `FASTEMBED_CACHE_DIR`.
+- For deterministic local tests or environments where dense embeddings are not
+  required, set `PKMS_RAG_EMBEDDING_PROVIDER=hash` for both indexing and
+  retrieval.
 - If `pkms rag serve` prints an address but retrieval returns no results, check
   `/index/status` and `pkms rag status --rag-db <path>` to confirm the rebuild
   completed and chunks were indexed.
