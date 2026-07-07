@@ -160,12 +160,14 @@ HTTP API:
 - `GET /health` returns service liveness.
 - `GET /status` returns SQLite index counts and embedding model names.
 - `GET /index/status` returns background index progress.
-- `POST /index/start` starts a background rebuild from the configured source.
+- `POST /index/start` starts a background rebuild from the server's startup
+  source.
 - `POST /ingest` accepts `application/x-ndjson`.
 - `POST /search` accepts `{"query":"...","limit":10}`.
 - `POST /retrieve` accepts `{"query":"...","limit":10,"mode":"hybrid"}`.
 
-On startup, `pkms rag serve` starts a rebuild from the resolved source.
+On startup, `pkms rag serve` starts a rebuild from the resolved `db_root` or the
+one-run source passed with `--notes-root` or `--index-source`.
 In builds with the `web` feature, result titles in the browser UI open notes
 through the same rendered viewer routes as `pkms serve`; without that feature,
 titles remain plain text.

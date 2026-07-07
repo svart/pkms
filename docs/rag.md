@@ -2,9 +2,9 @@
 
 `pkms rag` is available in builds made with `--features rag`. It provides local
 retrieval over an org-roam notes database, builds a SQLite index from current
-notes or retrieval NDJSON, stores sparse and dense retrieval data locally, and
-exposes the same data through CLI commands, JSON or NDJSON output, and a
-foreground local HTTP server.
+notes, can ingest retrieval NDJSON directly, stores sparse and dense retrieval
+data locally, and exposes the same data through CLI commands, structured output
+where supported, and a foreground local HTTP server.
 
 For implementation boundaries, see the [pkms-rag crate docs](crates/pkms-rag.md).
 
@@ -50,12 +50,13 @@ Serve the local browser UI and HTTP API:
 pkms rag serve --host 127.0.0.1 --port 7337
 ```
 
-Then open the printed URL. The process stays in the foreground. When a notes
-root is provided, an index source is configured, or a `db_root` is available,
-`pkms rag serve` starts a background rebuild on launch; use `GET /index/status`
-or the UI to watch progress. In builds with the `web` feature, result titles
-open the rendered note viewer using the same routes as `pkms serve`; without
-that feature, result titles remain plain text.
+Then open the printed URL. The process stays in the foreground. The `pkms` CLI
+uses the resolved `db_root` as the default serve source, or uses `--notes-root`
+or `--index-source` when one is passed, so `pkms rag serve` starts a background
+rebuild on launch. Use `GET /index/status` or the UI to watch progress. In
+builds with the `web` feature, result titles open the rendered note viewer using
+the same routes as `pkms serve`; without that feature, result titles remain
+plain text.
 
 ## Architecture
 
@@ -64,8 +65,7 @@ umbrella `pkms` binary through the `rag` command namespace.
 
 The current data flow is:
 
-1. `pkms rag index` resolves a source from RAG source environment variables or
-   the configured `pkms` database root.
+1. `pkms rag index` exports org notes from the resolved `pkms` database root.
 2. Org notes are exported through `pkms-org` parsing, including note metadata,
    headings, tags, links, aliases, and source locations.
 3. Exported notes are chunked and written as retrieval records.
@@ -74,12 +74,13 @@ The current data flow is:
 5. Search and retrieval read the SQLite index and return cited chunks with note
    titles, paths, heading paths, source line ranges, scores, and text snippets.
 
-`pkms rag ingest` accepts retrieval NDJSON directly. `pkms rag index` rebuilds
-from the selected source and removes stale indexed rows for records no longer in
-the source. Use `pkms rag index --force-rebuild` to remove the current SQLite
-index and sidecar files before rebuilding from scratch. `pkms rag serve` starts
-a foreground HTTP server and starts a background rebuild when a source is
-resolved.
+`pkms rag ingest` accepts retrieval NDJSON directly. `pkms rag index` exports
+current org notes from the resolved database root, ingests those records, and
+removes stale indexed rows for records no longer present in the database root.
+Use `pkms rag index --force-rebuild` to remove the current SQLite index and
+sidecar files before rebuilding from scratch. `pkms rag serve` starts a
+foreground HTTP server and starts a background rebuild from the source selected
+when the server was launched.
 
 `pkms rag index` is text-only. It reports foreground rebuild progress to stderr
 while keeping the final index summary on stdout, and rejects `--output-format`.
@@ -192,7 +193,8 @@ pkms rag retrieve "RAG HTTP API" --limit 5 --output-format ndjson
 - `GET /health` returns service liveness.
 - `GET /status` returns SQLite index counts and embedding model names.
 - `GET /index/status` returns background index progress.
-- `POST /index/start` starts a background rebuild from the configured source.
+- `POST /index/start` starts a background rebuild from the source selected when
+  the server was launched.
 - `POST /ingest` accepts retrieval NDJSON with `application/x-ndjson`.
 - `POST /search` accepts `{"query":"...","limit":10}`.
 - `POST /retrieve` accepts `{"query":"...","limit":10,"mode":"hybrid"}`.
@@ -205,7 +207,7 @@ with the same rendered viewer used by `pkms serve` when the binary includes the
 The server is a foreground local process. It does not add a daemon, watcher, or
 persistent service beyond the SQLite index selected by `--rag-db` or
 `PKMS_RAG_DB` or `[rag].rag_db`. On startup it begins a rebuild from the
-resolved source.
+resolved database root or the one-run source passed to `pkms rag serve`.
 
 Example API calls:
 

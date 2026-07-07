@@ -46,8 +46,9 @@ with `--features rag`.
 
 - The SQLite RAG database is derived local state; org source files or supplied
   retrieval NDJSON remain authoritative.
-- `pkms rag index` and `/index/start` rebuild from the configured source and
-  remove stale indexed rows for records no longer present.
+- `pkms rag index` rebuilds from the resolved `db_root`; `/index/start` rebuilds
+  from the RAG server's startup source. Both remove stale indexed rows for
+  records no longer present.
 - `pkms rag index --force-rebuild` removes the selected SQLite index and
   sidecar files before rebuilding from scratch.
 - Search and retrieval responses must cite note title, path, heading path,
