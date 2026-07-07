@@ -166,7 +166,9 @@ through the same rendered viewer routes as `pkms serve`; without that feature,
 titles remain plain text.
 
 FastEmbed is the default embedding provider. For deterministic local tests, set
-`PKMS_RAG_EMBEDDING_PROVIDER=hash`.
+`PKMS_RAG_EMBEDDING_PROVIDER=hash`. To avoid model downloads in restricted
+networks, point `PKMS_RAG_FASTEMBED_MODEL_DIR` at a local FastEmbed model
+directory.
 
 ## Statistics and Discovery
 

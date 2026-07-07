@@ -16,6 +16,8 @@ with `--features rag`.
   and embedding tables.
 - Provide embedding providers: FastEmbed by default and deterministic hash
   embeddings for tests and fixtures.
+- Build FastEmbed with rustls for Hugging Face model downloads and ONNX Runtime
+  binary downloads.
 - Search with SQLite FTS.
 - Retrieve cited chunks with BM25, dense, or hybrid scoring.
 - Track background index progress.
@@ -66,6 +68,8 @@ with `--features rag`.
 - `PKMS_RAG_EMBEDDING_BATCH_SIZE`: FastEmbed batch size.
 - `PKMS_RAG_EMBEDDING_MAX_BODY_CHARS`: body text budget used for embedding
   text.
+- `PKMS_RAG_FASTEMBED_MODEL_DIR`: local FastEmbed model files directory used
+  instead of downloading from Hugging Face during model initialization.
 
 ## Boundaries
 

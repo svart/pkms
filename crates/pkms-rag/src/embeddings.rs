@@ -1,4 +1,7 @@
-use std::mem::{size_of, size_of_val};
+use std::{
+    mem::{size_of, size_of_val},
+    path::{Path, PathBuf},
+};
 
 #[cfg(feature = "fastembed")]
 use anyhow::Context;
@@ -8,7 +11,10 @@ use blake2::{
     digest::{Update, VariableOutput},
 };
 #[cfg(feature = "fastembed")]
-use fastembed::{EmbeddingModel, TextEmbedding, TextInitOptions};
+use fastembed::{
+    EmbeddingModel, InitOptionsUserDefined, TextEmbedding, TextInitOptions, TokenizerFiles,
+    UserDefinedEmbeddingModel,
+};
 #[cfg(feature = "fastembed")]
 use std::sync::Mutex;
 
@@ -29,6 +35,7 @@ const FASTEMBED_PROVIDER_NAME: &str = "fastembed";
 const EMBEDDING_PROVIDER_ENV: &str = "PKMS_RAG_EMBEDDING_PROVIDER";
 const EMBEDDING_MODEL_ENV: &str = "PKMS_RAG_EMBEDDING_MODEL";
 const EMBEDDING_BATCH_SIZE_ENV: &str = "PKMS_RAG_EMBEDDING_BATCH_SIZE";
+const FASTEMBED_MODEL_DIR_ENV: &str = "PKMS_RAG_FASTEMBED_MODEL_DIR";
 
 pub trait EmbeddingProvider {
     fn model_name(&self) -> &str;
@@ -45,6 +52,7 @@ pub enum EmbeddingProviderConfig {
     FastEmbed {
         model_name: String,
         batch_size: usize,
+        model_dir: Option<PathBuf>,
     },
 }
 
@@ -112,16 +120,18 @@ pub struct FastEmbeddingProvider {
 
 #[cfg(feature = "fastembed")]
 impl FastEmbeddingProvider {
-    pub fn try_new(model_name: &str, batch_size: usize) -> Result<Self> {
+    pub fn try_new(model_name: &str, batch_size: usize, model_dir: Option<&Path>) -> Result<Self> {
         anyhow::ensure!(batch_size > 0, "FastEmbed batch size must be positive");
         let model = parse_fastembed_model(model_name)?;
         let info = TextEmbedding::get_model_info(&model)
             .with_context(|| format!("failed to read FastEmbed model info for {model_name}"))?;
         let normalized_model_name = info.model_code.clone();
         let dimension = info.dim;
-        let model = TextEmbedding::try_new(TextInitOptions::new(model)).with_context(|| {
-            format!("failed to initialize FastEmbed model {normalized_model_name}")
-        })?;
+        let model = match model_dir {
+            Some(model_dir) => text_embedding_from_model_dir(&model, model_dir),
+            None => TextEmbedding::try_new(TextInitOptions::new(model)),
+        }
+        .with_context(|| format!("failed to initialize FastEmbed model {normalized_model_name}"))?;
         Ok(Self {
             model_name: normalized_model_name,
             dimension,
@@ -169,6 +179,10 @@ pub fn embedding_provider_config_from_env() -> Result<EmbeddingProviderConfig> {
             model_name: std::env::var(EMBEDDING_MODEL_ENV)
                 .unwrap_or_else(|_| DEFAULT_FASTEMBED_MODEL.to_string()),
             batch_size: embedding_batch_size_from_env(),
+            model_dir: std::env::var(FASTEMBED_MODEL_DIR_ENV)
+                .ok()
+                .filter(|value| !value.is_empty())
+                .map(PathBuf::from),
         }),
         _ => bail!(
             "unsupported embedding provider '{}'; expected '{}' or '{}'",
@@ -192,7 +206,8 @@ pub fn provider_from_config(
         EmbeddingProviderConfig::FastEmbed {
             model_name,
             batch_size,
-        } => fastembed_provider_boxed(model_name, *batch_size),
+            model_dir,
+        } => fastembed_provider_boxed(model_name, *batch_size, model_dir.as_deref()),
     }
 }
 
@@ -200,9 +215,10 @@ pub fn provider_from_config(
 fn fastembed_provider_boxed(
     model_name: &str,
     batch_size: usize,
+    model_dir: Option<&Path>,
 ) -> Result<Box<dyn EmbeddingProvider>> {
     Ok(Box::new(FastEmbeddingProvider::try_new(
-        model_name, batch_size,
+        model_name, batch_size, model_dir,
     )?))
 }
 
@@ -210,11 +226,49 @@ fn fastembed_provider_boxed(
 fn fastembed_provider_boxed(
     model_name: &str,
     _batch_size: usize,
+    _model_dir: Option<&Path>,
 ) -> Result<Box<dyn EmbeddingProvider>> {
     bail!(
         "FastEmbed provider requested for model '{}', but pkms-rag was built without the 'fastembed' feature",
         model_name
     )
+}
+
+#[cfg(feature = "fastembed")]
+fn text_embedding_from_model_dir(
+    model: &EmbeddingModel,
+    model_dir: &Path,
+) -> Result<TextEmbedding> {
+    let info = TextEmbedding::get_model_info(model)?;
+    let tokenizer_files = TokenizerFiles {
+        tokenizer_file: read_fastembed_model_file(model_dir, "tokenizer.json")?,
+        config_file: read_fastembed_model_file(model_dir, "config.json")?,
+        special_tokens_map_file: read_fastembed_model_file(model_dir, "special_tokens_map.json")?,
+        tokenizer_config_file: read_fastembed_model_file(model_dir, "tokenizer_config.json")?,
+    };
+    let mut model_files = UserDefinedEmbeddingModel::new(
+        read_fastembed_model_file(model_dir, &info.model_file)?,
+        tokenizer_files,
+    )
+    .with_quantization(TextEmbedding::get_quantization_mode(model));
+    if let Some(pooling) = TextEmbedding::get_default_pooling_method(model) {
+        model_files = model_files.with_pooling(pooling);
+    }
+    for additional_file in &info.additional_files {
+        model_files = model_files.with_external_initializer(
+            additional_file.clone(),
+            read_fastembed_model_file(model_dir, additional_file)?,
+        );
+    }
+    model_files.output_key = info.output_key.clone();
+    TextEmbedding::try_new_from_user_defined(model_files, InitOptionsUserDefined::default())
+}
+
+#[cfg(feature = "fastembed")]
+fn read_fastembed_model_file(model_dir: &Path, relative_path: &str) -> Result<Vec<u8>> {
+    let path = model_dir.join(relative_path);
+    std::fs::read(&path)
+        .with_context(|| format!("failed to read FastEmbed model file {}", path.display()))
 }
 
 pub fn embedding_text(chunk: &ChunkRecord) -> String {
@@ -428,6 +482,7 @@ mod tests {
             EmbeddingProviderConfig::FastEmbed {
                 model_name: DEFAULT_FASTEMBED_MODEL.to_string(),
                 batch_size: DEFAULT_FASTEMBED_BATCH_SIZE,
+                model_dir: None,
             }
         );
     }
@@ -455,6 +510,10 @@ mod tests {
         set_env(EMBEDDING_PROVIDER_ENV, "fastembed");
         set_env(EMBEDDING_MODEL_ENV, "Xenova/all-MiniLM-L12-v2");
         set_env(EMBEDDING_BATCH_SIZE_ENV, "7");
+        set_env(
+            "PKMS_RAG_FASTEMBED_MODEL_DIR",
+            "/opt/pkms/models/all-minilm",
+        );
 
         let config = embedding_provider_config_from_env().expect("config reads");
 
@@ -463,6 +522,7 @@ mod tests {
             EmbeddingProviderConfig::FastEmbed {
                 model_name: "Xenova/all-MiniLM-L12-v2".to_string(),
                 batch_size: 7,
+                model_dir: Some("/opt/pkms/models/all-minilm".into()),
             }
         );
     }
@@ -487,6 +547,25 @@ mod tests {
 
         assert_eq!(info.model_code, DEFAULT_FASTEMBED_MODEL_CODE);
         assert!(info.dim > 0);
+    }
+
+    #[cfg(feature = "fastembed")]
+    #[test]
+    fn embeddings_fastembed_model_dir_reads_local_files() {
+        let model_dir = tempfile::tempdir().expect("tempdir creates");
+
+        let err = match FastEmbeddingProvider::try_new(
+            DEFAULT_FASTEMBED_MODEL,
+            DEFAULT_FASTEMBED_BATCH_SIZE,
+            Some(model_dir.path()),
+        ) {
+            Ok(_) => panic!("missing local model files should fail"),
+            Err(err) => err,
+        };
+
+        let message = format!("{err:#}");
+        assert!(message.contains("failed to read FastEmbed model file"));
+        assert!(message.contains("tokenizer.json"));
     }
 
     fn sample_chunk(body: &str) -> ChunkRecord {
@@ -542,6 +621,10 @@ mod tests {
                         EMBEDDING_BATCH_SIZE_ENV,
                         std::env::var(EMBEDDING_BATCH_SIZE_ENV).ok(),
                     ),
+                    (
+                        "PKMS_RAG_FASTEMBED_MODEL_DIR",
+                        std::env::var("PKMS_RAG_FASTEMBED_MODEL_DIR").ok(),
+                    ),
                 ],
             }
         }
@@ -562,6 +645,7 @@ mod tests {
         remove_env(EMBEDDING_PROVIDER_ENV);
         remove_env(EMBEDDING_MODEL_ENV);
         remove_env(EMBEDDING_BATCH_SIZE_ENV);
+        remove_env("PKMS_RAG_FASTEMBED_MODEL_DIR");
     }
 
     fn set_env(key: &str, value: &str) {

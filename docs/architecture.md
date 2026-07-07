@@ -115,4 +115,6 @@ See [JSON and NDJSON Output](json-output.md) and [Pipelining](pipelining.md).
 
 `pkms-rag` has a crate-level default `fastembed` feature. The umbrella `pkms`
 crate enables `pkms-rag` only through the `rag` feature; RAG builds use
-FastEmbed unless the dependency configuration changes.
+FastEmbed unless the dependency configuration changes. The FastEmbed dependency
+is configured with rustls for Hugging Face model downloads and ONNX Runtime
+binary downloads.

@@ -125,10 +125,19 @@ pkms rag ingest retrieval-export.ndjson --rag-db .data/pkms-rag.sqlite3
 
 ## Embeddings
 
-FastEmbed is the default embedding provider. It downloads model files on first
-use and then runs from its local cache. FastEmbed uses `./.fastembed_cache` by
-default; set `FASTEMBED_CACHE_DIR` to move that cache, or set `HF_HOME` to use
-the Hugging Face cache location. `HF_HOME` takes precedence.
+FastEmbed is the default embedding provider. `pkms-rag` builds FastEmbed with
+rustls for Hugging Face model downloads and ONNX Runtime binary downloads. It
+downloads model files on first use and then runs from its local cache. FastEmbed
+uses `./.fastembed_cache` by default; set `FASTEMBED_CACHE_DIR` to move that
+cache, or set `HF_HOME` to use the Hugging Face cache location. `HF_HOME` takes
+precedence.
+
+Set `PKMS_RAG_FASTEMBED_MODEL_DIR` to load FastEmbed model files from a local
+directory and skip Hugging Face downloads during model initialization. The
+directory must contain the files for the configured `PKMS_RAG_EMBEDDING_MODEL`,
+including `tokenizer.json`, `config.json`, `special_tokens_map.json`,
+`tokenizer_config.json`, and the model file path FastEmbed expects for that
+model, such as `onnx/model.onnx` for the default multilingual MiniLM model.
 
 Use `PKMS_RAG_EMBEDDING_PROVIDER=hash` for deterministic local tests and
 fixtures. The hash provider exposes `hashing-v1` embeddings with a fixed
@@ -140,6 +149,7 @@ Embedding-related environment variables:
 - `PKMS_RAG_EMBEDDING_MODEL`
 - `PKMS_RAG_EMBEDDING_BATCH_SIZE`
 - `PKMS_RAG_EMBEDDING_MAX_BODY_CHARS`
+- `PKMS_RAG_FASTEMBED_MODEL_DIR`
 - `FASTEMBED_CACHE_DIR`
 - `HF_HOME`
 - `HF_ENDPOINT`
@@ -226,6 +236,20 @@ curl -X POST http://127.0.0.1:7337/retrieve \
   mirror or pre-populate the FastEmbed cache in `HF_HOME` or
   `FASTEMBED_CACHE_DIR` from a machine that can download the model. `HF_HOME`
   takes precedence over `FASTEMBED_CACHE_DIR`.
+- In corporate TLS interception environments, install the corporate root CA in
+  the OS trust store first:
+
+  ```bash
+  sudo cp corp-root-ca.crt /usr/local/share/ca-certificates/
+  sudo update-ca-certificates
+  ```
+
+  Then verify normal tools trust the endpoint, for example
+  `curl https://huggingface.co/`. FastEmbed currently reaches Hugging Face
+  through dependency HTTP clients configured for rustls/webpki roots, so the OS
+  trust store alone may still be insufficient for a corporate MITM root. If the
+  download still fails, use `PKMS_RAG_FASTEMBED_MODEL_DIR` with a locally
+  downloaded model snapshot, or use an internal mirror through `HF_ENDPOINT`.
 - For deterministic local tests or environments where dense embeddings are not
   required, set `PKMS_RAG_EMBEDDING_PROVIDER=hash` for both indexing and
   retrieval.

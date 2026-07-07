@@ -13,7 +13,11 @@ fastembed = ["dep:fastembed"]
 anyhow = "1"
 axum = "0.8.9"
 blake2 = "0.10.6"
-fastembed = { version = "5.17.2", optional = true }
+fastembed = { version = "5.17.2", optional = true, default-features = false, features = [
+    "hf-hub-rustls-tls",
+    "image-models",
+    "ort-download-binaries-rustls-tls",
+] }
 pkms-org = { path = "../pkms-org" }
 rusqlite = { version = "0.40.1", features = ["bundled"] }
 serde = { version = "1", features = ["derive"] }

@@ -68,4 +68,6 @@ SSH targets such as `/ssh:host:/absolute/path`. Default builds keep
 The `rag` feature enables `pkms rag` and the optional `pkms-rag` dependency.
 The RAG crate uses FastEmbed by default, so first indexing or dense retrieval
 may download model files. Use `PKMS_RAG_EMBEDDING_PROVIDER=hash` for
-deterministic local runs that avoid FastEmbed model setup.
+deterministic local runs that avoid FastEmbed model setup. In restricted
+networks, set `PKMS_RAG_FASTEMBED_MODEL_DIR` to load a locally downloaded model
+directory without using the FastEmbed download path.
