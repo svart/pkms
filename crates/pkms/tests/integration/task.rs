@@ -2246,6 +2246,45 @@ fn test_task_show_accepts_pkms_id_forms() {
 }
 
 #[test]
+fn test_task_show_includes_desc_body_from_added_final_task() {
+    let db = TestDb::new().note("inbox.org", "Inbox", "11111111-1111-4111-8111-111111111111");
+    let config = format!("{TEST_CONFIG}\n[tasks]\ninbox = \"Inbox\"\n");
+    let root = db.root().to_str().unwrap();
+
+    let (stdout, stderr, status) = run_with_config(
+        &[
+            "--db",
+            root,
+            "task",
+            "add",
+            "some",
+            "task",
+            "desc:this is description",
+        ],
+        &config,
+    );
+    assert!(status.success(), "task add failed:\n{stdout}\n{stderr}");
+
+    let (stdout, stderr, status) = run_with_config(&["--db", root, "task", "show", "1"], &config);
+    assert!(status.success(), "task show failed:\n{stdout}\n{stderr}");
+    assert!(
+        stdout.contains(
+            "--- Content ---\n* TODO some task\n\nthis is description\n--- End Content ---"
+        ),
+        "stdout:\n{stdout}"
+    );
+
+    let args = ["--db", root, "--output-format", "json", "task", "show", "1"];
+    let (stdout, stderr, status) = run_with_config(&args, &config);
+    assert!(
+        status.success(),
+        "task show json failed:\n{stdout}\n{stderr}"
+    );
+    let v = assert_json_output(&args, &stdout);
+    assert_eq!(v["content"], "* TODO some task\n\nthis is description");
+}
+
+#[test]
 fn test_task_show_formats_inline_markup_when_terminal_formatting_is_forced() {
     let db = TestDb::new().note_with_content(
         "show-format.org",

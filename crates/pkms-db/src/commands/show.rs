@@ -101,7 +101,7 @@ fn find_children(
     let target_level = headings[target_idx].level;
     let mut children = Vec::new();
     for h in headings.iter().skip(target_idx + 1) {
-        if h.line_number >= end_line {
+        if h.line_number > end_line {
             break;
         }
         if h.level > target_level
@@ -189,20 +189,16 @@ fn show_heading_by_line(ctx: HeadingShowContext<'_>, line_number: usize) -> Resu
     let heading = &ctx.headings[heading_idx];
 
     let content_lines: Vec<&str> = ctx.content.lines().collect();
-    let end_idx = parsed_heading_subtree_end_index(ctx.headings, heading, content_lines.len());
-    let end_line = if end_idx >= content_lines.len() {
-        content_lines.len()
-    } else {
-        end_idx + 1
-    };
+    let end_idx = parsed_heading_subtree_end_index(ctx.headings, heading, content_lines.len())
+        .min(content_lines.len());
+    let end_line = end_idx;
     let parents = find_parents(ctx.headings, heading_idx, ctx.path, ctx.task_ids);
     let children = find_children(ctx.headings, heading_idx, end_line, ctx.path, ctx.task_ids);
 
     let block_content = if heading.line_number <= content_lines.len() {
         let start = heading.line_number - 1;
-        let end = end_line - 1;
-        if end > start {
-            content_lines[start..end].join("\n")
+        if end_idx > start {
+            content_lines[start..end_idx].join("\n")
         } else {
             String::new()
         }
