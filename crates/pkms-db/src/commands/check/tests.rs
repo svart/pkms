@@ -15,7 +15,6 @@ fn org_config(db_root: &std::path::Path) -> OrgConfig {
 fn check_config(db_root: &std::path::Path) -> CheckConfig {
     CheckConfig {
         org: org_config(db_root),
-        ssh: None,
     }
 }
 

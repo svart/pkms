@@ -39,6 +39,10 @@ pkms --output-format json <command>
 pkms <producer> --output-format ndjson | pkms <consumer> --from-stdin
 ```
 
+The `pkms rag index` command is text-only and rejects `--output-format`. Run
+`pkms rag status --output-format json` after indexing when automation needs
+structured RAG index state.
+
 ## Reference Map
 
 Load only the file needed for the task:

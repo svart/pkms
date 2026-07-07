@@ -48,6 +48,8 @@ with `--features rag`.
   retrieval NDJSON remain authoritative.
 - `pkms rag index` and `/index/start` rebuild from the configured source and
   remove stale indexed rows for records no longer present.
+- `pkms rag index --force-rebuild` removes the selected SQLite index and
+  sidecar files before rebuilding from scratch.
 - Search and retrieval responses must cite note title, path, heading path,
   source line range, scores, and chunk text.
 - The foreground RAG server may start a background rebuild, but it is not a
@@ -57,11 +59,13 @@ with `--features rag`.
 
 - `--rag-db`, `PKMS_RAG_DB`, or `[rag].rag_db`: SQLite index path. Default:
   `.data/pkms-rag.sqlite3`.
-- `--notes-root` or `PKMS_RAG_NOTES_ROOT`: org notes root to export. When no
-  source override or `[rag].index_source` is set, `pkms rag` uses the resolved
-  `db_root`.
-- `--index-source`, `PKMS_RAG_INDEX_SOURCE`, or `[rag].index_source`: retrieval
-  NDJSON source.
+- `PKMS_RAG_NOTES_ROOT`: org notes root to export for `pkms rag index`.
+  `pkms rag serve` also accepts `--notes-root`. When no source override is set,
+  `pkms rag` uses the resolved `db_root`.
+- `PKMS_RAG_INDEX_SOURCE`: retrieval NDJSON source for `pkms rag index`.
+  `pkms rag serve` also accepts `--index-source`.
+- `--force-rebuild`: `pkms rag index` removes the selected SQLite index and
+  SQLite sidecar files before rebuilding.
 - `--host`/`--port` or `PKMS_RAG_HOST`/`PKMS_RAG_PORT`: HTTP bind settings for
   `pkms rag serve`.
 - `PKMS_RAG_EMBEDDING_PROVIDER`: `fastembed` or `hash`.

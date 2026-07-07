@@ -17,7 +17,9 @@ pub use api::{
     RagServeOptions, RagServeStarted, router, serve, serve_with_note_viewer,
 };
 pub use chunking::{CONTENT_HASH_PREFIX, ChunkNoteInput, chunk_note, content_hash};
-pub use db::{build_fts_query, connect, dense_search, ingest_records, search, status};
+pub use db::{
+    build_fts_query, connect, dense_search, ingest_records, remove_index_files, search, status,
+};
 #[cfg(feature = "fastembed")]
 pub use embeddings::FastEmbeddingProvider;
 pub use embeddings::{

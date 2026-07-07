@@ -53,22 +53,21 @@ fn run_ingest(command_ctx: &CommandContext<'_>, args: &RagIngestArgs) -> Result<
 }
 
 fn run_index(command_ctx: &CommandContext<'_>, args: &RagIndexArgs) -> Result<()> {
+    if args.output_format.is_some() || command_ctx.output().is_structured() {
+        bail!("--output-format is not supported by pkms rag index");
+    }
     let db_path = resolve_rag_db(args.rag_db.as_ref(), command_ctx.config());
-    let (notes_root, index_source) = resolve_index_sources(
-        args.notes_root.as_ref(),
-        args.index_source.as_ref(),
-        command_ctx.config(),
-    );
+    if args.force_rebuild {
+        pkms_rag::remove_index_files(&db_path)?;
+    }
+    let (notes_root, index_source) = resolve_index_sources(None, None, command_ctx.config());
     let provider_config = resolve_embedding_provider_config(command_ctx.config())?;
     let indexer = pkms_rag::BackgroundIndexer::new(db_path, index_source, notes_root);
-    let progress = if command_ctx.output().is_structured() {
-        indexer.run_sync_with_provider_config(&provider_config)
-    } else {
-        let progress_printer = RefCell::new(RagIndexProgressPrinter::default());
+    let progress_printer = RefCell::new(RagIndexProgressPrinter::default());
+    let progress =
         indexer.run_sync_with_provider_config_and_progress(&provider_config, |progress| {
             progress_printer.borrow_mut().render(progress);
-        })
-    };
+        });
     if progress.phase == "error" {
         bail!(
             "{}",
@@ -431,15 +430,10 @@ fn resolve_index_sources(
         .cloned()
         .or_else(|| env_path(RAG_INDEX_SOURCE_ENV));
     if notes_root.is_some() || index_source.is_some() {
-        return (notes_root, index_source);
+        (notes_root, index_source)
+    } else {
+        (Some(config.resolved_db_root().to_path_buf()), None)
     }
-
-    let index_source = config.resolve_rag_index_source();
-    if index_source.is_some() {
-        return (None, index_source);
-    }
-
-    (Some(config.resolved_db_root().to_path_buf()), None)
 }
 
 fn resolve_embedding_provider_config(
@@ -499,7 +493,6 @@ mod tests {
         let mut config = ResolvedConfig::for_test_db("/db");
         config.rag = Some(RagConfig {
             rag_db: None,
-            index_source: None,
             embedding_model: None,
             fastembed_model_dir: Some(PathBuf::from("models/bge-small")),
         });

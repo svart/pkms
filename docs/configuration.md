@@ -17,17 +17,8 @@ closed_todo_states = ["DONE"]
 
 [rag]
 rag_db = ".data/pkms-rag.sqlite3"
-# index_source = "retrieval-export.ndjson"
 embedding_model = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
 # fastembed_model_dir = "models/paraphrase-multilingual-MiniLM-L12-v2"
-
-[ssh]
-identity_file = "~/.ssh/id_ed25519"
-known_hosts = "~/.ssh/known_hosts"
-connect_timeout_ms = 5000
-operation_timeout_ms = 5000
-max_connections = 4
-agent = true
 ```
 
 ## Database Root Resolution
@@ -121,17 +112,16 @@ requires a binary built with `--features rag`:
 ```toml
 [rag]
 rag_db = ".data/pkms-rag.sqlite3"
-# index_source = "retrieval-export.ndjson"
 embedding_model = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
 # fastembed_model_dir = "models/paraphrase-multilingual-MiniLM-L12-v2"
 ```
 
 `--rag-db` overrides `[rag].rag_db`; `PKMS_RAG_DB` also overrides the config
-value. When no CLI or environment source is set, `pkms rag index` and
-`pkms rag serve` use `[rag].index_source`; if it is not configured, they fall
-back to the resolved `db_root`. Use `--notes-root` or `PKMS_RAG_NOTES_ROOT` for
-an explicit one-off source override. Relative `[rag]` paths are resolved under
-`db_root`.
+value. `pkms rag index` uses `PKMS_RAG_NOTES_ROOT` or `PKMS_RAG_INDEX_SOURCE`
+for one-off source overrides. `pkms rag serve` also accepts `--notes-root` and
+`--index-source` for one foreground server run. When no source override is set,
+both commands fall back to the resolved `db_root`. Relative `[rag]` paths are
+resolved under `db_root`.
 
 `embedding_model` configures the FastEmbed model used by indexing, ingest,
 retrieval, and `rag serve`. `PKMS_RAG_EMBEDDING_MODEL` overrides this config
@@ -145,29 +135,14 @@ config value when set.
 ## SSH File-Link Checks
 
 SSH file-link checks require a binary built with `--features ssh` and are only
-run when `pkms check --remote-file-links` is requested. All `[ssh]` fields are
-optional:
+run when `pkms check --remote-file-links` is requested. There is no `[ssh]`
+configuration section.
 
-```toml
-[ssh]
-identity_file = "~/.ssh/id_ed25519"
-known_hosts = "~/.ssh/known_hosts"
-connect_timeout_ms = 5000
-operation_timeout_ms = 5000
-max_connections = 4
-agent = true
-```
-
-`identity_file` is a passwordless private key path. Encrypted keys fail rather
-than prompting for a passphrase. `known_hosts` defaults to
-`~/.ssh/known_hosts`; unknown or changed host keys are errors. `agent` defaults
-to `true`, so the SSH agent is tried after a configured key fails or when no
-key is configured. Password and keyboard-interactive authentication are never
-attempted.
-
-`connect_timeout_ms` bounds connection setup. `operation_timeout_ms` bounds
-authentication and SFTP operations. `max_connections` bounds concurrent SSH
-host groups; links for the same `user@host#port` reuse one SSH/SFTP session.
+SSH checks use strict `~/.ssh/known_hosts` verification and non-interactive
+public-key authentication. Standard passwordless identity files under
+`~/.ssh/` and the SSH agent are tried automatically. If those methods cannot
+authenticate, the check reports an auth error. Password, passphrase, and
+keyboard-interactive prompts are never attempted.
 
 ## Agenda States
 

@@ -49,9 +49,9 @@ Without `--remote-file-links`, SSH `file:` targets are skipped instead of being
 treated as local absolute paths. `validate` is local-only and also skips SSH
 file targets.
 
-SSH checks use strict `known_hosts` verification and passwordless public-key
-authentication only. A configured private key is tried first, then the SSH
-agent when enabled. Password and keyboard-interactive prompts are not used.
+SSH checks use strict `~/.ssh/known_hosts` verification and passwordless
+public-key authentication only. Standard identity files and the SSH agent are
+tried automatically. Password and keyboard-interactive prompts are not used.
 Missing remote files are reported in `broken_file_links`; auth, host-key,
 timeout, unsupported syntax, and other SSH/SFTP failures are reported in
 `file_link_errors`.
@@ -123,8 +123,7 @@ When built with `--features rag`:
 pkms rag status
 pkms rag ingest retrieval-export.ndjson
 pkms rag index
-pkms rag index --notes-root ~/org
-pkms rag index --index-source retrieval-export.ndjson
+pkms rag index --force-rebuild
 pkms rag search "externalHostname"
 pkms rag retrieve "agenda inspect tasks" --limit 5 --mode hybrid
 pkms rag serve --host 127.0.0.1 --port 7337
@@ -134,16 +133,20 @@ pkms rag serve --host 127.0.0.1 --port 7337
 path resolves from `--rag-db`, `PKMS_RAG_DB`, `[rag].rag_db`, then the default
 `.data/pkms-rag.sqlite3`.
 
-`pkms rag index` and `pkms rag serve` rebuild from, in order:
+`pkms rag index` rebuilds from, in order:
 
-- `--notes-root` or `PKMS_RAG_NOTES_ROOT`.
-- `--index-source` or `PKMS_RAG_INDEX_SOURCE` for retrieval NDJSON.
-- `[rag].index_source` from `~/.config/pkms.toml`.
+- `PKMS_RAG_NOTES_ROOT`.
+- `PKMS_RAG_INDEX_SOURCE` for retrieval NDJSON.
 - The resolved `pkms` database root when neither source is set.
 
-For text output, `pkms rag index` writes rebuild progress to stderr and the
-final summary to stdout. Structured output stays parseable on stdout and emits
-only the final progress object.
+`pkms rag serve` uses the same fallback order but also accepts `--notes-root`
+and `--index-source` for one foreground server run.
+
+`pkms rag index --force-rebuild` removes the selected SQLite index and sidecar
+files before rebuilding from scratch.
+
+`pkms rag index` is text-only. It writes rebuild progress to stderr, prints the
+final summary to stdout, and rejects `--output-format`.
 
 `pkms rag retrieve` returns cited chunks with `hybrid`, `bm25`, or `dense`
 scoring. Text output is concise; JSON returns the full response, and NDJSON emits

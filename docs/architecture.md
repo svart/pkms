@@ -97,10 +97,11 @@ serve a foreground local HTTP API/UI. See [RAG Retrieval](rag.md).
 
 ## Output Contracts
 
-All user-facing commands should support `--output-format json`. Stream-like
-commands should support `ndjson` when practical. NDJSON producers emit one JSON
-object per line, usually with `uuid`; consumers read targets from stdin via
-automatic pipe detection or `--from-stdin`.
+User-facing commands should support `--output-format json` unless their command
+contract explicitly documents a text-only exception, such as `pkms rag index`.
+Stream-like commands should support `ndjson` when practical. NDJSON producers
+emit one JSON object per line, usually with `uuid`; consumers read targets from
+stdin via automatic pipe detection or `--from-stdin`.
 
 See [JSON and NDJSON Output](json-output.md) and [Pipelining](pipelining.md).
 

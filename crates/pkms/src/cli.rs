@@ -162,12 +162,24 @@ pub struct RagIngestArgs {
 #[cfg(feature = "rag")]
 #[derive(Debug, Args)]
 pub struct RagIndexArgs {
-    #[arg(long, value_name = "PATH", help = "Org notes root to index")]
-    pub notes_root: Option<PathBuf>,
-    #[arg(long, value_name = "PATH", help = "Retrieval NDJSON source to index")]
-    pub index_source: Option<PathBuf>,
     #[arg(long, value_name = "PATH", help = "Path to RAG SQLite index")]
     pub rag_db: Option<PathBuf>,
+    #[arg(long, help = "Remove the current RAG SQLite index before rebuilding")]
+    pub force_rebuild: bool,
+    #[arg(
+        long = "output-format",
+        hide = true,
+        value_name = "FMT",
+        value_parser = reject_rag_index_output_format
+    )]
+    pub output_format: Option<OutputFormat>,
+}
+
+#[cfg(feature = "rag")]
+fn reject_rag_index_output_format(value: &str) -> Result<OutputFormat, String> {
+    Err(format!(
+        "--output-format is not supported by pkms rag index; got '{value}'"
+    ))
 }
 
 #[cfg(feature = "rag")]
@@ -496,6 +508,8 @@ pub struct PathArgs {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(feature = "rag")]
+    use clap::CommandFactory;
 
     fn parse(args: &[&str]) -> Cli {
         Cli::try_parse_from(args).unwrap()
@@ -573,5 +587,58 @@ mod tests {
         };
         assert_eq!(args.from, "Note A");
         assert_eq!(args.to, "Note C");
+    }
+
+    #[cfg(feature = "rag")]
+    #[test]
+    fn rag_index_parses_force_rebuild_without_source_or_output_flags() {
+        let cli = parse(&[
+            "pkms",
+            "rag",
+            "index",
+            "--force-rebuild",
+            "--rag-db",
+            "/tmp/rag.sqlite3",
+        ]);
+        let Command::Rag(rag) = cli.command else {
+            panic!("expected rag command");
+        };
+        let RagCommand::Index(args) = rag.command else {
+            panic!("expected rag index command");
+        };
+        assert!(args.force_rebuild);
+        assert_eq!(args.rag_db, Some(PathBuf::from("/tmp/rag.sqlite3")));
+
+        assert!(Cli::try_parse_from(["pkms", "rag", "index", "--notes-root", "/tmp/org"]).is_err());
+        assert!(
+            Cli::try_parse_from([
+                "pkms",
+                "rag",
+                "index",
+                "--index-source",
+                "/tmp/export.ndjson"
+            ])
+            .is_err()
+        );
+        assert!(Cli::try_parse_from(["pkms", "rag", "index", "--output-format", "json"]).is_err());
+    }
+
+    #[cfg(feature = "rag")]
+    #[test]
+    fn rag_index_help_exposes_only_supported_local_flags() {
+        let mut command = Cli::command();
+        let index = command
+            .find_subcommand_mut("rag")
+            .and_then(|rag| rag.find_subcommand_mut("index"))
+            .expect("rag index command exists");
+        let mut help = Vec::new();
+        index.write_long_help(&mut help).expect("help renders");
+        let help = String::from_utf8(help).expect("help is utf8");
+
+        assert!(help.contains("--force-rebuild"));
+        assert!(help.contains("--rag-db"));
+        assert!(!help.contains("--notes-root"));
+        assert!(!help.contains("--index-source"));
+        assert!(!help.contains("--output-format"));
     }
 }

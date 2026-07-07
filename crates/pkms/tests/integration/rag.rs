@@ -110,19 +110,20 @@ Agents call retrieve to search mounted PKMS notes.
     );
     let rag_db = db.root().join("rag.sqlite3");
 
-    let (index, index_status) = run_hash_json(&[
+    let (index_stdout, index_stderr, index_status) = run_hash(&[
         "--db",
         db.root().to_str().unwrap(),
-        "--output-format",
-        "json",
         "rag",
         "index",
         "--rag-db",
         rag_db.to_str().unwrap(),
     ]);
-    assert!(index_status.success());
-    assert_eq!(index["phase"], "complete");
-    assert_eq!(index["chunks_seen"], 1);
+    assert!(
+        index_status.success(),
+        "index failed\nstdout: {index_stdout}\nstderr: {index_stderr}"
+    );
+    assert!(index_stdout.contains("Index phase: complete"));
+    assert!(index_stdout.contains("Chunks: 1 seen"));
 
     let (search, search_status) = run_hash_json(&[
         "--db",
@@ -145,19 +146,31 @@ Agents call retrieve to search mounted PKMS notes.
 #[test]
 fn test_rag_index_text_reports_progress_on_stderr() {
     let db = TestDb::clean();
+    db.write_roam(
+        "progress-rag.org",
+        r#":PROPERTIES:
+:ID:       aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa
+:END:
+#+title: Progress RAG Source
+* Progress source
+The database root feeds the progress-reporting RAG index.
+"#,
+    );
     let rag_db = db.root().join("rag.sqlite3");
-    let fixture = rag_fixture();
+    let config = format!(
+        r#"
+db_root = "{}"
 
-    let (stdout, stderr, status) = run_hash(&[
-        "--db",
-        db.root().to_str().unwrap(),
-        "rag",
-        "index",
-        "--index-source",
-        fixture.to_str().unwrap(),
-        "--rag-db",
-        rag_db.to_str().unwrap(),
-    ]);
+[rag]
+rag_db = "{}"
+
+{TEST_CONFIG}
+"#,
+        db.root().display(),
+        rag_db.display()
+    );
+
+    let (stdout, stderr, status) = run_hash_with_config(&["rag", "index"], &config);
 
     assert!(status.success());
     assert!(stdout.contains("Index phase: complete"));
@@ -168,6 +181,30 @@ fn test_rag_index_text_reports_progress_on_stderr() {
     assert!(
         stderr.contains("RAG index: Embedding chunks"),
         "stderr should include embedding progress\nstderr: {stderr}"
+    );
+}
+
+#[test]
+fn test_rag_index_rejects_global_output_format() {
+    let db = TestDb::clean();
+    let rag_db = db.root().join("rag.sqlite3");
+
+    let (stdout, stderr, status) = run_hash(&[
+        "--db",
+        db.root().to_str().unwrap(),
+        "--output-format",
+        "json",
+        "rag",
+        "index",
+        "--rag-db",
+        rag_db.to_str().unwrap(),
+    ]);
+
+    assert!(!status.success());
+    assert!(
+        stdout.contains("--output-format is not supported by pkms rag index")
+            || stderr.contains("--output-format is not supported by pkms rag index"),
+        "expected unsupported output-format error\nstdout: {stdout}\nstderr: {stderr}"
     );
 }
 
@@ -198,11 +235,14 @@ rag_db = "{}"
         rag_db.display()
     );
 
-    let (index, index_status) =
-        run_hash_json_with_config(&["--output-format", "json", "rag", "index"], &config);
-    assert!(index_status.success());
-    assert_eq!(index["phase"], "complete");
-    assert_eq!(index["chunks_seen"], 1);
+    let (index_stdout, index_stderr, index_status) =
+        run_hash_with_config(&["rag", "index"], &config);
+    assert!(
+        index_status.success(),
+        "index failed\nstdout: {index_stdout}\nstderr: {index_stderr}"
+    );
+    assert!(index_stdout.contains("Index phase: complete"));
+    assert!(index_stdout.contains("Chunks: 1 seen"));
 
     let (search, search_status) = run_hash_json_with_config(
         &[
@@ -222,9 +262,9 @@ rag_db = "{}"
 }
 
 #[test]
-fn test_rag_index_uses_configured_index_source() {
+fn test_rag_index_uses_env_index_source() {
     let db = TestDb::clean();
-    let rag_db = db.root().join("configured-source.sqlite3");
+    let rag_db = db.root().join("env-source.sqlite3");
     let fixture = rag_fixture();
     let config = format!(
         r#"
@@ -232,20 +272,38 @@ db_root = "{}"
 
 [rag]
 rag_db = "{}"
-index_source = "{}"
 
 {TEST_CONFIG}
 "#,
         db.root().display(),
-        rag_db.display(),
-        fixture.display()
+        rag_db.display()
     );
 
-    let (index, index_status) =
-        run_hash_json_with_config(&["--output-format", "json", "rag", "index"], &config);
-    assert!(index_status.success());
-    assert_eq!(index["phase"], "complete");
-    assert_eq!(index["chunks_seen"], 2);
+    let config_home = tempfile::tempdir().unwrap();
+    std::fs::write(config_home.path().join("pkms.toml"), &config).unwrap();
+    let mut command = Command::new(pkms_binary());
+    configure_test_command(&mut command, config_home.path());
+    let output = command
+        .env_remove("PKMS_RAG_DB")
+        .env_remove("PKMS_RAG_NOTES_ROOT")
+        .env("PKMS_RAG_INDEX_SOURCE", fixture.as_os_str())
+        .env_remove("PKMS_RAG_HOST")
+        .env_remove("PKMS_RAG_PORT")
+        .env_remove("PKMS_RAG_EMBEDDING_MODEL")
+        .env_remove("PKMS_RAG_EMBEDDING_BATCH_SIZE")
+        .env("PKMS_RAG_EMBEDDING_PROVIDER", "hash")
+        .args(["rag", "index"])
+        .output()
+        .unwrap();
+    let index_stdout = String::from_utf8_lossy(&output.stdout).to_string();
+    let index_stderr = String::from_utf8_lossy(&output.stderr).to_string();
+    let index_status = output.status;
+    assert!(
+        index_status.success(),
+        "index failed\nstdout: {index_stdout}\nstderr: {index_stderr}"
+    );
+    assert!(index_stdout.contains("Index phase: complete"));
+    assert!(index_stdout.contains("Chunks: 2 seen"));
 
     let (search, search_status) = run_hash_json_with_config(
         &[
@@ -261,6 +319,83 @@ index_source = "{}"
     assert_eq!(
         search["results"][0]["title"],
         "Media Library Migration to Jellyfin"
+    );
+}
+
+#[test]
+fn test_rag_index_force_rebuild_removes_existing_sqlite_index() {
+    let db = TestDb::clean();
+    db.write_roam(
+        "force-rebuild.org",
+        r#":PROPERTIES:
+:ID:       bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb
+:END:
+#+title: Force Rebuild Source
+* Force rebuild
+The RAG force rebuild path starts from an empty SQLite index.
+"#,
+    );
+    let rag_db = db.root().join("rag.sqlite3");
+
+    let (first_stdout, first_stderr, first_status) = run_hash(&[
+        "--db",
+        db.root().to_str().unwrap(),
+        "rag",
+        "index",
+        "--rag-db",
+        rag_db.to_str().unwrap(),
+    ]);
+    assert!(
+        first_status.success(),
+        "first index failed\nstdout: {first_stdout}\nstderr: {first_stderr}"
+    );
+
+    let (second_stdout, second_stderr, second_status) = run_hash(&[
+        "--db",
+        db.root().to_str().unwrap(),
+        "rag",
+        "index",
+        "--rag-db",
+        rag_db.to_str().unwrap(),
+    ]);
+    assert!(
+        second_status.success(),
+        "second index failed\nstdout: {second_stdout}\nstderr: {second_stderr}"
+    );
+    assert!(second_stdout.contains("Chunks: 1 seen, 0 upserted, 1 unchanged, 0 deleted"));
+    assert!(second_stdout.contains("Embeddings: 0 computed, 0 skipped"));
+
+    let (force_stdout, force_stderr, force_status) = run_hash(&[
+        "--db",
+        db.root().to_str().unwrap(),
+        "rag",
+        "index",
+        "--rag-db",
+        rag_db.to_str().unwrap(),
+        "--force-rebuild",
+    ]);
+    assert!(
+        force_status.success(),
+        "force index failed\nstdout: {force_stdout}\nstderr: {force_stderr}"
+    );
+    assert!(force_stdout.contains("Chunks: 1 seen, 1 upserted, 0 unchanged, 0 deleted"));
+    assert!(force_stdout.contains("Embeddings: 1 computed, 0 skipped"));
+
+    let (search, search_status) = run_hash_json(&[
+        "--db",
+        db.root().to_str().unwrap(),
+        "--output-format",
+        "json",
+        "rag",
+        "search",
+        "empty SQLite index",
+        "--rag-db",
+        rag_db.to_str().unwrap(),
+    ]);
+    assert!(search_status.success());
+    assert_eq!(
+        search["results"][0]["note_id"],
+        "bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb"
     );
 }
 

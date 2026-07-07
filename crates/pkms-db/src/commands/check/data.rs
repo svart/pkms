@@ -107,7 +107,7 @@ fn selection_shows(selection: &CheckSelection, section: CheckDisplaySection) -> 
 }
 
 pub(super) fn collect_check_data<'a>(
-    config: &'a CheckConfig,
+    _config: &'a CheckConfig,
     graph: &'a Graph,
     db_root: &'a Path,
     opts: &CheckOptions,
@@ -118,7 +118,7 @@ pub(super) fn collect_check_data<'a>(
     let mut link_results = run_local_link_checks(link_jobs, db_root);
     if opts.checks.requests(CheckItem::RemoteFileLinks) {
         let ssh_jobs = graph.collect_ssh_file_link_check_jobs();
-        let ssh_options = SshFileCheckOptions::from_config(config.ssh.as_ref());
+        let ssh_options = SshFileCheckOptions::default();
         link_results.extend(run_ssh_link_checks(ssh_jobs, &ssh_options));
     }
     let (broken_file, file_link_errors, broken_attachment) = split_link_check_results(link_results);

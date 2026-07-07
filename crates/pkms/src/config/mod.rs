@@ -25,7 +25,6 @@ pub struct Config {
     pub tasks: Option<TaskConfig>,
     pub agenda: Option<AgendaConfig>,
     pub todoist: Option<TodoistConfig>,
-    pub ssh: Option<SshConfig>,
     pub rag: Option<RagConfig>,
 }
 
@@ -39,7 +38,6 @@ pub struct ResolvedConfig {
     pub tasks: Option<TaskConfig>,
     pub agenda: Option<AgendaConfig>,
     pub todoist: Option<TodoistConfig>,
-    pub ssh: Option<SshConfig>,
     pub rag: Option<RagConfig>,
 }
 
@@ -47,7 +45,6 @@ pub struct ResolvedConfig {
 pub struct DbCommandConfig {
     pub org: pkms_org::OrgConfig,
     pub task_states: pkms_org::graph::tasks::TaskStateConfig,
-    pub ssh: Option<SshConfig>,
 }
 
 #[cfg(feature = "web")]
@@ -91,17 +88,6 @@ pub struct TodoistConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct SshConfig {
-    pub identity_file: Option<PathBuf>,
-    pub known_hosts: Option<PathBuf>,
-    pub connect_timeout_ms: Option<u64>,
-    pub operation_timeout_ms: Option<u32>,
-    pub max_connections: Option<usize>,
-    pub agent: Option<bool>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct TaskConfig {
     pub inbox: Option<String>,
 }
@@ -110,7 +96,6 @@ pub struct TaskConfig {
 #[serde(deny_unknown_fields)]
 pub struct RagConfig {
     pub rag_db: Option<PathBuf>,
-    pub index_source: Option<PathBuf>,
     pub embedding_model: Option<String>,
     pub fastembed_model_dir: Option<PathBuf>,
 }
@@ -137,7 +122,6 @@ impl Config {
                 tasks: None,
                 agenda: None,
                 todoist: None,
-                ssh: None,
                 rag: None,
             })
         }
@@ -165,7 +149,6 @@ impl Config {
             tasks: self.tasks,
             agenda: self.agenda,
             todoist: self.todoist,
-            ssh: self.ssh,
             rag: self.rag,
         };
         tracing::debug!(
@@ -196,7 +179,6 @@ impl ResolvedConfig {
             tasks: None,
             agenda: None,
             todoist: None,
-            ssh: None,
             rag: None,
         }
     }
@@ -256,7 +238,6 @@ impl ResolvedConfig {
         DbCommandConfig {
             org: self.org_config(),
             task_states: self.task_state_config(),
-            ssh: self.ssh.clone(),
         }
     }
 
@@ -287,12 +268,6 @@ impl ResolvedConfig {
 
     pub fn resolve_rag_db(&self) -> Option<PathBuf> {
         self.resolve_optional_configured_path(self.rag.as_ref().and_then(|rag| rag.rag_db.as_ref()))
-    }
-
-    pub fn resolve_rag_index_source(&self) -> Option<PathBuf> {
-        self.resolve_optional_configured_path(
-            self.rag.as_ref().and_then(|rag| rag.index_source.as_ref()),
-        )
     }
 
     pub fn resolve_rag_fastembed_model_dir(&self) -> Option<PathBuf> {
@@ -447,7 +422,6 @@ mod tests {
             tasks: None,
             agenda: None,
             todoist: None,
-            ssh: None,
             rag: None,
         };
         assert_eq!(
@@ -467,7 +441,6 @@ mod tests {
             tasks: None,
             agenda: None,
             todoist: None,
-            ssh: None,
             rag: None,
         };
         assert_eq!(config.resolve_new_notes_dir(), PathBuf::from("/abs/path"));
@@ -484,7 +457,6 @@ mod tests {
             tasks: None,
             agenda: None,
             todoist: None,
-            ssh: None,
             rag: None,
         };
         assert_eq!(
@@ -504,7 +476,6 @@ mod tests {
             tasks: None,
             agenda: None,
             todoist: None,
-            ssh: None,
             rag: None,
         };
         assert_eq!(
@@ -524,7 +495,6 @@ mod tests {
             tasks: None,
             agenda: None,
             todoist: None,
-            ssh: None,
             rag: None,
         };
         assert_eq!(
@@ -544,7 +514,6 @@ mod tests {
             tasks: None,
             agenda: None,
             todoist: None,
-            ssh: None,
             rag: None,
         };
         assert_eq!(
@@ -564,7 +533,6 @@ mod tests {
             tasks: None,
             agenda: None,
             todoist: None,
-            ssh: None,
             rag: None,
         };
         let patterns = config.resolve_ignore_patterns();
@@ -583,7 +551,6 @@ mod tests {
             tasks: None,
             agenda: None,
             todoist: None,
-            ssh: None,
             rag: None,
         };
         let patterns = config.resolve_ignore_patterns();
@@ -626,7 +593,6 @@ mod tests {
             tasks: None,
             agenda: None,
             todoist: None,
-            ssh: None,
             rag: None,
         };
         let info = config.resolved_info();
@@ -655,17 +621,8 @@ default_filter = "today | overdue"
 
 [rag]
 rag_db = ".data/rag.sqlite3"
-index_source = "exports/retrieval.ndjson"
 embedding_model = "Xenova/bge-small-en-v1.5"
 fastembed_model_dir = "models/bge-small"
-
-[ssh]
-identity_file = "~/.ssh/id_ed25519"
-known_hosts = "~/.ssh/known_hosts"
-connect_timeout_ms = 7000
-operation_timeout_ms = 8000
-max_connections = 2
-agent = false
 "#;
         let config: Config = toml::from_str(content).unwrap();
         assert_eq!(config.db_root, Some(PathBuf::from("/test/db")));
@@ -690,10 +647,6 @@ agent = false
         let rag = config.rag.unwrap();
         assert_eq!(rag.rag_db.as_deref(), Some(Path::new(".data/rag.sqlite3")));
         assert_eq!(
-            rag.index_source.as_deref(),
-            Some(Path::new("exports/retrieval.ndjson"))
-        );
-        assert_eq!(
             rag.embedding_model.as_deref(),
             Some("Xenova/bge-small-en-v1.5")
         );
@@ -701,19 +654,6 @@ agent = false
             rag.fastembed_model_dir.as_deref(),
             Some(Path::new("models/bge-small"))
         );
-        let ssh = config.ssh.unwrap();
-        assert_eq!(
-            ssh.identity_file.as_deref(),
-            Some(Path::new("~/.ssh/id_ed25519"))
-        );
-        assert_eq!(
-            ssh.known_hosts.as_deref(),
-            Some(Path::new("~/.ssh/known_hosts"))
-        );
-        assert_eq!(ssh.connect_timeout_ms, Some(7000));
-        assert_eq!(ssh.operation_timeout_ms, Some(8000));
-        assert_eq!(ssh.max_connections, Some(2));
-        assert_eq!(ssh.agent, Some(false));
     }
 
     fn assert_unknown_config_field_rejected(content: &str, field: &str) {
@@ -798,6 +738,32 @@ notes_root = "rag-notes"
     }
 
     #[test]
+    fn test_rag_config_rejects_removed_index_source() {
+        assert_unknown_config_field_rejected(
+            r#"
+db_root = "/test/db"
+
+[rag]
+index_source = "exports/retrieval.ndjson"
+"#,
+            "index_source",
+        );
+    }
+
+    #[test]
+    fn test_config_rejects_removed_ssh_section() {
+        assert_unknown_config_field_rejected(
+            r#"
+db_root = "/test/db"
+
+[ssh]
+identity_file = "~/.ssh/id_ed25519"
+"#,
+            "ssh",
+        );
+    }
+
+    #[test]
     fn test_generate_default_config_is_valid_config() {
         let content = generate_default_config(Some(Path::new("/my/notes")));
         toml::from_str::<Config>(&content).unwrap();
@@ -814,10 +780,8 @@ notes_root = "rag-notes"
             tasks: None,
             agenda: None,
             todoist: None,
-            ssh: None,
             rag: Some(RagConfig {
                 rag_db: Some(PathBuf::from(".data/rag.sqlite3")),
-                index_source: Some(PathBuf::from("exports/retrieval.ndjson")),
                 embedding_model: Some("Xenova/bge-small-en-v1.5".to_string()),
                 fastembed_model_dir: Some(PathBuf::from("models/bge-small")),
             }),
@@ -826,10 +790,6 @@ notes_root = "rag-notes"
         assert_eq!(
             config.resolve_rag_db(),
             Some(PathBuf::from("/test/root/.data/rag.sqlite3"))
-        );
-        assert_eq!(
-            config.resolve_rag_index_source(),
-            Some(PathBuf::from("/test/root/exports/retrieval.ndjson"))
         );
         assert_eq!(
             config.rag_embedding_model(),
@@ -934,7 +894,6 @@ tasks = ["Id", "Project", "Heading"]
             tasks: None,
             agenda: None,
             todoist: None,
-            ssh: None,
             rag: None,
         };
         assert!(!config.todoist_enabled());
@@ -958,7 +917,6 @@ tasks = ["Id", "Project", "Heading"]
                 token_env: Some("PKMS_TEST_MISSING_TODOIST_TOKEN".to_string()),
                 default_filter: None,
             }),
-            ssh: None,
             rag: None,
         };
         let error = config.todoist_token().unwrap_err().to_string();
@@ -981,7 +939,6 @@ tasks = ["Id", "Project", "Heading"]
                 token_env: Some("PKMS_TEST_MISSING_TODOIST_TOKEN".to_string()),
                 default_filter: None,
             }),
-            ssh: None,
             rag: None,
         };
         assert_eq!(config.todoist_token().unwrap(), "config-token");

@@ -131,13 +131,12 @@ normal local gate depend on external network state:
 PKMS_TEST_SSH_TARGET='user@example.org#22' \
 PKMS_TEST_SSH_PATH=/absolute/path/that/exists \
 PKMS_TEST_SSH_MISSING_PATH=/absolute/path/that/does/not/exist \
-PKMS_TEST_SSH_IDENTITY=~/.ssh/id_ed25519 \
 cargo test --features ssh test_check_remote_file_links_live_ssh -- --ignored
 ```
 
-`PKMS_TEST_SSH_KNOWN_HOSTS` can override `~/.ssh/known_hosts`. The live check
-uses strict host-key verification and passwordless public-key auth, matching
-normal `check --remote-file-links` behavior.
+The live check uses strict `~/.ssh/known_hosts` verification and automatic
+passwordless public-key auth from standard identity files or the SSH agent,
+matching normal `check --remote-file-links` behavior.
 
 When feature interactions are relevant during implementation, prefer an
 explicit combined-feature build:
@@ -251,9 +250,10 @@ shell, org body rendering, inline markup, KaTeX, and syntax highlighting live in
 
 ## Output Contracts
 
-All user-facing command output should support `--output-format json`. Streamable
-commands should support `ndjson` where practical. Output structs should derive
-`serde::Serialize`.
+User-facing command output should support `--output-format json` unless a
+command explicitly documents a text-only contract, such as `pkms rag index`.
+Streamable commands should support `ndjson` where practical. Output structs
+should derive `serde::Serialize`.
 
 NDJSON producers emit one JSON object per line, usually with a `uuid` field.
 Consumers read targets from stdin via automatic pipe detection or

@@ -1,6 +1,6 @@
 # JSON and NDJSON Output
 
-Every command accepts structured output flags:
+Most commands accept structured output flags:
 
 ```bash
 pkms --output-format json check
@@ -11,6 +11,9 @@ pkms --output-format ndjson resolve --title "graph"
 
 Use JSON when one command result should be consumed as a whole. Use NDJSON when
 passing a stream of note or task records to another command.
+
+`pkms rag index` is a text-only exception: it prints rebuild progress to stderr,
+prints its final summary to stdout, and rejects `--output-format`.
 
 NDJSON is stream-oriented only for commands that produce multiple records, such
 as the producers listed in [Pipelining](pipelining.md). Commands that are not

@@ -270,17 +270,14 @@ fn test_check_remote_file_links_live_ssh() {
         ),
     );
 
-    let (stdout, stderr, status) = run_with_config(
-        &[
-            "--db",
-            root.to_str().unwrap(),
-            "--output-format",
-            "json",
-            "check",
-            "--remote-file-links",
-        ],
-        &live_ssh_config(),
-    );
+    let (stdout, stderr, status) = run(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "check",
+        "--remote-file-links",
+    ]);
     let v = assert_json_output(&["check", "--remote-file-links"], &stdout);
 
     assert!(
@@ -296,26 +293,6 @@ fn test_check_remote_file_links_live_ssh() {
         broken[0]["target_path"],
         format!("/ssh:{target}:{missing_path}")
     );
-}
-
-#[cfg(feature = "ssh")]
-fn live_ssh_config() -> String {
-    let mut config = String::from("[ssh]\n");
-    if let Ok(identity_file) = std::env::var("PKMS_TEST_SSH_IDENTITY") {
-        config.push_str(&format!(
-            "identity_file = {}\n",
-            toml_string(&identity_file)
-        ));
-    }
-    if let Ok(known_hosts) = std::env::var("PKMS_TEST_SSH_KNOWN_HOSTS") {
-        config.push_str(&format!("known_hosts = {}\n", toml_string(&known_hosts)));
-    }
-    config
-}
-
-#[cfg(feature = "ssh")]
-fn toml_string(value: &str) -> String {
-    serde_json::to_string(value).unwrap()
 }
 
 #[test]

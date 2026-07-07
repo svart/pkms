@@ -9,7 +9,7 @@ lives here under `docs/`.
 - [Installation](installation.md): install from source and build optional
   feature sets.
 - [Configuration](configuration.md): database root resolution, note
-  directories, task settings, Todoist, SSH, and diagnostics.
+  directories, task settings, Todoist, RAG, and diagnostics.
 - [Notes Database Format](database-format.md): org-roam note shape, IDs, links,
   filetags, heading nodes, and task headings.
 - [Command Reference](commands.md): grouped CLI commands and flags. Run
@@ -62,4 +62,3 @@ lives here under `docs/`.
 | Change parsing or graph logic | [pkms-org crate](crates/pkms-org.md) | [Notes Database Format](database-format.md) |
 | Change database checks | [pkms-db crate](crates/pkms-db.md) | [Note Database Commands](note-database-commands.md) |
 | Change tasks | [pkms-task crate](crates/pkms-task.md) | [Task System Design](task-system.md) |
-

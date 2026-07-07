@@ -26,10 +26,10 @@ pkms rag status
 pkms rag retrieve "agenda inspect tasks" --limit 5 --mode hybrid
 ```
 
-Or pass the notes root directly:
+Override the index path while using the configured `pkms` database root:
 
 ```bash
-pkms rag index --notes-root ~/Documents/org --rag-db .data/pkms-rag.sqlite3
+pkms rag index --rag-db .data/pkms-rag.sqlite3
 pkms rag search "externalHostname" --limit 10 --rag-db .data/pkms-rag.sqlite3
 ```
 
@@ -64,8 +64,8 @@ umbrella `pkms` binary through the `rag` command namespace.
 
 The current data flow is:
 
-1. `pkms rag index` resolves a source from CLI/env source flags,
-   `[rag].index_source`, or the configured `pkms` database root.
+1. `pkms rag index` resolves a source from RAG source environment variables or
+   the configured `pkms` database root.
 2. Org notes are exported through `pkms-org` parsing, including note metadata,
    headings, tags, links, aliases, and source locations.
 3. Exported notes are chunked and written as retrieval records.
@@ -76,12 +76,13 @@ The current data flow is:
 
 `pkms rag ingest` accepts retrieval NDJSON directly. `pkms rag index` rebuilds
 from the selected source and removes stale indexed rows for records no longer in
-the source. `pkms rag serve` starts a foreground HTTP server and starts a
-background rebuild when a source is resolved.
+the source. Use `pkms rag index --force-rebuild` to remove the current SQLite
+index and sidecar files before rebuilding from scratch. `pkms rag serve` starts
+a foreground HTTP server and starts a background rebuild when a source is
+resolved.
 
-With text output, `pkms rag index` reports foreground rebuild progress to
-stderr while keeping the final index summary on stdout. JSON and NDJSON output
-remain structured stdout only and emit the final progress object.
+`pkms rag index` is text-only. It reports foreground rebuild progress to stderr
+while keeping the final index summary on stdout, and rejects `--output-format`.
 
 The default index path is `.data/pkms-rag.sqlite3`. Override it with `--rag-db`,
 `PKMS_RAG_DB`, or `[rag].rag_db` in `~/.config/pkms.toml`. Relative `[rag]`
@@ -90,28 +91,27 @@ notes remain the authority.
 
 ## Source Selection
 
-`pkms rag index` and `pkms rag serve` select an input source in this order:
+`pkms rag index` selects an input source in this order:
 
-1. `--notes-root` or `PKMS_RAG_NOTES_ROOT`.
-2. `--index-source` or `PKMS_RAG_INDEX_SOURCE`.
-3. `[rag].index_source` from `~/.config/pkms.toml`.
-4. The resolved `pkms` database root.
+1. `PKMS_RAG_NOTES_ROOT`.
+2. `PKMS_RAG_INDEX_SOURCE`.
+3. The resolved `pkms` database root.
 
 Examples:
 
 ```bash
-pkms rag index --notes-root ~/Documents/org
-pkms rag index --index-source retrieval-export.ndjson
 PKMS_RAG_NOTES_ROOT=~/Documents/org pkms rag index
 PKMS_RAG_INDEX_SOURCE=retrieval-export.ndjson pkms rag index
 ```
+
+`pkms rag serve` uses the same fallback order but also accepts `--notes-root`
+and `--index-source` for one foreground server run.
 
 Persistent RAG defaults live under `[rag]`:
 
 ```toml
 [rag]
 rag_db = ".data/pkms-rag.sqlite3"
-# index_source = "retrieval-export.ndjson"
 embedding_model = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
 # fastembed_model_dir = "models/paraphrase-multilingual-MiniLM-L12-v2"
 ```
@@ -166,8 +166,7 @@ but `hybrid` and `dense` use the active embedding provider for the query vector.
 pkms rag status
 pkms rag ingest retrieval-export.ndjson
 pkms rag index
-pkms rag index --notes-root ~/org
-pkms rag index --index-source retrieval-export.ndjson
+pkms rag index --force-rebuild
 pkms rag search "externalHostname"
 pkms rag retrieve "agenda inspect tasks" --limit 5 --mode hybrid
 pkms rag serve --host 127.0.0.1 --port 7337

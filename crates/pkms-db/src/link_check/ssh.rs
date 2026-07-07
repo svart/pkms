@@ -7,7 +7,9 @@ use rayon::prelude::*;
 #[cfg(feature = "ssh")]
 use std::collections::BTreeMap;
 use std::env;
-use std::path::{Path, PathBuf};
+#[cfg(feature = "ssh")]
+use std::path::Path;
+use std::path::PathBuf;
 #[cfg(feature = "ssh")]
 use std::sync::Arc;
 use std::time::Duration;
@@ -34,55 +36,22 @@ pub struct SshFileTarget {
 #[derive(Debug, Clone)]
 pub struct SshFileCheckOptions {
     pub default_user: String,
-    pub identity_file: Option<PathBuf>,
+    pub identity_files: Vec<PathBuf>,
     pub known_hosts: PathBuf,
     pub connect_timeout: Duration,
     pub operation_timeout_ms: u32,
     pub max_connections: usize,
-    pub agent: bool,
 }
 
-#[derive(Debug, Clone)]
-pub struct SshFileCheckConfig {
-    pub identity_file: Option<PathBuf>,
-    pub known_hosts: Option<PathBuf>,
-    pub connect_timeout_ms: Option<u64>,
-    pub operation_timeout_ms: Option<u32>,
-    pub max_connections: Option<usize>,
-    pub agent: Option<bool>,
-}
-
-impl SshFileCheckOptions {
-    pub fn from_config(config: Option<&SshFileCheckConfig>) -> Self {
-        let identity_file = config
-            .and_then(|config| config.identity_file.as_ref())
-            .map(|path| expand_home_path(path));
-        let known_hosts = config
-            .and_then(|config| config.known_hosts.as_ref())
-            .map(|path| expand_home_path(path))
-            .unwrap_or_else(default_known_hosts_path);
-        let connect_timeout_ms = config
-            .and_then(|config| config.connect_timeout_ms)
-            .unwrap_or(DEFAULT_SSH_CONNECT_TIMEOUT_MS)
-            .max(1);
-        let operation_timeout_ms = config
-            .and_then(|config| config.operation_timeout_ms)
-            .unwrap_or(DEFAULT_SSH_OPERATION_TIMEOUT_MS)
-            .max(1);
-        let max_connections = config
-            .and_then(|config| config.max_connections)
-            .unwrap_or(DEFAULT_SSH_MAX_CONNECTIONS)
-            .max(1);
-        let agent = config.and_then(|config| config.agent).unwrap_or(true);
-
+impl Default for SshFileCheckOptions {
+    fn default() -> Self {
         Self {
             default_user: default_ssh_user(),
-            identity_file,
-            known_hosts,
-            connect_timeout: Duration::from_millis(connect_timeout_ms),
-            operation_timeout_ms,
-            max_connections,
-            agent,
+            identity_files: default_identity_files(),
+            known_hosts: default_known_hosts_path(),
+            connect_timeout: Duration::from_millis(DEFAULT_SSH_CONNECT_TIMEOUT_MS),
+            operation_timeout_ms: DEFAULT_SSH_OPERATION_TIMEOUT_MS,
+            max_connections: DEFAULT_SSH_MAX_CONNECTIONS,
         }
     }
 }
@@ -466,16 +435,18 @@ async fn authenticate_ssh_client(
         })?
         .flatten();
 
-    match authenticate_with_identity_file(session, connection, options, hash_alg).await {
-        SshAuthAttempt::Success => return Ok(()),
-        SshAuthAttempt::Failure(message) => failures.push(message),
-        SshAuthAttempt::Skipped => {}
+    for identity_file in &options.identity_files {
+        match authenticate_with_identity_file(session, connection, identity_file, options, hash_alg)
+            .await
+        {
+            SshAuthAttempt::Success => return Ok(()),
+            SshAuthAttempt::Failure(message) => failures.push(message),
+        }
     }
 
-    match authenticate_with_agent_if_enabled(session, connection, options, hash_alg).await {
-        SshAuthAttempt::Success => return Ok(()),
-        SshAuthAttempt::Failure(message) => failures.push(message),
-        SshAuthAttempt::Skipped => {}
+    match authenticate_with_agent(session, connection, options, hash_alg).await {
+        Ok(()) => return Ok(()),
+        Err(failure) => failures.push(failure.message),
     }
 
     Err(ssh_auth_failure(failures))
@@ -485,20 +456,16 @@ async fn authenticate_ssh_client(
 enum SshAuthAttempt {
     Success,
     Failure(String),
-    Skipped,
 }
 
 #[cfg(feature = "ssh")]
 async fn authenticate_with_identity_file(
     session: &mut russh::client::Handle<KnownHostsHandler>,
     connection: &SshConnectionKey,
+    identity_file: &Path,
     options: &SshFileCheckOptions,
     hash_alg: Option<russh::keys::HashAlg>,
 ) -> SshAuthAttempt {
-    let Some(identity_file) = &options.identity_file else {
-        return SshAuthAttempt::Skipped;
-    };
-
     let key_pair = match russh::keys::load_secret_key(identity_file, None) {
         Ok(key_pair) => key_pair,
         Err(error) => {
@@ -533,27 +500,10 @@ async fn authenticate_with_identity_file(
 }
 
 #[cfg(feature = "ssh")]
-async fn authenticate_with_agent_if_enabled(
-    session: &mut russh::client::Handle<KnownHostsHandler>,
-    connection: &SshConnectionKey,
-    options: &SshFileCheckOptions,
-    hash_alg: Option<russh::keys::HashAlg>,
-) -> SshAuthAttempt {
-    if !options.agent {
-        return SshAuthAttempt::Skipped;
-    }
-
-    match authenticate_with_agent(session, connection, options, hash_alg).await {
-        Ok(()) => SshAuthAttempt::Success,
-        Err(failure) => SshAuthAttempt::Failure(failure.message),
-    }
-}
-
-#[cfg(feature = "ssh")]
 fn ssh_auth_failure(mut failures: Vec<String>) -> SshCheckFailure {
     if failures.is_empty() {
         failures.push(
-            "no SSH authentication method configured; set [ssh].identity_file or agent = true"
+            "no SSH authentication method succeeded; load a key into the SSH agent or use a standard passwordless identity file"
                 .to_string(),
         );
     }
@@ -836,17 +786,15 @@ fn default_known_hosts_path() -> PathBuf {
         .unwrap_or_else(|| PathBuf::from("~/.ssh/known_hosts"))
 }
 
-fn expand_home_path(path: &Path) -> PathBuf {
-    let raw = path.to_string_lossy();
-    if raw == "~" {
-        dirs::home_dir().unwrap_or_else(|| path.to_path_buf())
-    } else if let Some(rest) = raw.strip_prefix("~/") {
-        dirs::home_dir()
-            .map(|home| home.join(rest))
-            .unwrap_or_else(|| path.to_path_buf())
-    } else {
-        path.to_path_buf()
-    }
+fn default_identity_files() -> Vec<PathBuf> {
+    let Some(home) = dirs::home_dir() else {
+        return Vec::new();
+    };
+    ["id_ed25519", "id_ecdsa", "id_rsa"]
+        .into_iter()
+        .map(|name| home.join(".ssh").join(name))
+        .filter(|path| path.is_file())
+        .collect()
 }
 
 fn parse_host_and_port(host_and_port: &str) -> Result<(String, u16), SshFileTargetParseError> {

@@ -1,24 +1,16 @@
 use crate::cli::CheckArgs;
 use crate::command_context::CommandContext;
-use crate::config::SshConfig;
 use crate::output::OutputContext;
 use anyhow::Result;
 use pkms_db::commands::check::{
     self, CheckCommandOutput, CheckConfig, CheckItem, CheckOptions, CheckSelection,
     CrossLinkTargets,
 };
-use pkms_db::link_check::SshFileCheckConfig;
 use std::process::ExitCode;
 
 pub fn run(ctx: &CommandContext<'_>, opts: &CheckOptions) -> Result<ExitCode> {
     let config = ctx.config().db_command_config();
-    let output = check::execute(
-        &CheckConfig {
-            org: config.org,
-            ssh: config.ssh.as_ref().map(ssh_file_check_config_from_config),
-        },
-        opts,
-    )?;
+    let output = check::execute(&CheckConfig { org: config.org }, opts)?;
     render(ctx.output(), &output)
 }
 
@@ -76,16 +68,5 @@ pub fn options_from_args(args: &CheckArgs) -> CheckOptions {
     CheckOptions {
         checks,
         cross_links,
-    }
-}
-
-fn ssh_file_check_config_from_config(config: &SshConfig) -> SshFileCheckConfig {
-    SshFileCheckConfig {
-        identity_file: config.identity_file.clone(),
-        known_hosts: config.known_hosts.clone(),
-        connect_timeout_ms: config.connect_timeout_ms,
-        operation_timeout_ms: config.operation_timeout_ms,
-        max_connections: config.max_connections,
-        agent: config.agent,
     }
 }

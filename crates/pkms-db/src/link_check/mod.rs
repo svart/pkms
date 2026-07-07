@@ -13,9 +13,8 @@ pub use model::{
     LinkCheckResults, SshErrorKind, sort_broken_targets, sort_link_check_errors,
 };
 pub use ssh::{
-    SshConnectionKey, SshFileCheckConfig, SshFileCheckOptions, SshFileTarget,
-    SshFileTargetParseError, SshFileTargetParseErrorKind, parse_ssh_file_target,
-    run_ssh_link_checks,
+    SshConnectionKey, SshFileCheckOptions, SshFileTarget, SshFileTargetParseError,
+    SshFileTargetParseErrorKind, parse_ssh_file_target, run_ssh_link_checks,
 };
 
 #[cfg(test)]

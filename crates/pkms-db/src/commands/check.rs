@@ -9,7 +9,6 @@ mod rendering;
 #[cfg(test)]
 mod tests;
 
-use crate::link_check::SshFileCheckConfig;
 use data::{CheckDisplayOptions, build_check_output, collect_check_data};
 pub use model::*;
 pub use rendering::render_text;
@@ -17,7 +16,6 @@ pub use rendering::render_text;
 #[derive(Debug, Clone)]
 pub struct CheckConfig {
     pub org: OrgConfig,
-    pub ssh: Option<SshFileCheckConfig>,
 }
 
 pub fn execute(config: &CheckConfig, opts: &CheckOptions) -> Result<CheckCommandOutput> {

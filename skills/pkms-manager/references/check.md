@@ -28,6 +28,9 @@ flags are given, output is limited to those sections.
 TRAMP-style SSH `file:` links explicitly and reports remote auth, host-key,
 timeout, unsupported syntax, and SFTP failures in `file_link_errors`. Without
 that flag, SSH `file:` links are skipped and no network access is attempted.
+SSH checks use the user's standard non-interactive public-key setup
+(`~/.ssh/known_hosts`, standard identity files, and SSH agent); there is no
+`[ssh]` config block.
 
 ## Agent Workflow
 

@@ -60,19 +60,8 @@ pub fn generate_default_config(db_root: Option<&Path>) -> String {
 # RAG retrieval index configuration. Relative paths are resolved under db_root.
 # [rag]
 # rag_db = ".data/pkms-rag.sqlite3"
-# index_source = "retrieval-export.ndjson"
 # embedding_model = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
 # fastembed_model_dir = "models/paraphrase-multilingual-MiniLM-L12-v2"
-
-# SSH file-link checks are disabled unless pkms is built with --features ssh and
-# `pkms check --remote-file-links` is passed. Password prompts are not used.
-# [ssh]
-# identity_file = "~/.ssh/id_ed25519"
-# known_hosts = "~/.ssh/known_hosts"
-# connect_timeout_ms = 5000
-# operation_timeout_ms = 5000
-# max_connections = 4
-# agent = true
-"#,
+"#
     )
 }

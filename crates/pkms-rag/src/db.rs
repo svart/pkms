@@ -1,8 +1,9 @@
 use std::{
     cmp::Ordering,
     collections::HashSet,
-    fs,
-    path::Path,
+    ffi::OsString,
+    fs, io,
+    path::{Path, PathBuf},
     time::{SystemTime, UNIX_EPOCH},
 };
 
@@ -44,6 +45,25 @@ pub fn connect(db_path: impl AsRef<Path>) -> Result<Connection> {
         .context("failed to enable SQLite foreign keys")?;
     ensure_schema(&conn)?;
     Ok(conn)
+}
+
+pub fn remove_index_files(db_path: impl AsRef<Path>) -> Result<()> {
+    let db_path = db_path.as_ref();
+    for path in sqlite_index_files(db_path) {
+        match fs::remove_file(&path) {
+            Ok(()) => {}
+            Err(err) if err.kind() == io::ErrorKind::NotFound => {}
+            Err(err) => {
+                return Err(err).with_context(|| {
+                    format!(
+                        "failed to remove RAG SQLite index file {}",
+                        display_path(&path)
+                    )
+                });
+            }
+        }
+    }
+    Ok(())
 }
 
 pub fn ensure_schema(conn: &Connection) -> Result<()> {
@@ -923,6 +943,21 @@ fn display_path(path: &Path) -> String {
     path.to_string_lossy().into_owned()
 }
 
+fn sqlite_index_files(db_path: &Path) -> [PathBuf; 4] {
+    [
+        db_path.to_path_buf(),
+        sqlite_sidecar_path(db_path, "-journal"),
+        sqlite_sidecar_path(db_path, "-wal"),
+        sqlite_sidecar_path(db_path, "-shm"),
+    ]
+}
+
+fn sqlite_sidecar_path(db_path: &Path, suffix: &str) -> PathBuf {
+    let mut value = OsString::from(db_path.as_os_str());
+    value.push(suffix);
+    PathBuf::from(value)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -933,6 +968,27 @@ mod tests {
         let tempdir = tempfile::tempdir().expect("tempdir");
         let path = tempdir.path().join("nested").join("rag.sqlite3");
         (tempdir, path)
+    }
+
+    #[test]
+    fn remove_index_files_deletes_sqlite_database_and_sidecars() {
+        let (_tempdir, path) = db_path();
+        let journal_path = sqlite_sidecar_path(&path, "-journal");
+        let wal_path = sqlite_sidecar_path(&path, "-wal");
+        let shm_path = sqlite_sidecar_path(&path, "-shm");
+        fs::create_dir_all(path.parent().expect("path has parent")).expect("parent creates");
+        fs::write(&path, b"db").expect("db writes");
+        fs::write(&journal_path, b"journal").expect("journal writes");
+        fs::write(&wal_path, b"wal").expect("wal writes");
+        fs::write(&shm_path, b"shm").expect("shm writes");
+
+        remove_index_files(&path).expect("index files remove");
+
+        assert!(!path.exists());
+        assert!(!journal_path.exists());
+        assert!(!wal_path.exists());
+        assert!(!shm_path.exists());
+        remove_index_files(&path).expect("missing index files are ignored");
     }
 
     #[test]
