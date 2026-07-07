@@ -17,7 +17,8 @@ closed_todo_states = ["DONE"]
 
 [rag]
 rag_db = ".data/pkms-rag.sqlite3"
-notes_root = "/home/user/Documents/org"
+# index_source = "retrieval-export.ndjson"
+embedding_model = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
 
 [ssh]
 identity_file = "~/.ssh/id_ed25519"
@@ -119,15 +120,20 @@ requires a binary built with `--features rag`:
 ```toml
 [rag]
 rag_db = ".data/pkms-rag.sqlite3"
-notes_root = "/home/user/Documents/org"
 # index_source = "retrieval-export.ndjson"
+embedding_model = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
 ```
 
 `--rag-db` overrides `[rag].rag_db`; `PKMS_RAG_DB` also overrides the config
 value. When no CLI or environment source is set, `pkms rag index` and
-`pkms rag serve` use `[rag].notes_root` or `[rag].index_source`; if neither is
-configured, they fall back to the resolved `db_root`. Relative `[rag]` paths are
-resolved under `db_root`.
+`pkms rag serve` use `[rag].index_source`; if it is not configured, they fall
+back to the resolved `db_root`. Use `--notes-root` or `PKMS_RAG_NOTES_ROOT` for
+an explicit one-off source override. Relative `[rag]` paths are resolved under
+`db_root`.
+
+`embedding_model` configures the FastEmbed model used by indexing, ingest,
+retrieval, and `rag serve`. `PKMS_RAG_EMBEDDING_MODEL` overrides this config
+value when set.
 
 ## SSH File-Link Checks
 

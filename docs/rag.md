@@ -51,10 +51,11 @@ pkms rag serve --host 127.0.0.1 --port 7337
 ```
 
 Then open the printed URL. The process stays in the foreground. When a notes
-root or index source is configured, `pkms rag serve` starts a background rebuild
-on launch; use `GET /index/status` or the UI to watch progress. In builds with
-the `web` feature, result titles open the rendered note viewer using the same
-routes as `pkms serve`; without that feature, result titles remain plain text.
+root is provided, an index source is configured, or a `db_root` is available,
+`pkms rag serve` starts a background rebuild on launch; use `GET /index/status`
+or the UI to watch progress. In builds with the `web` feature, result titles
+open the rendered note viewer using the same routes as `pkms serve`; without
+that feature, result titles remain plain text.
 
 ## Architecture
 
@@ -64,8 +65,7 @@ umbrella `pkms` binary through the `rag` command namespace.
 The current data flow is:
 
 1. `pkms rag index` resolves a source from CLI/env source flags,
-   `[rag].notes_root`, `[rag].index_source`, or the configured `pkms` database
-   root.
+   `[rag].index_source`, or the configured `pkms` database root.
 2. Org notes are exported through `pkms-org` parsing, including note metadata,
    headings, tags, links, aliases, and source locations.
 3. Exported notes are chunked and written as retrieval records.
@@ -77,7 +77,7 @@ The current data flow is:
 `pkms rag ingest` accepts retrieval NDJSON directly. `pkms rag index` rebuilds
 from the selected source and removes stale indexed rows for records no longer in
 the source. `pkms rag serve` starts a foreground HTTP server and starts a
-background rebuild when a notes root or index source is configured.
+background rebuild when a source is resolved.
 
 With text output, `pkms rag index` reports foreground rebuild progress to
 stderr while keeping the final index summary on stdout. JSON and NDJSON output
@@ -94,9 +94,8 @@ notes remain the authority.
 
 1. `--notes-root` or `PKMS_RAG_NOTES_ROOT`.
 2. `--index-source` or `PKMS_RAG_INDEX_SOURCE`.
-3. `[rag].notes_root` from `~/.config/pkms.toml`.
-4. `[rag].index_source` from `~/.config/pkms.toml`.
-5. The resolved `pkms` database root.
+3. `[rag].index_source` from `~/.config/pkms.toml`.
+4. The resolved `pkms` database root.
 
 Examples:
 
@@ -112,8 +111,8 @@ Persistent RAG defaults live under `[rag]`:
 ```toml
 [rag]
 rag_db = ".data/pkms-rag.sqlite3"
-notes_root = "/home/user/Documents/org"
 # index_source = "retrieval-export.ndjson"
+embedding_model = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
 ```
 
 `pkms rag ingest` reads retrieval NDJSON and upserts it into the selected RAG
@@ -134,8 +133,9 @@ precedence.
 
 Set `PKMS_RAG_FASTEMBED_MODEL_DIR` to load FastEmbed model files from a local
 directory and skip Hugging Face downloads during model initialization. The
-directory must contain the files for the configured `PKMS_RAG_EMBEDDING_MODEL`,
-including `tokenizer.json`, `config.json`, `special_tokens_map.json`,
+directory must contain the files for the configured
+`PKMS_RAG_EMBEDDING_MODEL` or `[rag].embedding_model`, including
+`tokenizer.json`, `config.json`, `special_tokens_map.json`,
 `tokenizer_config.json`, and the model file path FastEmbed expects for that
 model, such as `onnx/model.onnx` for the default multilingual MiniLM model.
 
@@ -146,7 +146,7 @@ dimension.
 Embedding-related environment variables:
 
 - `PKMS_RAG_EMBEDDING_PROVIDER`
-- `PKMS_RAG_EMBEDDING_MODEL`
+- `PKMS_RAG_EMBEDDING_MODEL` (overrides `[rag].embedding_model`)
 - `PKMS_RAG_EMBEDDING_BATCH_SIZE`
 - `PKMS_RAG_EMBEDDING_MAX_BODY_CHARS`
 - `PKMS_RAG_FASTEMBED_MODEL_DIR`

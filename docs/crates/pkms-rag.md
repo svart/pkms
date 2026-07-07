@@ -57,14 +57,16 @@ with `--features rag`.
 
 - `--rag-db`, `PKMS_RAG_DB`, or `[rag].rag_db`: SQLite index path. Default:
   `.data/pkms-rag.sqlite3`.
-- `--notes-root`, `PKMS_RAG_NOTES_ROOT`, or `[rag].notes_root`: org notes root
-  to export.
+- `--notes-root` or `PKMS_RAG_NOTES_ROOT`: org notes root to export. When no
+  source override or `[rag].index_source` is set, `pkms rag` uses the resolved
+  `db_root`.
 - `--index-source`, `PKMS_RAG_INDEX_SOURCE`, or `[rag].index_source`: retrieval
   NDJSON source.
 - `--host`/`--port` or `PKMS_RAG_HOST`/`PKMS_RAG_PORT`: HTTP bind settings for
   `pkms rag serve`.
 - `PKMS_RAG_EMBEDDING_PROVIDER`: `fastembed` or `hash`.
-- `PKMS_RAG_EMBEDDING_MODEL`: FastEmbed model name.
+- `PKMS_RAG_EMBEDDING_MODEL` or `[rag].embedding_model`: FastEmbed model name.
+  The environment variable takes precedence.
 - `PKMS_RAG_EMBEDDING_BATCH_SIZE`: FastEmbed batch size.
 - `PKMS_RAG_EMBEDDING_MAX_BODY_CHARS`: body text budget used for embedding
   text.

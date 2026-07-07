@@ -110,8 +110,8 @@ pub struct TaskConfig {
 #[serde(deny_unknown_fields)]
 pub struct RagConfig {
     pub rag_db: Option<PathBuf>,
-    pub notes_root: Option<PathBuf>,
     pub index_source: Option<PathBuf>,
+    pub embedding_model: Option<String>,
 }
 
 impl Config {
@@ -288,16 +288,18 @@ impl ResolvedConfig {
         self.resolve_optional_configured_path(self.rag.as_ref().and_then(|rag| rag.rag_db.as_ref()))
     }
 
-    pub fn resolve_rag_notes_root(&self) -> Option<PathBuf> {
-        self.resolve_optional_configured_path(
-            self.rag.as_ref().and_then(|rag| rag.notes_root.as_ref()),
-        )
-    }
-
     pub fn resolve_rag_index_source(&self) -> Option<PathBuf> {
         self.resolve_optional_configured_path(
             self.rag.as_ref().and_then(|rag| rag.index_source.as_ref()),
         )
+    }
+
+    pub fn rag_embedding_model(&self) -> Option<&str> {
+        self.rag
+            .as_ref()
+            .and_then(|rag| rag.embedding_model.as_deref())
+            .map(str::trim)
+            .filter(|model| !model.is_empty())
     }
 
     pub fn task_state_config(&self) -> pkms_org::graph::tasks::TaskStateConfig {
@@ -644,8 +646,8 @@ default_filter = "today | overdue"
 
 [rag]
 rag_db = ".data/rag.sqlite3"
-notes_root = "rag-notes"
 index_source = "exports/retrieval.ndjson"
+embedding_model = "Xenova/bge-small-en-v1.5"
 
 [ssh]
 identity_file = "~/.ssh/id_ed25519"
@@ -677,10 +679,13 @@ agent = false
         assert_eq!(todoist.default_filter.as_deref(), Some("today | overdue"));
         let rag = config.rag.unwrap();
         assert_eq!(rag.rag_db.as_deref(), Some(Path::new(".data/rag.sqlite3")));
-        assert_eq!(rag.notes_root.as_deref(), Some(Path::new("rag-notes")));
         assert_eq!(
             rag.index_source.as_deref(),
             Some(Path::new("exports/retrieval.ndjson"))
+        );
+        assert_eq!(
+            rag.embedding_model.as_deref(),
+            Some("Xenova/bge-small-en-v1.5")
         );
         let ssh = config.ssh.unwrap();
         assert_eq!(
@@ -766,6 +771,19 @@ rag_database = "typo.sqlite3"
     }
 
     #[test]
+    fn test_rag_config_rejects_removed_notes_root() {
+        assert_unknown_config_field_rejected(
+            r#"
+db_root = "/test/db"
+
+[rag]
+notes_root = "rag-notes"
+"#,
+            "notes_root",
+        );
+    }
+
+    #[test]
     fn test_generate_default_config_is_valid_config() {
         let content = generate_default_config(Some(Path::new("/my/notes")));
         toml::from_str::<Config>(&content).unwrap();
@@ -785,8 +803,8 @@ rag_database = "typo.sqlite3"
             ssh: None,
             rag: Some(RagConfig {
                 rag_db: Some(PathBuf::from(".data/rag.sqlite3")),
-                notes_root: Some(PathBuf::from("rag-notes")),
                 index_source: Some(PathBuf::from("exports/retrieval.ndjson")),
+                embedding_model: Some("Xenova/bge-small-en-v1.5".to_string()),
             }),
         };
 
@@ -795,12 +813,12 @@ rag_database = "typo.sqlite3"
             Some(PathBuf::from("/test/root/.data/rag.sqlite3"))
         );
         assert_eq!(
-            config.resolve_rag_notes_root(),
-            Some(PathBuf::from("/test/root/rag-notes"))
-        );
-        assert_eq!(
             config.resolve_rag_index_source(),
             Some(PathBuf::from("/test/root/exports/retrieval.ndjson"))
+        );
+        assert_eq!(
+            config.rag_embedding_model(),
+            Some("Xenova/bge-small-en-v1.5")
         );
     }
 

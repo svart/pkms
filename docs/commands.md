@@ -138,7 +138,7 @@ path resolves from `--rag-db`, `PKMS_RAG_DB`, `[rag].rag_db`, then the default
 
 - `--notes-root` or `PKMS_RAG_NOTES_ROOT`.
 - `--index-source` or `PKMS_RAG_INDEX_SOURCE` for retrieval NDJSON.
-- `[rag].notes_root` or `[rag].index_source` from `~/.config/pkms.toml`.
+- `[rag].index_source` from `~/.config/pkms.toml`.
 - The resolved `pkms` database root when neither source is set.
 
 For text output, `pkms rag index` writes rebuild progress to stderr and the

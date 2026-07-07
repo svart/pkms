@@ -7,13 +7,14 @@ use std::{
     sync::Arc,
 };
 
-use crate::embeddings::embedding_provider_config_from_env;
+use crate::{EmbeddingProviderConfig, embeddings::embedding_provider_config_from_env};
 
 #[derive(Debug, Clone)]
 pub struct RagServeOptions {
     pub db_path: PathBuf,
     pub index_source: Option<PathBuf>,
     pub notes_root: Option<PathBuf>,
+    pub embedding_provider_config: Option<EmbeddingProviderConfig>,
     pub host: String,
     pub port: u16,
 }
@@ -48,8 +49,14 @@ fn serve_with_state(
     note_viewer: Option<Arc<dyn NoteViewer>>,
     started: impl FnOnce(&RagServeStarted) -> Result<()>,
 ) -> Result<()> {
-    let embedding_provider_config = embedding_provider_config_from_env()
-        .context("failed to read RAG embedding provider configuration")?;
+    let embedding_provider_config = opts
+        .embedding_provider_config
+        .clone()
+        .map(Ok)
+        .unwrap_or_else(|| {
+            embedding_provider_config_from_env()
+                .context("failed to read RAG embedding provider configuration")
+        })?;
     let mut state = AppState::with_embedding_provider_config(
         opts.db_path.clone(),
         opts.index_source.clone(),

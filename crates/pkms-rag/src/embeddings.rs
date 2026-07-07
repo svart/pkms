@@ -170,14 +170,31 @@ impl EmbeddingProvider for FastEmbeddingProvider {
 }
 
 pub fn embedding_provider_config_from_env() -> Result<EmbeddingProviderConfig> {
+    embedding_provider_config_from_env_with_model(None)
+}
+
+pub fn embedding_provider_config_from_env_with_model(
+    configured_model_name: Option<&str>,
+) -> Result<EmbeddingProviderConfig> {
     let provider = std::env::var(EMBEDDING_PROVIDER_ENV)
-        .unwrap_or_else(|_| FASTEMBED_PROVIDER_NAME.to_string())
-        .to_ascii_lowercase();
+        .ok()
+        .map(|provider| provider.trim().to_ascii_lowercase())
+        .filter(|provider| !provider.is_empty())
+        .unwrap_or_else(|| FASTEMBED_PROVIDER_NAME.to_string());
     match provider.as_str() {
         HASH_PROVIDER_NAME | "hashing-v1" => Ok(EmbeddingProviderConfig::Hash),
         FASTEMBED_PROVIDER_NAME => Ok(EmbeddingProviderConfig::FastEmbed {
             model_name: std::env::var(EMBEDDING_MODEL_ENV)
-                .unwrap_or_else(|_| DEFAULT_FASTEMBED_MODEL.to_string()),
+                .ok()
+                .map(|model| model.trim().to_string())
+                .filter(|model| !model.is_empty())
+                .or_else(|| {
+                    configured_model_name
+                        .map(str::trim)
+                        .filter(|model| !model.is_empty())
+                        .map(ToOwned::to_owned)
+                })
+                .unwrap_or_else(|| DEFAULT_FASTEMBED_MODEL.to_string()),
             batch_size: embedding_batch_size_from_env(),
             model_dir: std::env::var(FASTEMBED_MODEL_DIR_ENV)
                 .ok()
@@ -523,6 +540,49 @@ mod tests {
                 model_name: "Xenova/all-MiniLM-L12-v2".to_string(),
                 batch_size: 7,
                 model_dir: Some("/opt/pkms/models/all-minilm".into()),
+            }
+        );
+    }
+
+    #[test]
+    fn embeddings_provider_config_uses_configured_model_when_env_model_absent() {
+        let _guard = ENV_LOCK.lock().expect("env lock");
+        let _snapshot = EnvSnapshot::capture();
+        clear_embedding_env();
+        set_env(EMBEDDING_PROVIDER_ENV, "fastembed");
+
+        let config =
+            embedding_provider_config_from_env_with_model(Some("Xenova/bge-small-en-v1.5"))
+                .expect("config reads");
+
+        assert_eq!(
+            config,
+            EmbeddingProviderConfig::FastEmbed {
+                model_name: "Xenova/bge-small-en-v1.5".to_string(),
+                batch_size: DEFAULT_FASTEMBED_BATCH_SIZE,
+                model_dir: None,
+            }
+        );
+    }
+
+    #[test]
+    fn embeddings_provider_config_prefers_env_model_over_configured_model() {
+        let _guard = ENV_LOCK.lock().expect("env lock");
+        let _snapshot = EnvSnapshot::capture();
+        clear_embedding_env();
+        set_env(EMBEDDING_PROVIDER_ENV, "fastembed");
+        set_env(EMBEDDING_MODEL_ENV, "Xenova/all-MiniLM-L12-v2");
+
+        let config =
+            embedding_provider_config_from_env_with_model(Some("Xenova/bge-small-en-v1.5"))
+                .expect("config reads");
+
+        assert_eq!(
+            config,
+            EmbeddingProviderConfig::FastEmbed {
+                model_name: "Xenova/all-MiniLM-L12-v2".to_string(),
+                batch_size: DEFAULT_FASTEMBED_BATCH_SIZE,
+                model_dir: None,
             }
         );
     }

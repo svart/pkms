@@ -297,6 +297,7 @@ Agents call /retrieve to search mounted PKMS notes.
             db_path: tempdir.path().join("api.sqlite3"),
             index_source: None,
             notes_root: None,
+            embedding_provider_config: Some(EmbeddingProviderConfig::Hash),
             host: "127.0.0.1".to_string(),
             port: 0,
         };
@@ -335,6 +336,7 @@ Serve startup rebuilds the configured RAG index.
             db_path: tempdir.path().join("api.sqlite3"),
             index_source: None,
             notes_root: Some(notes_root.clone()),
+            embedding_provider_config: Some(EmbeddingProviderConfig::Hash),
             host: "127.0.0.1".to_string(),
             port: 0,
         };

@@ -45,7 +45,8 @@ fn run_status(command_ctx: &CommandContext<'_>, args: &RagStatusArgs) -> Result<
 fn run_ingest(command_ctx: &CommandContext<'_>, args: &RagIngestArgs) -> Result<()> {
     let db_path = resolve_rag_db(args.rag_db.as_ref(), command_ctx.config());
     let records = pkms_rag::load_ndjson(&args.path)?;
-    let provider = pkms_rag::provider_from_env()?;
+    let provider_config = resolve_embedding_provider_config(command_ctx.config())?;
+    let provider = pkms_rag::provider_from_config(&provider_config)?;
     let mut conn = pkms_rag::connect(&db_path)?;
     let summary = pkms_rag::ingest_records(&mut conn, &records, provider.as_ref(), false)?;
     render_ingest_summary(command_ctx.output(), &summary)
@@ -58,7 +59,7 @@ fn run_index(command_ctx: &CommandContext<'_>, args: &RagIndexArgs) -> Result<()
         args.index_source.as_ref(),
         command_ctx.config(),
     );
-    let provider_config = pkms_rag::embedding_provider_config_from_env()?;
+    let provider_config = resolve_embedding_provider_config(command_ctx.config())?;
     let indexer = pkms_rag::BackgroundIndexer::new(db_path, index_source, notes_root);
     let progress = if command_ctx.output().is_structured() {
         indexer.run_sync_with_provider_config(&provider_config)
@@ -94,7 +95,8 @@ fn run_search(command_ctx: &CommandContext<'_>, args: &RagSearchArgs) -> Result<
 fn run_retrieve(command_ctx: &CommandContext<'_>, args: &RagRetrieveArgs) -> Result<()> {
     let db_path = resolve_rag_db(args.rag_db.as_ref(), command_ctx.config());
     let conn = pkms_rag::connect(&db_path)?;
-    let provider = pkms_rag::provider_from_env()?;
+    let provider_config = resolve_embedding_provider_config(command_ctx.config())?;
+    let provider = pkms_rag::provider_from_config(&provider_config)?;
     let request = pkms_rag::RetrieveRequest {
         query: args.query.clone(),
         limit: args.limit,
@@ -116,6 +118,7 @@ fn run_serve(command_ctx: &CommandContext<'_>, args: &RagServeArgs) -> Result<()
         db_path: resolve_rag_db(args.rag_db.as_ref(), command_ctx.config()),
         notes_root,
         index_source,
+        embedding_provider_config: Some(resolve_embedding_provider_config(command_ctx.config())?),
         host: args
             .host
             .clone()
@@ -431,13 +434,19 @@ fn resolve_index_sources(
         return (notes_root, index_source);
     }
 
-    let notes_root = config.resolve_rag_notes_root();
     let index_source = config.resolve_rag_index_source();
-    if notes_root.is_some() || index_source.is_some() {
-        return (notes_root, index_source);
+    if index_source.is_some() {
+        return (None, index_source);
     }
 
     (Some(config.resolved_db_root().to_path_buf()), None)
+}
+
+fn resolve_embedding_provider_config(
+    config: &ResolvedConfig,
+) -> Result<pkms_rag::EmbeddingProviderConfig> {
+    pkms_rag::embedding_provider_config_from_env_with_model(config.rag_embedding_model())
+        .context("failed to read RAG embedding provider configuration")
 }
 
 fn env_path(key: &str) -> Option<PathBuf> {

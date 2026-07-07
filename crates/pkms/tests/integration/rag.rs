@@ -172,21 +172,18 @@ fn test_rag_index_text_reports_progress_on_stderr() {
 }
 
 #[test]
-fn test_rag_index_uses_configured_rag_db_and_notes_root() {
+fn test_rag_index_uses_configured_rag_db_and_db_root_source() {
     let db = TestDb::clean();
-    let notes_root = db.root().join("configured-notes");
-    std::fs::create_dir_all(&notes_root).unwrap();
-    std::fs::write(
-        notes_root.join("configured-rag.org"),
+    db.write_roam(
+        "configured-rag.org",
         r#":PROPERTIES:
 :ID:       aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa
 :END:
 #+title: Configured RAG Source
 * Configured source
-The configured notes root feeds the RAG index.
+The configured database root feeds the RAG index.
 "#,
-    )
-    .unwrap();
+    );
     let rag_db = db.root().join("configured-rag.sqlite3");
     let config = format!(
         r#"
@@ -194,13 +191,11 @@ db_root = "{}"
 
 [rag]
 rag_db = "{}"
-notes_root = "{}"
 
 {TEST_CONFIG}
 "#,
         db.root().display(),
-        rag_db.display(),
-        notes_root.display()
+        rag_db.display()
     );
 
     let (index, index_status) =
@@ -215,7 +210,7 @@ notes_root = "{}"
             "json",
             "rag",
             "search",
-            "configured notes root",
+            "configured database root",
         ],
         &config,
     );
