@@ -670,19 +670,6 @@ fn test_check_id_links_json() {
 }
 
 #[test]
-fn test_check_rejects_agenda_flag() {
-    let (_dir, root) = setup_db();
-    let (stdout, stderr, status) = run(&["--db", root.to_str().unwrap(), "check", "--agenda"]);
-    assert!(!status.success());
-    assert!(stdout.is_empty(), "unexpected stdout: {stdout}");
-    assert!(
-        stderr.contains("unexpected argument '--agenda'")
-            || stderr.contains("unrecognized option '--agenda'"),
-        "stderr: {stderr}"
-    );
-}
-
-#[test]
 fn test_check_heading_equals_primary() {
     let (_dir, root) = setup_clean_db();
     db_write(

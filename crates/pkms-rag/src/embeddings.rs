@@ -482,19 +482,6 @@ mod tests {
     }
 
     #[test]
-    fn embeddings_text_ignores_removed_max_body_chars_env() {
-        let _guard = ENV_LOCK.lock().expect("env lock");
-        let _snapshot = EnvSnapshot::capture();
-        clear_embedding_env();
-        set_env("PKMS_RAG_EMBEDDING_MAX_BODY_CHARS", "3");
-        let chunk = sample_chunk("abcde");
-
-        let text = embedding_text(&chunk);
-
-        assert!(text.ends_with("abcde"));
-    }
-
-    #[test]
     fn embeddings_provider_config_defaults_to_fastembed() {
         let _guard = ENV_LOCK.lock().expect("env lock");
         let _snapshot = EnvSnapshot::capture();
@@ -534,7 +521,6 @@ mod tests {
         clear_embedding_env();
         set_env(EMBEDDING_PROVIDER_ENV, "fastembed");
         set_env(EMBEDDING_MODEL_ENV, "Xenova/all-MiniLM-L12-v2");
-        set_env("PKMS_RAG_EMBEDDING_BATCH_SIZE", "7");
         set_env(
             "PKMS_RAG_FASTEMBED_MODEL_DIR",
             "/opt/pkms/models/all-minilm",
@@ -733,14 +719,6 @@ mod tests {
                     ),
                     (EMBEDDING_MODEL_ENV, std::env::var(EMBEDDING_MODEL_ENV).ok()),
                     (
-                        "PKMS_RAG_EMBEDDING_BATCH_SIZE",
-                        std::env::var("PKMS_RAG_EMBEDDING_BATCH_SIZE").ok(),
-                    ),
-                    (
-                        "PKMS_RAG_EMBEDDING_MAX_BODY_CHARS",
-                        std::env::var("PKMS_RAG_EMBEDDING_MAX_BODY_CHARS").ok(),
-                    ),
-                    (
                         "PKMS_RAG_FASTEMBED_MODEL_DIR",
                         std::env::var("PKMS_RAG_FASTEMBED_MODEL_DIR").ok(),
                     ),
@@ -763,8 +741,6 @@ mod tests {
     fn clear_embedding_env() {
         remove_env(EMBEDDING_PROVIDER_ENV);
         remove_env(EMBEDDING_MODEL_ENV);
-        remove_env("PKMS_RAG_EMBEDDING_BATCH_SIZE");
-        remove_env("PKMS_RAG_EMBEDDING_MAX_BODY_CHARS");
         remove_env("PKMS_RAG_FASTEMBED_MODEL_DIR");
     }
 

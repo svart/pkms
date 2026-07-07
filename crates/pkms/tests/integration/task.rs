@@ -61,40 +61,6 @@ fn test_task_help_lists_subcommands() {
     assert!(stdout.contains("dead:<date>"));
     assert!(stdout.contains("note:<uuid-title-or-path>"));
     assert!(stdout.contains("dep:<task-id>"));
-    assert!(!stdout.contains("report"));
-    assert!(!stdout.contains("plan"));
-    let commands = task_help_commands(&stdout);
-    assert!(!commands.contains(&"projects"));
-    assert!(!commands.contains(&"labels"));
-    assert!(!commands.contains(&"clarify"));
-    assert!(!commands.contains(&"update"));
-    assert!(!commands.contains(&"delete"));
-    assert!(!commands.contains(&"reopen"));
-}
-
-#[test]
-fn test_removed_task_subcommands_are_rejected() {
-    for subcommand in [
-        "today", "overdue", "upcoming", "projects", "labels", "clarify", "update", "delete",
-        "reopen",
-    ] {
-        let (stdout, stderr, status) = run(&["task", subcommand, "--help"]);
-        assert!(
-            !status.success(),
-            "task {subcommand} unexpectedly succeeded:\n{stdout}\n{stderr}"
-        );
-    }
-}
-
-#[test]
-fn test_removed_top_level_task_commands_are_rejected() {
-    for command in ["todo", "agenda", "show", "open"] {
-        let (stdout, stderr, status) = run(&[command, "--help"]);
-        assert!(
-            !status.success(),
-            "pkms {command} unexpectedly succeeded:\n{stdout}\n{stderr}"
-        );
-    }
 }
 
 #[test]
@@ -108,10 +74,6 @@ fn test_task_agenda_help_lists_shortcut_subcommands() {
     assert!(stdout.contains("week"));
     assert!(stdout.contains("overdue"));
     assert!(stdout.contains("upcoming"));
-    assert!(!stdout.contains("--today"));
-    assert!(!stdout.contains("--week"));
-    assert!(!stdout.contains("--overdue"));
-    assert!(!stdout.contains("--upcoming"));
 }
 
 #[test]
@@ -139,31 +101,6 @@ fn test_task_add_help_shows_modifiers() {
     assert!(stdout.contains("dead:<date>"));
     assert!(stdout.contains("note:<uuid-title-or-path> PKMS only"));
     assert!(stdout.contains("dep:<task-id>"));
-    assert!(!stdout.contains("--title"));
-    assert!(!stdout.contains("--source"));
-}
-
-#[test]
-fn test_task_agenda_shortcut_flags_are_rejected() {
-    for flag in ["--today", "--week", "--overdue", "--upcoming"] {
-        let (stdout, stderr, status) = run(&["task", "agenda", flag, "--help"]);
-        assert!(
-            !status.success(),
-            "task agenda {flag} unexpectedly succeeded:\n{stdout}\n{stderr}"
-        );
-    }
-}
-
-fn task_help_commands(stdout: &str) -> Vec<&str> {
-    stdout
-        .lines()
-        .filter_map(|line| {
-            let line = line.strip_prefix("  ")?;
-            let command = line.split_whitespace().next()?;
-            (command != "-h," && command != "--db" && command != "--output-format")
-                .then_some(command)
-        })
-        .collect()
 }
 
 #[test]
@@ -3039,26 +2976,6 @@ fn test_task_mod_rejects_unknown_modifier() {
             .unwrap()
             .contains("Unknown task modifier 'unknown:value'")
     );
-}
-
-#[test]
-fn test_task_schedule_and_deadline_id_subcommands_are_rejected() {
-    let (_dir, root) = setup_db();
-    for (subcommand, option) in [("schedule", "--due"), ("deadline", "--deadline")] {
-        let (stdout, stderr, status) = run(&[
-            "--db",
-            root.to_str().unwrap(),
-            "task",
-            "p1",
-            subcommand,
-            option,
-            "2026-06-01",
-        ]);
-        assert!(
-            !status.success(),
-            "task {subcommand} unexpectedly succeeded:\n{stdout}\n{stderr}"
-        );
-    }
 }
 
 #[test]

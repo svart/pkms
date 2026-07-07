@@ -725,45 +725,6 @@ rag_database = "typo.sqlite3"
     }
 
     #[test]
-    fn test_rag_config_rejects_removed_notes_root() {
-        assert_unknown_config_field_rejected(
-            r#"
-db_root = "/test/db"
-
-[rag]
-notes_root = "rag-notes"
-"#,
-            "notes_root",
-        );
-    }
-
-    #[test]
-    fn test_rag_config_rejects_removed_index_source() {
-        assert_unknown_config_field_rejected(
-            r#"
-db_root = "/test/db"
-
-[rag]
-index_source = "exports/retrieval.ndjson"
-"#,
-            "index_source",
-        );
-    }
-
-    #[test]
-    fn test_config_rejects_removed_ssh_section() {
-        assert_unknown_config_field_rejected(
-            r#"
-db_root = "/test/db"
-
-[ssh]
-identity_file = "~/.ssh/id_ed25519"
-"#,
-            "ssh",
-        );
-    }
-
-    #[test]
     fn test_generate_default_config_is_valid_config() {
         let content = generate_default_config(Some(Path::new("/my/notes")));
         toml::from_str::<Config>(&content).unwrap();

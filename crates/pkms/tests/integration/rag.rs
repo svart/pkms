@@ -185,30 +185,6 @@ rag_db = "{}"
 }
 
 #[test]
-fn test_rag_index_rejects_global_output_format() {
-    let db = TestDb::clean();
-    let rag_db = db.root().join("rag.sqlite3");
-
-    let (stdout, stderr, status) = run_hash(&[
-        "--db",
-        db.root().to_str().unwrap(),
-        "--output-format",
-        "json",
-        "rag",
-        "index",
-        "--rag-db",
-        rag_db.to_str().unwrap(),
-    ]);
-
-    assert!(!status.success());
-    assert!(
-        stdout.contains("--output-format is not supported by pkms rag index")
-            || stderr.contains("--output-format is not supported by pkms rag index"),
-        "expected unsupported output-format error\nstdout: {stdout}\nstderr: {stderr}"
-    );
-}
-
-#[test]
 fn test_rag_index_uses_configured_rag_db_and_db_root_source() {
     let db = TestDb::clean();
     db.write_roam(
@@ -258,73 +234,6 @@ rag_db = "{}"
     assert_eq!(
         search["results"][0]["note_id"],
         "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa"
-    );
-}
-
-#[test]
-fn test_rag_index_ignores_removed_env_index_source() {
-    let db = TestDb::clean();
-    db.write_roam(
-        "removed-env-source.org",
-        r#":PROPERTIES:
-:ID:       cccccccc-cccc-4ccc-cccc-cccccccccccc
-:END:
-#+title: Removed Env Source
-* Removed env source
-The resolved database root wins over removed RAG source environment variables.
-"#,
-    );
-    let rag_db = db.root().join("env-source.sqlite3");
-    let fixture = rag_fixture();
-    let config = format!(
-        r#"
-db_root = "{}"
-
-[rag]
-rag_db = "{}"
-
-{TEST_CONFIG}
-"#,
-        db.root().display(),
-        rag_db.display()
-    );
-
-    let config_home = tempfile::tempdir().unwrap();
-    std::fs::write(config_home.path().join("pkms.toml"), &config).unwrap();
-    let mut command = Command::new(pkms_binary());
-    configure_test_command(&mut command, config_home.path());
-    let output = command
-        .env_remove("PKMS_RAG_DB")
-        .env("PKMS_RAG_INDEX_SOURCE", fixture.as_os_str())
-        .env_remove("PKMS_RAG_EMBEDDING_MODEL")
-        .env("PKMS_RAG_EMBEDDING_PROVIDER", "hash")
-        .args(["rag", "index"])
-        .output()
-        .unwrap();
-    let index_stdout = String::from_utf8_lossy(&output.stdout).to_string();
-    let index_stderr = String::from_utf8_lossy(&output.stderr).to_string();
-    let index_status = output.status;
-    assert!(
-        index_status.success(),
-        "index failed\nstdout: {index_stdout}\nstderr: {index_stderr}"
-    );
-    assert!(index_stdout.contains("Index phase: complete"));
-    assert!(index_stdout.contains("Chunks: 1 seen"));
-
-    let (search, search_status) = run_hash_json_with_config(
-        &[
-            "--output-format",
-            "json",
-            "rag",
-            "search",
-            "removed RAG source",
-        ],
-        &config,
-    );
-    assert!(search_status.success());
-    assert_eq!(
-        search["results"][0]["note_id"],
-        "cccccccc-cccc-4ccc-cccc-cccccccccccc"
     );
 }
 

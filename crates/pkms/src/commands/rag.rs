@@ -511,26 +511,30 @@ mod tests {
     }
 
     #[test]
-    fn resolve_index_sources_ignores_removed_source_env_vars() {
+    fn resolve_rag_db_prefers_cli_then_active_env_then_config() {
         let _guard = ENV_LOCK.lock().expect("env lock");
         let _snapshot = EnvSnapshot::capture();
-        set_env("PKMS_RAG_NOTES_ROOT", "/env/notes");
-        set_env("PKMS_RAG_INDEX_SOURCE", "/env/source.ndjson");
-        let config = ResolvedConfig::for_test_db("/db");
+        remove_env("PKMS_RAG_DB");
+        set_env("PKMS_RAG_DB", "/env/rag.sqlite3");
+        let mut config = ResolvedConfig::for_test_db("/db");
+        config.rag = Some(RagConfig {
+            rag_db: Some(PathBuf::from("config/rag.sqlite3")),
+            embedding_model: None,
+            fastembed_model_dir: None,
+        });
 
-        let (notes_root, index_source) = resolve_index_sources(None, None, &config);
+        let cli_rag_db = PathBuf::from("/cli/rag.sqlite3");
 
-        assert_eq!(notes_root, Some(PathBuf::from("/db")));
-        assert_eq!(index_source, None);
-    }
-
-    #[test]
-    fn resolve_rag_port_ignores_removed_port_env_var() {
-        let _guard = ENV_LOCK.lock().expect("env lock");
-        let _snapshot = EnvSnapshot::capture();
-        set_env("PKMS_RAG_PORT", "7444");
-
-        assert_eq!(resolve_rag_port(None), DEFAULT_RAG_PORT);
+        assert_eq!(resolve_rag_db(Some(&cli_rag_db), &config), cli_rag_db);
+        assert_eq!(
+            resolve_rag_db(None, &config),
+            PathBuf::from("/env/rag.sqlite3")
+        );
+        remove_env("PKMS_RAG_DB");
+        assert_eq!(
+            resolve_rag_db(None, &config),
+            PathBuf::from("/db/config/rag.sqlite3")
+        );
     }
 
     #[test]
@@ -570,6 +574,7 @@ mod tests {
         fn capture() -> Self {
             Self {
                 values: vec![
+                    ("PKMS_RAG_DB", std::env::var("PKMS_RAG_DB").ok()),
                     (
                         "PKMS_RAG_EMBEDDING_PROVIDER",
                         std::env::var("PKMS_RAG_EMBEDDING_PROVIDER").ok(),
@@ -579,23 +584,9 @@ mod tests {
                         std::env::var("PKMS_RAG_EMBEDDING_MODEL").ok(),
                     ),
                     (
-                        "PKMS_RAG_EMBEDDING_BATCH_SIZE",
-                        std::env::var("PKMS_RAG_EMBEDDING_BATCH_SIZE").ok(),
-                    ),
-                    (
                         "PKMS_RAG_FASTEMBED_MODEL_DIR",
                         std::env::var("PKMS_RAG_FASTEMBED_MODEL_DIR").ok(),
                     ),
-                    (
-                        "PKMS_RAG_NOTES_ROOT",
-                        std::env::var("PKMS_RAG_NOTES_ROOT").ok(),
-                    ),
-                    (
-                        "PKMS_RAG_INDEX_SOURCE",
-                        std::env::var("PKMS_RAG_INDEX_SOURCE").ok(),
-                    ),
-                    ("PKMS_RAG_HOST", std::env::var("PKMS_RAG_HOST").ok()),
-                    ("PKMS_RAG_PORT", std::env::var("PKMS_RAG_PORT").ok()),
                 ],
             }
         }
@@ -615,12 +606,7 @@ mod tests {
     fn clear_embedding_env() {
         remove_env("PKMS_RAG_EMBEDDING_PROVIDER");
         remove_env("PKMS_RAG_EMBEDDING_MODEL");
-        remove_env("PKMS_RAG_EMBEDDING_BATCH_SIZE");
         remove_env("PKMS_RAG_FASTEMBED_MODEL_DIR");
-        remove_env("PKMS_RAG_NOTES_ROOT");
-        remove_env("PKMS_RAG_INDEX_SOURCE");
-        remove_env("PKMS_RAG_HOST");
-        remove_env("PKMS_RAG_PORT");
     }
 
     fn set_env(key: &str, value: &str) {

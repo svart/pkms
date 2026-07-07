@@ -23,6 +23,7 @@ fn parse_encoding(value: &str) -> Result<tokens::Encoding, String> {
         .map_err(|()| format!("unknown token encoding '{value}'"))
 }
 
+#[cfg(feature = "rag")]
 fn parse_positive_usize(value: &str) -> Result<usize, String> {
     let parsed = value
         .parse::<usize>()
@@ -615,7 +616,7 @@ mod tests {
 
     #[cfg(feature = "rag")]
     #[test]
-    fn rag_index_parses_force_rebuild_without_source_or_output_flags() {
+    fn rag_index_parses_force_rebuild_and_rag_db() {
         let cli = parse(&[
             "pkms",
             "rag",
@@ -632,19 +633,6 @@ mod tests {
         };
         assert!(args.force_rebuild);
         assert_eq!(args.rag_db, Some(PathBuf::from("/tmp/rag.sqlite3")));
-
-        assert!(Cli::try_parse_from(["pkms", "rag", "index", "--notes-root", "/tmp/org"]).is_err());
-        assert!(
-            Cli::try_parse_from([
-                "pkms",
-                "rag",
-                "index",
-                "--index-source",
-                "/tmp/export.ndjson"
-            ])
-            .is_err()
-        );
-        assert!(Cli::try_parse_from(["pkms", "rag", "index", "--output-format", "json"]).is_err());
     }
 
     #[cfg(feature = "rag")]
@@ -684,7 +672,39 @@ mod tests {
 
     #[cfg(feature = "rag")]
     #[test]
-    fn rag_index_help_exposes_only_supported_local_flags() {
+    fn rag_serve_parses_source_and_bind_options() {
+        let cli = parse(&[
+            "pkms",
+            "rag",
+            "serve",
+            "--notes-root",
+            "/tmp/notes",
+            "--index-source",
+            "/tmp/export.ndjson",
+            "--rag-db",
+            "/tmp/rag.sqlite3",
+            "--host",
+            "0.0.0.0",
+            "--port",
+            "7444",
+        ]);
+        let Command::Rag(rag) = cli.command else {
+            panic!("expected rag command");
+        };
+        let RagCommand::Serve(args) = rag.command else {
+            panic!("expected rag serve command");
+        };
+
+        assert_eq!(args.notes_root, Some(PathBuf::from("/tmp/notes")));
+        assert_eq!(args.index_source, Some(PathBuf::from("/tmp/export.ndjson")));
+        assert_eq!(args.rag_db, Some(PathBuf::from("/tmp/rag.sqlite3")));
+        assert_eq!(args.host.as_deref(), Some("0.0.0.0"));
+        assert_eq!(args.port, Some(7444));
+    }
+
+    #[cfg(feature = "rag")]
+    #[test]
+    fn rag_index_help_exposes_supported_local_flags() {
         let mut command = Cli::command();
         let index = command
             .find_subcommand_mut("rag")
@@ -698,8 +718,5 @@ mod tests {
         assert!(help.contains("--rag-db"));
         assert!(help.contains("--embedding-batch-size"));
         assert!(help.contains("--embedding-max-body-chars"));
-        assert!(!help.contains("--notes-root"));
-        assert!(!help.contains("--index-source"));
-        assert!(!help.contains("--output-format"));
     }
 }

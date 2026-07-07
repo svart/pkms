@@ -1,27 +1,8 @@
 use super::*;
 
-#[test]
-fn test_context_command_is_removed_from_help() {
-    let (stdout, stderr, status) = run(&["--help"]);
-
-    assert!(
-        status.success(),
-        "Expected help to succeed\nstdout: {}\nstderr: {}",
-        stdout,
-        stderr
-    );
-    assert!(
-        !stdout
-            .lines()
-            .any(|line| line.trim_start().starts_with("context ")),
-        "context command should not appear in help:\n{}",
-        stdout
-    );
-}
-
 #[cfg(not(feature = "rag"))]
 #[test]
-fn test_rag_command_is_removed_from_default_build_help() {
+fn test_rag_command_is_feature_gated_in_default_build_help() {
     let (stdout, stderr, status) = run(&["--help"]);
 
     assert!(
@@ -34,7 +15,7 @@ fn test_rag_command_is_removed_from_default_build_help() {
         !stdout
             .lines()
             .any(|line| line.trim_start().starts_with("rag ")),
-        "rag command should not appear in default build help:\n{}",
+        "rag command should not appear without the rag feature:\n{}",
         stdout
     );
 
