@@ -112,6 +112,7 @@ pub struct RagConfig {
     pub rag_db: Option<PathBuf>,
     pub index_source: Option<PathBuf>,
     pub embedding_model: Option<String>,
+    pub fastembed_model_dir: Option<PathBuf>,
 }
 
 impl Config {
@@ -291,6 +292,14 @@ impl ResolvedConfig {
     pub fn resolve_rag_index_source(&self) -> Option<PathBuf> {
         self.resolve_optional_configured_path(
             self.rag.as_ref().and_then(|rag| rag.index_source.as_ref()),
+        )
+    }
+
+    pub fn resolve_rag_fastembed_model_dir(&self) -> Option<PathBuf> {
+        self.resolve_optional_configured_path(
+            self.rag
+                .as_ref()
+                .and_then(|rag| rag.fastembed_model_dir.as_ref()),
         )
     }
 
@@ -648,6 +657,7 @@ default_filter = "today | overdue"
 rag_db = ".data/rag.sqlite3"
 index_source = "exports/retrieval.ndjson"
 embedding_model = "Xenova/bge-small-en-v1.5"
+fastembed_model_dir = "models/bge-small"
 
 [ssh]
 identity_file = "~/.ssh/id_ed25519"
@@ -686,6 +696,10 @@ agent = false
         assert_eq!(
             rag.embedding_model.as_deref(),
             Some("Xenova/bge-small-en-v1.5")
+        );
+        assert_eq!(
+            rag.fastembed_model_dir.as_deref(),
+            Some(Path::new("models/bge-small"))
         );
         let ssh = config.ssh.unwrap();
         assert_eq!(
@@ -805,6 +819,7 @@ notes_root = "rag-notes"
                 rag_db: Some(PathBuf::from(".data/rag.sqlite3")),
                 index_source: Some(PathBuf::from("exports/retrieval.ndjson")),
                 embedding_model: Some("Xenova/bge-small-en-v1.5".to_string()),
+                fastembed_model_dir: Some(PathBuf::from("models/bge-small")),
             }),
         };
 
@@ -819,6 +834,10 @@ notes_root = "rag-notes"
         assert_eq!(
             config.rag_embedding_model(),
             Some("Xenova/bge-small-en-v1.5")
+        );
+        assert_eq!(
+            config.resolve_rag_fastembed_model_dir(),
+            Some(PathBuf::from("/test/root/models/bge-small"))
         );
     }
 

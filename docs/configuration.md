@@ -19,6 +19,7 @@ closed_todo_states = ["DONE"]
 rag_db = ".data/pkms-rag.sqlite3"
 # index_source = "retrieval-export.ndjson"
 embedding_model = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+# fastembed_model_dir = "models/paraphrase-multilingual-MiniLM-L12-v2"
 
 [ssh]
 identity_file = "~/.ssh/id_ed25519"
@@ -122,6 +123,7 @@ requires a binary built with `--features rag`:
 rag_db = ".data/pkms-rag.sqlite3"
 # index_source = "retrieval-export.ndjson"
 embedding_model = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+# fastembed_model_dir = "models/paraphrase-multilingual-MiniLM-L12-v2"
 ```
 
 `--rag-db` overrides `[rag].rag_db`; `PKMS_RAG_DB` also overrides the config
@@ -134,6 +136,11 @@ an explicit one-off source override. Relative `[rag]` paths are resolved under
 `embedding_model` configures the FastEmbed model used by indexing, ingest,
 retrieval, and `rag serve`. `PKMS_RAG_EMBEDDING_MODEL` overrides this config
 value when set.
+
+`fastembed_model_dir` configures a local directory containing the FastEmbed
+model files for the active `embedding_model`, so `pkms rag` can initialize the
+model without downloading it. `PKMS_RAG_FASTEMBED_MODEL_DIR` overrides this
+config value when set.
 
 ## SSH File-Link Checks
 

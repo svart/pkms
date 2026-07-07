@@ -85,6 +85,8 @@ pkms rag serve --host 127.0.0.1 --port 7337
 
 Set `[rag].rag_db` in `~/.config/pkms.toml` when the RAG SQLite index should
 live somewhere other than the default `.data/pkms-rag.sqlite3`.
+Set `[rag].fastembed_model_dir` when FastEmbed should load model files from a
+local directory instead of downloading them.
 
 ```bash
 pkms query "rust" --output-format ndjson | pkms get --links --from-stdin

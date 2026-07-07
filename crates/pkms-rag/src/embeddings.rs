@@ -176,6 +176,13 @@ pub fn embedding_provider_config_from_env() -> Result<EmbeddingProviderConfig> {
 pub fn embedding_provider_config_from_env_with_model(
     configured_model_name: Option<&str>,
 ) -> Result<EmbeddingProviderConfig> {
+    embedding_provider_config_from_env_with_model_and_dir(configured_model_name, None)
+}
+
+pub fn embedding_provider_config_from_env_with_model_and_dir(
+    configured_model_name: Option<&str>,
+    configured_model_dir: Option<&Path>,
+) -> Result<EmbeddingProviderConfig> {
     let provider = std::env::var(EMBEDDING_PROVIDER_ENV)
         .ok()
         .map(|provider| provider.trim().to_ascii_lowercase())
@@ -198,8 +205,10 @@ pub fn embedding_provider_config_from_env_with_model(
             batch_size: embedding_batch_size_from_env(),
             model_dir: std::env::var(FASTEMBED_MODEL_DIR_ENV)
                 .ok()
+                .map(|value| value.trim().to_string())
                 .filter(|value| !value.is_empty())
-                .map(PathBuf::from),
+                .map(PathBuf::from)
+                .or_else(|| configured_model_dir.map(Path::to_path_buf)),
         }),
         _ => bail!(
             "unsupported embedding provider '{}'; expected '{}' or '{}'",
@@ -561,6 +570,53 @@ mod tests {
                 model_name: "Xenova/bge-small-en-v1.5".to_string(),
                 batch_size: DEFAULT_FASTEMBED_BATCH_SIZE,
                 model_dir: None,
+            }
+        );
+    }
+
+    #[test]
+    fn embeddings_provider_config_uses_configured_model_dir_when_env_dir_absent() {
+        let _guard = ENV_LOCK.lock().expect("env lock");
+        let _snapshot = EnvSnapshot::capture();
+        clear_embedding_env();
+        set_env(EMBEDDING_PROVIDER_ENV, "fastembed");
+
+        let config = embedding_provider_config_from_env_with_model_and_dir(
+            None,
+            Some(Path::new("/srv/pkms/models/bge-small")),
+        )
+        .expect("config reads");
+
+        assert_eq!(
+            config,
+            EmbeddingProviderConfig::FastEmbed {
+                model_name: DEFAULT_FASTEMBED_MODEL.to_string(),
+                batch_size: DEFAULT_FASTEMBED_BATCH_SIZE,
+                model_dir: Some("/srv/pkms/models/bge-small".into()),
+            }
+        );
+    }
+
+    #[test]
+    fn embeddings_provider_config_prefers_env_model_dir_over_configured_model_dir() {
+        let _guard = ENV_LOCK.lock().expect("env lock");
+        let _snapshot = EnvSnapshot::capture();
+        clear_embedding_env();
+        set_env(EMBEDDING_PROVIDER_ENV, "fastembed");
+        set_env(FASTEMBED_MODEL_DIR_ENV, "/env/pkms/models");
+
+        let config = embedding_provider_config_from_env_with_model_and_dir(
+            None,
+            Some(Path::new("/config/pkms/models")),
+        )
+        .expect("config reads");
+
+        assert_eq!(
+            config,
+            EmbeddingProviderConfig::FastEmbed {
+                model_name: DEFAULT_FASTEMBED_MODEL.to_string(),
+                batch_size: DEFAULT_FASTEMBED_BATCH_SIZE,
+                model_dir: Some("/env/pkms/models".into()),
             }
         );
     }

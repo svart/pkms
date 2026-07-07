@@ -445,8 +445,12 @@ fn resolve_index_sources(
 fn resolve_embedding_provider_config(
     config: &ResolvedConfig,
 ) -> Result<pkms_rag::EmbeddingProviderConfig> {
-    pkms_rag::embedding_provider_config_from_env_with_model(config.rag_embedding_model())
-        .context("failed to read RAG embedding provider configuration")
+    let model_dir = config.resolve_rag_fastembed_model_dir();
+    pkms_rag::embedding_provider_config_from_env_with_model_and_dir(
+        config.rag_embedding_model(),
+        model_dir.as_deref(),
+    )
+    .context("failed to read RAG embedding provider configuration")
 }
 
 fn env_path(key: &str) -> Option<PathBuf> {
@@ -478,4 +482,96 @@ fn text_snippet(text: &str, max_chars: usize) -> String {
         snippet.push_str("...");
     }
     snippet.replace('\n', " ")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::RagConfig;
+    use std::path::PathBuf;
+
+    #[test]
+    fn resolve_embedding_provider_config_uses_configured_fastembed_model_dir() {
+        let _guard = ENV_LOCK.lock().expect("env lock");
+        let _snapshot = EnvSnapshot::capture();
+        clear_embedding_env();
+
+        let mut config = ResolvedConfig::for_test_db("/db");
+        config.rag = Some(RagConfig {
+            rag_db: None,
+            index_source: None,
+            embedding_model: None,
+            fastembed_model_dir: Some(PathBuf::from("models/bge-small")),
+        });
+
+        let provider_config = resolve_embedding_provider_config(&config).expect("config resolves");
+
+        assert_eq!(
+            provider_config,
+            pkms_rag::EmbeddingProviderConfig::FastEmbed {
+                model_name: pkms_rag::DEFAULT_FASTEMBED_MODEL.to_string(),
+                batch_size: pkms_rag::DEFAULT_FASTEMBED_BATCH_SIZE,
+                model_dir: Some(PathBuf::from("/db/models/bge-small")),
+            }
+        );
+    }
+
+    static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    struct EnvSnapshot {
+        values: Vec<(&'static str, Option<String>)>,
+    }
+
+    impl EnvSnapshot {
+        fn capture() -> Self {
+            Self {
+                values: vec![
+                    (
+                        "PKMS_RAG_EMBEDDING_PROVIDER",
+                        std::env::var("PKMS_RAG_EMBEDDING_PROVIDER").ok(),
+                    ),
+                    (
+                        "PKMS_RAG_EMBEDDING_MODEL",
+                        std::env::var("PKMS_RAG_EMBEDDING_MODEL").ok(),
+                    ),
+                    (
+                        "PKMS_RAG_EMBEDDING_BATCH_SIZE",
+                        std::env::var("PKMS_RAG_EMBEDDING_BATCH_SIZE").ok(),
+                    ),
+                    (
+                        "PKMS_RAG_FASTEMBED_MODEL_DIR",
+                        std::env::var("PKMS_RAG_FASTEMBED_MODEL_DIR").ok(),
+                    ),
+                ],
+            }
+        }
+    }
+
+    impl Drop for EnvSnapshot {
+        fn drop(&mut self) {
+            for (key, value) in &self.values {
+                match value {
+                    Some(value) => set_env(key, value),
+                    None => remove_env(key),
+                }
+            }
+        }
+    }
+
+    fn clear_embedding_env() {
+        remove_env("PKMS_RAG_EMBEDDING_PROVIDER");
+        remove_env("PKMS_RAG_EMBEDDING_MODEL");
+        remove_env("PKMS_RAG_EMBEDDING_BATCH_SIZE");
+        remove_env("PKMS_RAG_FASTEMBED_MODEL_DIR");
+    }
+
+    fn set_env(key: &str, value: &str) {
+        // SAFETY: these tests serialize environment changes with ENV_LOCK and restore values.
+        unsafe { std::env::set_var(key, value) };
+    }
+
+    fn remove_env(key: &str) {
+        // SAFETY: these tests serialize environment changes with ENV_LOCK and restore values.
+        unsafe { std::env::remove_var(key) };
+    }
 }

@@ -167,8 +167,9 @@ titles remain plain text.
 
 FastEmbed is the default embedding provider. For deterministic local tests, set
 `PKMS_RAG_EMBEDDING_PROVIDER=hash`. To avoid model downloads in restricted
-networks, point `PKMS_RAG_FASTEMBED_MODEL_DIR` at a local FastEmbed model
-directory.
+networks, point `[rag].fastembed_model_dir` or
+`PKMS_RAG_FASTEMBED_MODEL_DIR` at a local FastEmbed model directory. The
+environment variable overrides the config value.
 
 ## Statistics and Discovery
 

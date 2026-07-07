@@ -62,6 +62,7 @@ pub fn generate_default_config(db_root: Option<&Path>) -> String {
 # rag_db = ".data/pkms-rag.sqlite3"
 # index_source = "retrieval-export.ndjson"
 # embedding_model = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+# fastembed_model_dir = "models/paraphrase-multilingual-MiniLM-L12-v2"
 
 # SSH file-link checks are disabled unless pkms is built with --features ssh and
 # `pkms check --remote-file-links` is passed. Password prompts are not used.

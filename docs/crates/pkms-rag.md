@@ -70,8 +70,9 @@ with `--features rag`.
 - `PKMS_RAG_EMBEDDING_BATCH_SIZE`: FastEmbed batch size.
 - `PKMS_RAG_EMBEDDING_MAX_BODY_CHARS`: body text budget used for embedding
   text.
-- `PKMS_RAG_FASTEMBED_MODEL_DIR`: local FastEmbed model files directory used
-  instead of downloading from Hugging Face during model initialization.
+- `PKMS_RAG_FASTEMBED_MODEL_DIR` or `[rag].fastembed_model_dir`: local
+  FastEmbed model files directory used instead of downloading from Hugging Face
+  during model initialization. The environment variable takes precedence.
 
 ## Boundaries
 

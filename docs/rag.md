@@ -113,6 +113,7 @@ Persistent RAG defaults live under `[rag]`:
 rag_db = ".data/pkms-rag.sqlite3"
 # index_source = "retrieval-export.ndjson"
 embedding_model = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+# fastembed_model_dir = "models/paraphrase-multilingual-MiniLM-L12-v2"
 ```
 
 `pkms rag ingest` reads retrieval NDJSON and upserts it into the selected RAG
@@ -131,9 +132,10 @@ uses `./.fastembed_cache` by default; set `FASTEMBED_CACHE_DIR` to move that
 cache, or set `HF_HOME` to use the Hugging Face cache location. `HF_HOME` takes
 precedence.
 
-Set `PKMS_RAG_FASTEMBED_MODEL_DIR` to load FastEmbed model files from a local
-directory and skip Hugging Face downloads during model initialization. The
-directory must contain the files for the configured
+Set `[rag].fastembed_model_dir` or `PKMS_RAG_FASTEMBED_MODEL_DIR` to load
+FastEmbed model files from a local directory and skip Hugging Face downloads
+during model initialization. The environment variable overrides the config
+value when set. The directory must contain the files for the configured
 `PKMS_RAG_EMBEDDING_MODEL` or `[rag].embedding_model`, including
 `tokenizer.json`, `config.json`, `special_tokens_map.json`,
 `tokenizer_config.json`, and the model file path FastEmbed expects for that
@@ -149,7 +151,7 @@ Embedding-related environment variables:
 - `PKMS_RAG_EMBEDDING_MODEL` (overrides `[rag].embedding_model`)
 - `PKMS_RAG_EMBEDDING_BATCH_SIZE`
 - `PKMS_RAG_EMBEDDING_MAX_BODY_CHARS`
-- `PKMS_RAG_FASTEMBED_MODEL_DIR`
+- `PKMS_RAG_FASTEMBED_MODEL_DIR` (overrides `[rag].fastembed_model_dir`)
 - `FASTEMBED_CACHE_DIR`
 - `HF_HOME`
 - `HF_ENDPOINT`
@@ -248,8 +250,9 @@ curl -X POST http://127.0.0.1:7337/retrieve \
   `curl https://huggingface.co/`. FastEmbed currently reaches Hugging Face
   through dependency HTTP clients configured for rustls/webpki roots, so the OS
   trust store alone may still be insufficient for a corporate MITM root. If the
-  download still fails, use `PKMS_RAG_FASTEMBED_MODEL_DIR` with a locally
-  downloaded model snapshot, or use an internal mirror through `HF_ENDPOINT`.
+  download still fails, use `[rag].fastembed_model_dir` or
+  `PKMS_RAG_FASTEMBED_MODEL_DIR` with a locally downloaded model snapshot, or
+  use an internal mirror through `HF_ENDPOINT`.
 - For deterministic local tests or environments where dense embeddings are not
   required, set `PKMS_RAG_EMBEDDING_PROVIDER=hash` for both indexing and
   retrieval.
