@@ -1,8 +1,10 @@
-use super::{DuplicateInfo, Graph, Node, OverlinkEntry, SelfLinkEntry, resolve_file_link_path};
+use super::{
+    DuplicateInfo, Graph, Node, OverlinkEntry, SelfLinkEntry, resolve_file_link_path_with_home,
+};
 use crate::domain::{LinkTarget, NoteId};
 use crate::link_check::{
     LinkCheckBackend, LinkCheckJob, LinkCheckKind, LinkSource, is_ssh_file_target,
-    local_file_link_target_exists, sort_link_check_jobs,
+    sort_link_check_jobs,
 };
 use crate::parser::{ID_PROPERTY_RE, Link, TITLE_RE, UUID_FORMAT_RE, validate_filetags_format};
 use std::collections::{HashMap, HashSet};
@@ -189,7 +191,7 @@ impl Graph {
         NodeValidationIssues {
             issues,
             broken_internal_links: self.collect_node_broken_internal_link_issues(node),
-            broken_file_links: collect_node_broken_file_link_issues(node, db_root),
+            broken_file_links: collect_node_broken_file_link_issues(node, db_root, self.home_dir()),
         }
     }
 
@@ -339,7 +341,12 @@ impl Graph {
                             });
                         }
                         Link::File(target_path) => {
-                            let resolved = resolve_file_link_path(target_path, &node.path, db_root);
+                            let resolved = resolve_file_link_path_with_home(
+                                target_path,
+                                &node.path,
+                                db_root,
+                                self.home_dir(),
+                            );
                             if resolved == *path {
                                 let suggestion = if has_headings {
                                     Some(format!(
@@ -460,12 +467,18 @@ fn collect_duplicate_uuid_issues(
     }
 }
 
-fn collect_node_broken_file_link_issues(node: &Node, db_root: &Path) -> Vec<BrokenFileLinkIssue> {
+fn collect_node_broken_file_link_issues(
+    node: &Node,
+    db_root: &Path,
+    home_dir: Option<&Path>,
+) -> Vec<BrokenFileLinkIssue> {
     node.outgoing
         .iter()
         .filter_map(|link| match link {
             Link::File(path_str)
-                if !local_file_link_target_exists(path_str, &node.path, db_root) =>
+                if !crate::link_check::local_file_link_target_exists_with_home(
+                    path_str, &node.path, db_root, home_dir,
+                ) =>
             {
                 Some(BrokenFileLinkIssue {
                     source_uuid: node.uuid.clone(),
@@ -500,7 +513,8 @@ fn collect_node_self_link_issues(
                 });
             }
             Link::File(path) => {
-                let resolved = resolve_file_link_path(path, &node.path, db_root);
+                let resolved =
+                    resolve_file_link_path_with_home(path, &node.path, db_root, graph.home_dir());
                 if resolved == node.path {
                     let suggested_uuid = if is_heading_node {
                         Some(

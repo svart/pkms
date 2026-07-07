@@ -312,6 +312,7 @@ impl BuildContext {
             },
             heading_uuid_to_primary: self.heading_uuid_to_primary,
             results: vec![],
+            home_dir: None,
         }
     }
 }

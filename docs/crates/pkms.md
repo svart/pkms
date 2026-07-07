@@ -13,9 +13,10 @@ cross-domain orchestration.
 - Provide shared loaders and context in `src/command_context.rs`.
 - Render text, JSON, and NDJSON through `src/output.rs` and `src/output/`.
 - Keep command adapter modules under `src/commands/` thin.
-- Map `ResolvedConfig` into domain-specific config structs for `pkms-org`,
-  `pkms-db`, `pkms-task`, and `pkms-web`, and, when the `rag` feature is
-  enabled, wire RAG CLI/env options into `pkms-rag`.
+- Map CLI arguments, environment variables, and `ResolvedConfig` into
+  domain-specific config structs for `pkms-org`, `pkms-db`, `pkms-task`, and
+  `pkms-web`, and, when the `rag` feature is enabled, wire resolved RAG options
+  into `pkms-rag`.
 
 ## Main Modules
 
@@ -36,6 +37,8 @@ cross-domain orchestration.
 ## Command Adapter Rules
 
 - Define arguments in `cli.rs` or `cli/task.rs`, not inside domain crates.
+- Resolve process environment at the `pkms` boundary and pass typed values into
+  domain crates.
 - Dispatch from `runner.rs`.
 - Keep reusable command behavior in the domain crate when possible.
 - Use option structs when a command has more than trivial input.

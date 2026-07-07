@@ -13,6 +13,7 @@ fn web_config(db_root: PathBuf) -> WebConfig {
             daily_notes_dir: Some(db_root.join("roam")),
             ignore_patterns: Vec::new(),
             db_root,
+            home_dir: None,
         },
         task_states: TaskStateConfig {
             valid_states: vec!["TODO".to_string(), "DONE".to_string()],

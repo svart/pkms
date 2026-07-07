@@ -6,7 +6,6 @@ use crate::link_check::model::{SshErrorKind, link_check_broken};
 use rayon::prelude::*;
 #[cfg(feature = "ssh")]
 use std::collections::BTreeMap;
-use std::env;
 #[cfg(feature = "ssh")]
 use std::path::Path;
 use std::path::PathBuf;
@@ -38,6 +37,7 @@ pub struct SshFileCheckOptions {
     pub default_user: String,
     pub identity_files: Vec<PathBuf>,
     pub known_hosts: PathBuf,
+    pub agent_socket: Option<PathBuf>,
     pub connect_timeout: Duration,
     pub operation_timeout_ms: u32,
     pub max_connections: usize,
@@ -46,9 +46,10 @@ pub struct SshFileCheckOptions {
 impl Default for SshFileCheckOptions {
     fn default() -> Self {
         Self {
-            default_user: default_ssh_user(),
-            identity_files: default_identity_files(),
-            known_hosts: default_known_hosts_path(),
+            default_user: String::new(),
+            identity_files: Vec::new(),
+            known_hosts: PathBuf::from("~/.ssh/known_hosts"),
+            agent_socket: None,
             connect_timeout: Duration::from_millis(DEFAULT_SSH_CONNECT_TIMEOUT_MS),
             operation_timeout_ms: DEFAULT_SSH_OPERATION_TIMEOUT_MS,
             max_connections: DEFAULT_SSH_MAX_CONNECTIONS,
@@ -519,7 +520,13 @@ async fn authenticate_with_agent(
     options: &SshFileCheckOptions,
     hash_alg: Option<russh::keys::HashAlg>,
 ) -> Result<(), SshCheckFailure> {
-    let mut agent = russh::keys::agent::client::AgentClient::connect_env()
+    let Some(agent_socket) = options.agent_socket.as_deref() else {
+        return Err(SshCheckFailure::new(
+            SshErrorKind::Auth,
+            "SSH agent socket is not configured",
+        ));
+    };
+    let mut agent = russh::keys::agent::client::AgentClient::connect_uds(agent_socket)
         .await
         .map_err(|error| {
             SshCheckFailure::new(SshErrorKind::Auth, format!("SSH agent failed: {error}"))
@@ -772,29 +779,6 @@ fn sftp_operational_failure(
 
 fn normalized_file_target(target: &str) -> &str {
     target.strip_prefix("org:").unwrap_or(target)
-}
-
-fn default_ssh_user() -> String {
-    env::var("USER")
-        .or_else(|_| env::var("LOGNAME"))
-        .unwrap_or_default()
-}
-
-fn default_known_hosts_path() -> PathBuf {
-    dirs::home_dir()
-        .map(|home| home.join(".ssh").join("known_hosts"))
-        .unwrap_or_else(|| PathBuf::from("~/.ssh/known_hosts"))
-}
-
-fn default_identity_files() -> Vec<PathBuf> {
-    let Some(home) = dirs::home_dir() else {
-        return Vec::new();
-    };
-    ["id_ed25519", "id_ecdsa", "id_rsa"]
-        .into_iter()
-        .map(|name| home.join(".ssh").join(name))
-        .filter(|path| path.is_file())
-        .collect()
 }
 
 fn parse_host_and_port(host_and_port: &str) -> Result<(String, u16), SshFileTargetParseError> {

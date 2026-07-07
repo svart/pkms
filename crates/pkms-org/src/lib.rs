@@ -29,4 +29,5 @@ pub struct OrgConfig {
     pub new_notes_dir: Option<PathBuf>,
     pub daily_notes_dir: Option<PathBuf>,
     pub ignore_patterns: Vec<String>,
+    pub home_dir: Option<PathBuf>,
 }

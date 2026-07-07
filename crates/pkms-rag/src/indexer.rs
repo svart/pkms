@@ -11,7 +11,7 @@ use crate::{
     db::{IngestProgress, connect, ingest_records_with_progress},
     embeddings::{
         DEFAULT_EMBEDDING_MAX_BODY_CHARS, EmbeddingProvider, EmbeddingProviderConfig,
-        provider_from_config, provider_from_env,
+        default_embedding_provider_config, provider_from_config,
     },
     models::{IndexProgress, IngestSummary, RetrievalRecord},
     ndjson::load_ndjson,
@@ -57,8 +57,7 @@ impl BackgroundIndexer {
     }
 
     pub fn start(&self) -> IndexProgress {
-        let (progress, _handle) = self.start_with_provider_factory(provider_from_env);
-        progress
+        self.start_with_provider_config(default_embedding_provider_config())
     }
 
     pub fn start_with_provider_config(&self, config: EmbeddingProviderConfig) -> IndexProgress {

@@ -13,6 +13,7 @@ fn test_org_config(db_root: impl Into<PathBuf>) -> OrgConfig {
         new_notes_dir: None,
         daily_notes_dir: None,
         ignore_patterns: Vec::new(),
+        home_dir: None,
     }
 }
 
@@ -115,7 +116,7 @@ fn file_link_target_parses_resolution_parts() {
     let db_root = PathBuf::from("/tmp/pkms-db");
     let source_path = db_root.join("notes").join("source.org");
 
-    let relative = FileLinkTarget::parse("docs/reference.org::needle");
+    let relative = FileLinkTarget::parse("docs/reference.org::needle", None);
     assert_eq!(relative.path, PathBuf::from("docs/reference.org"));
     assert_eq!(relative.line_spec.as_deref(), Some("needle"));
     assert!(!relative.org_relative);
@@ -124,7 +125,7 @@ fn file_link_target_parses_resolution_parts() {
         db_root.join("notes").join("docs").join("reference.org")
     );
 
-    let org_relative = FileLinkTarget::parse("org:docs/reference.org::needle");
+    let org_relative = FileLinkTarget::parse("org:docs/reference.org::needle", None);
     assert_eq!(org_relative.path, PathBuf::from("docs/reference.org"));
     assert_eq!(org_relative.line_spec.as_deref(), Some("needle"));
     assert!(org_relative.org_relative);
@@ -133,7 +134,7 @@ fn file_link_target_parses_resolution_parts() {
         db_root.join("docs").join("reference.org")
     );
 
-    let absolute = FileLinkTarget::parse("/var/tmp/reference.org::needle");
+    let absolute = FileLinkTarget::parse("/var/tmp/reference.org::needle", None);
     assert_eq!(absolute.path, PathBuf::from("/var/tmp/reference.org"));
     assert_eq!(absolute.line_spec.as_deref(), Some("needle"));
     assert_eq!(
@@ -141,7 +142,7 @@ fn file_link_target_parses_resolution_parts() {
         PathBuf::from("/var/tmp/reference.org")
     );
 
-    let remote = FileLinkTarget::parse("/ssh:example.org:/var/log/app.log::needle");
+    let remote = FileLinkTarget::parse("/ssh:example.org:/var/log/app.log::needle", None);
     assert_eq!(
         remote.path,
         PathBuf::from("/ssh:example.org:/var/log/app.log")
@@ -152,18 +153,17 @@ fn file_link_target_parses_resolution_parts() {
         PathBuf::from("/ssh:example.org:/var/log/app.log")
     );
 
-    let repeated_separator = FileLinkTarget::parse("docs/reference.org::needle::ignored");
+    let repeated_separator = FileLinkTarget::parse("docs/reference.org::needle::ignored", None);
     assert_eq!(repeated_separator.line_spec.as_deref(), Some("needle"));
 
-    if let Some(home) = dirs::home_dir() {
-        let home_target = FileLinkTarget::parse("~/docs/reference.pdf::page");
-        assert_eq!(home_target.path, home.join("docs").join("reference.pdf"));
-        assert_eq!(home_target.line_spec.as_deref(), Some("page"));
-        assert_eq!(
-            home_target.resolve_path(&source_path, &db_root),
-            home.join("docs").join("reference.pdf")
-        );
-    }
+    let home = PathBuf::from("/home/tester");
+    let home_target = FileLinkTarget::parse("~/docs/reference.pdf::page", Some(&home));
+    assert_eq!(home_target.path, home.join("docs").join("reference.pdf"));
+    assert_eq!(home_target.line_spec.as_deref(), Some("page"));
+    assert_eq!(
+        home_target.resolve_path(&source_path, &db_root),
+        home.join("docs").join("reference.pdf")
+    );
 }
 
 #[test]

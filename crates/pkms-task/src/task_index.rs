@@ -388,9 +388,8 @@ fn task_priority(priority: OrgPriority) -> TaskPriority {
 mod tests {
     use super::*;
     use pkms_org::corpus::FileScanResult;
-    use pkms_org::graph::{DuplicateInfo, Graph};
+    use pkms_org::graph::Graph;
     use pkms_org::parser::{Heading, OrgPriority, OrgTodoState, ParsedNote};
-    use std::collections::HashMap;
     use std::path::PathBuf;
 
     fn test_config() -> TaskStateConfig {
@@ -402,23 +401,7 @@ mod tests {
     }
 
     fn graph_with_results(results: Vec<FileScanResult>) -> Graph {
-        Graph {
-            nodes: HashMap::new(),
-            path_to_uuid: HashMap::new(),
-            title_to_uuid: HashMap::new(),
-            alias_to_uuid: HashMap::new(),
-            backlinks: HashMap::new(),
-            broken_links: Vec::new(),
-            parse_errors: Vec::new(),
-            skipped_files: Vec::new(),
-            duplicates: DuplicateInfo {
-                duplicate_uuids: Vec::new(),
-                duplicate_titles: Vec::new(),
-                missing_titles: Vec::new(),
-            },
-            heading_uuid_to_primary: HashMap::new(),
-            results,
-        }
+        Graph::build(results)
     }
 
     fn note(path: &str, headings: Vec<Heading>) -> FileScanResult {

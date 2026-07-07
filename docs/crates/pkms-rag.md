@@ -36,7 +36,7 @@ with `--features rag`.
 | `org_export.rs` | Export org notes into retrieval records through `pkms-org`. |
 | `ndjson.rs` | Retrieval NDJSON parsing and loading. |
 | `chunking.rs` | Chunk construction, content hashes, and token/source metadata. |
-| `embeddings.rs` | Embedding provider trait, FastEmbed, hash provider, and env config. |
+| `embeddings.rs` | Embedding provider trait, FastEmbed, hash provider, and typed provider config. |
 | `indexer.rs` | Synchronous and background rebuild orchestration. |
 | `retrieve.rs` | BM25, dense, and hybrid retrieval. |
 | `api.rs` | Axum HTTP API and foreground server. |
@@ -78,12 +78,15 @@ with `--features rag`.
 - `PKMS_RAG_FASTEMBED_MODEL_DIR` or `[rag].fastembed_model_dir`: local
   FastEmbed model files directory used instead of downloading from Hugging Face
   during model initialization. The environment variable takes precedence.
+- `pkms-rag` receives the resolved SQLite path and embedding provider config as
+  typed parameters. CLI, environment, and config-file precedence is resolved by
+  the umbrella `pkms` crate.
 
 ## Boundaries
 
 `pkms-rag` may depend on `pkms-org`. It must not depend on `pkms`,
-`pkms-db`, `pkms-task`, or `pkms-web`. CLI command parsing and stdout rendering
-belong in `pkms`.
+`pkms-db`, `pkms-task`, or `pkms-web`. CLI command parsing, environment
+variable parsing, and stdout rendering belong in `pkms`.
 
 ## Related Docs
 

@@ -379,6 +379,7 @@ mod tests {
             new_notes_dir: None,
             daily_notes_dir: None,
             ignore_patterns: Vec::new(),
+            home_dir: None,
         };
         let output = execute(
             &config,

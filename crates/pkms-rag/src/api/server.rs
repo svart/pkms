@@ -7,7 +7,7 @@ use std::{
     sync::Arc,
 };
 
-use crate::{EmbeddingProviderConfig, embeddings::embedding_provider_config_from_env};
+use crate::{EmbeddingProviderConfig, embeddings::default_embedding_provider_config};
 
 #[derive(Debug, Clone)]
 pub struct RagServeOptions {
@@ -52,11 +52,7 @@ fn serve_with_state(
     let embedding_provider_config = opts
         .embedding_provider_config
         .clone()
-        .map(Ok)
-        .unwrap_or_else(|| {
-            embedding_provider_config_from_env()
-                .context("failed to read RAG embedding provider configuration")
-        })?;
+        .unwrap_or_else(default_embedding_provider_config);
     let mut state = AppState::with_embedding_provider_config(
         opts.db_path.clone(),
         opts.index_source.clone(),

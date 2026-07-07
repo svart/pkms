@@ -6,11 +6,19 @@ use pkms_db::commands::check::{
     self, CheckCommandOutput, CheckConfig, CheckItem, CheckOptions, CheckSelection,
     CrossLinkTargets,
 };
+use pkms_db::link_check::SshFileCheckOptions;
+use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 pub fn run(ctx: &CommandContext<'_>, opts: &CheckOptions) -> Result<ExitCode> {
     let config = ctx.config().db_command_config();
-    let output = check::execute(&CheckConfig { org: config.org }, opts)?;
+    let output = check::execute(
+        &CheckConfig {
+            org: config.org,
+            ssh: ssh_file_check_options_from_env(),
+        },
+        opts,
+    )?;
     render(ctx.output(), &output)
 }
 
@@ -69,4 +77,35 @@ pub fn options_from_args(args: &CheckArgs) -> CheckOptions {
         checks,
         cross_links,
     }
+}
+
+fn ssh_file_check_options_from_env() -> SshFileCheckOptions {
+    let mut options = SshFileCheckOptions {
+        default_user: default_ssh_user(),
+        agent_socket: non_empty_env_os("SSH_AUTH_SOCK").map(PathBuf::from),
+        ..SshFileCheckOptions::default()
+    };
+    if let Some(home) = dirs::home_dir() {
+        options.known_hosts = home.join(".ssh").join("known_hosts");
+        options.identity_files = default_identity_files(&home);
+    }
+    options
+}
+
+fn default_ssh_user() -> String {
+    std::env::var("USER")
+        .or_else(|_| std::env::var("LOGNAME"))
+        .unwrap_or_default()
+}
+
+fn default_identity_files(home: &Path) -> Vec<PathBuf> {
+    ["id_ed25519", "id_ecdsa", "id_rsa"]
+        .into_iter()
+        .map(|name| home.join(".ssh").join(name))
+        .filter(|path| path.is_file())
+        .collect()
+}
+
+fn non_empty_env_os(key: &str) -> Option<std::ffi::OsString> {
+    std::env::var_os(key).filter(|value| !value.as_os_str().is_empty())
 }

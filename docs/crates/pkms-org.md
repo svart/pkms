@@ -43,6 +43,8 @@ and raw org edit primitives.
 - Note-level IDs and heading-level IDs both participate in UUID resolution,
   duplicate-ID validation, links, and neighborhoods.
 - `Graph::load()` is a fresh scan and parse of the current files.
+- `~` expansion for file links uses the `home_dir` passed in `OrgConfig`; this
+  crate does not resolve the process environment itself.
 - Org editing helpers should preserve user content around the specific edit.
 - Domain crates and command adapters should use these helpers instead of
   open-coded org string manipulation.

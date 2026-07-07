@@ -1,4 +1,6 @@
-use super::{LinkCheckBackend, LinkCheckJob, LinkCheckKind, local_file_link_target_exists};
+use super::{
+    LinkCheckBackend, LinkCheckJob, LinkCheckKind, local_file_link_target_exists_with_home,
+};
 use crate::link_check::model::{
     LinkCheckErrorKind, LinkCheckOutcome, LinkCheckResults, link_check_broken, link_check_error,
 };
@@ -7,11 +9,22 @@ use rayon::prelude::*;
 use std::path::Path;
 
 pub fn check_local_link_job(job: LinkCheckJob, db_root: &Path) -> LinkCheckOutcome {
+    check_local_link_job_with_home(job, db_root, None)
+}
+
+pub fn check_local_link_job_with_home(
+    job: LinkCheckJob,
+    db_root: &Path,
+    home_dir: Option<&Path>,
+) -> LinkCheckOutcome {
     let exists = match job.backend {
         LinkCheckBackend::Local => match job.target.kind {
-            LinkCheckKind::File => {
-                local_file_link_target_exists(job.target.as_str(), &job.source.path, db_root)
-            }
+            LinkCheckKind::File => local_file_link_target_exists_with_home(
+                job.target.as_str(),
+                &job.source.path,
+                db_root,
+                home_dir,
+            ),
             LinkCheckKind::Attachment => {
                 attachment_target_exists(db_root, &job.source.uuid, job.target.as_str())
             }
@@ -33,9 +46,17 @@ pub fn check_local_link_job(job: LinkCheckJob, db_root: &Path) -> LinkCheckOutco
 }
 
 pub fn run_local_link_checks(jobs: Vec<LinkCheckJob>, db_root: &Path) -> LinkCheckResults {
+    run_local_link_checks_with_home(jobs, db_root, None)
+}
+
+pub fn run_local_link_checks_with_home(
+    jobs: Vec<LinkCheckJob>,
+    db_root: &Path,
+    home_dir: Option<&Path>,
+) -> LinkCheckResults {
     let outcomes: Vec<LinkCheckOutcome> = jobs
         .into_par_iter()
-        .map(|job| check_local_link_job(job, db_root))
+        .map(|job| check_local_link_job_with_home(job, db_root, home_dir))
         .collect();
     let mut results = LinkCheckResults::default();
     for outcome in outcomes {

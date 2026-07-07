@@ -5,8 +5,8 @@ use super::model::{
     FiletagsIssue,
 };
 use crate::link_check::{
-    LinkCheckErrorTarget, LinkCheckKind, LinkCheckResults, SshFileCheckOptions,
-    run_local_link_checks, run_ssh_link_checks,
+    LinkCheckErrorTarget, LinkCheckKind, LinkCheckResults, run_local_link_checks_with_home,
+    run_ssh_link_checks,
 };
 use anyhow::Result;
 use pkms_org::Graph;
@@ -107,7 +107,7 @@ fn selection_shows(selection: &CheckSelection, section: CheckDisplaySection) -> 
 }
 
 pub(super) fn collect_check_data<'a>(
-    _config: &'a CheckConfig,
+    config: &'a CheckConfig,
     graph: &'a Graph,
     db_root: &'a Path,
     opts: &CheckOptions,
@@ -115,11 +115,11 @@ pub(super) fn collect_check_data<'a>(
 ) -> Result<CheckData<'a>> {
     let local_link_kinds = display_opts.local_link_kinds();
     let link_jobs = graph.collect_local_link_check_jobs(&local_link_kinds);
-    let mut link_results = run_local_link_checks(link_jobs, db_root);
+    let mut link_results =
+        run_local_link_checks_with_home(link_jobs, db_root, config.org.home_dir.as_deref());
     if opts.checks.requests(CheckItem::RemoteFileLinks) {
         let ssh_jobs = graph.collect_ssh_file_link_check_jobs();
-        let ssh_options = SshFileCheckOptions::default();
-        link_results.extend(run_ssh_link_checks(ssh_jobs, &ssh_options));
+        link_results.extend(run_ssh_link_checks(ssh_jobs, &config.ssh));
     }
     let (broken_file, file_link_errors, broken_attachment) = split_link_check_results(link_results);
 

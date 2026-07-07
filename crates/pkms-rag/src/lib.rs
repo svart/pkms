@@ -25,10 +25,9 @@ pub use embeddings::FastEmbeddingProvider;
 pub use embeddings::{
     DEFAULT_EMBEDDING_MAX_BODY_CHARS, DEFAULT_FASTEMBED_BATCH_SIZE, DEFAULT_FASTEMBED_MODEL,
     DEFAULT_HASH_EMBEDDING_DIMENSION, EmbeddingProvider, EmbeddingProviderConfig,
-    HashEmbeddingProvider, cosine_similarity, embedding_provider_config_from_env,
-    embedding_provider_config_from_env_with_model,
-    embedding_provider_config_from_env_with_model_and_dir, embedding_text, pack_vector,
-    provider_from_config, provider_from_env, unpack_vector,
+    FASTEMBED_PROVIDER_NAME, HASH_PROVIDER_NAME, HashEmbeddingProvider, cosine_similarity,
+    default_embedding_provider_config, embedding_provider_config, embedding_text, pack_vector,
+    provider_from_config, unpack_vector,
 };
 pub use indexer::BackgroundIndexer;
 pub use models::{

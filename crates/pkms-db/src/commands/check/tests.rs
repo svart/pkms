@@ -9,12 +9,14 @@ fn org_config(db_root: &std::path::Path) -> OrgConfig {
         new_notes_dir: None,
         daily_notes_dir: None,
         ignore_patterns: Vec::new(),
+        home_dir: None,
     }
 }
 
 fn check_config(db_root: &std::path::Path) -> CheckConfig {
     CheckConfig {
         org: org_config(db_root),
+        ssh: SshFileCheckOptions::default(),
     }
 }
 

@@ -2,7 +2,7 @@ use super::{assets, inline::percent_decode, render_note_html, render_preview_htm
 use crate::{OpenTargetFn, ViewerMethod, WebConfig};
 use anyhow::{Context, Result};
 use pkms_org::domain::NoteId;
-use pkms_org::graph::{Graph, Node, resolve_file_link_path};
+use pkms_org::graph::{Graph, Node, resolve_file_link_path_with_home};
 use pkms_org::parser::{Link, parse_note};
 use std::io::{self, BufRead, BufReader, Write};
 use std::net::TcpStream;
@@ -257,10 +257,11 @@ impl AssetRequest {
     fn resolve(&self, state: &ServeState<'_>, note: &Node) -> ResolvedAsset {
         match self.kind {
             assets::AssetKind::File => {
-                let path = resolve_file_link_path(
+                let path = resolve_file_link_path_with_home(
                     &self.target,
                     &note.path,
                     state.config.resolved_db_root(),
+                    state.config.org.home_dir.as_deref(),
                 );
                 let allowed = assets::is_db_asset_allowed(&path, state.config.resolved_db_root());
                 ResolvedAsset { path, allowed }

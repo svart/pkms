@@ -4,10 +4,14 @@ mod ssh;
 
 pub use pkms_org::link_check::{
     LinkCheckBackend, LinkCheckJob, LinkCheckKind, LinkCheckTarget, LinkSource, is_ssh_file_target,
-    local_file_link_target_exists, sort_link_check_jobs, split_file_link_line_spec,
+    local_file_link_target_exists, local_file_link_target_exists_with_home, sort_link_check_jobs,
+    split_file_link_line_spec,
 };
 
-pub use local::{check_local_link_job, run_local_link_checks};
+pub use local::{
+    check_local_link_job, check_local_link_job_with_home, run_local_link_checks,
+    run_local_link_checks_with_home,
+};
 pub use model::{
     LinkCheckBrokenTarget, LinkCheckErrorKind, LinkCheckErrorTarget, LinkCheckOutcome,
     LinkCheckResults, SshErrorKind, sort_broken_targets, sort_link_check_errors,

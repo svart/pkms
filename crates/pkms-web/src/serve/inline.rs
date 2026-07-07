@@ -1,7 +1,7 @@
 use super::assets;
 use super::page::heading_anchor;
 use crate::WebConfig;
-use pkms_org::graph::{Graph, Node, resolve_file_link_path};
+use pkms_org::graph::{Graph, Node, resolve_file_link_path_with_home};
 use pkms_org::parser::LINK_RE;
 use regex::Regex;
 use std::path::PathBuf;
@@ -35,9 +35,12 @@ impl<'a> AssetRef<'a> {
 
     fn resolve_path(self, config: &WebConfig, node: &Node) -> PathBuf {
         match self.kind {
-            assets::AssetKind::File => {
-                resolve_file_link_path(self.target, &node.path, config.resolved_db_root())
-            }
+            assets::AssetKind::File => resolve_file_link_path_with_home(
+                self.target,
+                &node.path,
+                config.resolved_db_root(),
+                config.org.home_dir.as_deref(),
+            ),
             assets::AssetKind::Attachment => assets::resolve_existing_attachment(
                 config.resolved_db_root(),
                 &node.uuid,

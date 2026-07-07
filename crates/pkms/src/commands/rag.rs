@@ -17,6 +17,9 @@ use crate::{
 };
 
 const RAG_DB_ENV: &str = "PKMS_RAG_DB";
+const RAG_EMBEDDING_PROVIDER_ENV: &str = "PKMS_RAG_EMBEDDING_PROVIDER";
+const RAG_EMBEDDING_MODEL_ENV: &str = "PKMS_RAG_EMBEDDING_MODEL";
+const RAG_FASTEMBED_MODEL_DIR_ENV: &str = "PKMS_RAG_FASTEMBED_MODEL_DIR";
 const DEFAULT_RAG_HOST: &str = "127.0.0.1";
 const DEFAULT_RAG_PORT: u16 = 7337;
 
@@ -157,6 +160,7 @@ fn rag_note_viewer(
         config.org.db_root = notes_root.clone();
         config.org.new_notes_dir = Some(notes_root.join("roam"));
         config.org.daily_notes_dir = Some(notes_root.join("roam"));
+        config.org.home_dir = dirs::home_dir();
     }
     let viewer = pkms_web::NoteViewer::new(config, open::open_target, open::DEFAULT_EDITOR)?;
     Ok(Arc::new(RagWebNoteViewer { viewer }))
@@ -434,12 +438,13 @@ fn resolve_index_sources(
 fn resolve_embedding_provider_config(
     config: &ResolvedConfig,
 ) -> Result<pkms_rag::EmbeddingProviderConfig> {
-    let model_dir = config.resolve_rag_fastembed_model_dir();
-    pkms_rag::embedding_provider_config_from_env_with_model_and_dir(
-        config.rag_embedding_model(),
-        model_dir.as_deref(),
-    )
-    .context("failed to read RAG embedding provider configuration")
+    let provider = non_empty_env(RAG_EMBEDDING_PROVIDER_ENV);
+    let model = non_empty_env(RAG_EMBEDDING_MODEL_ENV)
+        .or_else(|| config.rag_embedding_model().map(ToOwned::to_owned));
+    let model_dir =
+        env_path(RAG_FASTEMBED_MODEL_DIR_ENV).or_else(|| config.resolve_rag_fastembed_model_dir());
+    pkms_rag::embedding_provider_config(provider.as_deref(), model.as_deref(), model_dir.as_deref())
+        .context("failed to read RAG embedding provider configuration")
 }
 
 fn resolve_index_embedding_provider_config(
@@ -508,6 +513,60 @@ mod tests {
                 model_dir: Some(PathBuf::from("/db/models/bge-small")),
             }
         );
+    }
+
+    #[test]
+    fn resolve_embedding_provider_config_prefers_env_values_over_config() {
+        let _guard = ENV_LOCK.lock().expect("env lock");
+        let _snapshot = EnvSnapshot::capture();
+        clear_embedding_env();
+        set_env(RAG_EMBEDDING_PROVIDER_ENV, "fastembed");
+        set_env(RAG_EMBEDDING_MODEL_ENV, "Xenova/all-MiniLM-L12-v2");
+        set_env(RAG_FASTEMBED_MODEL_DIR_ENV, "/env/pkms/models");
+        let mut config = ResolvedConfig::for_test_db("/db");
+        config.rag = Some(RagConfig {
+            rag_db: None,
+            embedding_model: Some("Xenova/bge-small-en-v1.5".to_string()),
+            fastembed_model_dir: Some(PathBuf::from("config/pkms/models")),
+        });
+
+        let provider_config = resolve_embedding_provider_config(&config).expect("config resolves");
+
+        assert_eq!(
+            provider_config,
+            pkms_rag::EmbeddingProviderConfig::FastEmbed {
+                model_name: "Xenova/all-MiniLM-L12-v2".to_string(),
+                batch_size: pkms_rag::DEFAULT_FASTEMBED_BATCH_SIZE,
+                model_dir: Some(PathBuf::from("/env/pkms/models")),
+            }
+        );
+    }
+
+    #[test]
+    fn resolve_embedding_provider_config_selects_hash_from_env() {
+        let _guard = ENV_LOCK.lock().expect("env lock");
+        let _snapshot = EnvSnapshot::capture();
+        clear_embedding_env();
+        set_env(RAG_EMBEDDING_PROVIDER_ENV, "hash");
+
+        let provider_config =
+            resolve_embedding_provider_config(&ResolvedConfig::for_test_db("/db"))
+                .expect("config resolves");
+
+        assert_eq!(provider_config, pkms_rag::EmbeddingProviderConfig::Hash);
+    }
+
+    #[test]
+    fn resolve_embedding_provider_config_rejects_unknown_env_provider() {
+        let _guard = ENV_LOCK.lock().expect("env lock");
+        let _snapshot = EnvSnapshot::capture();
+        clear_embedding_env();
+        set_env(RAG_EMBEDDING_PROVIDER_ENV, "unknown");
+
+        let err = resolve_embedding_provider_config(&ResolvedConfig::for_test_db("/db"))
+            .expect_err("provider is rejected");
+
+        assert!(format!("{err:#}").contains("unsupported embedding provider"));
     }
 
     #[test]

@@ -10,11 +10,13 @@ and preserving user note data over background state.
 1. `pkms` parses CLI arguments with `clap`.
 2. Configuration resolves once from `--db`, then `PKMS_DB_ROOT`, then
    `~/.config/pkms.toml`.
-3. Commands load only the data they need: configuration only, a graph, a
+3. `pkms` resolves process environment inputs and passes typed parameters into
+   domain crates.
+4. Commands load only the data they need: configuration only, a graph, a
    workspace, task providers, an optional RAG SQLite index, or a foreground HTTP
    server.
-4. Output is rendered as text, JSON, or NDJSON through shared output helpers.
-5. The process exits, except for explicit foreground servers: `pkms serve` when
+5. Output is rendered as text, JSON, or NDJSON through shared output helpers.
+6. The process exits, except for explicit foreground servers: `pkms serve` when
    built with `web` and `pkms rag serve` when built with `rag`.
 
 Do not add implicit caches, daemons, watchers, or hidden persistent derived
@@ -40,6 +42,8 @@ The dependency direction is intentionally one-way:
 - `pkms-db`, `pkms-rag`, `pkms-task`, and `pkms-web` may depend on `pkms-org`.
 - Domain crates must not depend on `pkms` or on each other unless the boundary
   check explicitly allows it.
+- Domain crates should not read process environment variables; `pkms` should
+  resolve environment-dependent values and pass them through typed config.
 
 Run `scripts/check-crate-boundaries.sh` after changing crate manifests.
 

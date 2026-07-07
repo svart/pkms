@@ -30,11 +30,8 @@ pub const DEFAULT_FASTEMBED_BATCH_SIZE: usize = 256;
 #[cfg(feature = "fastembed")]
 const DEFAULT_FASTEMBED_MODEL_CODE: &str = "Xenova/paraphrase-multilingual-MiniLM-L12-v2";
 
-const HASH_PROVIDER_NAME: &str = "hash";
-const FASTEMBED_PROVIDER_NAME: &str = "fastembed";
-const EMBEDDING_PROVIDER_ENV: &str = "PKMS_RAG_EMBEDDING_PROVIDER";
-const EMBEDDING_MODEL_ENV: &str = "PKMS_RAG_EMBEDDING_MODEL";
-const FASTEMBED_MODEL_DIR_ENV: &str = "PKMS_RAG_FASTEMBED_MODEL_DIR";
+pub const HASH_PROVIDER_NAME: &str = "hash";
+pub const FASTEMBED_PROVIDER_NAME: &str = "fastembed";
 
 pub trait EmbeddingProvider {
     fn model_name(&self) -> &str;
@@ -168,46 +165,32 @@ impl EmbeddingProvider for FastEmbeddingProvider {
     }
 }
 
-pub fn embedding_provider_config_from_env() -> Result<EmbeddingProviderConfig> {
-    embedding_provider_config_from_env_with_model(None)
+pub fn default_embedding_provider_config() -> EmbeddingProviderConfig {
+    EmbeddingProviderConfig::FastEmbed {
+        model_name: DEFAULT_FASTEMBED_MODEL.to_string(),
+        batch_size: DEFAULT_FASTEMBED_BATCH_SIZE,
+        model_dir: None,
+    }
 }
 
-pub fn embedding_provider_config_from_env_with_model(
-    configured_model_name: Option<&str>,
+pub fn embedding_provider_config(
+    provider: Option<&str>,
+    model_name: Option<&str>,
+    model_dir: Option<&Path>,
 ) -> Result<EmbeddingProviderConfig> {
-    embedding_provider_config_from_env_with_model_and_dir(configured_model_name, None)
-}
-
-pub fn embedding_provider_config_from_env_with_model_and_dir(
-    configured_model_name: Option<&str>,
-    configured_model_dir: Option<&Path>,
-) -> Result<EmbeddingProviderConfig> {
-    let provider = std::env::var(EMBEDDING_PROVIDER_ENV)
-        .ok()
+    let provider = provider
         .map(|provider| provider.trim().to_ascii_lowercase())
         .filter(|provider| !provider.is_empty())
         .unwrap_or_else(|| FASTEMBED_PROVIDER_NAME.to_string());
     match provider.as_str() {
         HASH_PROVIDER_NAME | "hashing-v1" => Ok(EmbeddingProviderConfig::Hash),
         FASTEMBED_PROVIDER_NAME => Ok(EmbeddingProviderConfig::FastEmbed {
-            model_name: std::env::var(EMBEDDING_MODEL_ENV)
-                .ok()
+            model_name: model_name
                 .map(|model| model.trim().to_string())
                 .filter(|model| !model.is_empty())
-                .or_else(|| {
-                    configured_model_name
-                        .map(str::trim)
-                        .filter(|model| !model.is_empty())
-                        .map(ToOwned::to_owned)
-                })
                 .unwrap_or_else(|| DEFAULT_FASTEMBED_MODEL.to_string()),
             batch_size: DEFAULT_FASTEMBED_BATCH_SIZE,
-            model_dir: std::env::var(FASTEMBED_MODEL_DIR_ENV)
-                .ok()
-                .map(|value| value.trim().to_string())
-                .filter(|value| !value.is_empty())
-                .map(PathBuf::from)
-                .or_else(|| configured_model_dir.map(Path::to_path_buf)),
+            model_dir: model_dir.map(Path::to_path_buf),
         }),
         _ => bail!(
             "unsupported embedding provider '{}'; expected '{}' or '{}'",
@@ -216,11 +199,6 @@ pub fn embedding_provider_config_from_env_with_model_and_dir(
             FASTEMBED_PROVIDER_NAME
         ),
     }
-}
-
-pub fn provider_from_env() -> Result<Box<dyn EmbeddingProvider>> {
-    let config = embedding_provider_config_from_env()?;
-    provider_from_config(&config)
 }
 
 pub fn provider_from_config(
@@ -483,11 +461,7 @@ mod tests {
 
     #[test]
     fn embeddings_provider_config_defaults_to_fastembed() {
-        let _guard = ENV_LOCK.lock().expect("env lock");
-        let _snapshot = EnvSnapshot::capture();
-        clear_embedding_env();
-
-        let config = embedding_provider_config_from_env().expect("config reads");
+        let config = embedding_provider_config(None, None, None).expect("config resolves");
 
         assert_eq!(
             config,
@@ -501,13 +475,8 @@ mod tests {
 
     #[test]
     fn embeddings_provider_config_selects_hash_provider() {
-        let _guard = ENV_LOCK.lock().expect("env lock");
-        let _snapshot = EnvSnapshot::capture();
-        clear_embedding_env();
-        set_env(EMBEDDING_PROVIDER_ENV, "hash");
-
-        let config = embedding_provider_config_from_env().expect("config reads");
-        let provider = provider_from_env().expect("hash provider builds");
+        let config = embedding_provider_config(Some("hash"), None, None).expect("config resolves");
+        let provider = provider_from_config(&config).expect("hash provider builds");
 
         assert_eq!(config, EmbeddingProviderConfig::Hash);
         assert_eq!(provider.model_name(), DEFAULT_HASH_EMBEDDING_MODEL);
@@ -516,17 +485,12 @@ mod tests {
 
     #[test]
     fn embeddings_provider_config_reads_fastembed_model_and_dir() {
-        let _guard = ENV_LOCK.lock().expect("env lock");
-        let _snapshot = EnvSnapshot::capture();
-        clear_embedding_env();
-        set_env(EMBEDDING_PROVIDER_ENV, "fastembed");
-        set_env(EMBEDDING_MODEL_ENV, "Xenova/all-MiniLM-L12-v2");
-        set_env(
-            "PKMS_RAG_FASTEMBED_MODEL_DIR",
-            "/opt/pkms/models/all-minilm",
-        );
-
-        let config = embedding_provider_config_from_env().expect("config reads");
+        let config = embedding_provider_config(
+            Some("fastembed"),
+            Some("Xenova/all-MiniLM-L12-v2"),
+            Some(Path::new("/opt/pkms/models/all-minilm")),
+        )
+        .expect("config resolves");
 
         assert_eq!(
             config,
@@ -539,15 +503,10 @@ mod tests {
     }
 
     #[test]
-    fn embeddings_provider_config_uses_configured_model_when_env_model_absent() {
-        let _guard = ENV_LOCK.lock().expect("env lock");
-        let _snapshot = EnvSnapshot::capture();
-        clear_embedding_env();
-        set_env(EMBEDDING_PROVIDER_ENV, "fastembed");
-
+    fn embeddings_provider_config_uses_configured_model() {
         let config =
-            embedding_provider_config_from_env_with_model(Some("Xenova/bge-small-en-v1.5"))
-                .expect("config reads");
+            embedding_provider_config(Some("fastembed"), Some("Xenova/bge-small-en-v1.5"), None)
+                .expect("config resolves");
 
         assert_eq!(
             config,
@@ -560,13 +519,9 @@ mod tests {
     }
 
     #[test]
-    fn embeddings_provider_config_uses_configured_model_dir_when_env_dir_absent() {
-        let _guard = ENV_LOCK.lock().expect("env lock");
-        let _snapshot = EnvSnapshot::capture();
-        clear_embedding_env();
-        set_env(EMBEDDING_PROVIDER_ENV, "fastembed");
-
-        let config = embedding_provider_config_from_env_with_model_and_dir(
+    fn embeddings_provider_config_uses_configured_model_dir() {
+        let config = embedding_provider_config(
+            Some("fastembed"),
             None,
             Some(Path::new("/srv/pkms/models/bge-small")),
         )
@@ -583,45 +538,13 @@ mod tests {
     }
 
     #[test]
-    fn embeddings_provider_config_prefers_env_model_dir_over_configured_model_dir() {
-        let _guard = ENV_LOCK.lock().expect("env lock");
-        let _snapshot = EnvSnapshot::capture();
-        clear_embedding_env();
-        set_env(EMBEDDING_PROVIDER_ENV, "fastembed");
-        set_env(FASTEMBED_MODEL_DIR_ENV, "/env/pkms/models");
-
-        let config = embedding_provider_config_from_env_with_model_and_dir(
-            None,
-            Some(Path::new("/config/pkms/models")),
-        )
-        .expect("config reads");
+    fn embeddings_provider_config_trims_empty_values() {
+        let config = embedding_provider_config(Some("  "), Some("  "), None).expect("config reads");
 
         assert_eq!(
             config,
             EmbeddingProviderConfig::FastEmbed {
                 model_name: DEFAULT_FASTEMBED_MODEL.to_string(),
-                batch_size: DEFAULT_FASTEMBED_BATCH_SIZE,
-                model_dir: Some("/env/pkms/models".into()),
-            }
-        );
-    }
-
-    #[test]
-    fn embeddings_provider_config_prefers_env_model_over_configured_model() {
-        let _guard = ENV_LOCK.lock().expect("env lock");
-        let _snapshot = EnvSnapshot::capture();
-        clear_embedding_env();
-        set_env(EMBEDDING_PROVIDER_ENV, "fastembed");
-        set_env(EMBEDDING_MODEL_ENV, "Xenova/all-MiniLM-L12-v2");
-
-        let config =
-            embedding_provider_config_from_env_with_model(Some("Xenova/bge-small-en-v1.5"))
-                .expect("config reads");
-
-        assert_eq!(
-            config,
-            EmbeddingProviderConfig::FastEmbed {
-                model_name: "Xenova/all-MiniLM-L12-v2".to_string(),
                 batch_size: DEFAULT_FASTEMBED_BATCH_SIZE,
                 model_dir: None,
             }
@@ -629,13 +552,17 @@ mod tests {
     }
 
     #[test]
-    fn embeddings_provider_config_rejects_unknown_provider() {
-        let _guard = ENV_LOCK.lock().expect("env lock");
-        let _snapshot = EnvSnapshot::capture();
-        clear_embedding_env();
-        set_env(EMBEDDING_PROVIDER_ENV, "unknown");
+    fn embeddings_provider_config_accepts_hashing_v1_alias() {
+        let config =
+            embedding_provider_config(Some("hashing-v1"), None, None).expect("config resolves");
 
-        let err = embedding_provider_config_from_env().expect_err("provider is rejected");
+        assert_eq!(config, EmbeddingProviderConfig::Hash);
+    }
+
+    #[test]
+    fn embeddings_provider_config_rejects_unknown_provider() {
+        let err = embedding_provider_config(Some("unknown"), None, None)
+            .expect_err("provider is rejected");
 
         assert!(err.to_string().contains("unsupported embedding provider"));
     }
@@ -701,57 +628,6 @@ mod tests {
                 }
             })
             .collect()
-    }
-
-    static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
-
-    struct EnvSnapshot {
-        values: Vec<(&'static str, Option<String>)>,
-    }
-
-    impl EnvSnapshot {
-        fn capture() -> Self {
-            Self {
-                values: vec![
-                    (
-                        EMBEDDING_PROVIDER_ENV,
-                        std::env::var(EMBEDDING_PROVIDER_ENV).ok(),
-                    ),
-                    (EMBEDDING_MODEL_ENV, std::env::var(EMBEDDING_MODEL_ENV).ok()),
-                    (
-                        "PKMS_RAG_FASTEMBED_MODEL_DIR",
-                        std::env::var("PKMS_RAG_FASTEMBED_MODEL_DIR").ok(),
-                    ),
-                ],
-            }
-        }
-    }
-
-    impl Drop for EnvSnapshot {
-        fn drop(&mut self) {
-            for (key, value) in &self.values {
-                match value {
-                    Some(value) => set_env(key, value),
-                    None => remove_env(key),
-                }
-            }
-        }
-    }
-
-    fn clear_embedding_env() {
-        remove_env(EMBEDDING_PROVIDER_ENV);
-        remove_env(EMBEDDING_MODEL_ENV);
-        remove_env("PKMS_RAG_FASTEMBED_MODEL_DIR");
-    }
-
-    fn set_env(key: &str, value: &str) {
-        // SAFETY: these tests serialize environment changes with ENV_LOCK and restore values.
-        unsafe { std::env::set_var(key, value) };
-    }
-
-    fn remove_env(key: &str) {
-        // SAFETY: these tests serialize environment changes with ENV_LOCK and restore values.
-        unsafe { std::env::remove_var(key) };
     }
 }
 

@@ -98,10 +98,19 @@ pub fn split_file_link_line_spec(target: &str) -> (&str, Option<&str>) {
 }
 
 pub fn local_file_link_target_exists(target: &str, source_path: &Path, db_root: &Path) -> bool {
+    local_file_link_target_exists_with_home(target, source_path, db_root, None)
+}
+
+pub fn local_file_link_target_exists_with_home(
+    target: &str,
+    source_path: &Path,
+    db_root: &Path,
+    home_dir: Option<&Path>,
+) -> bool {
     if is_ssh_file_target(target) {
         return true;
     }
-    crate::graph::file_link_target_exists(target, source_path, db_root)
+    crate::graph::file_link_target_exists_with_home(target, source_path, db_root, home_dir)
 }
 
 fn normalized_file_target(target: &str) -> &str {

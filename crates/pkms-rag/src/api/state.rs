@@ -1,16 +1,13 @@
 use super::NoteViewer;
-use anyhow::{Context, Result};
+use anyhow::Result;
 use std::{path::PathBuf, sync::Arc};
 
 use crate::{
-    BackgroundIndexer, EmbeddingProviderConfig,
-    embeddings::{embedding_provider_config_from_env, provider_from_config},
+    BackgroundIndexer, EmbeddingProviderConfig, embeddings::provider_from_config,
     models::IndexProgress,
 };
 
 pub const DEFAULT_RAG_DB: &str = ".data/pkms-rag.sqlite3";
-
-const RAG_DB_ENV: &str = "PKMS_RAG_DB";
 
 #[derive(Clone)]
 pub struct AppState {
@@ -22,20 +19,6 @@ pub struct AppState {
 }
 
 impl AppState {
-    pub fn from_env() -> Result<Self> {
-        let db_path = std::env::var(RAG_DB_ENV)
-            .map(PathBuf::from)
-            .unwrap_or_else(|_| PathBuf::from(DEFAULT_RAG_DB));
-        let embedding_provider_config = embedding_provider_config_from_env()
-            .context("failed to read RAG embedding provider configuration")?;
-        Ok(Self::with_embedding_provider_config(
-            db_path,
-            None,
-            None,
-            embedding_provider_config,
-        ))
-    }
-
     pub fn with_embedding_provider_config(
         db_path: impl Into<PathBuf>,
         index_source: Option<PathBuf>,

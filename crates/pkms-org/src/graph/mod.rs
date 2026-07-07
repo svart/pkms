@@ -81,6 +81,7 @@ pub struct Graph {
     pub duplicates: DuplicateInfo,
     pub heading_uuid_to_primary: HashMap<NoteId, NoteId>,
     pub results: Vec<FileScanResult>,
+    home_dir: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -116,13 +117,13 @@ pub(crate) struct FileLinkTarget {
 }
 
 impl FileLinkTarget {
-    pub(crate) fn parse(target_path: &str) -> Self {
+    pub(crate) fn parse(target_path: &str, home_dir: Option<&Path>) -> Self {
         let (inner_path, org_relative) = if let Some(rest) = target_path.strip_prefix("org:") {
             (rest, true)
         } else {
             (target_path, false)
         };
-        let expanded = expand_file_link_home(inner_path);
+        let expanded = expand_file_link_home(inner_path, home_dir);
         let clean_path = expanded.split("::").next().unwrap_or(&expanded);
         let line_spec = target_path.split("::").nth(1).map(str::to_string);
 
@@ -144,15 +145,11 @@ impl FileLinkTarget {
     }
 }
 
-fn expand_file_link_home(inner_path: &str) -> String {
+fn expand_file_link_home(inner_path: &str, home_dir: Option<&Path>) -> String {
     if inner_path.starts_with('~') {
-        if let Some(home) = dirs::home_dir() {
+        if let Some(home) = home_dir {
             inner_path.replacen('~', &home.display().to_string(), 1)
         } else {
-            eprintln!(
-                "Warning: Could not resolve home directory for path '{}'",
-                inner_path
-            );
             inner_path.to_string()
         }
     } else {
@@ -161,12 +158,31 @@ fn expand_file_link_home(inner_path: &str) -> String {
 }
 
 pub fn resolve_file_link_path(target_path: &str, source_path: &Path, db_root: &Path) -> PathBuf {
-    FileLinkTarget::parse(target_path).resolve_path(source_path, db_root)
+    resolve_file_link_path_with_home(target_path, source_path, db_root, None)
+}
+
+pub fn resolve_file_link_path_with_home(
+    target_path: &str,
+    source_path: &Path,
+    db_root: &Path,
+    home_dir: Option<&Path>,
+) -> PathBuf {
+    FileLinkTarget::parse(target_path, home_dir).resolve_path(source_path, db_root)
 }
 
 /// Check whether a file link target exists on disk and optionally matches a line spec.
 pub fn file_link_target_exists(target: &str, source_path: &Path, db_root: &Path) -> bool {
-    let target = FileLinkTarget::parse(target);
+    file_link_target_exists_with_home(target, source_path, db_root, None)
+}
+
+/// Check whether a file link target exists using an explicit home directory for `~` expansion.
+pub fn file_link_target_exists_with_home(
+    target: &str,
+    source_path: &Path,
+    db_root: &Path,
+    home_dir: Option<&Path>,
+) -> bool {
+    let target = FileLinkTarget::parse(target, home_dir);
     let resolved = target.resolve_path(source_path, db_root);
     if !resolved.exists() {
         return false;
@@ -196,6 +212,7 @@ impl Graph {
         tracing::debug!(db_root = %config.db_root.display(), "loading graph");
         let corpus = Corpus::load(config)?;
         let mut graph = Self::from_corpus(&corpus);
+        graph.home_dir = config.home_dir.clone();
         graph.index_db_relative_paths(&config.db_root);
         tracing::debug!(
             node_count = graph.nodes.len(),
@@ -225,6 +242,7 @@ impl Graph {
     fn from_results(results: Vec<FileScanResult>) -> Self {
         let mut graph = Graph::build_from_results(&results);
         graph.results = results;
+        graph.home_dir = None;
         tracing::debug!(
             node_count = graph.nodes.len(),
             file_count = graph.results.len(),
@@ -317,6 +335,10 @@ impl Graph {
             .iter()
             .find(|result| result.path == path)
             .and_then(|result| result.raw_content.as_deref())
+    }
+
+    pub fn home_dir(&self) -> Option<&Path> {
+        self.home_dir.as_deref()
     }
 }
 

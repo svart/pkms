@@ -49,7 +49,7 @@ fn resolve_paths(graph: &Graph, db_root: &Path, raw: &[String]) -> Vec<PathBuf> 
         }
 
         let expanded = if let Some(rest) = target.strip_prefix("~/") {
-            dirs::home_dir().map(|home| home.join(rest))
+            graph.home_dir().map(|home| home.join(rest))
         } else {
             None
         };

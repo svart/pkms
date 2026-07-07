@@ -1,3 +1,4 @@
+use crate::link_check::SshFileCheckOptions;
 use anyhow::Result;
 use pkms_org::{Graph, OrgConfig};
 use std::process::ExitCode;
@@ -16,6 +17,7 @@ pub use rendering::render_text;
 #[derive(Debug, Clone)]
 pub struct CheckConfig {
     pub org: OrgConfig,
+    pub ssh: SshFileCheckOptions,
 }
 
 pub fn execute(config: &CheckConfig, opts: &CheckOptions) -> Result<CheckCommandOutput> {

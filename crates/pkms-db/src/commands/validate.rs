@@ -341,6 +341,7 @@ Body
             new_notes_dir: None,
             daily_notes_dir: None,
             ignore_patterns: Vec::new(),
+            home_dir: None,
         };
         let outputs = execute(
             &config,

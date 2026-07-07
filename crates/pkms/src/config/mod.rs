@@ -231,6 +231,7 @@ impl ResolvedConfig {
             new_notes_dir: Some(self.resolve_new_notes_dir()),
             daily_notes_dir: Some(self.resolve_daily_notes_dir()),
             ignore_patterns: self.resolve_ignore_patterns(),
+            home_dir: dirs::home_dir(),
         }
     }
 
