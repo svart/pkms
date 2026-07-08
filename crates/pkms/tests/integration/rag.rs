@@ -78,6 +78,11 @@ fn test_rag_ingest_search_and_retrieve_json() {
         search["results"][0]["title"],
         "Media Library Migration to Jellyfin"
     );
+    assert_eq!(
+        search["results"][0]["uuid"],
+        "c6404b7e-5194-4a5a-89b6-cc9d4ae7ee27"
+    );
+    assert!(search["results"][0].get("note_id").is_none());
 
     let (retrieve, retrieve_status) = run_hash_json(&[
         "--db",
@@ -93,6 +98,11 @@ fn test_rag_ingest_search_and_retrieve_json() {
     assert!(retrieve_status.success());
     assert_eq!(retrieve["query"], "agenda inspect tasks");
     assert_eq!(retrieve["results"][0]["title"], "PKMS Task Backend");
+    assert_eq!(
+        retrieve["results"][0]["uuid"],
+        "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa"
+    );
+    assert!(retrieve["results"][0].get("note_id").is_none());
 }
 
 #[test]
@@ -138,9 +148,75 @@ Agents call retrieve to search mounted PKMS notes.
     ]);
     assert!(search_status.success());
     assert_eq!(
-        search["results"][0]["note_id"],
+        search["results"][0]["uuid"],
         "eeeeeeee-eeee-4eee-eeee-eeeeeeeeeeee"
     );
+    assert!(search["results"][0].get("note_id").is_none());
+}
+
+#[test]
+fn test_rag_search_ndjson_pipes_to_task_list() {
+    let db = TestDb::clean();
+    db.write_roam(
+        "distributed-mesh.org",
+        r#":PROPERTIES:
+:ID:       dddddddd-dddd-4ddd-dddd-dddddddddddd
+:END:
+#+title: Distributed Mesh Project
+* Context
+Distributed mesh planning and execution notes.
+* TODO Ship mesh routing milestone
+"#,
+    );
+    let rag_db = db.root().join("rag.sqlite3");
+
+    let (index_stdout, index_stderr, index_status) = run_hash(&[
+        "--db",
+        db.root().to_str().unwrap(),
+        "rag",
+        "index",
+        "--rag-db",
+        rag_db.to_str().unwrap(),
+    ]);
+    assert!(
+        index_status.success(),
+        "index failed\nstdout: {index_stdout}\nstderr: {index_stderr}"
+    );
+
+    let (task_stdout, task_stderr, task_status) = run_pipe(
+        &[
+            "--db",
+            db.root().to_str().unwrap(),
+            "rag",
+            "search",
+            "distributed mesh",
+            "--rag-db",
+            rag_db.to_str().unwrap(),
+            "--output-format",
+            "ndjson",
+        ],
+        &[
+            "--db",
+            db.root().to_str().unwrap(),
+            "--output-format",
+            "json",
+            "task",
+            "list",
+            "--from-stdin",
+        ],
+    );
+    assert!(
+        task_status.success(),
+        "task list --from-stdin failed:\n{task_stdout}\n{task_stderr}"
+    );
+    let tasks: serde_json::Value = serde_json::from_str(task_stdout.trim()).unwrap();
+    let items = tasks["items"].as_array().unwrap();
+    assert_eq!(items.len(), 1);
+    assert_eq!(
+        items[0]["note_uuid"],
+        "dddddddd-dddd-4ddd-dddd-dddddddddddd"
+    );
+    assert_eq!(items[0]["title"], "Ship mesh routing milestone");
 }
 
 #[test]
@@ -232,9 +308,10 @@ rag_db = "{}"
     );
     assert!(search_status.success());
     assert_eq!(
-        search["results"][0]["note_id"],
+        search["results"][0]["uuid"],
         "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa"
     );
+    assert!(search["results"][0].get("note_id").is_none());
 }
 
 #[test]
@@ -309,9 +386,10 @@ The RAG force rebuild path starts from an empty SQLite index.
     ]);
     assert!(search_status.success());
     assert_eq!(
-        search["results"][0]["note_id"],
+        search["results"][0]["uuid"],
         "bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb"
     );
+    assert!(search["results"][0].get("note_id").is_none());
 }
 
 #[cfg(feature = "web")]

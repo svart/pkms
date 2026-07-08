@@ -372,12 +372,12 @@ function renderResults(response) {
 
     const header = document.createElement("div");
     header.className = "result-header";
-    const title = document.createElement(noteViewerAvailable && item.note_id ? "a" : "div");
+    const title = document.createElement(noteViewerAvailable && item.uuid ? "a" : "div");
     title.className = title instanceof HTMLAnchorElement ? "title title-link" : "title";
     if (title instanceof HTMLAnchorElement) {
-      title.href = noteHref(item.note_id);
+      title.href = noteHref(item.uuid);
     }
-    title.textContent = item.title || item.note_id || "Untitled";
+    title.textContent = item.title || item.uuid || "Untitled";
     const score = document.createElement("div");
     score.className = "score";
     score.textContent = numberFormat.format(item.scores?.final || 0);

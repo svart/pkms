@@ -14,6 +14,8 @@ Only the producer commands below emit record streams. Other commands that accept
 - `orphans --output-format ndjson`
 - `stats --hubs --output-format ndjson`
 - `suggest --output-format ndjson`
+- `rag search --output-format ndjson`
+- `rag retrieve --output-format ndjson`
 
 ## Consumers
 
@@ -31,6 +33,7 @@ pkms stats --hubs --output-format ndjson | pkms get --links --no-content
 pkms query "concurrency" --output-format ndjson | pkms suggest --output-format ndjson | pkms get --links
 pkms query "foo" --output-format ndjson | pkms validate
 pkms resolve --tags "project" --output-format ndjson | pkms task list --from-stdin
+pkms rag retrieve "distributed mesh" --output-format ndjson | pkms task list --from-stdin
 ```
 
 Use `--from-stdin` explicitly when a consumer also receives flags that make

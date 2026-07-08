@@ -10,7 +10,7 @@ pkms --output-format ndjson resolve --title "graph"
 ```
 
 Use JSON when one command result should be consumed as a whole. Use NDJSON when
-passing a stream of note or task records to another command.
+passing a stream of note, task, or RAG chunk records to another command.
 
 `pkms rag index` is a text-only exception: it prints rebuild progress to stderr,
 prints its final summary to stdout, and rejects `--output-format`.

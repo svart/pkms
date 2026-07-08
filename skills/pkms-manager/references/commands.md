@@ -64,6 +64,8 @@ links.
 
 `pkms rag` exists only in builds made with the `rag` feature. Use it for local
 retrieval indexing, search, cited retrieval, and the RAG HTTP API/UI.
+RAG search/retrieve JSON and NDJSON results include `uuid` for the source note,
+so they can feed note-target pipeline consumers.
 Use `[rag].fastembed_model_dir` or `PKMS_RAG_FASTEMBED_MODEL_DIR` when FastEmbed
 should load model files from a local directory instead of downloading them.
 

@@ -152,7 +152,8 @@ final summary to stdout, and rejects `--output-format`.
 
 `pkms rag retrieve` returns cited chunks with `hybrid`, `bm25`, or `dense`
 scoring. Text output is concise; JSON returns the full response, and NDJSON emits
-one result per line.
+one result per line. RAG search and retrieve results include `uuid` for the
+source note so they can be piped to note-target consumers.
 
 `pkms rag serve` starts a foreground local HTTP server with the browser UI and
 HTTP API:

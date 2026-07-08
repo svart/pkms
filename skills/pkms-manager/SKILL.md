@@ -155,7 +155,8 @@ Validate changed notes afterward.
 Use NDJSON for command chaining. Producers emit one JSON object per line;
 consumers read UUID/path targets from stdin.
 
-Common producers: `resolve`, `query`, `orphans`, `stats --hubs`, `suggest`.
+Common producers: `resolve`, `query`, `orphans`, `stats --hubs`, `suggest`,
+`rag search`, `rag retrieve`.
 Common consumers: `get`, `suggest`, `validate`, `task list`.
 
 Use `--from-stdin` when the consumer also has other flags or scope could be

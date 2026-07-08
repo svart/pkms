@@ -52,10 +52,10 @@ mod tests {
                 .contains("noteViewerAvailable = statusBody.note_viewer_available === true;")
         );
         assert!(script.1.contains(
-            "document.createElement(noteViewerAvailable && item.note_id ? \"a\" : \"div\")"
+            "document.createElement(noteViewerAvailable && item.uuid ? \"a\" : \"div\")"
         ));
-        assert!(script.1.contains("noteHref(item.note_id)"));
-        assert!(script.1.contains("title.href = noteHref(item.note_id)"));
+        assert!(script.1.contains("noteHref(item.uuid)"));
+        assert!(script.1.contains("title.href = noteHref(item.uuid)"));
 
         let index_status =
             json_request(app, Method::GET, "/index/status", Body::empty(), None).await;
@@ -267,9 +267,10 @@ Agents call /retrieve to search mounted PKMS notes.
         .await;
         assert_eq!(retrieve.0, StatusCode::OK);
         assert_eq!(
-            retrieve.1["results"][0]["note_id"],
+            retrieve.1["results"][0]["uuid"],
             "eeeeeeee-eeee-4eee-eeee-eeeeeeeeeeee"
         );
+        assert!(retrieve.1["results"][0].get("note_id").is_none());
 
         std::fs::remove_file(note_path).expect("note removes");
         let second = json_request(

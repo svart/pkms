@@ -411,7 +411,7 @@ pub(crate) fn row_to_stored_search_result(
 ) -> rusqlite::Result<SearchResult> {
     Ok(SearchResult {
         chunk_id: row.get("chunk_id")?,
-        note_id: row.get("note_id")?,
+        uuid: row.get("note_id")?,
         title: row.get("title")?,
         path: row.get("path")?,
         aliases: json_column(row, "aliases_json")?,

@@ -251,7 +251,7 @@ fn expand_graph_candidates<'a>(
               AND c.stale = 0
             ORDER BY c.note_id, c.heading_level, c.start_line, c.chunk_id
             "#,
-            &seed.note_id,
+            &seed.uuid,
             0.9,
             &mut expanded,
         )?;
@@ -276,7 +276,7 @@ fn expand_graph_candidates<'a>(
               AND c.stale = 0
             ORDER BY c.note_id, c.heading_level, c.start_line, c.chunk_id
             "#,
-            &seed.note_id,
+            &seed.uuid,
             0.8,
             &mut expanded,
         )?;
@@ -347,8 +347,8 @@ fn graph_boost(conn: &Connection, result: &SearchResult) -> Result<f64> {
             "#,
             [
                 result.chunk_id.as_str(),
-                result.note_id.as_str(),
-                result.note_id.as_str(),
+                result.uuid.as_str(),
+                result.uuid.as_str(),
             ],
             |row| row.get::<_, i64>(0),
         )
@@ -423,7 +423,7 @@ mod tests {
         assert!(!results.is_empty());
         let first = &results[0];
         assert_eq!(first.result.title, "Media Library Migration to Jellyfin");
-        assert_eq!(first.result.note_id, "c6404b7e-5194-4a5a-89b6-cc9d4ae7ee27");
+        assert_eq!(first.result.uuid, "c6404b7e-5194-4a5a-89b6-cc9d4ae7ee27");
         assert_eq!(first.result.path, "ops/media-library.org");
         assert_eq!(first.result.heading_path, vec!["Seerr", "Jellyfin links"]);
         assert_eq!(first.result.start_line, 40);

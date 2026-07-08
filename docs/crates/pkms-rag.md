@@ -51,8 +51,8 @@ with `--features rag`.
   records no longer present.
 - `pkms rag index --force-rebuild` removes the selected SQLite index and
   sidecar files before rebuilding from scratch.
-- Search and retrieval responses must cite note title, path, heading path,
-  source line range, scores, and chunk text.
+- Search and retrieval responses must cite source note `uuid`, note title, path,
+  heading path, source line range, scores, and chunk text.
 - The foreground RAG server may start a background rebuild, but it is not a
   daemon or watcher.
 

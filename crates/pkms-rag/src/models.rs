@@ -221,7 +221,7 @@ pub struct ScoreBreakdown {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SearchResult {
     pub chunk_id: String,
-    pub note_id: String,
+    pub uuid: String,
     pub title: String,
     pub path: String,
     pub aliases: Vec<String>,
