@@ -34,7 +34,10 @@ pub use execution::{
 };
 pub use filter::{SourceSelection, TaskFilters, parse_task_filters, parse_task_filters_on};
 pub use id::TaskId;
-pub use model::{TaskItem, TaskPriority, TaskProperty, TaskSourceKind};
+pub use model::{
+    TaskDate, TaskDateValue, TaskItem, TaskPriority, TaskProperty, TaskSourceKind, TaskState,
+    TaskStatus,
+};
 pub use modifiers::TaskModifierSpec;
 pub use mutation::{
     TaskModOutput, TaskStateChangeOutput, add_pkms_task, mod_pkms_task, postpone_pkms_task,

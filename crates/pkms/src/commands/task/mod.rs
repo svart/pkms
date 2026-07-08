@@ -157,12 +157,13 @@ fn run_agenda(runtime: TaskRuntime<'_>, args: &TaskAgendaArgs) -> Result<()> {
     let planned = plan_agenda_request(&task_config, args, runtime.clock)?;
     let task_config = runtime.config.pkms_task_config();
     let output = pkms_task::execute_task_agenda(runtime.config, &task_config, &planned.execution)?;
-    render_task_agenda(runtime.output, output, &planned.table)
+    render_task_agenda(runtime.output, output, runtime.clock.now, &planned.table)
 }
 
 fn render_task_agenda(
     ctx: &OutputContext,
     output: pkms_task::AgendaExecution,
+    now: chrono::NaiveTime,
     table: &plan::TaskTableOptions,
 ) -> Result<()> {
     render::print_agenda_task_items(
@@ -176,6 +177,7 @@ fn render_task_agenda(
                 row_separators: table.row_separators,
             },
             today: output.today,
+            now,
             window: output.window,
         },
     )

@@ -292,7 +292,40 @@ pub fn print_table_with_empty_message<T: RowItem>(
     footer: &str,
     empty_message: &str,
 ) {
-    if sections.iter().all(|(_, items)| items.is_empty()) {
+    let entry_rows: Vec<Vec<TaskTableEntry<'_, T>>> = sections
+        .iter()
+        .map(|(_, items)| items.iter().map(TaskTableEntry::Item).collect())
+        .collect();
+    let entry_sections: Vec<(&str, &[TaskTableEntry<'_, T>])> = sections
+        .iter()
+        .zip(entry_rows.iter())
+        .map(|((label, _), entries)| (*label, entries.as_slice()))
+        .collect();
+    print_table_entries_with_empty_message(
+        &entry_sections,
+        cols,
+        row_separators,
+        footer,
+        empty_message,
+    );
+}
+
+pub enum TaskTableEntry<'a, T> {
+    Item(&'a T),
+    Divider(String),
+}
+
+pub fn print_table_entries_with_empty_message<T: RowItem>(
+    sections: &[(&str, &[TaskTableEntry<'_, T>])],
+    cols: &[Column],
+    row_separators: RowSeparatorMode,
+    footer: &str,
+    empty_message: &str,
+) {
+    if sections
+        .iter()
+        .all(|(_, entries)| !has_item_entries(entries))
+    {
         println!("{empty_message}");
         return;
     }
@@ -308,6 +341,12 @@ pub fn print_table_with_empty_message<T: RowItem>(
     println!("{footer}");
 }
 
+fn has_item_entries<T>(entries: &[TaskTableEntry<'_, T>]) -> bool {
+    entries
+        .iter()
+        .any(|entry| matches!(entry, TaskTableEntry::Item(_)))
+}
+
 struct TaskTableLayout {
     adaptive_layout: Option<TableLayout>,
     section_width: usize,
@@ -315,13 +354,16 @@ struct TaskTableLayout {
 }
 
 impl TaskTableLayout {
-    fn calculate<T: RowItem>(sections: &[(&str, &[T])], cols: &[Column]) -> Self {
+    fn calculate<T: RowItem>(
+        sections: &[(&str, &[TaskTableEntry<'_, T>])],
+        cols: &[Column],
+    ) -> Self {
         let max_widths = max_task_table_widths(sections);
         let adaptive_layout = adaptive_table_layout(cols, &max_widths);
         let section_width = rendered_section_width(cols, &max_widths, adaptive_layout.as_ref());
         let uses_section_boxes = sections
             .iter()
-            .any(|(label, items)| !label.trim().is_empty() && !items.is_empty());
+            .any(|(label, entries)| !label.trim().is_empty() && has_item_entries(entries));
 
         Self {
             adaptive_layout,
@@ -331,10 +373,13 @@ impl TaskTableLayout {
     }
 }
 
-fn max_task_table_widths<T: RowItem>(sections: &[(&str, &[T])]) -> [usize; 9] {
+fn max_task_table_widths<T: RowItem>(sections: &[(&str, &[TaskTableEntry<'_, T>])]) -> [usize; 9] {
     let mut max_widths: [usize; 9] = ALL_COLUMNS.map(|c| c.name().len());
-    for (_, items) in sections {
-        for item in *items {
+    for (_, entries) in sections {
+        for entry in *entries {
+            let TaskTableEntry::Item(item) = entry else {
+                continue;
+            };
             for row in item.format_rows() {
                 for (i, col) in row.iter().enumerate() {
                     let line_w = col.lines().map(|l| l.len()).max().unwrap_or(0);
@@ -350,12 +395,13 @@ fn max_task_table_widths<T: RowItem>(sections: &[(&str, &[T])]) -> [usize; 9] {
 struct TaskTableRecords {
     builder: Builder,
     section_rows: Vec<usize>,
+    zero_padding_rows: Vec<usize>,
     no_border_rows: Vec<usize>,
     row_end: usize,
 }
 
 fn build_task_table_records<T: RowItem>(
-    sections: &[(&str, &[T])],
+    sections: &[(&str, &[TaskTableEntry<'_, T>])],
     cols: &[Column],
     layout: &TaskTableLayout,
 ) -> TaskTableRecords {
@@ -366,12 +412,13 @@ fn build_task_table_records<T: RowItem>(
     let n_cols = cols.len();
     let empty_row: Vec<String> = std::iter::repeat_n(String::new(), n_cols).collect();
     let mut section_rows: Vec<usize> = Vec::new();
+    let mut zero_padding_rows: Vec<usize> = Vec::new();
     let mut no_border_rows: Vec<usize> = Vec::new();
     let mut row_idx = 1;
     let mut need_sep = false;
 
-    for (label, items) in sections {
-        if items.is_empty() {
+    for (label, entries) in sections {
+        if !has_item_entries(entries) {
             continue;
         }
         let has_label = !label.trim().is_empty();
@@ -385,17 +432,35 @@ fn build_task_table_records<T: RowItem>(
             label_row[0] = section_top_delimiter(label, layout.section_width);
             builder.push_record(label_row);
             section_rows.push(row_idx);
+            zero_padding_rows.push(row_idx);
             no_border_rows.push(row_idx);
             row_idx += 1;
         }
-        for item in *items {
-            let rows = item.format_rows();
-            for (j, row) in rows.iter().enumerate() {
-                if j > 0 {
-                    no_border_rows.push(row_idx);
+        let mut suppress_next_border = false;
+        for entry in *entries {
+            match entry {
+                TaskTableEntry::Item(item) => {
+                    let rows = item.format_rows();
+                    for (j, row) in rows.iter().enumerate() {
+                        if j > 0 || suppress_next_border {
+                            no_border_rows.push(row_idx);
+                        }
+                        builder.push_record(filter_row(row, cols));
+                        row_idx += 1;
+                        suppress_next_border = false;
+                    }
                 }
-                builder.push_record(filter_row(row, cols));
-                row_idx += 1;
+                TaskTableEntry::Divider(label) => {
+                    let mut divider_row: Vec<String> =
+                        std::iter::repeat_n(String::new(), n_cols).collect();
+                    divider_row[0] = section_divider(label, layout.section_width);
+                    builder.push_record(divider_row);
+                    section_rows.push(row_idx);
+                    zero_padding_rows.push(row_idx);
+                    no_border_rows.push(row_idx);
+                    row_idx += 1;
+                    suppress_next_border = true;
+                }
             }
         }
         if has_label {
@@ -403,6 +468,7 @@ fn build_task_table_records<T: RowItem>(
             label_row[0] = section_bottom_delimiter(layout.section_width);
             builder.push_record(label_row);
             section_rows.push(row_idx);
+            zero_padding_rows.push(row_idx);
             no_border_rows.push(row_idx);
             row_idx += 1;
         }
@@ -412,9 +478,18 @@ fn build_task_table_records<T: RowItem>(
     TaskTableRecords {
         builder,
         section_rows,
+        zero_padding_rows,
         no_border_rows,
         row_end: row_idx,
     }
+}
+
+fn section_divider(label: &str, width: usize) -> String {
+    let content_width = width.saturating_sub(1).max(1);
+    let fill_width = content_width
+        .saturating_sub(label.chars().count() + 5)
+        .max(1);
+    format!(" ─── {label} {}", "─".repeat(fill_width - 1))
 }
 
 fn render_task_table(
@@ -460,6 +535,8 @@ fn render_task_table(
     }
     for &sec_row in &records.section_rows {
         table.with(Modify::new((sec_row, 0)).with(Span::column(cols.len() as isize)));
+    }
+    for &sec_row in &records.zero_padding_rows {
         table.with(Modify::new(Rows::one(sec_row)).with(Padding::zero()));
     }
 
