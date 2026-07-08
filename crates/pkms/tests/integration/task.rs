@@ -2421,6 +2421,86 @@ fn test_task_done_writes_closed_state() {
 }
 
 #[test]
+fn test_task_done_rejects_parent_with_open_child() {
+    let db = TestDb::new().note_with_content(
+        "state-children.org",
+        r#":PROPERTIES:
+:ID:       61616161-6161-4161-8161-616161616161
+:END:
+#+title: State Children
+
+* TODO Parent task
+** TODO Child task A
+** DONE Child task B
+"#,
+    );
+    let task_id = pkms_task_id_for_title(db.root(), "Parent task");
+
+    let (v, status) = db.run_json(&["task", &task_id, "done"]);
+
+    assert!(!status.success());
+    assert_eq!(
+        v["error"],
+        "Task state from TODO to DONE blocked by \"TODO Child task A\"."
+    );
+    let content = std::fs::read_to_string(db.root().join("roam/state-children.org")).unwrap();
+    assert!(content.contains("* TODO Parent task"));
+    assert!(!content.contains("* DONE Parent task"));
+}
+
+#[test]
+fn test_task_state_allows_reopening_closed_parent_with_open_child() {
+    let db = TestDb::new().note_with_content(
+        "state-reopen.org",
+        r#":PROPERTIES:
+:ID:       62626262-6262-4262-8262-626262626262
+:END:
+#+title: State Reopen
+
+* DONE Parent task
+** TODO Child task A
+"#,
+    );
+    let task_id = pkms_task_id_for_title(db.root(), "Parent task");
+
+    let (v, status) = db.run_json(&["task", &task_id, "state", "TODO"]);
+
+    assert!(status.success());
+    assert_eq!(v["old_state"], "DONE");
+    assert_eq!(v["new_state"], "TODO");
+    let content = std::fs::read_to_string(db.root().join("roam/state-reopen.org")).unwrap();
+    assert!(content.contains("* TODO Parent task"));
+    assert!(content.contains("** TODO Child task A"));
+}
+
+#[test]
+fn test_task_mod_state_rejects_parent_with_open_child() {
+    let db = TestDb::new().note_with_content(
+        "mod-state-children.org",
+        r#":PROPERTIES:
+:ID:       63636363-6363-4363-8363-636363636363
+:END:
+#+title: Mod State Children
+
+* TODO Parent task
+** WAITING Child task A
+"#,
+    );
+    let task_id = pkms_task_id_for_title(db.root(), "Parent task");
+
+    let (v, status) = db.run_json(&["task", &task_id, "mod", "state:DONE"]);
+
+    assert!(!status.success());
+    assert_eq!(
+        v["error"],
+        "Task state from TODO to DONE blocked by \"WAITING Child task A\"."
+    );
+    let content = std::fs::read_to_string(db.root().join("roam/mod-state-children.org")).unwrap();
+    assert!(content.contains("* TODO Parent task"));
+    assert!(!content.contains("* DONE Parent task"));
+}
+
+#[test]
 fn test_task_done_warns_when_task_ids_change() {
     let db = TestDb::new().note_with_content(
         "task-id-warning.org",

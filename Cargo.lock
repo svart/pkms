@@ -2956,7 +2956,7 @@ checksum = "19f132c84eca552bf34cab8ec81f1c1dcc229b811638f9d283dceabe58c5569e"
 
 [[package]]
 name = "pkms"
-version = "2.2.1"
+version = "2.3.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -2986,7 +2986,7 @@ dependencies = [
 
 [[package]]
 name = "pkms-db"
-version = "2.2.1"
+version = "2.3.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -3006,7 +3006,7 @@ dependencies = [
 
 [[package]]
 name = "pkms-org"
-version = "2.2.1"
+version = "2.3.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -3027,7 +3027,7 @@ dependencies = [
 
 [[package]]
 name = "pkms-rag"
-version = "2.2.1"
+version = "2.3.0"
 dependencies = [
  "anyhow",
  "axum",
@@ -3046,7 +3046,7 @@ dependencies = [
 
 [[package]]
 name = "pkms-task"
-version = "2.2.1"
+version = "2.3.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -3061,7 +3061,7 @@ dependencies = [
 
 [[package]]
 name = "pkms-web"
-version = "2.2.1"
+version = "2.3.0"
 dependencies = [
  "anyhow",
  "katex",

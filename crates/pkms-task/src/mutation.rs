@@ -12,7 +12,7 @@ use chrono::NaiveDate;
 use pkms_org::Graph;
 use pkms_org::org_task_edit::OrgTaskInsertSpec;
 use pkms_org::org_task_mutation::{self, Change, OrgTaskProperty};
-use pkms_org::parser::{OrgPriority, OrgTodoState};
+use pkms_org::parser::{Heading, OrgPriority, OrgTodoState};
 use serde::Serialize;
 use std::path::Path;
 
@@ -116,6 +116,15 @@ pub fn mod_pkms_task(
     let graph = Graph::load(&config.org)?;
     let location =
         task_index::resolve_canonical_task_id(&config.task_states, &graph, canonical_id)?;
+    if let Some(new_state) = &modifier.state {
+        ensure_state_change_allowed(
+            config,
+            &graph,
+            &location.path,
+            location.line_number,
+            new_state,
+        )?;
+    }
     let mut location = pkms_task_location(location);
     let mut changes = Vec::new();
 
@@ -315,6 +324,13 @@ pub fn set_pkms_state(
     let graph = Graph::load(&config.org)?;
     let location =
         task_index::resolve_canonical_task_id(&config.task_states, &graph, canonical_id)?;
+    ensure_state_change_allowed(
+        config,
+        &graph,
+        &location.path,
+        location.line_number,
+        &new_state,
+    )?;
     let title =
         task_title_in_graph(&graph, &location.path, location.line_number).with_context(|| {
             format!(
@@ -514,6 +530,86 @@ fn task_title_in_graph(graph: &Graph, path: &str, line_number: usize) -> Option<
         .iter()
         .find(|heading| heading.line_number == line_number)
         .map(|heading| heading.title.clone())
+}
+
+fn ensure_state_change_allowed(
+    config: &PkmsTaskConfig,
+    graph: &Graph,
+    path: &str,
+    line_number: usize,
+    new_state: &OrgTodoState,
+) -> Result<()> {
+    let path = Path::new(path);
+    let Some(result) = graph.results.iter().find(|result| result.path == path) else {
+        return Ok(());
+    };
+    let Some((index, heading)) = result
+        .parsed
+        .headings
+        .iter()
+        .enumerate()
+        .find(|(_, heading)| heading.line_number == line_number)
+    else {
+        return Ok(());
+    };
+    let Some(current_state) = heading.todo_state.as_deref() else {
+        return Ok(());
+    };
+
+    if !is_open_state(config, current_state) || !is_closed_state(config, new_state) {
+        return Ok(());
+    }
+
+    for child in result.parsed.headings.iter().skip(index + 1) {
+        if child.level <= heading.level {
+            break;
+        }
+        if child
+            .todo_state
+            .as_deref()
+            .is_some_and(|state| is_open_state(config, state))
+        {
+            bail!(
+                "Task state from {} to {} blocked by \"{}\".",
+                current_state,
+                new_state,
+                task_heading_with_state(child)
+            );
+        }
+    }
+
+    Ok(())
+}
+
+fn is_open_state(config: &PkmsTaskConfig, state: &str) -> bool {
+    config
+        .task_states
+        .open_states
+        .iter()
+        .any(|open| open.eq_ignore_ascii_case(state))
+}
+
+fn is_closed_state(config: &PkmsTaskConfig, state: &str) -> bool {
+    config
+        .task_states
+        .closed_states
+        .iter()
+        .any(|closed| closed.eq_ignore_ascii_case(state))
+}
+
+fn task_heading_with_state(heading: &Heading) -> String {
+    let mut parts = Vec::new();
+    if let Some(state) = &heading.todo_state {
+        parts.push(state.to_string());
+    }
+    if let Some(priority) = heading.priority {
+        parts.push(format!("[#{}]", priority.as_char()));
+    }
+    parts.push(heading.title.clone());
+    if !heading.tags.is_empty() {
+        parts.push(format!(":{}:", heading.tags.join(":")));
+    }
+    parts.join(" ")
 }
 
 fn pkms_task_location(location: task_index::TaskLocation) -> pkms::TaskLocation {
