@@ -22,7 +22,7 @@ struct GraphCandidate {
     score: f64,
 }
 
-pub fn retrieve(
+pub(crate) fn retrieve(
     conn: &Connection,
     request: &RetrieveRequest,
     embedding_provider: &dyn EmbeddingProvider,
@@ -42,7 +42,7 @@ pub fn retrieve(
     })
 }
 
-pub fn retrieve_results(
+pub(crate) fn retrieve_results(
     conn: &Connection,
     query: &str,
     limit: usize,

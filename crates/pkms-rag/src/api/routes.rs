@@ -11,12 +11,10 @@ use serde::Serialize;
 use std::str;
 
 use crate::{
-    IngestSummary, RetrieveRequest, RetrieveResponse, SearchRequest, SearchResponse,
+    IngestSummary, RagIndex, RetrieveRequest, RetrieveResponse, SearchRequest, SearchResponse,
     StatusResponse,
-    db::{connect, ingest_records, search, status as db_status},
     models::IndexProgress,
     ndjson::parse_ndjson,
-    retrieve::retrieve,
     web::{INDEX_HTML, UI_JS},
 };
 
@@ -120,9 +118,9 @@ async fn health() -> Json<HealthResponse> {
 }
 
 async fn get_status(State(state): State<AppState>) -> Result<Json<ApiStatusResponse>, ApiError> {
-    let conn = connect(&state.db_path).map_err(|err| ApiError::internal("status", err))?;
-    let status =
-        db_status(&conn, &state.db_path).map_err(|err| ApiError::internal("status", err))?;
+    let status = RagIndex::open(state.db_path.clone())
+        .and_then(|index| index.status())
+        .map_err(|err| ApiError::internal("status", err))?;
     Ok(Json(ApiStatusResponse {
         status,
         note_viewer_available: state.note_viewer.is_some(),
@@ -151,8 +149,8 @@ async fn post_ingest(
     let provider = state
         .provider()
         .map_err(|err| ApiError::internal("ingest_provider", err))?;
-    let mut conn = connect(&state.db_path).map_err(|err| ApiError::internal("ingest", err))?;
-    let summary = ingest_records(&mut conn, &records, provider.as_ref(), false)
+    let summary = RagIndex::open(state.db_path.clone())
+        .and_then(|index| index.ingest(&records, provider.as_ref(), false))
         .map_err(|err| ApiError::internal("ingest", err))?;
     tracing::info!(
         event = "rag_api_ingest_complete",
@@ -170,8 +168,8 @@ async fn post_search(
     payload: Result<Json<SearchRequest>, JsonRejection>,
 ) -> Result<Json<SearchResponse>, ApiError> {
     let Json(request) = payload.map_err(ApiError::json_rejection)?;
-    let conn = connect(&state.db_path).map_err(|err| ApiError::internal("search", err))?;
-    let results = search(&conn, &request.query, request.limit)
+    let results = RagIndex::open(state.db_path.clone())
+        .and_then(|index| index.search(&request.query, request.limit))
         .map_err(|err| ApiError::internal("search", err))?;
     tracing::info!(
         event = "rag_api_search_complete",
@@ -191,11 +189,11 @@ async fn post_retrieve(
     payload: Result<Json<RetrieveRequest>, JsonRejection>,
 ) -> Result<Json<RetrieveResponse>, ApiError> {
     let Json(request) = payload.map_err(ApiError::json_rejection)?;
-    let conn = connect(&state.db_path).map_err(|err| ApiError::internal("retrieve", err))?;
     let provider = state
         .provider()
         .map_err(|err| ApiError::internal("retrieve_provider", err))?;
-    let response = retrieve(&conn, &request, provider.as_ref())
+    let response = RagIndex::open(state.db_path.clone())
+        .and_then(|index| index.retrieve(&request, provider.as_ref()))
         .map_err(|err| ApiError::internal("retrieve", err))?;
     tracing::info!(
         event = "rag_api_retrieve_complete",

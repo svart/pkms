@@ -4,6 +4,7 @@ mod api;
 mod chunking;
 mod db;
 mod embeddings;
+mod index;
 mod indexer;
 mod models;
 mod ndjson;
@@ -17,9 +18,6 @@ pub use api::{
     RagServeOptions, RagServeStarted, router, serve, serve_with_note_viewer,
 };
 pub use chunking::{CONTENT_HASH_PREFIX, ChunkNoteInput, chunk_note, content_hash};
-pub use db::{
-    build_fts_query, connect, dense_search, ingest_records, remove_index_files, search, status,
-};
 #[cfg(feature = "fastembed")]
 pub use embeddings::FastEmbeddingProvider;
 pub use embeddings::{
@@ -29,6 +27,7 @@ pub use embeddings::{
     default_embedding_provider_config, embedding_provider_config, embedding_text, pack_vector,
     provider_from_config, unpack_vector,
 };
+pub use index::RagIndex;
 pub use indexer::BackgroundIndexer;
 pub use models::{
     ChunkRecord, DeleteEntityType, DeleteRecord, IndexProgress, IngestSummary, LinkRecord,
@@ -38,4 +37,3 @@ pub use models::{
 };
 pub use ndjson::{NdjsonError, load_ndjson, parse_ndjson};
 pub use org_export::{export_org_notes, export_org_notes_with_ignore};
-pub use retrieve::{retrieve, retrieve_results};

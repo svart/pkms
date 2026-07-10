@@ -33,7 +33,7 @@ pub(crate) struct IngestProgress {
     pub summary: IngestSummary,
 }
 
-pub fn connect(db_path: impl AsRef<Path>) -> Result<Connection> {
+pub(crate) fn connect(db_path: impl AsRef<Path>) -> Result<Connection> {
     let db_path = db_path.as_ref();
     create_parent_dir(db_path)?;
     let conn = Connection::open(db_path).with_context(|| {
@@ -48,7 +48,7 @@ pub fn connect(db_path: impl AsRef<Path>) -> Result<Connection> {
     Ok(conn)
 }
 
-pub fn remove_index_files(db_path: impl AsRef<Path>) -> Result<()> {
+pub(crate) fn remove_index_files(db_path: impl AsRef<Path>) -> Result<()> {
     let db_path = db_path.as_ref();
     for path in sqlite_index_files(db_path) {
         match fs::remove_file(&path) {
@@ -67,12 +67,12 @@ pub fn remove_index_files(db_path: impl AsRef<Path>) -> Result<()> {
     Ok(())
 }
 
-pub fn ensure_schema(conn: &Connection) -> Result<()> {
+fn ensure_schema(conn: &Connection) -> Result<()> {
     conn.execute_batch(SCHEMA_SQL)
         .context("failed to initialize RAG SQLite schema")
 }
 
-pub fn ingest_records(
+pub(crate) fn ingest_records(
     conn: &mut Connection,
     records: &[RetrievalRecord],
     embedding_provider: &dyn EmbeddingProvider,
@@ -202,7 +202,7 @@ pub(crate) fn ingest_records_with_progress(
     Ok(summary)
 }
 
-pub fn status(conn: &Connection, db_path: impl AsRef<Path>) -> Result<StatusResponse> {
+pub(crate) fn status(conn: &Connection, db_path: impl AsRef<Path>) -> Result<StatusResponse> {
     Ok(StatusResponse {
         schema_version: SUPPORTED_SCHEMA_VERSION,
         notes: count(conn, "SELECT COUNT(*) FROM notes")?,
@@ -216,7 +216,7 @@ pub fn status(conn: &Connection, db_path: impl AsRef<Path>) -> Result<StatusResp
     })
 }
 
-pub fn search(conn: &Connection, query: &str, limit: usize) -> Result<Vec<SearchResult>> {
+pub(crate) fn search(conn: &Connection, query: &str, limit: usize) -> Result<Vec<SearchResult>> {
     let fts_query = build_fts_query(query);
     if fts_query.is_empty() || limit == 0 {
         return Ok(Vec::new());
@@ -254,7 +254,7 @@ pub fn search(conn: &Connection, query: &str, limit: usize) -> Result<Vec<Search
         .context("failed to read RAG search rows")
 }
 
-pub fn dense_search(
+pub(crate) fn dense_search(
     conn: &Connection,
     query: &str,
     limit: usize,
@@ -355,7 +355,7 @@ pub fn dense_search(
     Ok(results)
 }
 
-pub fn build_fts_query(query: &str) -> String {
+pub(crate) fn build_fts_query(query: &str) -> String {
     let mut parts = Vec::new();
     let mut chars = query.chars().peekable();
     loop {

@@ -36,8 +36,7 @@ pub fn run(command_ctx: &CommandContext<'_>, command: &RagCommand) -> Result<()>
 
 fn run_status(command_ctx: &CommandContext<'_>, args: &RagStatusArgs) -> Result<()> {
     let db_path = resolve_rag_db(args.rag_db.as_ref(), command_ctx.config());
-    let conn = pkms_rag::connect(&db_path)?;
-    let status = pkms_rag::status(&conn, &db_path)?;
+    let status = pkms_rag::RagIndex::open(db_path)?.status()?;
     render_status(command_ctx.output(), &status)
 }
 
@@ -46,8 +45,7 @@ fn run_ingest(command_ctx: &CommandContext<'_>, args: &RagIngestArgs) -> Result<
     let records = pkms_rag::load_ndjson(&args.path)?;
     let provider_config = resolve_embedding_provider_config(command_ctx.config())?;
     let provider = pkms_rag::provider_from_config(&provider_config)?;
-    let mut conn = pkms_rag::connect(&db_path)?;
-    let summary = pkms_rag::ingest_records(&mut conn, &records, provider.as_ref(), false)?;
+    let summary = pkms_rag::RagIndex::open(db_path)?.ingest(&records, provider.as_ref(), false)?;
     render_ingest_summary(command_ctx.output(), &summary)
 }
 
@@ -57,7 +55,7 @@ fn run_index(command_ctx: &CommandContext<'_>, args: &RagIndexArgs) -> Result<()
     }
     let db_path = resolve_rag_db(args.rag_db.as_ref(), command_ctx.config());
     if args.force_rebuild {
-        pkms_rag::remove_index_files(&db_path)?;
+        pkms_rag::RagIndex::remove_files(&db_path)?;
     }
     let (notes_root, index_source) = resolve_index_sources(None, None, command_ctx.config());
     let provider_config = resolve_index_embedding_provider_config(command_ctx.config(), args)?;
@@ -85,8 +83,7 @@ fn run_index(command_ctx: &CommandContext<'_>, args: &RagIndexArgs) -> Result<()
 
 fn run_search(command_ctx: &CommandContext<'_>, args: &RagSearchArgs) -> Result<()> {
     let db_path = resolve_rag_db(args.rag_db.as_ref(), command_ctx.config());
-    let conn = pkms_rag::connect(&db_path)?;
-    let results = pkms_rag::search(&conn, &args.query, args.limit)?;
+    let results = pkms_rag::RagIndex::open(db_path)?.search(&args.query, args.limit)?;
     let response = pkms_rag::SearchResponse {
         query: args.query.clone(),
         results,
@@ -96,7 +93,6 @@ fn run_search(command_ctx: &CommandContext<'_>, args: &RagSearchArgs) -> Result<
 
 fn run_retrieve(command_ctx: &CommandContext<'_>, args: &RagRetrieveArgs) -> Result<()> {
     let db_path = resolve_rag_db(args.rag_db.as_ref(), command_ctx.config());
-    let conn = pkms_rag::connect(&db_path)?;
     let provider_config = resolve_embedding_provider_config(command_ctx.config())?;
     let provider = pkms_rag::provider_from_config(&provider_config)?;
     let request = pkms_rag::RetrieveRequest {
@@ -106,7 +102,7 @@ fn run_retrieve(command_ctx: &CommandContext<'_>, args: &RagRetrieveArgs) -> Res
         max_token_budget: args.max_token_budget,
         weights: pkms_rag::RetrieveWeights::default(),
     };
-    let response = pkms_rag::retrieve(&conn, &request, provider.as_ref())?;
+    let response = pkms_rag::RagIndex::open(db_path)?.retrieve(&request, provider.as_ref())?;
     render_retrieve_response(command_ctx.output(), &response)
 }
 
