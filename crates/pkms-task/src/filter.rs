@@ -2,6 +2,7 @@ use anyhow::{Result, bail};
 use chrono::{Duration, NaiveDate, NaiveDateTime};
 use serde::Serialize;
 
+#[cfg(test)]
 use crate::clock::TaskClock;
 use crate::model::TaskItem;
 use crate::modifiers::parse_task_date_arg_on;
@@ -17,9 +18,9 @@ pub enum SourceSelection {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TaskFilters {
-    pub source: SourceSelection,
-    pub todoist_filter: Option<String>,
-    pub criteria: TaskFilterCriteria,
+    pub(crate) source: SourceSelection,
+    pub(crate) todoist_filter: Option<String>,
+    pub(crate) criteria: TaskFilterCriteria,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -45,7 +46,8 @@ pub enum TaskDateFilter {
     Any(Vec<TaskDateFilter>),
 }
 
-pub fn parse_task_filters(filters: &[String]) -> Result<TaskFilters> {
+#[cfg(test)]
+fn parse_task_filters(filters: &[String]) -> Result<TaskFilters> {
     parse_task_filters_on(filters, TaskClock::now().today)
 }
 
@@ -118,6 +120,18 @@ pub fn parse_task_filters_on(filters: &[String], today: NaiveDate) -> Result<Tas
 }
 
 impl TaskFilters {
+    pub fn source(&self) -> SourceSelection {
+        self.source
+    }
+
+    pub fn todoist_filter(&self) -> Option<&str> {
+        self.todoist_filter.as_deref()
+    }
+
+    pub fn scope(&self) -> &[String] {
+        &self.criteria.scope
+    }
+
     pub fn with_todoist_filter(&self, todoist_filter: Option<String>) -> Self {
         Self {
             source: self.source,

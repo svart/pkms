@@ -64,23 +64,23 @@ pub(super) fn plan_task_list_request(
 ) -> Result<PlannedTaskList> {
     let filters = parse_task_filters_on(raw_filters, clock.today)?;
     tracing::debug!(
-        source = ?filters.source,
+        source = ?filters.source(),
         filter_count = raw_filters.len(),
-        has_todoist_filter = filters.todoist_filter.is_some(),
+        has_todoist_filter = filters.todoist_filter().is_some(),
         has_criteria = filters.has_criteria(),
         "running task list"
     );
-    let scope = task_scope(args.from_stdin, &filters.criteria.scope)?;
-    if args.group.is_some() && !matches!(filters.source, SourceSelection::Pkms) {
+    let scope = task_scope(args.from_stdin, filters.scope())?;
+    if args.group.is_some() && !matches!(filters.source(), SourceSelection::Pkms) {
         bail!("task list --group is available only for source:pkms");
     }
-    if args.from_stdin && !matches!(filters.source, SourceSelection::Pkms) {
+    if args.from_stdin && !matches!(filters.source(), SourceSelection::Pkms) {
         bail!("task list --from-stdin is available only for source:pkms");
     }
 
     let columns = resolve_task_table_columns(
         config,
-        filters.source,
+        filters.source(),
         ColumnView::Tasks,
         args.table.columns.as_deref(),
     )?;
@@ -191,15 +191,15 @@ fn plan_agenda_request_from_filters(
 ) -> Result<PlannedAgenda> {
     let filters = parse_task_filters_on(raw_filters, clock.today)?;
     tracing::debug!(
-        source = ?filters.source,
+        source = ?filters.source(),
         filter_count = raw_filters.len(),
-        has_todoist_filter = filters.todoist_filter.is_some(),
+        has_todoist_filter = filters.todoist_filter().is_some(),
         has_criteria = filters.has_criteria(),
         "running task agenda"
     );
     let columns = resolve_task_table_columns(
         config,
-        filters.source,
+        filters.source(),
         ColumnView::Agenda,
         table.columns.as_deref(),
     )?;

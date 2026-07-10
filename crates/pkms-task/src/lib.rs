@@ -23,18 +23,13 @@ mod todoist_mutation;
 mod todoist_provider;
 
 pub use clock::TaskClock;
-pub use common::{
-    AgendaWindow, TASK_SORT_FIELD_HELP, TaskGroupField, TaskSortField, agenda_day_section_label,
-    agenda_window_cutoff, apply_limit, date_in_agenda_window, group_task_items,
-    parse_task_group_field, parse_task_sort_fields, retain_agenda_window_task_items_on,
-    retain_upcoming_task_items_on, sort_task_items,
-};
+pub use common::{AgendaWindow, TaskGroupField, agenda_day_section_label, apply_limit};
 pub use config::{PkmsTaskConfig, TaskStateConfig, TodoistProviderConfig};
 pub use execution::{
     AgendaExecution, AgendaRequest, TaskListExecution, TaskListItems, TaskListRequest,
     collect_shortcut_items_on, execute_task_agenda, execute_task_list,
 };
-pub use filter::{SourceSelection, TaskFilters, parse_task_filters, parse_task_filters_on};
+pub use filter::{SourceSelection, TaskFilters, parse_task_filters_on};
 pub use id::TaskId;
 pub use model::{
     TaskDate, TaskDateValue, TaskItem, TaskPriority, TaskProperty, TaskSourceKind, TaskState,
@@ -51,9 +46,7 @@ pub use show::{
     HeadingTarget, ShowOptions, ShowOutput, TaskIdEntry, execute as execute_show,
     render_text as render_show_text,
 };
-pub use task_index::{
-    CanonicalTaskEntry, TaskLocation, all_task_entries, resolve_canonical_task_id,
-};
+pub use task_index::{CanonicalTaskEntry, TaskLocation, all_task_entries};
 pub use todoist_provider::get_item as get_todoist_item;
 
 #[cfg(feature = "todoist")]
