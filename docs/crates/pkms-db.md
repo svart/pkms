@@ -47,9 +47,9 @@ the database-oriented work.
 
 ## Boundaries
 
-`pkms-db` may depend on `pkms-org`. It must not depend on the umbrella `pkms`
-crate, `pkms-rag`, `pkms-task`, or `pkms-web`. Keep CLI parser details and
-output format selection in `pkms`.
+`pkms-db` may depend on `pkms-org` and the leaf `pkms-tokens` crate. It must not
+depend on the umbrella `pkms` crate, `pkms-rag`, `pkms-task`, or `pkms-web`.
+Keep CLI parser details and output format selection in `pkms`.
 
 ## Related Docs
 

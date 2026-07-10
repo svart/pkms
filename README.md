@@ -109,13 +109,14 @@ pkms query "rust" --output-format ndjson | pkms get --links --from-stdin
 
 The workspace is split into focused crates:
 
-- `pkms-org`: org discovery, parsing, graph construction, workspace loading,
-  typed task insertion, daily note creation, and raw org edit primitives.
+- `pkms-org`: org discovery, parsing, graph and one-scan snapshot loading, link
+  resolution, and raw typed org edit primitives.
 - `pkms-db`: note database commands and link checks.
 - `pkms-task`: task IDs, filtering, providers, mutations, typed org edit
   requests, and Todoist execution.
 - `pkms-rag`: local retrieval indexing, embeddings, search, and HTTP API.
 - `pkms-web`: the local `serve` HTTP viewer, HTML rendering, and static assets.
+- `pkms-tokens`: token encoding, counting, and truncation leaf utilities.
 - `pkms`: the umbrella binary crate for CLI parsing, config mapping, dispatch,
   and output formatting.
 

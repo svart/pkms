@@ -12,9 +12,9 @@ and preserving user note data over background state.
    `~/.config/pkms.toml`.
 3. `pkms` resolves process environment inputs and passes typed parameters into
    domain crates.
-4. Commands load only the data they need: configuration only, a graph, a
-   workspace, task providers, an optional RAG SQLite index, or a foreground HTTP
-   server.
+4. Commands load only the data they need: configuration only, a graph, one
+   `OrgSnapshot` containing parsed content plus graph indexes, task providers,
+   an optional RAG index, or a foreground HTTP server.
 5. Output is rendered as text, JSON, or NDJSON through shared output helpers.
 6. The process exits, except for explicit foreground servers: `pkms serve` when
    built with `web` and `pkms rag serve` when built with `rag`.
@@ -28,11 +28,12 @@ state. The RAG SQLite index is explicit derived local state owned by
 | Crate | Role | Detailed docs |
 |-------|------|---------------|
 | `pkms` | Umbrella binary crate: CLI parser, config mapping, dispatch, output, and cross-domain orchestration. | [crates/pkms.md](crates/pkms.md) |
-| `pkms-org` | Org discovery, parsing, graph, workspace loading, task extraction from org, and raw org edit primitives. | [crates/pkms-org.md](crates/pkms-org.md) |
+| `pkms-org` | Org discovery, parsing, immutable snapshots, graph indexes/traversal, link resolution, and raw typed org edits. | [crates/pkms-org.md](crates/pkms-org.md) |
 | `pkms-db` | Note database command logic: health checks, validation, search, graph navigation, creation, extraction, and repair. | [crates/pkms-db.md](crates/pkms-db.md) |
-| `pkms-task` | Task domain logic: canonical IDs, filters, providers, mutations, Todoist integration, and typed requests into org editing. | [crates/pkms-task.md](crates/pkms-task.md) |
-| `pkms-rag` | Local retrieval: org export, chunking, SQLite index, embeddings, search, retrieval, and RAG HTTP API. | [crates/pkms-rag.md](crates/pkms-rag.md) |
+| `pkms-task` | Task semantics: state policy, org projection, canonical IDs, filters, providers, show/mutation use cases, and Todoist integration. | [crates/pkms-task.md](crates/pkms-task.md) |
+| `pkms-rag` | Local retrieval services: indexing, encapsulated storage, embeddings, search, retrieval, and RAG HTTP API. | [crates/pkms-rag.md](crates/pkms-rag.md) |
 | `pkms-web` | Local web viewer: note rendering, static assets, routes, previews, and foreground HTTP serving. | [crates/pkms-web.md](crates/pkms-web.md) |
+| `pkms-tokens` | Leaf utility crate for token encoding, counting, and truncation. | [crates/pkms-tokens.md](crates/pkms-tokens.md) |
 
 ## Dependency Direction
 
@@ -40,6 +41,8 @@ The dependency direction is intentionally one-way:
 
 - `pkms` may depend on all domain crates.
 - `pkms-db`, `pkms-rag`, `pkms-task`, and `pkms-web` may depend on `pkms-org`.
+- `pkms-db` and `pkms-rag` may depend on the leaf `pkms-tokens` crate.
+- `pkms-tokens` must not depend on the umbrella or any domain crate.
 - Domain crates must not depend on `pkms` or on each other unless the boundary
   check explicitly allows it.
 - Domain crates should not read process environment variables; `pkms` should
@@ -62,12 +65,15 @@ CLI wiring lives in the umbrella crate:
 
 Reusable behavior belongs in domain crates:
 
-- Org syntax, graph, workspace loading, and raw org edits go in `pkms-org`.
+- Org syntax, graph/snapshot loading, link resolution, and raw typed org edits
+  go in `pkms-org`.
 - Note database command behavior goes in `pkms-db`.
 - Task source selection, filtering, IDs, and mutation planning go in
   `pkms-task`.
-- RAG indexing, embedding, search, retrieval, and API behavior go in
-  `pkms-rag`.
+- Token encoding/counting goes in `pkms-tokens`; callers own token-budget
+  policy.
+- RAG indexing, embedding, storage, search, retrieval, and API behavior go in
+  `pkms-rag`; callers use `RagIndex` rather than SQLite connections.
 - Web note rendering and HTTP routes for `pkms serve` go in `pkms-web`.
 
 ## Data Flows
@@ -76,7 +82,8 @@ Reusable behavior belongs in domain crates:
 
 Commands such as `check`, `validate`, `resolve`, `query`, `get`, `stats`,
 `orphans`, `path`, `suggest`, `new`, `extract`, and `fix` are reached through
-`pkms` command adapters and use `pkms-db` plus `pkms-org` graph/workspace data.
+`pkms` command adapters and use `pkms-db` plus focused `pkms-org` graph or
+snapshot data.
 See [Note Database Commands](note-database-commands.md).
 
 ### Task Commands

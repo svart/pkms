@@ -6,12 +6,15 @@ Todoist-backed tasks. It does not own CLI parsing or raw org text edits.
 ## Responsibilities
 
 - Build the canonical local task index.
+- Own task state configuration and project parsed org headings into task
+  records.
 - Assign deterministic PKMS task IDs shared by `task list`, `task agenda`, and
   ID-first actions.
 - Parse and apply task filters for source, state, tags, type, priority, dates,
   scope, project, and Todoist raw filters.
 - Model source-neutral task items for local and provider-backed tasks.
 - Collect tasks from configured providers.
+- Produce task-show details and parent/child relationships.
 - Plan and execute task mutations such as add, state, done, schedule,
   deadline, priority, tags, project, description, dependency, and postpone.
 - Integrate with Todoist when built with the `todoist` feature.
@@ -28,7 +31,9 @@ Todoist-backed tasks. It does not own CLI parsing or raw org text edits.
 | `scope.rs` | PKMS note scope resolution for task views. |
 | `modifiers.rs` | Add/modifier parsing for task creation and mutation. |
 | `mutation.rs` | Source-neutral mutation planning and result types. |
-| `execution.rs` | Mutation execution orchestration. |
+| `projection.rs` | Converts parsed org headings into task-domain records. |
+| `execution.rs` | List and agenda use-case orchestration. |
+| `show.rs` | ID-first task-show lookup and typed output. |
 | `provider.rs` | Provider trait and source abstraction. |
 | `providers.rs` | Provider collection and source selection. |
 | `pkms.rs` | Local org-backed task provider behavior. |
@@ -49,6 +54,8 @@ Todoist-backed tasks. It does not own CLI parsing or raw org text edits.
 - Todoist reads and writes must not log tokens, task content, or descriptions.
 - Source-neutral output shape should stay compatible across PKMS and Todoist
   tasks.
+- Parsed filter criteria stay private; command adapters receive read-only
+  accessors and pass the typed filter value back into task use cases.
 
 ## Boundaries
 

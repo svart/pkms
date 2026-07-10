@@ -12,15 +12,16 @@ with `--features rag`.
 - Export notes from `pkms-org` parsed data into retrieval records.
 - Parse retrieval NDJSON for direct ingest.
 - Chunk notes with stable content hashes and source line ranges.
-- Maintain the SQLite schema and ingest records into notes, chunks, links, FTS,
-  and embedding tables.
+- Present storage through `RagIndex`; keep SQLite connections, schema setup,
+  transactions, cleanup, and queries private.
 - Provide embedding providers: FastEmbed by default and deterministic hash
   embeddings for tests and fixtures.
 - Build FastEmbed with rustls for Hugging Face model downloads and ONNX Runtime
   binary downloads.
 - Search with SQLite FTS.
 - Retrieve cited chunks with BM25, dense, or hybrid scoring.
-- Track background index progress.
+- Track background index progress with serialized `IndexPhase` and `IndexStep`
+  enums while returning synchronous failures as `Result` values.
 - Serve the local HTTP API and browser UI used by `pkms rag serve`.
 - Expose note-viewer delegation hooks so the umbrella `pkms` crate can wire
   RAG UI result links to `pkms-web` without making `pkms-rag` depend on
@@ -32,14 +33,15 @@ with `--features rag`.
 |--------|---------|
 | `models.rs` | Request, response, record, score, and progress models. |
 | `schema.rs` | SQLite schema versioning and table definitions. |
-| `db.rs` | SQLite connection, ingest, status, FTS, and dense search. |
+| `storage/mod.rs` | `RagIndex` service facade owning the index path. |
+| `storage/sqlite.rs` | Private SQLite connection, schema, ingest, status, cleanup, FTS, and dense-search implementation. |
 | `org_export.rs` | Export org notes into retrieval records through `pkms-org`. |
 | `ndjson.rs` | Retrieval NDJSON parsing and loading. |
 | `chunking.rs` | Chunk construction, content hashes, and token/source metadata. |
 | `embeddings.rs` | Embedding provider trait, FastEmbed, hash provider, and typed provider config. |
 | `indexer.rs` | Synchronous and background rebuild orchestration. |
 | `retrieve.rs` | BM25, dense, and hybrid retrieval. |
-| `api.rs` | Axum HTTP API and foreground server. |
+| `api/` | Axum routes, state, viewer bridge, errors, and foreground server. |
 | `web.rs` | Embedded browser UI assets. |
 
 ## Invariants
@@ -55,6 +57,7 @@ with `--features rag`.
   heading path, source line range, scores, and chunk text.
 - The foreground RAG server may start a background rebuild, but it is not a
   daemon or watcher.
+- No public API accepts or returns `rusqlite::Connection`.
 
 ## Configuration Surface
 
@@ -84,9 +87,10 @@ with `--features rag`.
 
 ## Boundaries
 
-`pkms-rag` may depend on `pkms-org`. It must not depend on `pkms`,
-`pkms-db`, `pkms-task`, or `pkms-web`. CLI command parsing, environment
-variable parsing, and stdout rendering belong in `pkms`.
+`pkms-rag` may depend on `pkms-org` and the leaf `pkms-tokens` crate. It must
+not depend on `pkms`, `pkms-db`, `pkms-task`, or `pkms-web`. CLI command
+parsing, environment-variable precedence, and stdout rendering belong in
+`pkms`.
 
 ## Related Docs
 

@@ -35,6 +35,25 @@ ownership. After that, encapsulate the org snapshot and RAG store. File splits,
 dependency pruning, and API narrowing should accompany those moves, not become
 an independent rewrite.
 
+## Implementation outcome
+
+All 15 tasks were implemented incrementally on 2026-07-10. The original
+assessment below is retained as the evidence and reasoning that led to the
+changes; file paths and APIs mentioned as problems describe the pre-refactor
+baseline.
+
+| Tasks | Outcome |
+|---|---|
+| 1-3 | Added cross-command contract tests, completed the transitive dependency matrix, and pruned unused manifests/helpers. |
+| 4-7 | Moved exit/editor policy to `pkms`, moved task projection/state/show ownership to `pkms-task`, and removed the misplaced domain APIs. |
+| 8-10 | Added graph queries, privatized graph storage, introduced focused scan/link/note configs and `OrgSnapshot`, and isolated tokenization in `pkms-tokens`. |
+| 11-13 | Captured immutable runtime inputs, hid SQLite behind `RagIndex`, and replaced string progress with typed synchronous/background flows. |
+| 14 | Reorganized RAG storage, conventionalized web module wiring, and extracted the Todoist integration harness. Parser/SSH splits were intentionally left alone because no active responsibility change justified their churn. |
+| 15 | Narrowed umbrella, RAG, task-filter, and graph facades; updated the boundary check, architecture docs, crate docs, and ADR. |
+
+The accepted target is recorded in
+[ADR 0001](adr/0001-maintainable-crate-boundaries.md).
+
 ## Assessment method
 
 This review covered:

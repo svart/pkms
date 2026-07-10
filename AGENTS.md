@@ -55,7 +55,7 @@ Crate-specific docs:
 
 - [pkms](docs/crates/pkms.md): CLI parsing, config, dispatch, output, and
   command adapters.
-- [pkms-org](docs/crates/pkms-org.md): org discovery, parsing, graph, workspace,
+- [pkms-org](docs/crates/pkms-org.md): org discovery, parsing, graph, snapshots,
   and edit primitives.
 - [pkms-db](docs/crates/pkms-db.md): note database commands and link checks.
 - [pkms-task](docs/crates/pkms-task.md): task IDs, filters, providers, and
@@ -76,7 +76,8 @@ or behavior has changed.
 - Do not introduce persistent caches, databases, daemons, or watch mode.
 - `pkms serve` is the explicit foreground local HTTP viewer exception. It must
   keep no persistent derived state.
-- `Graph::load()` re-scans and re-parses `.org` files for each invocation.
+- `Graph::load_from()` and `OrgSnapshot::load()` re-scan and re-parse `.org`
+  files for each invocation.
 - `Config::load()` reads optional user config; `Config::resolve()` produces a
   `ResolvedConfig`.
 - `db_root` resolution happens once through CLI `--db`, then `PKMS_DB_ROOT`, then
@@ -98,7 +99,7 @@ or behavior has changed.
 - Use option structs for command input when arguments are more than trivial.
 - Command implementations usually accept `&CommandContext` for shared resolved
   config and output access.
-- Load the graph or workspace only when the command needs that data.
+- Load a graph or one-scan org snapshot only when the command needs that data.
 - Return `anyhow::Result`; `check` may return an `ExitCode` for unhealthy
   database state.
 - Derive `serde::Serialize` for command output structs.

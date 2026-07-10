@@ -166,7 +166,8 @@ crates/pkms/                # umbrella binary crate
   src/input.rs              # target/stdin/date/column parsing helpers
   src/output.rs             # OutputContext and output format helpers
   tests/integration/        # binary-level integration tests with mock databases
-crates/pkms-org/            # org discovery, parsing, graph, workspace, org edits
+crates/pkms-org/            # org discovery, parsing, graph, snapshots, org edits
+crates/pkms-tokens/         # token encoding/counting leaf utilities
 crates/pkms-db/             # note database command logic and link checks
 crates/pkms-rag/            # local retrieval, SQLite index, embeddings, RAG API
 crates/pkms-task/           # task domain logic, providers, mutations, Todoist integration
@@ -197,8 +198,8 @@ Follow the existing command shape:
 4. Use option structs for command input when more than trivial args are needed.
 5. Accept `&CommandContext` for shared resolved config and output access.
 6. Load the graph only when the command needs graph data. Use
-   `Graph::load(config)`, or `Workspace::load(config)` when a command needs both
-   parsed files and graph data.
+   `Graph::load_from(scan, links)`, or `OrgSnapshot::load(scan, links)` when a
+   command needs both parsed files and graph indexes from one scan.
 7. Dispatch structured output through `OutputContext` helpers:
    `print_json`, `print_ndjson`, or `print_json_adaptive`.
 8. Add or update integration tests under `crates/pkms/tests/integration/`.
@@ -215,7 +216,7 @@ fn execute(config: &ResolvedConfig, opts: &Options) -> Result<CommandOutput>
 fn render(ctx: &OutputContext, output: &CommandOutput) -> Result<()>
 ```
 
-`execute(...)` should own graph/workspace loading, file reads, filtering,
+`execute(...)` should own graph/snapshot loading, file reads, filtering,
 sorting, limiting, and typed output shaping. `render(...)` should only choose
 text, JSON, or NDJSON presentation; text formatting should usually be a pure
 `render_text(...) -> String` helper with focused unit tests. Do not force this
@@ -224,7 +225,7 @@ mutations, or the long-running `serve` command unless a concrete change makes
 the split useful.
 
 Command domain behavior should live in the focused crates when possible:
-`pkms-org` for org syntax, graph, workspace, and raw org edits; `pkms-db` for
+`pkms-org` for org syntax, graph, snapshots, and raw org edits; `pkms-db` for
 note database commands; `pkms-task` for task workflows; `pkms-rag` for
 retrieval indexing/search/API behavior; and `pkms-web` for the local viewer. The
 umbrella `pkms` crate should keep CLI parsing, config mapping, output

@@ -19,7 +19,8 @@ one selected note plus linked-note navigation through a foreground HTTP server.
 
 | Module | Purpose |
 |--------|---------|
-| `lib.rs` | Public `serve` entry point, config types, startup event, and tests. |
+| `lib.rs` | Narrow public viewer config, request, startup, and serving facade. |
+| `serve/mod.rs` | Private viewer module wiring and shared page assets. |
 | `serve/http.rs` | HTTP request routing and response handling. |
 | `serve/page.rs` | Page shell, panels, backlinks, preview hooks, and note layout. |
 | `serve/org_html.rs` | Org-to-HTML rendering entry point. |

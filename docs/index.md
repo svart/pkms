@@ -31,6 +31,8 @@ lives here under `docs/`.
 
 - [Architecture](architecture.md): workspace boundaries, command flow, data
   flow, and feature flags.
+- [Crate Boundary Decision](adr/0001-maintainable-crate-boundaries.md): accepted
+  ownership, loading, runtime-input, storage, and facade decisions.
 - [Development](development.md): local development loop, checks, project
   structure, command conventions, and release workflow.
 - [Task System Design](task-system.md): implementation rules for task IDs,
@@ -43,7 +45,7 @@ lives here under `docs/`.
 
 - [pkms](crates/pkms.md): umbrella binary crate for CLI parsing, config,
   dispatch, output, and cross-domain command orchestration.
-- [pkms-org](crates/pkms-org.md): org discovery, parsing, graph, workspace, and
+- [pkms-org](crates/pkms-org.md): org discovery, parsing, graph, snapshots, and
   edit primitives.
 - [pkms-db](crates/pkms-db.md): note database command logic and link checks.
 - [pkms-task](crates/pkms-task.md): task domain model, IDs, filters, providers,
@@ -52,6 +54,8 @@ lives here under `docs/`.
   embeddings, search, retrieval, and RAG HTTP API.
 - [pkms-web](crates/pkms-web.md): local note viewer, HTML rendering, assets, and
   foreground HTTP serving.
+- [pkms-tokens](crates/pkms-tokens.md): token encoding, counting, and
+  truncation leaf utilities.
 
 ## Where To Start
 
