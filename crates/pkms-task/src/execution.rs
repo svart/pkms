@@ -1,6 +1,5 @@
 use anyhow::Result;
 use chrono::NaiveDate;
-use pkms_org::Workspace;
 use std::collections::BTreeMap;
 
 use crate::clock::TaskClock;
@@ -148,9 +147,9 @@ pub fn apply_task_filter_criteria_on(
     let scope = if criteria.scope.is_empty() {
         None
     } else {
-        let workspace = Workspace::load(&config.org)?;
+        let snapshot = config.load_snapshot()?;
         Some(ResolvedScope::resolve(
-            &workspace.graph,
+            snapshot.graph(),
             &config.org.db_root,
             &criteria.scope,
         ))

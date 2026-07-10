@@ -15,14 +15,12 @@ pub mod org_task_mutation;
 pub mod parser;
 pub mod snapshot;
 pub mod tokens;
-pub mod workspace;
 
 pub use corpus::{Corpus, FileScanResult};
 pub use domain::{LinkTarget, NoteId};
 pub use graph::Graph;
 pub use parser::{Heading, Link, OrgPriority, OrgTodoState, ParsedNote, ParsedNoteSummary};
 pub use snapshot::OrgSnapshot;
-pub use workspace::Workspace;
 
 #[derive(Debug, Clone)]
 pub struct ScanConfig {

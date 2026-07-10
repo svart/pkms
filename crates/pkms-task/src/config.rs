@@ -1,5 +1,5 @@
 use anyhow::Result;
-use pkms_org::OrgConfig;
+use pkms_org::{OrgConfig, OrgSnapshot};
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -26,6 +26,10 @@ pub struct TodoistProviderConfig {
 }
 
 impl PkmsTaskConfig {
+    pub(crate) fn load_snapshot(&self) -> Result<OrgSnapshot> {
+        OrgSnapshot::load(&self.org.scan_config(), &self.org.link_resolution_context())
+    }
+
     pub fn resolved_db_root(&self) -> &Path {
         &self.org.db_root
     }

@@ -7,9 +7,9 @@ use crate::task_index::{
 };
 use anyhow::Result;
 use chrono::NaiveDate;
+use pkms_org::Graph;
 use pkms_org::org_task_edit;
 use pkms_org::parser::find_daily_file_date;
-use pkms_org::{Graph, Workspace};
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
@@ -41,13 +41,13 @@ pub fn list_items(config: &PkmsTaskConfig) -> Result<Vec<TaskItem>> {
 }
 
 pub fn list_items_on(config: &PkmsTaskConfig, clock: TaskClock) -> Result<Vec<TaskItem>> {
-    let workspace = Workspace::load(&config.org)?;
+    let snapshot = config.load_snapshot()?;
     let task_states = &config.task_states;
     let mut records = collect_todo_records(
-        &workspace.corpus,
+        snapshot.corpus(),
         TaskRecordQuery::todo(&task_states.valid_states, clock),
     );
-    assign_canonical_ids(task_states, &workspace.graph, &mut records);
+    assign_canonical_ids(task_states, snapshot.graph(), &mut records);
     Ok(records
         .into_iter()
         .map(|record| record_to_task_item(task_states, record))
@@ -56,11 +56,11 @@ pub fn list_items_on(config: &PkmsTaskConfig, clock: TaskClock) -> Result<Vec<Ta
 
 pub fn collect_inbox_items_on(config: &PkmsTaskConfig, clock: TaskClock) -> Result<Vec<TaskItem>> {
     let target = resolve_inbox_target_on(config, false, clock.today)?;
-    let workspace = Workspace::load(&config.org)?;
-    let graph = &workspace.graph;
+    let snapshot = config.load_snapshot()?;
+    let graph = snapshot.graph();
     let task_states = &config.task_states;
     let mut records = collect_todo_records(
-        &workspace.corpus,
+        snapshot.corpus(),
         TaskRecordQuery::todo(&task_states.valid_states, clock),
     );
     assign_canonical_ids(task_states, graph, &mut records);
@@ -260,11 +260,11 @@ pub fn find_task_item_on(
     line_number: usize,
     clock: TaskClock,
 ) -> Result<Option<TaskItem>> {
-    let workspace = Workspace::load(&config.org)?;
-    let graph = &workspace.graph;
+    let snapshot = config.load_snapshot()?;
+    let graph = snapshot.graph();
     let task_states = &config.task_states;
     let mut records = collect_todo_records(
-        &workspace.corpus,
+        snapshot.corpus(),
         TaskRecordQuery::todo(&task_states.valid_states, clock),
     );
     assign_canonical_ids(task_states, graph, &mut records);
@@ -281,16 +281,16 @@ pub fn agenda_items_for_clock(
     view: AgendaView,
     clock: TaskClock,
 ) -> Result<Vec<TaskItem>> {
-    let workspace = Workspace::load(&config.org)?;
+    let snapshot = config.load_snapshot()?;
     let task_states = &config.task_states;
     let mut records = collect_agenda_records(
-        &workspace.corpus,
+        snapshot.corpus(),
         TaskRecordQuery::agenda(&task_states.valid_states, &task_states.closed_states, clock),
     );
 
     retain_agenda_view_records(&mut records, view, clock.today);
 
-    assign_canonical_ids(task_states, &workspace.graph, &mut records);
+    assign_canonical_ids(task_states, snapshot.graph(), &mut records);
     Ok(records
         .into_iter()
         .map(|record| record_to_task_item(task_states, record))
