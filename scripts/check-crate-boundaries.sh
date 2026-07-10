@@ -48,8 +48,9 @@ reject_forbidden() {
 
 pkms_tree="$(tree_for pkms)"
 domain_packages=(pkms-org pkms-db pkms-rag pkms-task pkms-web)
+leaf_packages=(pkms-tokens)
 
-for package in "${domain_packages[@]}"; do
+for package in "${domain_packages[@]}" "${leaf_packages[@]}"; do
   require_present pkms "$package" "$pkms_tree"
 done
 
@@ -65,6 +66,13 @@ for package in "${domain_packages[@]}"; do
     fi
   done
   reject_forbidden "$package" "$package_tree" "${forbidden[@]}"
+done
+
+# Leaf utility crates may be shared by domain crates, but must not acquire an
+# edge back into the umbrella or any domain package.
+for package in "${leaf_packages[@]}"; do
+  package_tree="$(tree_for "$package")"
+  reject_forbidden "$package" "$package_tree" pkms "${domain_packages[@]}"
 done
 
 printf 'Crate dependency boundaries OK\n'
