@@ -251,6 +251,7 @@ impl ResolvedConfig {
             org: self.org_config(),
             task_states: self.task_state_config(),
             inbox: self.tasks.as_ref().and_then(|tasks| tasks.inbox.clone()),
+            daily_notes_dir: self.resolve_daily_notes_dir(),
             daily_notes_dir_configured: self.daily_notes_dir.is_some(),
         }
     }

@@ -14,6 +14,7 @@ pub struct PkmsTaskConfig {
     pub org: OrgConfig,
     pub task_states: TaskStateConfig,
     pub inbox: Option<String>,
+    pub daily_notes_dir: PathBuf,
     pub daily_notes_dir_configured: bool,
 }
 
@@ -35,11 +36,7 @@ impl PkmsTaskConfig {
     }
 
     pub fn resolve_daily_notes_dir(&self) -> PathBuf {
-        self.org
-            .daily_notes_dir
-            .clone()
-            .or_else(|| self.org.new_notes_dir.clone())
-            .unwrap_or_else(|| self.org.db_root.join("roam"))
+        self.daily_notes_dir.clone()
     }
 
     pub fn task_inbox(&self) -> Result<&str> {
