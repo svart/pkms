@@ -318,11 +318,7 @@ fn resolve_node_heading_target<'a>(
     graph: &'a Graph,
     node: &'a Node,
 ) -> Result<ResolvedHeadingTarget<'a>> {
-    let parsed = graph
-        .results
-        .iter()
-        .find(|r| r.path == node.path)
-        .map(|r| &r.parsed);
+    let parsed = graph.file(&node.path).map(|result| &result.parsed);
     let headings = parsed.map(|p| p.headings.as_slice()).unwrap_or(&[]);
     let content = std::fs::read_to_string(&node.path)?;
     let note_title = strip_org_links(&node.title);

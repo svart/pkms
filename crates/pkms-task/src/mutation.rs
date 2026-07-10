@@ -216,10 +216,7 @@ fn current_dependency_parent(
     config: &PkmsTaskConfig,
     location: &pkms::TaskLocation,
 ) -> Option<(usize, pkms::TaskLocation)> {
-    let result = graph
-        .results
-        .iter()
-        .find(|result| result.path == location.path.as_path())?;
+    let result = graph.file(&location.path)?;
     let source = result
         .parsed
         .headings
@@ -522,9 +519,7 @@ fn canonical_state(config: &PkmsTaskConfig, requested_state: &str) -> Result<Org
 fn task_title_in_graph(graph: &Graph, path: &str, line_number: usize) -> Option<String> {
     let path = Path::new(path);
     graph
-        .results
-        .iter()
-        .find(|result| result.path == path)?
+        .file(path)?
         .parsed
         .headings
         .iter()

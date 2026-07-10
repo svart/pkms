@@ -158,7 +158,7 @@ fn resolve_daily_inbox_target(
 
     let graph = Graph::load(&config.org)?;
     if let Some(result) = graph
-        .results
+        .files()
         .iter()
         .find(|result| find_daily_file_date(&result.path) == Some(today))
     {
