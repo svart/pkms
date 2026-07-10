@@ -42,6 +42,15 @@ pub struct WebConfig {
 }
 
 impl WebConfig {
+    fn load_graph(&self) -> Result<Graph> {
+        Graph::load_from(&self.org.scan_config(), &self.org.link_resolution_context())
+    }
+
+    #[cfg(test)]
+    fn load_corpus(&self) -> Result<pkms_org::Corpus> {
+        pkms_org::Corpus::load_from(&self.org.scan_config())
+    }
+
     pub fn resolved_db_root(&self) -> &Path {
         &self.org.db_root
     }
@@ -109,7 +118,7 @@ impl NoteViewer {
         open_target: OpenTargetFn,
         default_editor: impl Into<String>,
     ) -> Result<Self> {
-        let graph = Graph::load(&config.org)?;
+        let graph = config.load_graph()?;
         Ok(Self {
             config,
             graph,
@@ -143,7 +152,7 @@ pub fn serve(
     default_editor: &str,
     started: impl FnOnce(&ServeStarted) -> Result<()>,
 ) -> Result<()> {
-    let graph = Graph::load(&config.org)?;
+    let graph = config.load_graph()?;
     let initial_uuid = graph.resolve_target(&opts.target)?.uuid.clone();
     let listener = TcpListener::bind((opts.host.as_str(), opts.port))
         .with_context(|| format!("Failed to bind {}:{}", opts.host, opts.port))?;
@@ -196,7 +205,7 @@ mod viewer_tests;
 #[cfg(test)]
 mod tests {
     use super::*;
-    use pkms_org::{Corpus, OrgConfig};
+    use pkms_org::OrgConfig;
     use std::fs;
     use std::io;
     use std::path::PathBuf;
@@ -302,7 +311,7 @@ Preview body.
         )
         .unwrap();
         let config = web_config(root);
-        let corpus = Corpus::load(&config.org).unwrap();
+        let corpus = config.load_corpus().unwrap();
         let graph = Graph::from_corpus(&corpus);
         let alpha = graph
             .resolve_target("aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa")
@@ -379,7 +388,7 @@ Sibling body.
         )
         .unwrap();
         let config = web_config(root);
-        let corpus = Corpus::load(&config.org).unwrap();
+        let corpus = config.load_corpus().unwrap();
         let graph = Graph::from_corpus(&corpus);
         let alpha = graph
             .resolve_target("aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa")
@@ -424,7 +433,7 @@ Body.
         )
         .unwrap();
         let config = web_config(root);
-        let corpus = Corpus::load(&config.org).unwrap();
+        let corpus = config.load_corpus().unwrap();
         let graph = Graph::from_corpus(&corpus);
         let initial_uuid: pkms_org::domain::NoteId = "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa".into();
         let state = ServeState {
@@ -476,7 +485,7 @@ Body.
         )
         .unwrap();
         let config = web_config(root);
-        let corpus = Corpus::load(&config.org).unwrap();
+        let corpus = config.load_corpus().unwrap();
         let graph = Graph::from_corpus(&corpus);
         let node = graph
             .resolve_target("aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa")
@@ -526,7 +535,7 @@ Body.
         )
         .unwrap();
         let config = web_config(root);
-        let corpus = Corpus::load(&config.org).unwrap();
+        let corpus = config.load_corpus().unwrap();
         let graph = Graph::from_corpus(&corpus);
         let node = graph
             .resolve_target("aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa")
@@ -673,7 +682,7 @@ fn main() {}
         )
         .unwrap();
         let config = web_config(root);
-        let corpus = Corpus::load(&config.org).unwrap();
+        let corpus = config.load_corpus().unwrap();
         let graph = Graph::from_corpus(&corpus);
         let node = graph
             .resolve_target("aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa")
@@ -788,7 +797,7 @@ generic export
         )
         .unwrap();
         let config = web_config(root);
-        let corpus = Corpus::load(&config.org).unwrap();
+        let corpus = config.load_corpus().unwrap();
         let graph = Graph::from_corpus(&corpus);
         let node = graph
             .resolve_target("aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa")
@@ -879,7 +888,7 @@ generic export
         )
         .unwrap();
         let config = web_config(root);
-        let corpus = Corpus::load(&config.org).unwrap();
+        let corpus = config.load_corpus().unwrap();
         let graph = Graph::from_corpus(&corpus);
         let node = graph
             .resolve_target("aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa")
@@ -924,7 +933,7 @@ generic export
         )
         .unwrap();
         let config = web_config(root);
-        let corpus = Corpus::load(&config.org).unwrap();
+        let corpus = config.load_corpus().unwrap();
         let graph = Graph::from_corpus(&corpus);
         let node = graph
             .resolve_target("aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa")
