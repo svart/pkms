@@ -266,7 +266,7 @@ pub(super) fn build_check_output(data: &CheckData, opts: &CheckDisplayOptions) -
 
     let failed = if show_id {
         data.graph
-            .parse_errors
+            .parse_errors()
             .iter()
             .map(|(path, err)| FailedFileEntry {
                 path: path.display().to_string(),

@@ -137,7 +137,7 @@ pub fn render_text(output: &ExtractOutput) -> String {
 
 fn resolve_heading_location(graph: &Graph, heading_uuid: &str) -> Result<HeadingLocation> {
     if let Some(duplicate) = graph
-        .duplicates
+        .duplicates()
         .duplicate_uuids
         .iter()
         .find(|entry| entry.value == heading_uuid)

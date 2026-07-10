@@ -69,17 +69,17 @@ pub struct DuplicateEntry {
 
 #[derive(Debug)]
 pub struct Graph {
-    pub nodes: HashMap<NoteId, Node>,
-    pub path_to_uuid: HashMap<PathBuf, NoteId>,
-    pub title_to_uuid: HashMap<String, Vec<NoteId>>,
-    pub alias_to_uuid: HashMap<String, Vec<NoteId>>,
-    pub backlinks: HashMap<NoteId, Vec<NoteId>>,
-    pub broken_links: Vec<(NoteId, NoteId)>,
-    pub parse_errors: Vec<(PathBuf, String)>,
-    pub skipped_files: Vec<PathBuf>,
-    pub duplicates: DuplicateInfo,
-    pub heading_uuid_to_primary: HashMap<NoteId, NoteId>,
-    pub results: Vec<FileScanResult>,
+    pub(crate) nodes: HashMap<NoteId, Node>,
+    pub(crate) path_to_uuid: HashMap<PathBuf, NoteId>,
+    pub(crate) title_to_uuid: HashMap<String, Vec<NoteId>>,
+    pub(crate) alias_to_uuid: HashMap<String, Vec<NoteId>>,
+    pub(crate) backlinks: HashMap<NoteId, Vec<NoteId>>,
+    pub(crate) broken_links: Vec<(NoteId, NoteId)>,
+    pub(crate) parse_errors: Vec<(PathBuf, String)>,
+    pub(crate) skipped_files: Vec<PathBuf>,
+    pub(crate) duplicates: DuplicateInfo,
+    pub(crate) heading_uuid_to_primary: HashMap<NoteId, NoteId>,
+    pub(crate) results: Vec<FileScanResult>,
     home_dir: Option<PathBuf>,
 }
 
@@ -320,6 +320,14 @@ impl Graph {
 
     pub fn contains_file(&self, path: &Path) -> bool {
         self.file(path).is_some()
+    }
+
+    pub fn parse_errors(&self) -> &[(PathBuf, String)] {
+        &self.parse_errors
+    }
+
+    pub fn duplicates(&self) -> &DuplicateInfo {
+        &self.duplicates
     }
 
     pub fn resolve_target(&self, target: &str) -> anyhow::Result<&Node> {
