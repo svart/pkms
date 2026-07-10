@@ -250,14 +250,12 @@ fn timestamp_date(timestamp: &str) -> Option<&str> {
 
 fn render_backlinks_panel(graph: &Graph, node: &Node) -> String {
     let mut incoming: BTreeMap<(String, String), &Node> = BTreeMap::new();
-    if let Some(backlink_uuids) = graph.backlinks.get(&node.uuid) {
-        for uuid in backlink_uuids {
-            if let Some(source) = graph.nodes.get(uuid) {
-                incoming.insert(
-                    (source.title.to_ascii_lowercase(), source.uuid.to_string()),
-                    source,
-                );
-            }
+    for uuid in graph.backlinks_to(node.uuid.as_str()) {
+        if let Some(source) = graph.node(uuid.as_str()) {
+            incoming.insert(
+                (source.title.to_ascii_lowercase(), source.uuid.to_string()),
+                source,
+            );
         }
     }
 

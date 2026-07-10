@@ -65,9 +65,7 @@ pub fn open(editor: &str, target: &EditorTarget) -> Result<()> {
 
 fn title_for_path(graph: &Graph, path: &Path) -> String {
     graph
-        .results
-        .iter()
-        .find(|result| result.path == path)
+        .file(path)
         .and_then(|result| result.parsed.title.clone())
         .unwrap_or_else(|| {
             path.file_stem()
@@ -78,9 +76,7 @@ fn title_for_path(graph: &Graph, path: &Path) -> String {
 
 fn first_task_line(graph: &Graph, path: &Path) -> usize {
     graph
-        .results
-        .iter()
-        .find(|result| result.path == path)
+        .file(path)
         .and_then(|result| {
             result
                 .parsed
