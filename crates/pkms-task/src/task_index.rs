@@ -1,16 +1,14 @@
 use crate::clock::TaskClock;
 use crate::filter::{TextFilter, matches_tag_filters, matches_text_filters, matches_type_filters};
 use crate::model::{TaskDateValue, TaskPriority, TaskState};
+use crate::projection;
 use anyhow::Result;
 use chrono::{NaiveDateTime, NaiveTime};
 use pkms_org::Graph;
 use pkms_org::corpus::Corpus;
 use pkms_org::domain::NoteId;
 use pkms_org::graph::tasks::TaskStateConfig;
-use pkms_org::org_task_extract::{
-    OrgTaskClock, OrgTaskRecord, OrgTaskRecordQuery, collect_org_task_records,
-};
-use pkms_org::parser::{OrgPriority, find_daily_file_date};
+use pkms_org::parser::find_daily_file_date;
 use std::cmp::Ordering;
 use std::path::Path;
 
@@ -131,14 +129,10 @@ pub fn collect_todo_records(corpus: &Corpus, query: TaskRecordQuery<'_>) -> Vec<
         ..
     } = query;
 
-    collect_org_task_records(
-        corpus,
-        OrgTaskRecordQuery::todo(valid_states, org_task_clock(clock)),
-    )
-    .into_iter()
-    .map(task_record_from_org)
-    .filter(|record| apply_common_filters(record, filters))
-    .collect()
+    projection::collect_todo_records(corpus, valid_states, clock)
+        .into_iter()
+        .filter(|record| apply_common_filters(record, filters))
+        .collect()
 }
 
 pub fn collect_agenda_records(corpus: &Corpus, query: TaskRecordQuery<'_>) -> Vec<TaskRecord> {
@@ -149,14 +143,10 @@ pub fn collect_agenda_records(corpus: &Corpus, query: TaskRecordQuery<'_>) -> Ve
         clock,
     } = query;
 
-    collect_org_task_records(
-        corpus,
-        OrgTaskRecordQuery::agenda(valid_states, closed_states, org_task_clock(clock)),
-    )
-    .into_iter()
-    .map(task_record_from_org)
-    .filter(|record| apply_common_filters(record, filters))
-    .collect()
+    projection::collect_agenda_records(corpus, valid_states, closed_states, clock)
+        .into_iter()
+        .filter(|record| apply_common_filters(record, filters))
+        .collect()
 }
 
 pub fn assign_canonical_ids(
@@ -314,40 +304,6 @@ fn parse_timestamped_filename(path: &Path, filename: &str) -> Option<(NaiveDateT
     find_daily_file_date(path).map(|date| (date.and_time(NaiveTime::MIN), String::new()))
 }
 
-fn org_task_clock(clock: TaskClock) -> OrgTaskClock {
-    OrgTaskClock {
-        today: clock.today,
-        now: clock.now,
-    }
-}
-
-fn task_record_from_org(record: OrgTaskRecord) -> TaskRecord {
-    TaskRecord {
-        id: 0,
-        uuid: record.uuid,
-        title: record.title,
-        path: record.path,
-        filetags: record.filetags,
-        has_agenda_tag: record.has_agenda_tag,
-        is_daily_file: record.is_daily_file,
-        daily_file_date: record.daily_file_date.map(TaskDateValue::new),
-        heading_title: record.heading_title,
-        heading_level: record.heading_level,
-        line_number: record.line_number,
-        todo_state: record
-            .todo_state
-            .map(|state| TaskState::new(state.as_str())),
-        priority: record.priority.map(task_priority),
-        project: record.project,
-        scheduled: record.scheduled,
-        scheduled_date: record.scheduled_date.map(TaskDateValue::new),
-        deadline: record.deadline,
-        deadline_date: record.deadline_date.map(TaskDateValue::new),
-        is_overdue: record.is_overdue,
-        heading_tags: record.heading_tags,
-    }
-}
-
 fn apply_common_filters(record: &TaskRecord, filters: RecordFilters<'_>) -> bool {
     if !matches_text_filters(record.todo_state.as_deref(), filters.state_filters) {
         return false;
@@ -374,14 +330,6 @@ fn combined_tags<'a>(tags: impl Iterator<Item = &'a String>) -> Vec<String> {
         }
     }
     result
-}
-
-fn task_priority(priority: OrgPriority) -> TaskPriority {
-    match priority {
-        OrgPriority::A => TaskPriority::A,
-        OrgPriority::B => TaskPriority::B,
-        OrgPriority::C => TaskPriority::C,
-    }
 }
 
 #[cfg(test)]
