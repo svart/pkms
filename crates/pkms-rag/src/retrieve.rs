@@ -8,12 +8,12 @@ use pkms_tokens::{Encoding, count_tokens};
 use rusqlite::Connection;
 
 use crate::{
-    db::{dense_search, row_to_stored_search_result, search},
     embeddings::EmbeddingProvider,
     models::{
         RetrieveMode, RetrieveRequest, RetrieveResponse, RetrieveResult, RetrieveWeights,
         ScoreBreakdown, SearchResult,
     },
+    storage::sqlite::{dense_search, row_to_stored_search_result, search},
 };
 
 #[derive(Debug, Clone)]
@@ -387,9 +387,9 @@ fn trim_to_budget(
 mod tests {
     use super::*;
     use crate::{
-        db::{connect, ingest_records},
         embeddings::HashEmbeddingProvider,
         ndjson::load_ndjson,
+        storage::sqlite::{connect, ingest_records},
     };
     use std::path::PathBuf;
 

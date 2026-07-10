@@ -2,15 +2,14 @@
 
 mod api;
 mod chunking;
-mod db;
 mod embeddings;
-mod index;
 mod indexer;
 mod models;
 mod ndjson;
 mod org_export;
 mod retrieve;
 mod schema;
+mod storage;
 mod web;
 
 pub use api::{
@@ -27,7 +26,6 @@ pub use embeddings::{
     default_embedding_provider_config, embedding_provider_config, embedding_text, pack_vector,
     provider_from_config, unpack_vector,
 };
-pub use index::RagIndex;
 pub use indexer::BackgroundIndexer;
 pub use models::{
     ChunkRecord, DeleteEntityType, DeleteRecord, IndexPhase, IndexProgress, IndexStep,
@@ -37,3 +35,4 @@ pub use models::{
 };
 pub use ndjson::{NdjsonError, load_ndjson, parse_ndjson};
 pub use org_export::{export_org_notes, export_org_notes_with_ignore};
+pub use storage::RagIndex;

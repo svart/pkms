@@ -8,7 +8,6 @@ use std::{
 use anyhow::{Context, Result, bail};
 
 use crate::{
-    db::{IngestProgress, connect, ingest_records_with_progress},
     embeddings::{
         DEFAULT_EMBEDDING_MAX_BODY_CHARS, EmbeddingProvider, EmbeddingProviderConfig,
         default_embedding_provider_config, provider_from_config,
@@ -16,6 +15,7 @@ use crate::{
     models::{IndexPhase, IndexProgress, IndexStep, IngestSummary, RetrievalRecord},
     ndjson::load_ndjson,
     org_export::export_org_notes,
+    storage::sqlite::{IngestProgress, connect, ingest_records_with_progress},
 };
 
 type ProgressCallback<'a> = dyn Fn(&IndexProgress) + 'a;
@@ -445,7 +445,7 @@ fn apply_summary(progress: &mut IndexProgress, summary: &IngestSummary) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{db::status, embeddings::HashEmbeddingProvider};
+    use crate::{embeddings::HashEmbeddingProvider, storage::sqlite::status};
     use std::{
         fs,
         path::PathBuf,

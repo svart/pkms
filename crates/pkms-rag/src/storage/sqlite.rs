@@ -1,3 +1,5 @@
+//! Private SQLite schema, ingest, and query implementation.
+
 use std::{
     cmp::Ordering,
     collections::HashSet,

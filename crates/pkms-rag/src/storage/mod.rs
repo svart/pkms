@@ -1,9 +1,13 @@
+//! Public RAG index facade over the private SQLite implementation.
+
 use crate::embeddings::EmbeddingProvider;
 use crate::models::{
     IngestSummary, RetrievalRecord, RetrieveRequest, RetrieveResponse, SearchResult, StatusResponse,
 };
 use anyhow::Result;
 use std::path::{Path, PathBuf};
+
+pub(crate) mod sqlite;
 
 #[derive(Debug, Clone)]
 pub struct RagIndex {
@@ -15,17 +19,17 @@ impl RagIndex {
         let index = Self {
             db_path: db_path.into(),
         };
-        crate::db::connect(&index.db_path)?;
+        sqlite::connect(&index.db_path)?;
         Ok(index)
     }
 
     pub fn remove_files(db_path: impl AsRef<Path>) -> Result<()> {
-        crate::db::remove_index_files(db_path)
+        sqlite::remove_index_files(db_path)
     }
 
     pub fn status(&self) -> Result<StatusResponse> {
-        let connection = crate::db::connect(&self.db_path)?;
-        crate::db::status(&connection, &self.db_path)
+        let connection = sqlite::connect(&self.db_path)?;
+        sqlite::status(&connection, &self.db_path)
     }
 
     pub fn ingest(
@@ -34,13 +38,13 @@ impl RagIndex {
         embedding_provider: &dyn EmbeddingProvider,
         full_rebuild: bool,
     ) -> Result<IngestSummary> {
-        let mut connection = crate::db::connect(&self.db_path)?;
-        crate::db::ingest_records(&mut connection, records, embedding_provider, full_rebuild)
+        let mut connection = sqlite::connect(&self.db_path)?;
+        sqlite::ingest_records(&mut connection, records, embedding_provider, full_rebuild)
     }
 
     pub fn search(&self, query: &str, limit: usize) -> Result<Vec<SearchResult>> {
-        let connection = crate::db::connect(&self.db_path)?;
-        crate::db::search(&connection, query, limit)
+        let connection = sqlite::connect(&self.db_path)?;
+        sqlite::search(&connection, query, limit)
     }
 
     pub fn retrieve(
@@ -48,7 +52,7 @@ impl RagIndex {
         request: &RetrieveRequest,
         embedding_provider: &dyn EmbeddingProvider,
     ) -> Result<RetrieveResponse> {
-        let connection = crate::db::connect(&self.db_path)?;
+        let connection = sqlite::connect(&self.db_path)?;
         crate::retrieve::retrieve(&connection, request, embedding_provider)
     }
 
