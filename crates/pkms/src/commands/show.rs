@@ -2,20 +2,20 @@ use crate::cli::OutputFormat;
 use crate::command_context::CommandContext;
 use crate::output::{OutputContext, terminal_markup};
 use anyhow::Result;
-use pkms_db::commands::show::{self, ShowOutput};
+use pkms_task::ShowOutput;
 
-pub use pkms_db::commands::show::{HeadingTarget, ShowOptions, TaskIdEntry};
+pub use pkms_task::{HeadingTarget, ShowOptions, TaskIdEntry};
 
 pub fn run(ctx: &CommandContext<'_>, opts: &ShowOptions) -> Result<()> {
     let org_config = ctx.config().org_config();
-    let outputs = show::execute(&org_config, opts)?;
+    let outputs = pkms_task::execute_show(&org_config, opts)?;
     render(ctx.output(), &outputs)
 }
 
 pub fn render(ctx: &OutputContext, outputs: &[ShowOutput]) -> Result<()> {
     match ctx.format {
         OutputFormat::Text => {
-            let text = show::render_text(outputs);
+            let text = pkms_task::render_show_text(outputs);
             print!("{}", terminal_markup::format_if_terminal_supported(&text));
         }
         OutputFormat::Json => {

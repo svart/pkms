@@ -14,6 +14,7 @@ mod projection;
 mod provider;
 mod providers;
 mod scope;
+mod show;
 mod task_index;
 #[cfg(feature = "todoist")]
 mod todoist;
@@ -46,6 +47,10 @@ pub use mutation::{
 };
 pub use provider::{TaskListView, TaskMetadataRow};
 pub use providers::{MetadataKind, TaskProviderEnvironment, collect_task_metadata_on};
+pub use show::{
+    HeadingTarget, ShowOptions, ShowOutput, TaskIdEntry, execute as execute_show,
+    render_text as render_show_text,
+};
 pub use task_index::{
     CanonicalTaskEntry, TaskLocation, all_task_entries, resolve_canonical_task_id,
 };

@@ -1,3 +1,5 @@
+//! Task-detail projection and rendering for canonical local tasks.
+
 use anyhow::Result;
 use pkms_org::OrgConfig;
 use pkms_org::graph::{FileScanResult, Graph, Node};
