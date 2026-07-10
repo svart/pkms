@@ -214,8 +214,7 @@ pub fn execute_uuid(config: &OrgConfig, opts: &FixUuidOptions) -> Result<UuidFix
     let ignore_patterns = config.ignore_patterns.as_slice();
 
     let (replacement_uuid, replacement_title) = graph
-        .nodes
-        .get(opts.target_uuid.as_str())
+        .node(opts.target_uuid.as_str())
         .map(|n| (n.uuid.clone(), n.title.clone()))
         .ok_or_else(|| {
             anyhow::anyhow!(

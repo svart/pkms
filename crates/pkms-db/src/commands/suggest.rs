@@ -215,14 +215,10 @@ fn neighbor_relevance(
     }
 
     let shared_backlinks = graph
-        .backlinks
-        .get(neighbor_uuid)
-        .map(|v| {
-            v.iter()
-                .filter(|bl| ctx.target_backlinks.contains(bl.as_str()))
-                .count()
-        })
-        .unwrap_or(0);
+        .backlinks_to(neighbor_uuid)
+        .iter()
+        .filter(|bl| ctx.target_backlinks.contains(bl.as_str()))
+        .count();
     if shared_backlinks > 0 {
         score += shared_backlinks as f64 * BACKLINK_OVERLAP_WEIGHT;
     }
@@ -248,10 +244,7 @@ fn neighbor_relevance(
 
 fn is_orphan(node: &Node, graph: &Graph) -> bool {
     let has_outgoing = node.outgoing.iter().any(|l| matches!(l, Link::Internal(_)));
-    let has_incoming = graph
-        .backlinks
-        .get(&node.uuid)
-        .is_some_and(|b| !b.is_empty());
+    let has_incoming = !graph.backlinks_to(node.uuid.as_str()).is_empty();
     !has_outgoing && !has_incoming
 }
 
@@ -326,10 +319,10 @@ fn score_backlink_overlap(
     reasons: &mut Vec<String>,
 ) -> f64 {
     let other_backlinks: HashSet<&str> = graph
-        .backlinks
-        .get(&other.uuid)
-        .map(|v| v.iter().map(|uuid| uuid.as_str()).collect())
-        .unwrap_or_default();
+        .backlinks_to(other.uuid.as_str())
+        .iter()
+        .map(|uuid| uuid.as_str())
+        .collect();
     let shared: usize = ctx.target_backlinks.intersection(&other_backlinks).count();
     if shared > 0 {
         reasons.push(format!("{shared} shared backlinks"));
@@ -474,12 +467,11 @@ fn compute_suggestions_for_node(
     target_uuid: Option<String>,
 ) -> Result<SuggestComputation> {
     let node = graph
-        .nodes
-        .get(target)
+        .node(target)
         .cloned()
         .ok_or_else(|| anyhow::anyhow!("Note not found: {target}"))?;
 
-    let heading_context: Option<String> = if graph.heading_uuid_to_primary.contains_key(target) {
+    let heading_context: Option<String> = if graph.primary_uuid_for_heading(target).is_some() {
         node_content(graph, &node).and_then(|content| find_heading_title_for_uuid(content, target))
     } else {
         None
@@ -526,10 +518,10 @@ fn compute_suggestions_for_node(
         .map(std::string::String::as_str)
         .collect();
     let target_backlinks: HashSet<&str> = graph
-        .backlinks
-        .get(&node.uuid)
-        .map(|v| v.iter().map(|uuid| uuid.as_str()).collect())
-        .unwrap_or_default();
+        .backlinks_to(node.uuid.as_str())
+        .iter()
+        .map(|uuid| uuid.as_str())
+        .collect();
     let target_outgoing: HashSet<&str> = node
         .outgoing
         .iter()
