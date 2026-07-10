@@ -12,11 +12,11 @@ pub mod search;
 pub mod traversal;
 pub mod validation;
 
-use crate::OrgConfig;
 use crate::corpus::Corpus;
 pub use crate::corpus::FileScanResult;
 use crate::domain::{LinkTarget, NoteId};
 use crate::parser::{Link, ParsedNote};
+use crate::{LinkResolutionContext, OrgConfig, ScanConfig};
 use serde::Serialize;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -208,11 +208,14 @@ fn file_link_line_spec_exists(path: &Path, line_spec: &str) -> bool {
 
 impl Graph {
     pub fn load(config: &OrgConfig) -> anyhow::Result<Self> {
-        tracing::debug!(db_root = %config.db_root.display(), "loading graph");
-        let corpus = Corpus::load(config)?;
+        Self::load_from(&config.scan_config(), &config.link_resolution_context())
+    }
+
+    pub fn load_from(scan: &ScanConfig, links: &LinkResolutionContext) -> anyhow::Result<Self> {
+        tracing::debug!(db_root = %scan.db_root.display(), "loading graph");
+        let corpus = Corpus::load_from(scan)?;
         let mut graph = Self::from_corpus(&corpus);
-        graph.home_dir = config.home_dir.clone();
-        graph.index_db_relative_paths(&config.db_root);
+        graph.apply_link_context(links);
         tracing::debug!(
             node_count = graph.nodes.len(),
             backlink_target_count = graph.backlinks.len(),
@@ -222,6 +225,11 @@ impl Graph {
             "graph loaded"
         );
         Ok(graph)
+    }
+
+    pub(crate) fn apply_link_context(&mut self, links: &LinkResolutionContext) {
+        self.home_dir = links.home_dir.clone();
+        self.index_db_relative_paths(&links.db_root);
     }
 
     pub fn from_corpus(corpus: &Corpus) -> Self {

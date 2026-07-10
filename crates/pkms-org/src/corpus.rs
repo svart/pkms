@@ -1,6 +1,6 @@
-use crate::OrgConfig;
 use crate::discovery::discover_files;
 use crate::parser::{ParsedNote, parse_note};
+use crate::{OrgConfig, ScanConfig};
 use anyhow::Result;
 use rayon::prelude::*;
 use std::path::{Path, PathBuf};
@@ -31,6 +31,10 @@ pub struct Corpus {
 
 impl Corpus {
     pub fn load(config: &OrgConfig) -> Result<Self> {
+        Self::load_from(&config.scan_config())
+    }
+
+    pub fn load_from(config: &ScanConfig) -> Result<Self> {
         let db_root = &config.db_root;
         let ignore = &config.ignore_patterns;
         tracing::debug!(
