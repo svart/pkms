@@ -37,7 +37,12 @@ pub struct Node {
 }
 
 impl Node {
-    pub fn from_parsed(uuid: NoteId, title: String, path: PathBuf, parsed: &ParsedNote) -> Self {
+    pub(crate) fn from_parsed(
+        uuid: NoteId,
+        title: String,
+        path: PathBuf,
+        parsed: &ParsedNote,
+    ) -> Self {
         Node {
             uuid,
             title,
@@ -156,10 +161,6 @@ fn expand_file_link_home(inner_path: &str, home_dir: Option<&Path>) -> String {
     }
 }
 
-pub fn resolve_file_link_path(target_path: &str, source_path: &Path, db_root: &Path) -> PathBuf {
-    resolve_file_link_path_with_home(target_path, source_path, db_root, None)
-}
-
 pub fn resolve_file_link_path_with_home(
     target_path: &str,
     source_path: &Path,
@@ -169,13 +170,8 @@ pub fn resolve_file_link_path_with_home(
     FileLinkTarget::parse(target_path, home_dir).resolve_path(source_path, db_root)
 }
 
-/// Check whether a file link target exists on disk and optionally matches a line spec.
-pub fn file_link_target_exists(target: &str, source_path: &Path, db_root: &Path) -> bool {
-    file_link_target_exists_with_home(target, source_path, db_root, None)
-}
-
 /// Check whether a file link target exists using an explicit home directory for `~` expansion.
-pub fn file_link_target_exists_with_home(
+pub(crate) fn file_link_target_exists_with_home(
     target: &str,
     source_path: &Path,
     db_root: &Path,
@@ -232,7 +228,7 @@ impl Graph {
         Self::from_results(corpus.results().to_vec())
     }
 
-    pub fn from_corpus_without_raw_content(corpus: &Corpus) -> Self {
+    pub(crate) fn from_corpus_without_raw_content(corpus: &Corpus) -> Self {
         Self::from_results(
             corpus
                 .results()
