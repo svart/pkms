@@ -54,6 +54,7 @@ impl AppState {
         if self.synchronous_indexing {
             self.indexer
                 .run_sync_with_provider_config(&self.embedding_provider_config)
+                .unwrap_or_else(|_| self.indexer.status())
         } else {
             self.indexer
                 .start_with_provider_config(self.embedding_provider_config.clone())

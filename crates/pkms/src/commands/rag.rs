@@ -68,16 +68,7 @@ fn run_index(command_ctx: &CommandContext<'_>, args: &RagIndexArgs) -> Result<()
     let progress =
         indexer.run_sync_with_provider_config_and_progress(&provider_config, |progress| {
             progress_printer.borrow_mut().render(progress);
-        });
-    if progress.phase == "error" {
-        bail!(
-            "{}",
-            progress
-                .error
-                .clone()
-                .unwrap_or_else(|| progress.message.clone())
-        );
-    }
+        })?;
     render_index_progress(command_ctx.output(), &progress)
 }
 
@@ -265,27 +256,32 @@ fn render_index_progress(ctx: &OutputContext, progress: &pkms_rag::IndexProgress
 
 #[derive(Default)]
 struct RagIndexProgressPrinter {
-    last_step: Option<String>,
+    last_step: Option<pkms_rag::IndexStep>,
     last_bucket: Option<u64>,
 }
 
 impl RagIndexProgressPrinter {
     fn render(&mut self, progress: &pkms_rag::IndexProgress) {
         let bucket = progress_bucket(progress);
-        let step_changed = self.last_step.as_deref() != Some(progress.current_step.as_str());
+        let step_changed = self.last_step != Some(progress.current_step);
         let bucket_changed = self.last_bucket != bucket;
-        let terminal = matches!(progress.phase.as_str(), "complete" | "error" | "idle");
+        let terminal = matches!(
+            progress.phase,
+            pkms_rag::IndexPhase::Complete
+                | pkms_rag::IndexPhase::Error
+                | pkms_rag::IndexPhase::Idle
+        );
         if !step_changed && !bucket_changed && !terminal {
             return;
         }
         eprintln!("{}", format_index_progress_line(progress));
-        self.last_step = Some(progress.current_step.clone());
+        self.last_step = Some(progress.current_step);
         self.last_bucket = bucket;
     }
 }
 
 fn progress_bucket(progress: &pkms_rag::IndexProgress) -> Option<u64> {
-    if progress.current_step == "embed-chunks" && progress.total_embeddings > 0 {
+    if progress.current_step == pkms_rag::IndexStep::EmbedChunks && progress.total_embeddings > 0 {
         return progress
             .processed_embeddings
             .saturating_mul(20)
@@ -298,20 +294,20 @@ fn progress_bucket(progress: &pkms_rag::IndexProgress) -> Option<u64> {
 }
 
 fn format_index_progress_line(progress: &pkms_rag::IndexProgress) -> String {
-    match progress.current_step.as_str() {
-        "ingest-records" if progress.total_records == 0 => {
+    match progress.current_step {
+        pkms_rag::IndexStep::IngestRecords if progress.total_records == 0 => {
             "RAG index: Processing records: none found.".to_string()
         }
-        "ingest-records" => format!(
+        pkms_rag::IndexStep::IngestRecords => format!(
             "RAG index: Processing records {}/{} ({})",
             progress.processed_records,
             progress.total_records,
             percent(progress.processed_records, progress.total_records)
         ),
-        "embed-chunks" if progress.total_embeddings == 0 => {
+        pkms_rag::IndexStep::EmbedChunks if progress.total_embeddings == 0 => {
             "RAG index: Embedding chunks: none needed.".to_string()
         }
-        "embed-chunks" => {
+        pkms_rag::IndexStep::EmbedChunks => {
             format!(
                 "RAG index: Embedding chunks {}/{} ({})",
                 progress.processed_embeddings,
@@ -319,12 +315,12 @@ fn format_index_progress_line(progress: &pkms_rag::IndexProgress) -> String {
                 percent(progress.processed_embeddings, progress.total_embeddings)
             )
         }
-        "cleanup-stale" => "RAG index: Removing stale index rows.".to_string(),
-        "complete" => format!(
+        pkms_rag::IndexStep::CleanupStale => "RAG index: Removing stale index rows.".to_string(),
+        pkms_rag::IndexStep::Complete => format!(
             "RAG index: Complete ({} records, {} chunks, {} embeddings computed).",
             progress.processed_records, progress.chunks_seen, progress.embeddings_computed
         ),
-        "error" => format!("RAG index: Error: {}", progress.message),
+        pkms_rag::IndexStep::Error => format!("RAG index: Error: {}", progress.message),
         _ if !progress.message.is_empty() => format!("RAG index: {}", progress.message),
         _ => format!("RAG index: {}", progress.current_step),
     }

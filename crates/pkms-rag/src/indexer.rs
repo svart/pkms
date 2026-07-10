@@ -13,7 +13,7 @@ use crate::{
         DEFAULT_EMBEDDING_MAX_BODY_CHARS, EmbeddingProvider, EmbeddingProviderConfig,
         default_embedding_provider_config, provider_from_config,
     },
-    models::{IndexProgress, IngestSummary, RetrievalRecord},
+    models::{IndexPhase, IndexProgress, IndexStep, IngestSummary, RetrievalRecord},
     ndjson::load_ndjson,
     org_export::export_org_notes,
 };
@@ -66,7 +66,10 @@ impl BackgroundIndexer {
         progress
     }
 
-    pub fn run_sync_with_provider(&self, provider: &dyn EmbeddingProvider) -> IndexProgress {
+    pub fn run_sync_with_provider(
+        &self,
+        provider: &dyn EmbeddingProvider,
+    ) -> Result<IndexProgress> {
         self.run_sync_with_provider_internal(provider, None)
     }
 
@@ -74,7 +77,7 @@ impl BackgroundIndexer {
         &self,
         provider: &dyn EmbeddingProvider,
         on_progress: impl Fn(&IndexProgress),
-    ) -> IndexProgress {
+    ) -> Result<IndexProgress> {
         self.run_sync_with_provider_internal(provider, Some(&on_progress))
     }
 
@@ -82,25 +85,16 @@ impl BackgroundIndexer {
         &self,
         provider: &dyn EmbeddingProvider,
         on_progress: Option<&ProgressCallback<'_>>,
-    ) -> IndexProgress {
-        if !self.has_index_source() {
-            self.set_no_source();
-            self.emit_progress(on_progress);
-            return self.status();
-        }
-
-        let started_at = unix_timestamp_seconds();
-        if !self.begin_rebuild(started_at) {
-            self.emit_progress(on_progress);
-            return self.status();
-        }
-        self.emit_progress(on_progress);
-        self.run_rebuild_with_provider(started_at, provider, on_progress);
-        self.finish_rebuild();
-        self.status()
+    ) -> Result<IndexProgress> {
+        self.run_sync_operation(on_progress, |started_at| {
+            self.try_run_rebuild_with_provider(started_at, provider, on_progress)
+        })
     }
 
-    pub fn run_sync_with_provider_config(&self, config: &EmbeddingProviderConfig) -> IndexProgress {
+    pub fn run_sync_with_provider_config(
+        &self,
+        config: &EmbeddingProviderConfig,
+    ) -> Result<IndexProgress> {
         self.run_sync_with_provider_config_internal(config, None)
     }
 
@@ -108,7 +102,7 @@ impl BackgroundIndexer {
         &self,
         config: &EmbeddingProviderConfig,
         on_progress: impl Fn(&IndexProgress),
-    ) -> IndexProgress {
+    ) -> Result<IndexProgress> {
         self.run_sync_with_provider_config_internal(config, Some(&on_progress))
     }
 
@@ -116,32 +110,39 @@ impl BackgroundIndexer {
         &self,
         config: &EmbeddingProviderConfig,
         on_progress: Option<&ProgressCallback<'_>>,
-    ) -> IndexProgress {
+    ) -> Result<IndexProgress> {
+        self.run_sync_operation(on_progress, |started_at| {
+            let provider = provider_from_config(config)
+                .context("failed to initialize RAG embedding provider")?;
+            self.try_run_rebuild_with_provider(started_at, provider.as_ref(), on_progress)
+        })
+    }
+
+    fn run_sync_operation(
+        &self,
+        on_progress: Option<&ProgressCallback<'_>>,
+        operation: impl FnOnce(f64) -> Result<()>,
+    ) -> Result<IndexProgress> {
         if !self.has_index_source() {
             self.set_no_source();
             self.emit_progress(on_progress);
-            return self.status();
+            return Ok(self.status());
         }
 
         let started_at = unix_timestamp_seconds();
         if !self.begin_rebuild(started_at) {
             self.emit_progress(on_progress);
-            return self.status();
+            bail!("RAG index rebuild is already running");
         }
         self.emit_progress(on_progress);
-        match provider_from_config(config) {
-            Ok(provider) => {
-                self.run_rebuild_with_provider(started_at, provider.as_ref(), on_progress)
-            }
-            Err(err) => {
-                self.set_error(format_error_chain(
-                    &err.context("failed to initialize RAG embedding provider"),
-                ));
-                self.emit_progress(on_progress);
-            }
+        if let Err(error) = operation(started_at) {
+            self.set_error(format_error_chain(&error));
+            self.emit_progress(on_progress);
+            self.finish_rebuild();
+            return Err(error);
         }
         self.finish_rebuild();
-        self.status()
+        Ok(self.status())
     }
 
     pub fn status(&self) -> IndexProgress {
@@ -199,8 +200,8 @@ impl BackgroundIndexer {
         let result = (|| {
             let records = self.load_records(started_at, on_progress)?;
             self.set(
-                "indexing",
-                "init-embedding-model",
+                IndexPhase::Indexing,
+                IndexStep::InitEmbeddingModel,
                 "Preparing embedding model.",
                 Some(records.len() as u64),
             );
@@ -215,27 +216,21 @@ impl BackgroundIndexer {
         }
     }
 
-    fn run_rebuild_with_provider(
+    fn try_run_rebuild_with_provider(
         &self,
         started_at: f64,
         provider: &dyn EmbeddingProvider,
         on_progress: Option<&ProgressCallback<'_>>,
-    ) {
-        let result = (|| {
-            let records = self.load_records(started_at, on_progress)?;
-            self.set(
-                "indexing",
-                "init-embedding-model",
-                "Preparing embedding model.",
-                Some(records.len() as u64),
-            );
-            self.emit_progress(on_progress);
-            self.ingest_records(&records, provider, on_progress)
-        })();
-        if let Err(err) = result {
-            self.set_error(format_error_chain(&err));
-            self.emit_progress(on_progress);
-        }
+    ) -> Result<()> {
+        let records = self.load_records(started_at, on_progress)?;
+        self.set(
+            IndexPhase::Indexing,
+            IndexStep::InitEmbeddingModel,
+            "Preparing embedding model.",
+            Some(records.len() as u64),
+        );
+        self.emit_progress(on_progress);
+        self.ingest_records(&records, provider, on_progress)
     }
 
     fn load_records(
@@ -245,7 +240,7 @@ impl BackgroundIndexer {
     ) -> Result<Vec<RetrievalRecord>> {
         if let Some(notes_root) = &self.notes_root {
             self.set_loading(
-                "export-notes-root",
+                IndexStep::ExportNotesRoot,
                 format!("Exporting org notes from {}", display_path(notes_root)),
                 started_at,
             );
@@ -260,7 +255,7 @@ impl BackgroundIndexer {
             bail!("index source does not exist: {}", display_path(source_path));
         }
         self.set_loading(
-            "read-ndjson",
+            IndexStep::ReadNdjson,
             format!("Reading {}", display_path(source_path)),
             started_at,
         );
@@ -275,8 +270,8 @@ impl BackgroundIndexer {
         on_progress: Option<&ProgressCallback<'_>>,
     ) -> Result<()> {
         self.set(
-            "indexing",
-            "ingest-rebuild",
+            IndexPhase::Indexing,
+            IndexStep::IngestRebuild,
             format!("Rebuilding index from {} records.", records.len()),
             None,
         );
@@ -312,8 +307,8 @@ impl BackgroundIndexer {
             *running = true;
         }
         *self.progress() = IndexProgress {
-            phase: "loading".to_string(),
-            current_step: "starting".to_string(),
+            phase: IndexPhase::Loading,
+            current_step: IndexStep::Starting,
             message: "Starting index rebuild.".to_string(),
             source_path: self.source_path.as_deref().map(display_path),
             notes_root: self.notes_root.as_deref().map(display_path),
@@ -329,26 +324,32 @@ impl BackgroundIndexer {
 
     fn set_no_source(&self) {
         let mut progress = self.progress();
-        progress.phase = "idle".to_string();
-        progress.current_step = "no-source".to_string();
+        progress.phase = IndexPhase::Idle;
+        progress.current_step = IndexStep::NoSource;
         progress.message = "No notes root or index source configured.".to_string();
         progress.error = None;
     }
 
-    fn set_loading(&self, current_step: &str, message: String, started_at: f64) {
+    fn set_loading(&self, current_step: IndexStep, message: String, started_at: f64) {
         let mut progress = self.progress();
-        progress.phase = "loading".to_string();
-        progress.current_step = current_step.to_string();
+        progress.phase = IndexPhase::Loading;
+        progress.current_step = current_step;
         progress.message = message;
         progress.started_at = Some(started_at);
         progress.finished_at = None;
         progress.error = None;
     }
 
-    fn set(&self, phase: &str, current_step: &str, message: impl Into<String>, total: Option<u64>) {
+    fn set(
+        &self,
+        phase: IndexPhase,
+        current_step: IndexStep,
+        message: impl Into<String>,
+        total: Option<u64>,
+    ) {
         let mut progress = self.progress();
-        progress.phase = phase.to_string();
-        progress.current_step = current_step.to_string();
+        progress.phase = phase;
+        progress.current_step = current_step;
         progress.message = message.into();
         if let Some(total) = total {
             progress.total_records = total;
@@ -357,8 +358,8 @@ impl BackgroundIndexer {
 
     fn set_complete(&self, processed: u64) {
         let mut progress = self.progress();
-        progress.phase = "complete".to_string();
-        progress.current_step = "complete".to_string();
+        progress.phase = IndexPhase::Complete;
+        progress.current_step = IndexStep::Complete;
         progress.message = "Index is ready.".to_string();
         progress.processed_records = processed;
         progress.finished_at = Some(unix_timestamp_seconds());
@@ -367,8 +368,8 @@ impl BackgroundIndexer {
 
     fn set_error(&self, error: String) {
         let mut progress = self.progress();
-        progress.phase = "error".to_string();
-        progress.current_step = "error".to_string();
+        progress.phase = IndexPhase::Error;
+        progress.current_step = IndexStep::Error;
         progress.message = error.clone();
         progress.error = Some(error);
         progress.finished_at = Some(unix_timestamp_seconds());
@@ -376,8 +377,8 @@ impl BackgroundIndexer {
 
     fn set_ingest_progress(&self, ingest_progress: &IngestProgress) {
         let mut progress = self.progress();
-        progress.phase = "indexing".to_string();
-        progress.current_step = ingest_progress.current_step.clone();
+        progress.phase = IndexPhase::Indexing;
+        progress.current_step = ingest_progress.current_step;
         progress.message = ingest_progress.message.clone();
         progress.total_records = ingest_progress.total_records;
         progress.processed_records = ingest_progress.processed_records;
@@ -461,10 +462,12 @@ mod tests {
         let indexer = BackgroundIndexer::new(tempdir.path().join("rag.sqlite3"), None, None);
         let provider = HashEmbeddingProvider::default();
 
-        let progress = indexer.run_sync_with_provider(&provider);
+        let progress = indexer
+            .run_sync_with_provider(&provider)
+            .expect("no-source status returns");
 
-        assert_eq!(progress.phase, "idle");
-        assert_eq!(progress.current_step, "no-source");
+        assert_eq!(progress.phase, IndexPhase::Idle);
+        assert_eq!(progress.current_step, IndexStep::NoSource);
         assert!(progress.message.contains("No notes root"));
     }
 
@@ -476,10 +479,14 @@ mod tests {
             BackgroundIndexer::new(tempdir.path().join("rag.sqlite3"), Some(source), None);
         let provider = HashEmbeddingProvider::default();
 
-        let progress = indexer.run_sync_with_provider(&provider);
+        let error = indexer
+            .run_sync_with_provider(&provider)
+            .expect_err("missing source returns an error");
+        let progress = indexer.status();
 
-        assert_eq!(progress.phase, "error");
-        assert_eq!(progress.current_step, "error");
+        assert!(format!("{error:#}").contains("does not exist"));
+        assert_eq!(progress.phase, IndexPhase::Error);
+        assert_eq!(progress.current_step, IndexStep::Error);
         assert!(
             progress
                 .error
@@ -496,12 +503,14 @@ mod tests {
         let indexer = BackgroundIndexer::new(db_path.clone(), Some(source.clone()), None);
         let provider = HashEmbeddingProvider::default();
 
-        let progress = indexer.run_sync_with_provider(&provider);
+        let progress = indexer
+            .run_sync_with_provider(&provider)
+            .expect("rebuild succeeds");
         let conn = connect(&db_path).expect("database opens");
         let current = status(&conn, &db_path).expect("status reads");
 
-        assert_eq!(progress.phase, "complete");
-        assert_eq!(progress.current_step, "complete");
+        assert_eq!(progress.phase, IndexPhase::Complete);
+        assert_eq!(progress.current_step, IndexStep::Complete);
         assert_eq!(progress.source_path, Some(display_path(&source)));
         assert_eq!(progress.total_records, 5);
         assert_eq!(progress.processed_records, 5);
@@ -523,15 +532,17 @@ mod tests {
         let provider = HashEmbeddingProvider::default();
         let events = Mutex::new(Vec::new());
 
-        let progress = indexer.run_sync_with_provider_and_progress(&provider, |progress| {
-            events.lock().expect("events lock").push(progress.clone());
-        });
+        let progress = indexer
+            .run_sync_with_provider_and_progress(&provider, |progress| {
+                events.lock().expect("events lock").push(progress.clone());
+            })
+            .expect("rebuild succeeds");
 
         let events = events.lock().expect("events lock");
-        assert_eq!(progress.phase, "complete");
+        assert_eq!(progress.phase, IndexPhase::Complete);
         assert!(
             events.iter().any(|event| {
-                event.current_step == "ingest-records"
+                event.current_step == IndexStep::IngestRecords
                     && event.total_records == 5
                     && event.processed_records > 0
                     && event.processed_records < event.total_records
@@ -540,7 +551,7 @@ mod tests {
         );
         assert!(
             events.iter().any(|event| {
-                event.current_step == "embed-chunks"
+                event.current_step == IndexStep::EmbedChunks
                     && event.total_embeddings == 2
                     && event.processed_embeddings > 0
             }),
@@ -548,7 +559,7 @@ mod tests {
         );
         assert_eq!(
             events.last().expect("at least one progress event").phase,
-            "complete"
+            IndexPhase::Complete
         );
     }
 
@@ -569,7 +580,7 @@ mod tests {
 
         let progress = indexer.status();
         let error = progress.error.expect("error is recorded");
-        assert_eq!(progress.phase, "error");
+        assert_eq!(progress.phase, IndexPhase::Error);
         assert!(
             error.contains(
                 "failed to initialize RAG embedding provider: download request failed: corporate CA rejected"
@@ -600,19 +611,23 @@ Agents call /retrieve to semantically search PKMS notes.
         let indexer = BackgroundIndexer::new(db_path.clone(), None, Some(notes_root.clone()));
         let provider = HashEmbeddingProvider::default();
 
-        let first = indexer.run_sync_with_provider(&provider);
+        let first = indexer
+            .run_sync_with_provider(&provider)
+            .expect("initial rebuild succeeds");
         let conn = connect(&db_path).expect("database opens");
         let current = status(&conn, &db_path).expect("status reads");
-        assert_eq!(first.phase, "complete");
+        assert_eq!(first.phase, IndexPhase::Complete);
         assert_eq!(first.notes_root, Some(display_path(&notes_root)));
         assert_eq!(current.notes, 1);
         assert_eq!(current.chunks, 1);
 
         fs::remove_file(note_path).expect("note removes");
-        let second = indexer.run_sync_with_provider(&provider);
+        let second = indexer
+            .run_sync_with_provider(&provider)
+            .expect("second rebuild succeeds");
         let current = status(&conn, &db_path).expect("status reads");
 
-        assert_eq!(second.phase, "complete");
+        assert_eq!(second.phase, IndexPhase::Complete);
         assert_eq!(second.total_records, 0);
         assert_eq!(second.notes_deleted, 1);
         assert_eq!(second.chunks_deleted, 1);
@@ -637,7 +652,7 @@ Agents call /retrieve to semantically search PKMS notes.
                 release: provider_release,
             }))
         });
-        assert_eq!(first.phase, "loading");
+        assert_eq!(first.phase, IndexPhase::Loading);
         entered_rx
             .recv_timeout(Duration::from_secs(5))
             .expect("background provider starts");
@@ -645,7 +660,7 @@ Agents call /retrieve to semantically search PKMS notes.
         let (second, duplicate_handle) = indexer
             .start_with_provider_factory(|| panic!("duplicate start should not build a provider"));
         assert!(duplicate_handle.is_none());
-        assert_ne!(second.phase, "complete");
+        assert_ne!(second.phase, IndexPhase::Complete);
 
         let (lock, cvar) = &*release;
         *lock.lock().expect("release lock") = true;
@@ -655,7 +670,7 @@ Agents call /retrieve to semantically search PKMS notes.
             .join()
             .expect("background thread joins");
 
-        assert_eq!(indexer.status().phase, "complete");
+        assert_eq!(indexer.status().phase, IndexPhase::Complete);
     }
 
     fn fixture_path() -> PathBuf {

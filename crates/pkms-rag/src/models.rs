@@ -104,10 +104,80 @@ pub struct IngestSummary {
     pub embeddings_skipped: u64,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum IndexPhase {
+    Idle,
+    Loading,
+    Indexing,
+    Complete,
+    Error,
+}
+
+impl IndexPhase {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Idle => "idle",
+            Self::Loading => "loading",
+            Self::Indexing => "indexing",
+            Self::Complete => "complete",
+            Self::Error => "error",
+        }
+    }
+}
+
+impl std::fmt::Display for IndexPhase {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(self.as_str())
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum IndexStep {
+    Idle,
+    Starting,
+    NoSource,
+    ExportNotesRoot,
+    ReadNdjson,
+    InitEmbeddingModel,
+    IngestRebuild,
+    IngestRecords,
+    EmbedChunks,
+    CleanupStale,
+    Complete,
+    Error,
+}
+
+impl IndexStep {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Idle => "idle",
+            Self::Starting => "starting",
+            Self::NoSource => "no-source",
+            Self::ExportNotesRoot => "export-notes-root",
+            Self::ReadNdjson => "read-ndjson",
+            Self::InitEmbeddingModel => "init-embedding-model",
+            Self::IngestRebuild => "ingest-rebuild",
+            Self::IngestRecords => "ingest-records",
+            Self::EmbedChunks => "embed-chunks",
+            Self::CleanupStale => "cleanup-stale",
+            Self::Complete => "complete",
+            Self::Error => "error",
+        }
+    }
+}
+
+impl std::fmt::Display for IndexStep {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(self.as_str())
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct IndexProgress {
-    pub phase: String,
-    pub current_step: String,
+    pub phase: IndexPhase,
+    pub current_step: IndexStep,
     pub message: String,
     #[serde(default)]
     pub source_path: Option<String>,
@@ -156,8 +226,8 @@ pub struct IndexProgress {
 impl Default for IndexProgress {
     fn default() -> Self {
         Self {
-            phase: "idle".to_string(),
-            current_step: "idle".to_string(),
+            phase: IndexPhase::Idle,
+            current_step: IndexStep::Idle,
             message: String::new(),
             source_path: None,
             notes_root: None,

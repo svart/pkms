@@ -30,10 +30,10 @@ pub use embeddings::{
 pub use index::RagIndex;
 pub use indexer::BackgroundIndexer;
 pub use models::{
-    ChunkRecord, DeleteEntityType, DeleteRecord, IndexProgress, IngestSummary, LinkRecord,
-    NoteRecord, RetrievalRecord, RetrieveMode, RetrieveRequest, RetrieveResponse, RetrieveResult,
-    RetrieveWeights, SUPPORTED_SCHEMA_VERSION, ScoreBreakdown, SearchRequest, SearchResponse,
-    SearchResult, StatusResponse,
+    ChunkRecord, DeleteEntityType, DeleteRecord, IndexPhase, IndexProgress, IndexStep,
+    IngestSummary, LinkRecord, NoteRecord, RetrievalRecord, RetrieveMode, RetrieveRequest,
+    RetrieveResponse, RetrieveResult, RetrieveWeights, SUPPORTED_SCHEMA_VERSION, ScoreBreakdown,
+    SearchRequest, SearchResponse, SearchResult, StatusResponse,
 };
 pub use ndjson::{NdjsonError, load_ndjson, parse_ndjson};
 pub use org_export::{export_org_notes, export_org_notes_with_ignore};

@@ -105,8 +105,8 @@ where
         let progress = state.start_indexing();
         tracing::info!(
             event = "rag_api_startup_index",
-            phase = progress.phase,
-            current_step = progress.current_step,
+            phase = %progress.phase,
+            current_step = %progress.current_step,
             "started RAG index rebuild from configured serve source"
         );
     }

@@ -16,15 +16,15 @@ use crate::{
         embedding_text_with_max_body_chars, pack_vector, unpack_vector,
     },
     models::{
-        ChunkRecord, DeleteEntityType, DeleteRecord, IngestSummary, LinkRecord, RetrievalRecord,
-        SUPPORTED_SCHEMA_VERSION, ScoreBreakdown, SearchResult, StatusResponse,
+        ChunkRecord, DeleteEntityType, DeleteRecord, IndexStep, IngestSummary, LinkRecord,
+        RetrievalRecord, SUPPORTED_SCHEMA_VERSION, ScoreBreakdown, SearchResult, StatusResponse,
     },
     schema::SCHEMA_SQL,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct IngestProgress {
-    pub current_step: String,
+    pub current_step: IndexStep,
     pub message: String,
     pub total_records: u64,
     pub processed_records: u64,
@@ -110,7 +110,7 @@ pub(crate) fn ingest_records_with_progress(
     }
 
     on_progress(&IngestProgress {
-        current_step: "ingest-records".to_string(),
+        current_step: IndexStep::IngestRecords,
         message: format!("Processing {total_records} records."),
         total_records,
         processed_records: 0,
@@ -150,7 +150,7 @@ pub(crate) fn ingest_records_with_progress(
             }
         }
         on_progress(&IngestProgress {
-            current_step: "ingest-records".to_string(),
+            current_step: IndexStep::IngestRecords,
             message: format!("Processing {total_records} records."),
             total_records,
             processed_records: index as u64 + 1,
@@ -170,7 +170,7 @@ pub(crate) fn ingest_records_with_progress(
             progress_summary.embeddings_computed = processed_embeddings;
             progress_summary.embeddings_skipped = embeddings_skipped;
             on_progress(&IngestProgress {
-                current_step: "embed-chunks".to_string(),
+                current_step: IndexStep::EmbedChunks,
                 message: format!("Embedding {total_embeddings} changed chunks."),
                 total_records,
                 processed_records: total_records,
@@ -187,7 +187,7 @@ pub(crate) fn ingest_records_with_progress(
         summary.chunks_deleted += delete_stale_chunks(&tx)?;
         summary.notes_deleted += delete_missing_notes(&tx, &seen_note_ids)?;
         on_progress(&IngestProgress {
-            current_step: "cleanup-stale".to_string(),
+            current_step: IndexStep::CleanupStale,
             message: "Removing stale index rows.".to_string(),
             total_records,
             processed_records: total_records,
