@@ -13,7 +13,10 @@ pub fn build_output(config: &ResolvedConfig) -> InfoOutput {
     let info = config.resolved_info();
     InfoOutput {
         config: info,
-        config_path: dirs::config_dir()
+        config_path: config
+            .runtime_inputs()
+            .config_dir
+            .clone()
             .unwrap_or_default()
             .join("pkms.toml")
             .to_string_lossy()
@@ -74,6 +77,7 @@ mod tests {
             agenda: None,
             todoist: None,
             rag: None,
+            runtime: crate::environment::RuntimeInputs::default(),
         }
     }
 

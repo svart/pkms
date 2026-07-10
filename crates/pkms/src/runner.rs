@@ -55,7 +55,11 @@ fn dispatch(cli: &Cli, command_ctx: &CommandContext<'_>) -> Result<ExitCode> {
             &commands::orphans::options_from_args(args),
         ))?,
         Command::Info => success(commands::info::run(command_ctx))?,
-        Command::InitConfig(args) => success(init_config(args.db.as_deref(), ctx))?,
+        Command::InitConfig(args) => success(init_config(
+            args.db.as_deref(),
+            command_ctx.config().runtime_inputs().config_dir.as_deref(),
+            ctx,
+        ))?,
         Command::Resolve(args) => success(commands::resolve::run(
             command_ctx,
             &commands::resolve::options_from_args(args),
@@ -121,8 +125,12 @@ fn success(result: Result<()>) -> Result<ExitCode> {
     result.map(|()| ExitCode::SUCCESS)
 }
 
-fn init_config(db: Option<&std::path::Path>, ctx: &OutputContext) -> Result<()> {
-    let config_path = dirs::config_dir()
+fn init_config(
+    db: Option<&std::path::Path>,
+    config_dir: Option<&std::path::Path>,
+    ctx: &OutputContext,
+) -> Result<()> {
+    let config_path = config_dir
         .ok_or_else(|| anyhow::anyhow!("Could not find XDG config directory"))?
         .join("pkms.toml");
     if config_path.exists() {

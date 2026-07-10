@@ -158,7 +158,7 @@ fn rag_note_viewer(
     let mut config = command_ctx.config().web_command_config();
     if let Some(notes_root) = notes_root {
         config.org.db_root = notes_root.clone();
-        config.org.home_dir = dirs::home_dir();
+        config.org.home_dir = command_ctx.config().runtime_inputs().home_dir.clone();
     }
     let viewer = pkms_web::NoteViewer::new(config, editor::open_target, editor::DEFAULT_EDITOR)?;
     Ok(Arc::new(RagWebNoteViewer { viewer }))
@@ -414,7 +414,7 @@ fn retrieve_mode(mode: RagRetrieveMode) -> pkms_rag::RetrieveMode {
 fn resolve_rag_db(rag_db: Option<&PathBuf>, config: &ResolvedConfig) -> PathBuf {
     rag_db
         .cloned()
-        .or_else(|| env_path(RAG_DB_ENV))
+        .or_else(|| runtime_path(config, RAG_DB_ENV))
         .or_else(|| config.resolve_rag_db())
         .unwrap_or_else(|| PathBuf::from(pkms_rag::DEFAULT_RAG_DB))
 }
@@ -436,12 +436,14 @@ fn resolve_index_sources(
 fn resolve_embedding_provider_config(
     config: &ResolvedConfig,
 ) -> Result<pkms_rag::EmbeddingProviderConfig> {
-    let provider = non_empty_env(RAG_EMBEDDING_PROVIDER_ENV);
-    let model = non_empty_env(RAG_EMBEDDING_MODEL_ENV)
-        .or_else(|| config.rag_embedding_model().map(ToOwned::to_owned));
-    let model_dir =
-        env_path(RAG_FASTEMBED_MODEL_DIR_ENV).or_else(|| config.resolve_rag_fastembed_model_dir());
-    pkms_rag::embedding_provider_config(provider.as_deref(), model.as_deref(), model_dir.as_deref())
+    let runtime = config.runtime_inputs();
+    let provider = runtime.non_empty_var(RAG_EMBEDDING_PROVIDER_ENV);
+    let model = runtime
+        .non_empty_var(RAG_EMBEDDING_MODEL_ENV)
+        .or_else(|| config.rag_embedding_model());
+    let model_dir = runtime_path(config, RAG_FASTEMBED_MODEL_DIR_ENV)
+        .or_else(|| config.resolve_rag_fastembed_model_dir());
+    pkms_rag::embedding_provider_config(provider, model, model_dir.as_deref())
         .context("failed to read RAG embedding provider configuration")
 }
 
@@ -459,15 +461,11 @@ fn resolve_index_embedding_provider_config(
     Ok(provider_config)
 }
 
-fn env_path(key: &str) -> Option<PathBuf> {
-    non_empty_env(key).map(PathBuf::from)
-}
-
-fn non_empty_env(key: &str) -> Option<String> {
-    std::env::var(key)
-        .ok()
-        .map(|value| value.trim().to_string())
-        .filter(|value| !value.is_empty())
+fn runtime_path(config: &ResolvedConfig, key: &str) -> Option<PathBuf> {
+    config
+        .runtime_inputs()
+        .non_empty_var(key)
+        .map(PathBuf::from)
 }
 
 fn resolve_rag_port(port: Option<u16>) -> u16 {
@@ -490,10 +488,6 @@ mod tests {
 
     #[test]
     fn resolve_embedding_provider_config_uses_configured_fastembed_model_dir() {
-        let _guard = ENV_LOCK.lock().expect("env lock");
-        let _snapshot = EnvSnapshot::capture();
-        clear_embedding_env();
-
         let mut config = ResolvedConfig::for_test_db("/db");
         config.rag = Some(RagConfig {
             rag_db: None,
@@ -515,13 +509,12 @@ mod tests {
 
     #[test]
     fn resolve_embedding_provider_config_prefers_env_values_over_config() {
-        let _guard = ENV_LOCK.lock().expect("env lock");
-        let _snapshot = EnvSnapshot::capture();
-        clear_embedding_env();
-        set_env(RAG_EMBEDDING_PROVIDER_ENV, "fastembed");
-        set_env(RAG_EMBEDDING_MODEL_ENV, "Xenova/all-MiniLM-L12-v2");
-        set_env(RAG_FASTEMBED_MODEL_DIR_ENV, "/env/pkms/models");
         let mut config = ResolvedConfig::for_test_db("/db");
+        config.runtime = crate::environment::RuntimeInputs::from_values(&[
+            (RAG_EMBEDDING_PROVIDER_ENV, "fastembed"),
+            (RAG_EMBEDDING_MODEL_ENV, "Xenova/all-MiniLM-L12-v2"),
+            (RAG_FASTEMBED_MODEL_DIR_ENV, "/env/pkms/models"),
+        ]);
         config.rag = Some(RagConfig {
             rag_db: None,
             embedding_model: Some("Xenova/bge-small-en-v1.5".to_string()),
@@ -542,38 +535,33 @@ mod tests {
 
     #[test]
     fn resolve_embedding_provider_config_selects_hash_from_env() {
-        let _guard = ENV_LOCK.lock().expect("env lock");
-        let _snapshot = EnvSnapshot::capture();
-        clear_embedding_env();
-        set_env(RAG_EMBEDDING_PROVIDER_ENV, "hash");
+        let mut config = ResolvedConfig::for_test_db("/db");
+        config.runtime =
+            crate::environment::RuntimeInputs::from_values(&[(RAG_EMBEDDING_PROVIDER_ENV, "hash")]);
 
-        let provider_config =
-            resolve_embedding_provider_config(&ResolvedConfig::for_test_db("/db"))
-                .expect("config resolves");
+        let provider_config = resolve_embedding_provider_config(&config).expect("config resolves");
 
         assert_eq!(provider_config, pkms_rag::EmbeddingProviderConfig::Hash);
     }
 
     #[test]
     fn resolve_embedding_provider_config_rejects_unknown_env_provider() {
-        let _guard = ENV_LOCK.lock().expect("env lock");
-        let _snapshot = EnvSnapshot::capture();
-        clear_embedding_env();
-        set_env(RAG_EMBEDDING_PROVIDER_ENV, "unknown");
+        let mut config = ResolvedConfig::for_test_db("/db");
+        config.runtime = crate::environment::RuntimeInputs::from_values(&[(
+            RAG_EMBEDDING_PROVIDER_ENV,
+            "unknown",
+        )]);
 
-        let err = resolve_embedding_provider_config(&ResolvedConfig::for_test_db("/db"))
-            .expect_err("provider is rejected");
+        let err = resolve_embedding_provider_config(&config).expect_err("provider is rejected");
 
         assert!(format!("{err:#}").contains("unsupported embedding provider"));
     }
 
     #[test]
     fn resolve_rag_db_prefers_cli_then_active_env_then_config() {
-        let _guard = ENV_LOCK.lock().expect("env lock");
-        let _snapshot = EnvSnapshot::capture();
-        remove_env("PKMS_RAG_DB");
-        set_env("PKMS_RAG_DB", "/env/rag.sqlite3");
         let mut config = ResolvedConfig::for_test_db("/db");
+        config.runtime =
+            crate::environment::RuntimeInputs::from_values(&[("PKMS_RAG_DB", "/env/rag.sqlite3")]);
         config.rag = Some(RagConfig {
             rag_db: Some(PathBuf::from("config/rag.sqlite3")),
             embedding_model: None,
@@ -587,7 +575,7 @@ mod tests {
             resolve_rag_db(None, &config),
             PathBuf::from("/env/rag.sqlite3")
         );
-        remove_env("PKMS_RAG_DB");
+        config.runtime = crate::environment::RuntimeInputs::default();
         assert_eq!(
             resolve_rag_db(None, &config),
             PathBuf::from("/db/config/rag.sqlite3")
@@ -596,9 +584,6 @@ mod tests {
 
     #[test]
     fn resolve_index_embedding_provider_config_applies_cli_batch_size() {
-        let _guard = ENV_LOCK.lock().expect("env lock");
-        let _snapshot = EnvSnapshot::capture();
-        clear_embedding_env();
         let config = ResolvedConfig::for_test_db("/db");
         let args = RagIndexArgs {
             rag_db: None,
@@ -619,60 +604,5 @@ mod tests {
                 model_dir: None,
             }
         );
-    }
-
-    static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
-
-    struct EnvSnapshot {
-        values: Vec<(&'static str, Option<String>)>,
-    }
-
-    impl EnvSnapshot {
-        fn capture() -> Self {
-            Self {
-                values: vec![
-                    ("PKMS_RAG_DB", std::env::var("PKMS_RAG_DB").ok()),
-                    (
-                        "PKMS_RAG_EMBEDDING_PROVIDER",
-                        std::env::var("PKMS_RAG_EMBEDDING_PROVIDER").ok(),
-                    ),
-                    (
-                        "PKMS_RAG_EMBEDDING_MODEL",
-                        std::env::var("PKMS_RAG_EMBEDDING_MODEL").ok(),
-                    ),
-                    (
-                        "PKMS_RAG_FASTEMBED_MODEL_DIR",
-                        std::env::var("PKMS_RAG_FASTEMBED_MODEL_DIR").ok(),
-                    ),
-                ],
-            }
-        }
-    }
-
-    impl Drop for EnvSnapshot {
-        fn drop(&mut self) {
-            for (key, value) in &self.values {
-                match value {
-                    Some(value) => set_env(key, value),
-                    None => remove_env(key),
-                }
-            }
-        }
-    }
-
-    fn clear_embedding_env() {
-        remove_env("PKMS_RAG_EMBEDDING_PROVIDER");
-        remove_env("PKMS_RAG_EMBEDDING_MODEL");
-        remove_env("PKMS_RAG_FASTEMBED_MODEL_DIR");
-    }
-
-    fn set_env(key: &str, value: &str) {
-        // SAFETY: these tests serialize environment changes with ENV_LOCK and restore values.
-        unsafe { std::env::set_var(key, value) };
-    }
-
-    fn remove_env(key: &str) {
-        // SAFETY: these tests serialize environment changes with ENV_LOCK and restore values.
-        unsafe { std::env::remove_var(key) };
     }
 }

@@ -1,5 +1,6 @@
 use crate::cli::CheckArgs;
 use crate::command_context::CommandContext;
+use crate::environment::RuntimeInputs;
 use crate::output::OutputContext;
 use anyhow::Result;
 use pkms_db::commands::check::{
@@ -14,7 +15,7 @@ pub fn run(ctx: &CommandContext<'_>, opts: &CheckOptions) -> Result<ExitCode> {
     let output = check::execute(
         &CheckConfig {
             org: org_config,
-            ssh: ssh_file_check_options_from_env(),
+            ssh: ssh_file_check_options(ctx.config().runtime_inputs()),
         },
         opts,
     )?;
@@ -82,23 +83,25 @@ pub fn options_from_args(args: &CheckArgs) -> CheckOptions {
     }
 }
 
-fn ssh_file_check_options_from_env() -> SshFileCheckOptions {
+fn ssh_file_check_options(runtime: &RuntimeInputs) -> SshFileCheckOptions {
     let mut options = SshFileCheckOptions {
-        default_user: default_ssh_user(),
-        agent_socket: non_empty_env_os("SSH_AUTH_SOCK").map(PathBuf::from),
+        default_user: default_ssh_user(runtime),
+        agent_socket: runtime.var_os("SSH_AUTH_SOCK").map(PathBuf::from),
         ..SshFileCheckOptions::default()
     };
-    if let Some(home) = dirs::home_dir() {
+    if let Some(home) = &runtime.home_dir {
         options.known_hosts = home.join(".ssh").join("known_hosts");
-        options.identity_files = default_identity_files(&home);
+        options.identity_files = default_identity_files(home);
     }
     options
 }
 
-fn default_ssh_user() -> String {
-    std::env::var("USER")
-        .or_else(|_| std::env::var("LOGNAME"))
+fn default_ssh_user(runtime: &RuntimeInputs) -> String {
+    runtime
+        .non_empty_var("USER")
+        .or_else(|| runtime.non_empty_var("LOGNAME"))
         .unwrap_or_default()
+        .to_string()
 }
 
 fn default_identity_files(home: &Path) -> Vec<PathBuf> {
@@ -109,6 +112,28 @@ fn default_identity_files(home: &Path) -> Vec<PathBuf> {
         .collect()
 }
 
-fn non_empty_env_os(key: &str) -> Option<std::ffi::OsString> {
-    std::env::var_os(key).filter(|value| !value.as_os_str().is_empty())
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn builds_ssh_options_from_injected_runtime_inputs() {
+        let mut runtime = RuntimeInputs::from_values(&[
+            ("USER", "alice"),
+            ("SSH_AUTH_SOCK", "/run/user/1000/agent.sock"),
+        ]);
+        runtime.home_dir = Some(PathBuf::from("/home/alice"));
+
+        let options = ssh_file_check_options(&runtime);
+
+        assert_eq!(options.default_user, "alice");
+        assert_eq!(
+            options.agent_socket,
+            Some(PathBuf::from("/run/user/1000/agent.sock"))
+        );
+        assert_eq!(
+            options.known_hosts,
+            PathBuf::from("/home/alice/.ssh/known_hosts")
+        );
+    }
 }

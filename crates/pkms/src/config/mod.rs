@@ -1,3 +1,4 @@
+use crate::environment::RuntimeInputs;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
@@ -14,7 +15,7 @@ pub use defaults::generate_default_config;
 use defaults::{default_closed_todo_states, default_open_todo_states};
 pub use paths::canonicalize_or_abs;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
     pub db_root: Option<PathBuf>,
@@ -39,6 +40,7 @@ pub struct ResolvedConfig {
     pub agenda: Option<AgendaConfig>,
     pub todoist: Option<TodoistConfig>,
     pub rag: Option<RagConfig>,
+    pub(crate) runtime: RuntimeInputs,
 }
 
 #[cfg(feature = "web")]
@@ -99,36 +101,26 @@ pub struct RagConfig {
 }
 
 impl Config {
-    pub fn load() -> Result<Self> {
-        let config_path = dirs::config_dir()
-            .context("Could not find XDG config directory")?
-            .join("pkms.toml");
-
+    pub fn load_from(config_path: &Path) -> Result<Self> {
         tracing::debug!(path = %config_path.display(), exists = config_path.exists(), "loading config");
         if config_path.exists() {
-            let content = std::fs::read_to_string(&config_path)
+            let content = std::fs::read_to_string(config_path)
                 .with_context(|| format!("Failed to read config: {}", config_path.display()))?;
             toml::from_str(&content)
                 .with_context(|| format!("Failed to parse config: {}", config_path.display()))
         } else {
-            Ok(Config {
-                db_root: None,
-                new_notes_dir: None,
-                daily_notes_dir: None,
-                ignore_patterns: None,
-                columns: None,
-                tasks: None,
-                agenda: None,
-                todoist: None,
-                rag: None,
-            })
+            Ok(Config::default())
         }
     }
 
-    pub fn resolve(self, cli_db: Option<PathBuf>) -> Result<ResolvedConfig> {
+    pub fn resolve(
+        self,
+        cli_db: Option<PathBuf>,
+        runtime: RuntimeInputs,
+    ) -> Result<ResolvedConfig> {
         let (db_root, db_root_source) = if let Some(db_root) = cli_db {
             (db_root, "cli")
-        } else if let Some(db_root) = std::env::var("PKMS_DB_ROOT").ok().map(PathBuf::from) {
+        } else if let Some(db_root) = runtime.var_os("PKMS_DB_ROOT").map(PathBuf::from) {
             (db_root, "env")
         } else if let Some(db_root) = self.db_root.clone() {
             (db_root, "config")
@@ -139,7 +131,7 @@ impl Config {
             );
         };
         let resolved = ResolvedConfig {
-            db_root: canonicalize_or_abs(&db_root),
+            db_root: canonicalize_or_abs(&db_root, runtime.current_dir.as_deref()),
             new_notes_dir: self.new_notes_dir,
             daily_notes_dir: self.daily_notes_dir,
             ignore_patterns: self.ignore_patterns,
@@ -148,6 +140,7 @@ impl Config {
             agenda: self.agenda,
             todoist: self.todoist,
             rag: self.rag,
+            runtime,
         };
         tracing::debug!(
             db_root = %resolved.db_root.display(),
@@ -178,6 +171,7 @@ impl ResolvedConfig {
             agenda: None,
             todoist: None,
             rag: None,
+            runtime: RuntimeInputs::default(),
         }
     }
 
@@ -227,7 +221,7 @@ impl ResolvedConfig {
         pkms_org::OrgConfig {
             db_root: self.db_root.clone(),
             ignore_patterns: self.resolve_ignore_patterns(),
-            home_dir: dirs::home_dir(),
+            home_dir: self.runtime.home_dir.clone(),
         }
     }
 
@@ -340,11 +334,8 @@ impl ResolvedConfig {
 
     pub fn todoist_token(&self) -> Result<String> {
         let env_name = self.todoist_token_env();
-        if let Ok(token) = std::env::var(env_name) {
-            let token = token.trim();
-            if !token.is_empty() {
-                return Ok(token.to_string());
-            }
+        if let Some(token) = self.runtime.non_empty_var(env_name) {
+            return Ok(token.to_string());
         }
 
         if let Some(token) = self
@@ -363,8 +354,14 @@ impl ResolvedConfig {
     }
 
     pub fn todoist_api_base_url(&self) -> String {
-        std::env::var("PKMS_TODOIST_API_BASE_URL")
-            .unwrap_or_else(|_| "https://api.todoist.com/api/v1".to_string())
+        self.runtime
+            .non_empty_var("PKMS_TODOIST_API_BASE_URL")
+            .unwrap_or("https://api.todoist.com/api/v1")
+            .to_string()
+    }
+
+    pub fn runtime_inputs(&self) -> &RuntimeInputs {
+        &self.runtime
     }
 
     pub fn task_inbox(&self) -> Result<&str> {
@@ -390,7 +387,11 @@ impl ResolvedConfig {
             new_notes_dir: self.resolve_new_notes_dir(),
             daily_notes_dir: self.resolve_daily_notes_dir(),
             ignore_patterns: self.resolve_ignore_patterns(),
-            has_config_file: dirs::config_dir().is_some_and(|d| d.join("pkms.toml").exists()),
+            has_config_file: self
+                .runtime
+                .config_dir
+                .as_ref()
+                .is_some_and(|dir| dir.join("pkms.toml").exists()),
         }
     }
 }
@@ -410,9 +411,27 @@ mod tests {
 
     #[test]
     fn test_config_load_ok() {
-        // Config::load() should always succeed (returns defaults if file missing)
-        let config = Config::load();
+        let config = Config::load_from(Path::new("/nonexistent-pkms-config.toml"));
         assert!(config.is_ok());
+    }
+
+    #[test]
+    fn db_root_precedence_uses_cli_then_injected_environment_then_config() {
+        let config = || Config {
+            db_root: Some(PathBuf::from("/config/db")),
+            ..Config::default()
+        };
+        let runtime = RuntimeInputs::from_values(&[("PKMS_DB_ROOT", "/env/db")]);
+
+        let cli = config()
+            .resolve(Some(PathBuf::from("/cli/db")), runtime.clone())
+            .unwrap();
+        let env = config().resolve(None, runtime).unwrap();
+        let file = config().resolve(None, RuntimeInputs::default()).unwrap();
+
+        assert_eq!(cli.db_root, PathBuf::from("/cli/db"));
+        assert_eq!(env.db_root, PathBuf::from("/env/db"));
+        assert_eq!(file.db_root, PathBuf::from("/config/db"));
     }
 
     #[test]
@@ -427,6 +446,7 @@ mod tests {
             agenda: None,
             todoist: None,
             rag: None,
+            runtime: RuntimeInputs::default(),
         };
         assert_eq!(
             config.resolve_new_notes_dir(),
@@ -446,6 +466,7 @@ mod tests {
             agenda: None,
             todoist: None,
             rag: None,
+            runtime: RuntimeInputs::default(),
         };
         assert_eq!(config.resolve_new_notes_dir(), PathBuf::from("/abs/path"));
     }
@@ -462,6 +483,7 @@ mod tests {
             agenda: None,
             todoist: None,
             rag: None,
+            runtime: RuntimeInputs::default(),
         };
         assert_eq!(
             config.resolve_new_notes_dir(),
@@ -481,6 +503,7 @@ mod tests {
             agenda: None,
             todoist: None,
             rag: None,
+            runtime: RuntimeInputs::default(),
         };
         assert_eq!(
             config.resolve_daily_notes_dir(),
@@ -500,6 +523,7 @@ mod tests {
             agenda: None,
             todoist: None,
             rag: None,
+            runtime: RuntimeInputs::default(),
         };
         assert_eq!(
             config.resolve_daily_notes_dir(),
@@ -519,6 +543,7 @@ mod tests {
             agenda: None,
             todoist: None,
             rag: None,
+            runtime: RuntimeInputs::default(),
         };
         assert_eq!(
             config.resolve_daily_notes_dir(),
@@ -538,6 +563,7 @@ mod tests {
             agenda: None,
             todoist: None,
             rag: None,
+            runtime: RuntimeInputs::default(),
         };
         let patterns = config.resolve_ignore_patterns();
         assert_eq!(patterns.len(), 2);
@@ -556,6 +582,7 @@ mod tests {
             agenda: None,
             todoist: None,
             rag: None,
+            runtime: RuntimeInputs::default(),
         };
         let patterns = config.resolve_ignore_patterns();
         assert!(patterns.is_empty());
@@ -563,15 +590,19 @@ mod tests {
 
     #[test]
     fn test_canonicalize_or_abs_non_existent_absolute() {
-        let p = canonicalize_or_abs(Path::new("/nonexistent_path_xyz"));
+        let p = canonicalize_or_abs(Path::new("/nonexistent_path_xyz"), None);
         assert!(p.is_absolute());
         assert_eq!(p, PathBuf::from("/nonexistent_path_xyz"));
     }
 
     #[test]
     fn test_canonicalize_or_abs_non_existent_relative() {
-        let p = canonicalize_or_abs(Path::new("relative_nonexistent_path"));
+        let p = canonicalize_or_abs(
+            Path::new("relative_nonexistent_path"),
+            Some(Path::new("/current")),
+        );
         assert!(p.is_absolute()); // joined with cwd
+        assert_eq!(p, PathBuf::from("/current/relative_nonexistent_path"));
     }
 
     #[test]
@@ -598,6 +629,7 @@ mod tests {
             agenda: None,
             todoist: None,
             rag: None,
+            runtime: RuntimeInputs::default(),
         };
         let info = config.resolved_info();
         assert_eq!(info.db_root, PathBuf::from("/actual/db"));
@@ -750,6 +782,7 @@ rag_database = "typo.sqlite3"
                 embedding_model: Some("Xenova/bge-small-en-v1.5".to_string()),
                 fastembed_model_dir: Some(PathBuf::from("models/bge-small")),
             }),
+            runtime: RuntimeInputs::default(),
         };
 
         assert_eq!(
@@ -860,6 +893,7 @@ tasks = ["Id", "Project", "Heading"]
             agenda: None,
             todoist: None,
             rag: None,
+            runtime: RuntimeInputs::default(),
         };
         assert!(!config.todoist_enabled());
         assert_eq!(config.todoist_token_env(), "TODOIST_API_TOKEN");
@@ -883,6 +917,7 @@ tasks = ["Id", "Project", "Heading"]
                 default_filter: None,
             }),
             rag: None,
+            runtime: RuntimeInputs::default(),
         };
         let error = config.todoist_token().unwrap_err().to_string();
         assert!(error.contains("PKMS_TEST_MISSING_TODOIST_TOKEN"));
@@ -905,6 +940,7 @@ tasks = ["Id", "Project", "Heading"]
                 default_filter: None,
             }),
             rag: None,
+            runtime: RuntimeInputs::default(),
         };
         assert_eq!(config.todoist_token().unwrap(), "config-token");
     }

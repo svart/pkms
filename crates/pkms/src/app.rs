@@ -1,5 +1,6 @@
 use crate::cli::{Cli, OutputFormat};
 use crate::config::{Config, ResolvedConfig};
+use crate::environment::RuntimeInputs;
 use crate::output::OutputContext;
 use anyhow::Result;
 use std::process::ExitCode;
@@ -14,7 +15,13 @@ impl App {
         let output = OutputContext {
             format: cli.output_format.clone().unwrap_or(OutputFormat::Text),
         };
-        let config = Config::load()?.resolve(cli.db.clone())?;
+        let runtime = RuntimeInputs::capture();
+        let config_path = runtime
+            .config_dir
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("Could not find XDG config directory"))?
+            .join("pkms.toml");
+        let config = Config::load_from(&config_path)?.resolve(cli.db.clone(), runtime)?;
         tracing::debug!(output_format = ?output.format, "app initialized");
         Ok(App { config, output })
     }
