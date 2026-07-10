@@ -6,8 +6,6 @@ use pkms_org::graph::{Graph, GraphStats};
 fn org_config(db_root: &std::path::Path) -> OrgConfig {
     OrgConfig {
         db_root: db_root.to_path_buf(),
-        new_notes_dir: None,
-        daily_notes_dir: None,
         ignore_patterns: Vec::new(),
         home_dir: None,
     }

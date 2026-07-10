@@ -158,8 +158,6 @@ fn rag_note_viewer(
     let mut config = command_ctx.config().web_command_config();
     if let Some(notes_root) = notes_root {
         config.org.db_root = notes_root.clone();
-        config.org.new_notes_dir = Some(notes_root.join("roam"));
-        config.org.daily_notes_dir = Some(notes_root.join("roam"));
         config.org.home_dir = dirs::home_dir();
     }
     let viewer = pkms_web::NoteViewer::new(config, editor::open_target, editor::DEFAULT_EDITOR)?;

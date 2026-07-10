@@ -37,8 +37,6 @@ pub struct LinkResolutionContext {
 #[derive(Debug, Clone)]
 pub struct OrgConfig {
     pub db_root: PathBuf,
-    pub new_notes_dir: Option<PathBuf>,
-    pub daily_notes_dir: Option<PathBuf>,
     pub ignore_patterns: Vec<String>,
     pub home_dir: Option<PathBuf>,
 }

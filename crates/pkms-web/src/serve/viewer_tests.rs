@@ -8,8 +8,6 @@ use std::path::PathBuf;
 fn web_config(db_root: PathBuf) -> WebConfig {
     WebConfig {
         org: OrgConfig {
-            new_notes_dir: Some(db_root.join("roam")),
-            daily_notes_dir: Some(db_root.join("roam")),
             ignore_patterns: Vec::new(),
             db_root,
             home_dir: None,

@@ -337,8 +337,6 @@ Body
         .unwrap();
         let config = OrgConfig {
             db_root: dir.path().to_path_buf(),
-            new_notes_dir: None,
-            daily_notes_dir: None,
             ignore_patterns: Vec::new(),
             home_dir: None,
         };

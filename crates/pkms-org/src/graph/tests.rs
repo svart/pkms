@@ -10,8 +10,6 @@ use crate::parser::{Heading, ParsedNote};
 fn test_org_config(db_root: impl Into<PathBuf>) -> OrgConfig {
     OrgConfig {
         db_root: db_root.into(),
-        new_notes_dir: None,
-        daily_notes_dir: None,
         ignore_patterns: Vec::new(),
         home_dir: None,
     }

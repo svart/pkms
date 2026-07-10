@@ -222,8 +222,6 @@ impl ResolvedConfig {
     pub fn org_config(&self) -> pkms_org::OrgConfig {
         pkms_org::OrgConfig {
             db_root: self.db_root.clone(),
-            new_notes_dir: Some(self.resolve_new_notes_dir()),
-            daily_notes_dir: Some(self.resolve_daily_notes_dir()),
             ignore_patterns: self.resolve_ignore_patterns(),
             home_dir: dirs::home_dir(),
         }
