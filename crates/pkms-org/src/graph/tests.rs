@@ -218,7 +218,7 @@ Body
     )
     .unwrap();
     let config = test_org_config(dir.path());
-    let graph = Graph::load(&config).unwrap();
+    let graph = Graph::load_from(&config.scan_config(), &config.link_resolution_context()).unwrap();
     let stats = graph.stats();
 
     assert_eq!(stats.total_notes, 1);
@@ -295,7 +295,7 @@ fn collect_node_validation_issues_returns_typed_records() {
     .unwrap();
 
     let config = test_org_config(dir.path());
-    let graph = Graph::load(&config).unwrap();
+    let graph = Graph::load_from(&config.scan_config(), &config.link_resolution_context()).unwrap();
     let node = graph.resolve_target(source_uuid).unwrap();
     let issues = graph.collect_node_validation_issues(node, source_uuid, dir.path());
 
@@ -369,7 +369,7 @@ fn collect_validation_issues_returns_graph_level_health_records() {
     .unwrap();
 
     let config = test_org_config(dir.path());
-    let graph = Graph::load(&config).unwrap();
+    let graph = Graph::load_from(&config.scan_config(), &config.link_resolution_context()).unwrap();
     let issues = graph.collect_validation_issues(
         dir.path(),
         &GraphValidationOptions::new([

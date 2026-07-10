@@ -16,7 +16,7 @@ use crate::corpus::Corpus;
 pub use crate::corpus::FileScanResult;
 use crate::domain::{LinkTarget, NoteId};
 use crate::parser::{Link, ParsedNote};
-use crate::{LinkResolutionContext, OrgConfig, ScanConfig};
+use crate::{LinkResolutionContext, ScanConfig};
 use serde::Serialize;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -207,10 +207,6 @@ fn file_link_line_spec_exists(path: &Path, line_spec: &str) -> bool {
 }
 
 impl Graph {
-    pub fn load(config: &OrgConfig) -> anyhow::Result<Self> {
-        Self::load_from(&config.scan_config(), &config.link_resolution_context())
-    }
-
     pub fn load_from(scan: &ScanConfig, links: &LinkResolutionContext) -> anyhow::Result<Self> {
         tracing::debug!(db_root = %scan.db_root.display(), "loading graph");
         let corpus = Corpus::load_from(scan)?;
