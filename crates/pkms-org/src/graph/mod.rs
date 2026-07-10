@@ -6,10 +6,10 @@
 //! each file into a [`Node`] and creates separate heading-nodes for headings with their own
 //! `:ID:` property. The graph resolves internal links into backlinks and detects broken links.
 
-pub mod analytics;
-pub mod builder;
+mod analytics;
+mod builder;
 pub mod search;
-pub mod traversal;
+mod traversal;
 pub mod validation;
 
 use crate::corpus::Corpus;
