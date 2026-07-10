@@ -12,8 +12,8 @@ pub fn options_from_args(args: &PathArgs) -> PathOptions {
 }
 
 pub fn run(ctx: &CommandContext<'_>, opts: &PathOptions) -> Result<()> {
-    let config = ctx.config().db_command_config();
-    let output = path::execute(&config.org, opts)?;
+    let org_config = ctx.config().org_config();
+    let output = path::execute(&org_config, opts)?;
     render(ctx.output(), &output)
 }
 

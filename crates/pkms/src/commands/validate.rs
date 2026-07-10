@@ -7,8 +7,8 @@ use pkms_db::commands::validate::{self, ValidateOutput};
 pub use pkms_db::commands::validate::ValidateOptions;
 
 pub fn run(ctx: &CommandContext<'_>, opts: &ValidateOptions) -> Result<()> {
-    let config = ctx.config().db_command_config();
-    let outputs = validate::execute(&config.org, opts)?;
+    let org_config = ctx.config().org_config();
+    let outputs = validate::execute(&org_config, opts)?;
     render(ctx.output(), &outputs)
 }
 

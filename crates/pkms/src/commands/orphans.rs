@@ -29,7 +29,7 @@ pub fn render(ctx: &OutputContext, output: &OrphansOutput) -> Result<()> {
 }
 
 pub fn run(ctx: &CommandContext<'_>, opts: &OrphansOptions) -> Result<()> {
-    let config = ctx.config().db_command_config();
-    let output = orphans::execute(&config.org, opts)?;
+    let org_config = ctx.config().org_config();
+    let output = orphans::execute(&org_config, opts)?;
     render(ctx.output(), &output)
 }

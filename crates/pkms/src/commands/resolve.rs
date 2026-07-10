@@ -16,8 +16,8 @@ pub fn options_from_args(args: &ResolveArgs) -> ResolveOptions {
 }
 
 pub fn run(ctx: &CommandContext<'_>, opts: &ResolveOptions) -> Result<()> {
-    let config = ctx.config().db_command_config();
-    let output = resolve::execute(&config.org, opts)?;
+    let org_config = ctx.config().org_config();
+    let output = resolve::execute(&org_config, opts)?;
     render(ctx.output(), &output)
 }
 

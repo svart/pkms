@@ -23,8 +23,8 @@ pub fn options_from_args(args: &QueryArgs) -> Result<QueryOptions> {
 }
 
 pub fn run(ctx: &CommandContext<'_>, opts: &QueryOptions) -> Result<()> {
-    let config = ctx.config().db_command_config();
-    let output = query::execute(&config.org, opts)?;
+    let org_config = ctx.config().org_config();
+    let output = query::execute(&org_config, opts)?;
     render(ctx.output(), &output)
 }
 

@@ -11,10 +11,10 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 pub fn run(ctx: &CommandContext<'_>, opts: &CheckOptions) -> Result<ExitCode> {
-    let config = ctx.config().db_command_config();
+    let org_config = ctx.config().org_config();
     let output = check::execute(
         &CheckConfig {
-            org: config.org,
+            org: org_config,
             ssh: ssh_file_check_options_from_env(),
         },
         opts,

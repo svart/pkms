@@ -7,14 +7,14 @@ use pkms_db::commands::fix::{
 };
 
 pub fn run(ctx: &CommandContext<'_>, args: &FixArgs) -> Result<()> {
-    let config = ctx.config().db_command_config();
+    let org_config = ctx.config().org_config();
     match &args.command {
         FixCommand::Uuid(args) => {
-            let output = fix::execute_uuid(&config.org, &uuid_options_from_args(args)?)?;
+            let output = fix::execute_uuid(&org_config, &uuid_options_from_args(args)?)?;
             print_uuid_fix_output(ctx.output(), &output)
         }
         FixCommand::Attach(args) => {
-            let output = fix::execute_attach(&config.org, &attach_options_from_args(args))?;
+            let output = fix::execute_attach(&org_config, &attach_options_from_args(args))?;
             print_attach_fix_output(ctx.output(), &output)
         }
     }

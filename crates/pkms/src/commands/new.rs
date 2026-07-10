@@ -15,8 +15,8 @@ pub fn options_from_args(args: &NewArgs) -> NewOptions {
 }
 
 pub fn run(ctx: &CommandContext<'_>, opts: &NewOptions) -> Result<()> {
-    let config = ctx.config().db_command_config();
-    let output = new::execute(&config.org, opts)?;
+    let org_config = ctx.config().org_config();
+    let output = new::execute(&org_config, opts)?;
     render(ctx.output(), &output)
 }
 

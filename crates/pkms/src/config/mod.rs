@@ -41,12 +41,6 @@ pub struct ResolvedConfig {
     pub rag: Option<RagConfig>,
 }
 
-#[derive(Debug, Clone)]
-pub struct DbCommandConfig {
-    pub org: pkms_org::OrgConfig,
-    pub task_states: pkms_org::graph::tasks::TaskStateConfig,
-}
-
 #[cfg(feature = "web")]
 pub type WebCommandConfig = pkms_web::WebConfig;
 
@@ -232,13 +226,6 @@ impl ResolvedConfig {
             daily_notes_dir: Some(self.resolve_daily_notes_dir()),
             ignore_patterns: self.resolve_ignore_patterns(),
             home_dir: dirs::home_dir(),
-        }
-    }
-
-    pub fn db_command_config(&self) -> DbCommandConfig {
-        DbCommandConfig {
-            org: self.org_config(),
-            task_states: self.task_state_config(),
         }
     }
 

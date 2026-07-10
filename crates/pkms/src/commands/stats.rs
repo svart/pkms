@@ -14,8 +14,8 @@ pub fn options_from_args(args: &StatsArgs) -> StatsOptions {
 }
 
 pub fn run(ctx: &CommandContext<'_>, opts: &StatsOptions) -> Result<()> {
-    let config = ctx.config().db_command_config();
-    let output = stats::execute(&config.org, opts)?;
+    let org_config = ctx.config().org_config();
+    let output = stats::execute(&org_config, opts)?;
     render(ctx.output(), &output)
 }
 

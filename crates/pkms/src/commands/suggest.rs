@@ -7,8 +7,8 @@ use pkms_db::commands::suggest::{self, SuggestOutput};
 pub use pkms_db::commands::suggest::SuggestOptions;
 
 pub fn run(ctx: &CommandContext<'_>, opts: &SuggestOptions) -> Result<()> {
-    let config = ctx.config().db_command_config();
-    let outputs = suggest::execute(&config.org, opts)?;
+    let org_config = ctx.config().org_config();
+    let outputs = suggest::execute(&org_config, opts)?;
     render(ctx.output(), &outputs)
 }
 

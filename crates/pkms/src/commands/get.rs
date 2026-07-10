@@ -25,7 +25,7 @@ pub fn render(ctx: &OutputContext, outputs: &[GetOutput]) -> Result<()> {
 }
 
 pub fn run(ctx: &CommandContext<'_>, opts: &GetOptions) -> Result<()> {
-    let config = ctx.config().db_command_config();
-    let outputs = get::execute(&config.org, opts)?;
+    let org_config = ctx.config().org_config();
+    let outputs = get::execute(&org_config, opts)?;
     render(ctx.output(), &outputs)
 }

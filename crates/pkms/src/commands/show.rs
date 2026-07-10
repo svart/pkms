@@ -7,8 +7,8 @@ use pkms_db::commands::show::{self, ShowOutput};
 pub use pkms_db::commands::show::{HeadingTarget, ShowOptions, TaskIdEntry};
 
 pub fn run(ctx: &CommandContext<'_>, opts: &ShowOptions) -> Result<()> {
-    let config = ctx.config().db_command_config();
-    let outputs = show::execute(&config.org, opts)?;
+    let org_config = ctx.config().org_config();
+    let outputs = show::execute(&org_config, opts)?;
     render(ctx.output(), &outputs)
 }
 
