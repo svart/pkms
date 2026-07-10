@@ -24,6 +24,7 @@ pkms-db = { path = "../pkms-db" }
 pkms-org = { path = "../pkms-org" }
 pkms-rag = { path = "../pkms-rag", optional = true }
 pkms-task = { path = "../pkms-task" }
+pkms-tokens = { path = "../pkms-tokens" }
 pkms-web = { path = "../pkms-web", optional = true }
 chrono = { version = "0.4", default-features = false, features = ["clock", "serde", "std"] }
 dirs = "6"

@@ -1,7 +1,8 @@
 use anyhow::{Context, Result};
 use pkms_org::graph::{Graph, Node};
 use pkms_org::org_edit::parsed_heading_subtree_end_index;
-use pkms_org::{OrgConfig, parser, tokens};
+use pkms_org::{OrgConfig, parser};
+use pkms_tokens as tokens;
 use serde::Serialize;
 use std::collections::HashMap;
 use std::fmt::Write;

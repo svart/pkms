@@ -5,6 +5,7 @@ members = [
     "crates/pkms-org",
     "crates/pkms-rag",
     "crates/pkms-task",
+    "crates/pkms-tokens",
     "crates/pkms-web",
 ]
 default-members = ["crates/pkms"]

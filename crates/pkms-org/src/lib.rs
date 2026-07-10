@@ -14,7 +14,6 @@ pub mod org_task_edit;
 pub mod org_task_mutation;
 pub mod parser;
 pub mod snapshot;
-pub mod tokens;
 
 pub use corpus::{Corpus, FileScanResult};
 pub use domain::{LinkTarget, NoteId};

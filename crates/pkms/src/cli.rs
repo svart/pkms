@@ -1,5 +1,5 @@
 use clap::{Args, Parser, Subcommand, ValueEnum};
-use pkms_org::tokens;
+use pkms_tokens as tokens;
 use std::path::PathBuf;
 
 mod task;

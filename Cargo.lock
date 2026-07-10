@@ -2967,6 +2967,7 @@ dependencies = [
  "pkms-org",
  "pkms-rag",
  "pkms-task",
+ "pkms-tokens",
  "pkms-web",
  "serde",
  "serde_json",
@@ -2987,6 +2988,7 @@ dependencies = [
  "anyhow",
  "chrono",
  "pkms-org",
+ "pkms-tokens",
  "rayon",
  "regex",
  "russh",
@@ -3012,7 +3014,6 @@ dependencies = [
  "serde_json",
  "shlex",
  "tempfile",
- "tiktoken-rs",
  "tracing",
  "uuid",
  "walkdir",
@@ -3027,6 +3028,7 @@ dependencies = [
  "blake2 0.10.6",
  "fastembed",
  "pkms-org",
+ "pkms-tokens",
  "rusqlite",
  "serde",
  "serde_json",
@@ -3050,6 +3052,13 @@ dependencies = [
  "tracing",
  "ureq",
  "uuid",
+]
+
+[[package]]
+name = "pkms-tokens"
+version = "2.3.0"
+dependencies = [
+ "tiktoken-rs",
 ]
 
 [[package]]

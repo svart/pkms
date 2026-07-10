@@ -4,7 +4,7 @@ use std::{
 };
 
 use anyhow::{Context, Result};
-use pkms_org::tokens::{Encoding, count_tokens};
+use pkms_tokens::{Encoding, count_tokens};
 use rusqlite::Connection;
 
 use crate::{

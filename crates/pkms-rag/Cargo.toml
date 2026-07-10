@@ -19,6 +19,7 @@ fastembed = { version = "5.17.2", optional = true, default-features = false, fea
     "ort-download-binaries-rustls-tls",
 ] }
 pkms-org = { path = "../pkms-org" }
+pkms-tokens = { path = "../pkms-tokens" }
 rusqlite = { version = "0.40.1", features = ["bundled"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

@@ -1,3 +1,5 @@
+//! Token encoding, counting, and truncation primitives for pkms.
+
 use std::str::FromStr;
 use tiktoken_rs::CoreBPE;
 use tiktoken_rs::cl100k_base_singleton;
