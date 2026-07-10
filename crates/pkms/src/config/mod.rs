@@ -229,6 +229,13 @@ impl ResolvedConfig {
         }
     }
 
+    pub fn note_creation_config(&self) -> pkms_db::NoteCreationConfig {
+        pkms_db::NoteCreationConfig {
+            org: self.org_config(),
+            new_notes_dir: self.resolve_new_notes_dir(),
+        }
+    }
+
     #[cfg(feature = "web")]
     pub fn web_command_config(&self) -> WebCommandConfig {
         pkms_web::WebConfig {

@@ -49,13 +49,10 @@ pub struct NewOptions {
     pub heading: Option<String>,
 }
 
-pub fn execute(config: &pkms_org::OrgConfig, opts: &NewOptions) -> Result<NewOutput> {
-    let db_root = config.db_root.as_path();
-    let ignore = config.ignore_patterns.as_slice();
-    let new_notes_dir = config
-        .new_notes_dir
-        .as_deref()
-        .context("new notes directory is not configured")?;
+pub fn execute(config: &crate::NoteCreationConfig, opts: &NewOptions) -> Result<NewOutput> {
+    let db_root = config.org.db_root.as_path();
+    let ignore = config.org.ignore_patterns.as_slice();
+    let new_notes_dir = config.new_notes_dir.as_path();
 
     let mut uuid = uuid::Uuid::new_v4().to_string();
     let slug = title_to_slug(&opts.title);

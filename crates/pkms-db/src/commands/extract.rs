@@ -1,6 +1,5 @@
 use crate::commands::new::{create_note_file_exclusive, title_to_slug, unique_note_filename};
 use anyhow::{Context, Result};
-use pkms_org::OrgConfig;
 use pkms_org::graph::{Graph, HeadingLocation};
 use pkms_org::org_edit::{
     is_heading_line, parsed_heading_subtree_end_index, read_lines, split_line_ending, write_lines,
@@ -27,8 +26,8 @@ pub struct ExtractOutput {
     pub applied: bool,
 }
 
-pub fn execute(config: &OrgConfig, opts: &ExtractOptions) -> Result<ExtractOutput> {
-    let graph = Graph::load(config)?;
+pub fn execute(config: &crate::NoteCreationConfig, opts: &ExtractOptions) -> Result<ExtractOutput> {
+    let graph = Graph::load(&config.org)?;
     let location = resolve_heading_location(&graph, &opts.heading_uuid)?;
     let source_node = graph.node(location.primary_uuid.as_str()).ok_or_else(|| {
         anyhow::anyhow!("Source note not found for heading {}", opts.heading_uuid)
@@ -68,10 +67,7 @@ pub fn execute(config: &OrgConfig, opts: &ExtractOptions) -> Result<ExtractOutpu
     let note_content = build_new_note_content(&opts.heading_uuid, &title, &copied_subtree);
     let slug = title_to_slug(&title);
     let timestamp = chrono::Local::now().format("%Y%m%d%H%M%S").to_string();
-    let new_notes_dir = config
-        .new_notes_dir
-        .as_deref()
-        .context("new notes directory is not configured")?;
+    let new_notes_dir = config.new_notes_dir.as_path();
 
     let (new_path, created) = if opts.apply {
         std::fs::create_dir_all(new_notes_dir)
