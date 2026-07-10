@@ -1,7 +1,7 @@
 use super::*;
 use crate::link_check::LinkCheckKind;
 use pkms_org::OrgConfig;
-use pkms_org::graph::{Graph, GraphStats};
+use pkms_org::graph::GraphStats;
 
 fn org_config(db_root: &std::path::Path) -> OrgConfig {
     OrgConfig {
@@ -166,7 +166,7 @@ fn collects_only_requested_local_link_check_jobs_in_stable_order() {
 "#,
     )
     .unwrap();
-    let graph = Graph::load(&org_config(db_root)).unwrap();
+    let graph = crate::load_graph(&org_config(db_root)).unwrap();
 
     let all_jobs =
         graph.collect_local_link_check_jobs(&[LinkCheckKind::File, LinkCheckKind::Attachment]);

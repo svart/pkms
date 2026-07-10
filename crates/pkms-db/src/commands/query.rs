@@ -85,7 +85,7 @@ impl QuerySearchScope {
 }
 
 pub fn execute(config: &OrgConfig, opts: &QueryOptions) -> Result<QueryOutput> {
-    let graph = Graph::load(config)?;
+    let graph = crate::load_graph(config)?;
 
     let mut combined = search_by_text(&graph, &opts.terms, &opts.scope)?;
 

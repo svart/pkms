@@ -1,5 +1,5 @@
 use anyhow::Result;
-use pkms_org::{Graph, OrgConfig};
+use pkms_org::OrgConfig;
 use serde::Serialize;
 
 #[derive(Serialize)]
@@ -25,7 +25,7 @@ pub struct OrphansOptions {
 }
 
 pub fn execute(config: &OrgConfig, opts: &OrphansOptions) -> Result<OrphansOutput> {
-    let graph = Graph::load(config)?;
+    let graph = crate::load_graph(config)?;
     let mut orphans = if opts.with_dailies {
         graph.orphan_nodes_including_dailies()
     } else {
