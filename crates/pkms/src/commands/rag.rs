@@ -5,7 +5,7 @@ use std::{cell::RefCell, io::Write, path::PathBuf};
 use anyhow::{Context, Result, bail};
 
 #[cfg(feature = "web")]
-use crate::commands::open;
+use crate::editor;
 use crate::{
     cli::{
         RagCommand, RagIndexArgs, RagIngestArgs, RagRetrieveArgs, RagRetrieveMode, RagSearchArgs,
@@ -162,7 +162,7 @@ fn rag_note_viewer(
         config.org.daily_notes_dir = Some(notes_root.join("roam"));
         config.org.home_dir = dirs::home_dir();
     }
-    let viewer = pkms_web::NoteViewer::new(config, open::open_target, open::DEFAULT_EDITOR)?;
+    let viewer = pkms_web::NoteViewer::new(config, editor::open_target, editor::DEFAULT_EDITOR)?;
     Ok(Arc::new(RagWebNoteViewer { viewer }))
 }
 

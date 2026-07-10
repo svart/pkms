@@ -1,5 +1,5 @@
 use crate::command_context::CommandContext;
-use crate::commands::open;
+use crate::editor;
 use anyhow::Result;
 use std::io::Write;
 
@@ -12,8 +12,8 @@ pub fn run(ctx: &CommandContext<'_>, opts: &ServeOptions) -> Result<()> {
     pkms_web::serve(
         &config,
         opts,
-        open::open_target,
-        open::DEFAULT_EDITOR,
+        editor::open_target,
+        editor::DEFAULT_EDITOR,
         |started| {
             if output.is_structured() {
                 output.print_structured(started)?;

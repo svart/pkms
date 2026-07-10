@@ -2,7 +2,6 @@
 use crate::cli::OutputFormat;
 use crate::cli::{TaskAgendaArgs, TaskCommand, TaskListArgs, TaskShortcutArgs};
 use crate::command_context::CommandContext;
-use crate::commands::open::{OpenOptions, OpenTarget};
 use crate::commands::show::{HeadingTarget, ShowOptions, TaskIdEntry};
 #[cfg(feature = "todoist")]
 use crate::commands::task_common::RowSeparatorMode;
@@ -21,6 +20,7 @@ use std::process::ExitCode;
 
 mod id_command;
 mod mutations;
+mod open;
 mod plan;
 mod providers;
 mod render;
@@ -219,17 +219,7 @@ pub(super) fn run_open(
             let task_config = config.task_command_config();
             let entries = load_canonical_task_entries(&task_config)?;
             let location = resolve_task_location_from_entries(&entries, id)?;
-            crate::commands::open::run(
-                ctx,
-                &OpenOptions {
-                    targets: vec![OpenTarget::Location {
-                        path: location.path.into(),
-                        line_number: location.line_number,
-                    }],
-                    editor: editor.to_string(),
-                    line,
-                },
-            )
+            open::run(ctx, location.path, location.line_number, editor, line)
         }
         TaskId::Todoist(_) => bail!("Todoist task source is not implemented yet"),
         TaskId::External { source, .. } => unsupported_task_source(&source),

@@ -1,5 +1,5 @@
 use crate::command_context::CommandContext;
-use crate::commands::open::DEFAULT_EDITOR;
+use crate::editor::DEFAULT_EDITOR;
 use anyhow::{Context, Result, bail};
 use std::process::ExitCode;
 

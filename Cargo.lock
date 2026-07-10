@@ -2993,7 +2993,6 @@ dependencies = [
  "russh-sftp",
  "serde",
  "serde_json",
- "shlex",
  "tempfile",
  "tokio",
  "uuid",

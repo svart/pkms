@@ -12,7 +12,6 @@ pub mod fix;
 pub mod get;
 pub mod info;
 pub mod new;
-pub mod open;
 pub mod orphans;
 pub mod path;
 pub mod query;

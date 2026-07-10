@@ -172,7 +172,7 @@ pub struct TaskOpenArgs {
     pub id: String,
     #[arg(
         long,
-        default_value = crate::commands::open::DEFAULT_EDITOR,
+        default_value = crate::editor::DEFAULT_EDITOR,
         help = "Editor command (default: emacsclient -n)"
     )]
     pub editor: String,
