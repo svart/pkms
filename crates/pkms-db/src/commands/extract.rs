@@ -27,7 +27,7 @@ pub struct ExtractOutput {
 }
 
 pub fn execute(config: &crate::NoteCreationConfig, opts: &ExtractOptions) -> Result<ExtractOutput> {
-    let graph = Graph::load(&config.org)?;
+    let graph = crate::load_graph(&config.org)?;
     let location = resolve_heading_location(&graph, &opts.heading_uuid)?;
     let source_node = graph.node(location.primary_uuid.as_str()).ok_or_else(|| {
         anyhow::anyhow!("Source note not found for heading {}", opts.heading_uuid)

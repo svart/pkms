@@ -209,7 +209,7 @@ pub struct FixAttachOptions {
 }
 
 pub fn execute_uuid(config: &OrgConfig, opts: &FixUuidOptions) -> Result<UuidFixOutput> {
-    let graph = Graph::load(config)?;
+    let graph = crate::load_graph(config)?;
     let db_root = config.db_root.as_path();
     let ignore_patterns = config.ignore_patterns.as_slice();
 
@@ -244,7 +244,7 @@ pub fn execute_uuid(config: &OrgConfig, opts: &FixUuidOptions) -> Result<UuidFix
 }
 
 pub fn execute_attach(config: &OrgConfig, opts: &FixAttachOptions) -> Result<AttachFixOutput> {
-    let graph = Graph::load(config)?;
+    let graph = crate::load_graph(config)?;
     let db_root = config.db_root.as_path();
     let mode = if opts.copy {
         AttachMode::Copy

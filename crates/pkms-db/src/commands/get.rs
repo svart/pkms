@@ -196,7 +196,7 @@ fn process_one_get(graph: &Graph, target: &str, opts: &GetOptions) -> Result<Get
 }
 
 pub fn execute(config: &OrgConfig, opts: &GetOptions) -> Result<Vec<GetOutput>> {
-    let graph = Graph::load(config)?;
+    let graph = crate::load_graph(config)?;
     opts.targets
         .iter()
         .map(|target| process_one_get(&graph, target, opts))

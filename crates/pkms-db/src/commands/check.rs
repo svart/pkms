@@ -1,6 +1,6 @@
 use crate::link_check::SshFileCheckOptions;
 use anyhow::Result;
-use pkms_org::{Graph, OrgConfig};
+use pkms_org::OrgConfig;
 
 mod data;
 mod model;
@@ -22,7 +22,7 @@ pub struct CheckConfig {
 pub fn execute(config: &CheckConfig, opts: &CheckOptions) -> Result<CheckOutput> {
     ensure_remote_file_links_available(opts.checks.requests(CheckItem::RemoteFileLinks))?;
 
-    let graph = Graph::load(&config.org)?;
+    let graph = crate::load_graph(&config.org)?;
     let db_root = config.org.db_root.as_path();
 
     let display_opts = CheckDisplayOptions::from_options(opts);
