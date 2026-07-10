@@ -1,7 +1,6 @@
 use crate::link_check::SshFileCheckOptions;
 use anyhow::Result;
 use pkms_org::{Graph, OrgConfig};
-use std::process::ExitCode;
 
 mod data;
 mod model;
@@ -20,7 +19,7 @@ pub struct CheckConfig {
     pub ssh: SshFileCheckOptions,
 }
 
-pub fn execute(config: &CheckConfig, opts: &CheckOptions) -> Result<CheckCommandOutput> {
+pub fn execute(config: &CheckConfig, opts: &CheckOptions) -> Result<CheckOutput> {
     ensure_remote_file_links_available(opts.checks.requests(CheckItem::RemoteFileLinks))?;
 
     let graph = Graph::load(&config.org)?;
@@ -28,14 +27,7 @@ pub fn execute(config: &CheckConfig, opts: &CheckOptions) -> Result<CheckCommand
 
     let display_opts = CheckDisplayOptions::from_options(opts);
     let issue_data = collect_check_data(config, &graph, db_root, opts, &display_opts)?;
-    let output = build_check_output(&issue_data, &display_opts);
-    let exit_code = if output.healthy {
-        ExitCode::SUCCESS
-    } else {
-        ExitCode::from(1)
-    };
-
-    Ok(CheckCommandOutput { output, exit_code })
+    Ok(build_check_output(&issue_data, &display_opts))
 }
 
 #[cfg(feature = "ssh")]

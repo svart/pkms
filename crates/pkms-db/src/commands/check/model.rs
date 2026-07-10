@@ -1,6 +1,5 @@
 use pkms_org::graph::{DuplicateInfo, GraphStats, OverlinkEntry, SelfLinkEntry};
 use serde::Serialize;
-use std::process::ExitCode;
 
 #[derive(Serialize)]
 pub struct CheckOutput {
@@ -111,11 +110,6 @@ pub enum CheckItem {
 pub struct CrossLinkTargets {
     pub source: String,
     pub target: String,
-}
-
-pub struct CheckCommandOutput {
-    pub output: CheckOutput,
-    pub exit_code: ExitCode,
 }
 
 impl CheckSelection {

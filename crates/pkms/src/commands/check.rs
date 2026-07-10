@@ -3,8 +3,7 @@ use crate::command_context::CommandContext;
 use crate::output::OutputContext;
 use anyhow::Result;
 use pkms_db::commands::check::{
-    self, CheckCommandOutput, CheckConfig, CheckItem, CheckOptions, CheckSelection,
-    CrossLinkTargets,
+    self, CheckConfig, CheckItem, CheckOptions, CheckOutput, CheckSelection, CrossLinkTargets,
 };
 use pkms_db::link_check::SshFileCheckOptions;
 use std::path::{Path, PathBuf};
@@ -22,14 +21,18 @@ pub fn run(ctx: &CommandContext<'_>, opts: &CheckOptions) -> Result<ExitCode> {
     render(ctx.output(), &output)
 }
 
-pub fn render(ctx: &OutputContext, output: &CheckCommandOutput) -> Result<ExitCode> {
+pub fn render(ctx: &OutputContext, output: &CheckOutput) -> Result<ExitCode> {
     if ctx.is_structured() {
-        ctx.print_structured(&output.output)?;
+        ctx.print_structured(output)?;
     } else {
-        print!("{}", check::render_text(&output.output));
+        print!("{}", check::render_text(output));
     }
 
-    Ok(output.exit_code)
+    Ok(if output.healthy {
+        ExitCode::SUCCESS
+    } else {
+        ExitCode::from(1)
+    })
 }
 
 pub fn options_from_args(args: &CheckArgs) -> CheckOptions {

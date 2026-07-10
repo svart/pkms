@@ -133,9 +133,9 @@ fn targeted_file_link_check_health_ignores_hidden_id_link_issues() {
     )
     .unwrap();
 
-    assert!(output.output.healthy);
-    assert!(output.output.broken_links.is_none());
-    assert_eq!(output.output.broken_file_links.unwrap().len(), 0);
+    assert!(output.healthy);
+    assert!(output.broken_links.is_none());
+    assert_eq!(output.broken_file_links.unwrap().len(), 0);
 }
 
 #[test]
