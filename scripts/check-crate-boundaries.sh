@@ -47,25 +47,24 @@ reject_forbidden() {
 }
 
 pkms_tree="$(tree_for pkms)"
-require_present pkms pkms-org "$pkms_tree"
-require_present pkms pkms-db "$pkms_tree"
-require_present pkms pkms-task "$pkms_tree"
-require_present pkms pkms-web "$pkms_tree"
+domain_packages=(pkms-org pkms-db pkms-rag pkms-task pkms-web)
 
-org_tree="$(tree_for pkms-org)"
-reject_forbidden pkms-org "$org_tree" pkms pkms-db pkms-task pkms-web
+for package in "${domain_packages[@]}"; do
+  require_present pkms "$package" "$pkms_tree"
+done
 
-db_tree="$(tree_for pkms-db)"
-reject_forbidden pkms-db "$db_tree" pkms pkms-task pkms-web
-
-rag_tree="$(tree_for pkms-rag)"
-require_present pkms-rag pkms-org "$rag_tree"
-reject_forbidden pkms-rag "$rag_tree" pkms pkms-db pkms-task pkms-web
-
-task_tree="$(tree_for pkms-task)"
-reject_forbidden pkms-task "$task_tree" pkms pkms-db pkms-web
-
-web_tree="$(tree_for pkms-web)"
-reject_forbidden pkms-web "$web_tree" pkms pkms-db pkms-task
+# Domain crates may depend on pkms-org, but not on the umbrella crate or peer
+# domain crates. Checking the all-feature cargo tree rejects indirect forbidden
+# dependencies as well as direct manifest edges.
+for package in "${domain_packages[@]}"; do
+  package_tree="$(tree_for "$package")"
+  forbidden=(pkms)
+  for candidate in "${domain_packages[@]}"; do
+    if [[ "$candidate" != "$package" && "$candidate" != pkms-org ]]; then
+      forbidden+=("$candidate")
+    fi
+  done
+  reject_forbidden "$package" "$package_tree" "${forbidden[@]}"
+done
 
 printf 'Crate dependency boundaries OK\n'

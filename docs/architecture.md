@@ -45,7 +45,9 @@ The dependency direction is intentionally one-way:
 - Domain crates should not read process environment variables; `pkms` should
   resolve environment-dependent values and pass them through typed config.
 
-Run `scripts/check-crate-boundaries.sh` after changing crate manifests.
+Run `scripts/check-crate-boundaries.sh` after changing crate manifests. The
+check inspects each package's all-feature transitive dependency tree, so an
+indirect path to a forbidden domain crate fails like a direct manifest edge.
 
 ## Command Flow
 

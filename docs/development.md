@@ -182,7 +182,8 @@ Dependency direction is intentionally one-way: `pkms` may depend on all domain
 crates; `pkms-db`, `pkms-rag`, `pkms-task`, and `pkms-web` may depend on
 `pkms-org`; domain crates must not depend on each other or on the umbrella
 `pkms` crate unless `scripts/check-crate-boundaries.sh` explicitly allows it. Run
-`scripts/check-crate-boundaries.sh` after changing manifests.
+`scripts/check-crate-boundaries.sh` after changing manifests. The script checks
+all-feature transitive dependency trees, not only direct manifest entries.
 
 ## Adding or Changing Commands
 
