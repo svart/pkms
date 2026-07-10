@@ -294,6 +294,34 @@ impl Graph {
         None
     }
 
+    pub fn node(&self, uuid: &str) -> Option<&Node> {
+        self.nodes.get(uuid)
+    }
+
+    pub fn contains_node(&self, uuid: &str) -> bool {
+        self.nodes.contains_key(uuid)
+    }
+
+    pub fn nodes(&self) -> impl Iterator<Item = &Node> {
+        self.nodes.values()
+    }
+
+    pub fn backlinks_to(&self, uuid: &str) -> &[NoteId] {
+        self.backlinks.get(uuid).map_or(&[], Vec::as_slice)
+    }
+
+    pub fn files(&self) -> &[FileScanResult] {
+        &self.results
+    }
+
+    pub fn file(&self, path: &Path) -> Option<&FileScanResult> {
+        self.results.iter().find(|result| result.path == path)
+    }
+
+    pub fn contains_file(&self, path: &Path) -> bool {
+        self.file(path).is_some()
+    }
+
     pub fn resolve_target(&self, target: &str) -> anyhow::Result<&Node> {
         self.find_node(target)
             .ok_or_else(|| anyhow::anyhow!("Note not found: {target}"))
