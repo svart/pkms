@@ -54,6 +54,21 @@ baseline.
 The accepted target is recorded in
 [ADR 0001](adr/0001-maintainable-crate-boundaries.md).
 
+Final verification after the implementation:
+
+```text
+cargo fmt --all -- --check                              PASS
+scripts/check-crate-boundaries.sh                       PASS
+cargo clippy --workspace --all-targets --all-features \
+  -- -D warnings                                       PASS
+cargo test --workspace --all-features                  PASS
+cargo build --workspace --all-features                 PASS
+```
+
+The full test run has one ignored live-SSH scenario that requires externally
+provided `PKMS_TEST_SSH_*` targets; all locally runnable unit, integration, and
+documentation tests pass.
+
 ## Assessment method
 
 This review covered:
