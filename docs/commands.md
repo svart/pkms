@@ -112,6 +112,25 @@ HTML:
 - Hovering over an internal note link opens a scrollable note preview after a
   short delay.
 
+## Tags
+
+```bash
+pkms tags
+pkms tags --output-format json
+pkms tags suggest 11111111-1111-4111-8111-111111111111
+pkms tags suggest p12 --limit 3 --neighbors 30
+pkms tags suggest p12 --apply
+```
+
+`pkms tags` lists tags with their usage counts, sorted by count descending and
+then tag name. A use is one direct filetag assignment on a note or one direct
+tag assignment on a heading; inherited tags are not counted again. JSON wraps
+entries in `tags`, while NDJSON emits one `{tag,count}` entry per line.
+
+`pkms tags suggest` requires the `rag` feature and an indexed corpus. It accepts
+only full note UUIDs and canonical local task IDs so target interpretation is
+unambiguous.
+
 ## RAG Retrieval
 
 See [RAG Retrieval](rag.md) for architecture, index storage, embedding provider
@@ -154,6 +173,15 @@ final summary to stdout, and rejects `--output-format`.
 scoring. Text output is concise; JSON returns the full response, and NDJSON emits
 one result per line. RAG search and retrieve results include `uuid` for the
 source note so they can be piped to note-target consumers.
+
+When the RAG feature is enabled, `pkms tags suggest` uses dense similarity to
+recommend tags that already exist in the indexed corpus. Targets are either a
+full note UUID or a canonical local `p<ID>` task ID.
+The default is a five-tag preview over twenty similar chunks. `--apply` adds the
+recommendations without removing current tags. Note recommendations use
+filetags, while task recommendations use heading-specific tags and exclude
+inherited filetags. Todoist tasks are not supported. Applying changes org
+source but does not automatically rebuild the derived RAG index.
 
 `pkms rag serve` starts a foreground local HTTP server with the browser UI and
 HTTP API:

@@ -69,6 +69,25 @@ so they can feed note-target pipeline consumers.
 Use `[rag].fastembed_model_dir` or `PKMS_RAG_FASTEMBED_MODEL_DIR` when FastEmbed
 should load model files from a local directory instead of downloading them.
 
+List direct note and heading tag assignments, sorted by descending usage count:
+
+```bash
+pkms tags
+```
+
+Recommend existing tags from semantically similar indexed content. Suggestions
+require the `rag` feature and preview unless `--apply` is passed:
+
+```bash
+pkms tags suggest <full-note-uuid>
+pkms tags suggest p<canonical-id>
+pkms tags suggest p12 --limit 5 --neighbors 20 --apply
+```
+
+Note recommendations use note filetags. Local task recommendations use
+heading-only tags and exclude inherited filetags. Applying adds tags without
+removing current tags; Todoist tasks are not supported.
+
 ## Create and Repair
 
 ```bash

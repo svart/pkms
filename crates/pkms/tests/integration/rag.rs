@@ -16,6 +16,7 @@ fn test_rag_help_works() {
     );
     assert!(stdout.contains("status"));
     assert!(stdout.contains("retrieve"));
+    assert!(!stdout.contains("tags"));
     assert!(stdout.contains("serve"));
 }
 
@@ -103,6 +104,208 @@ fn test_rag_ingest_search_and_retrieve_json() {
         "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa"
     );
     assert!(retrieve["results"][0].get("note_id").is_none());
+}
+
+#[test]
+fn test_tags_suggest_note_previews_then_adds_filetags() {
+    let db = TestDb::clean();
+    db.write_roam(
+        "target-note.org",
+        r#":PROPERTIES:
+:ID:       11111111-1111-4111-8111-111111111111
+:END:
+#+title: Target Note
+
+* Retrieval
+Semantic retrieval workflow for local notes.
+"#,
+    );
+    let target_path = db.root().join("roam/target-note.org");
+    db.write_roam(
+        "neighbor-note.org",
+        r#":PROPERTIES:
+:ID:       22222222-2222-4222-8222-222222222222
+:END:
+#+title: Neighbor Note
+#+filetags: :rag:
+
+* Retrieval
+Semantic retrieval workflow for local notes.
+"#,
+    );
+    let rag_db = db.root().join("rag.sqlite3");
+    let (_, stderr, status) = run_hash(&[
+        "--db",
+        db.root().to_str().unwrap(),
+        "rag",
+        "index",
+        "--rag-db",
+        rag_db.to_str().unwrap(),
+    ]);
+    assert!(status.success(), "index failed: {stderr}");
+
+    let before = std::fs::read_to_string(&target_path).unwrap();
+    let (preview, preview_status) = run_hash_json(&[
+        "--db",
+        db.root().to_str().unwrap(),
+        "--output-format",
+        "json",
+        "tags",
+        "suggest",
+        "11111111-1111-4111-8111-111111111111",
+        "--rag-db",
+        rag_db.to_str().unwrap(),
+    ]);
+    assert!(preview_status.success());
+    assert_eq!(preview["target"]["kind"], "note");
+    assert_eq!(preview["suggestions"][0]["tag"], "rag");
+    assert_eq!(preview["applied"], false);
+    assert_eq!(std::fs::read_to_string(&target_path).unwrap(), before);
+
+    let ndjson_args = [
+        "--db",
+        db.root().to_str().unwrap(),
+        "--output-format",
+        "ndjson",
+        "tags",
+        "suggest",
+        "11111111-1111-4111-8111-111111111111",
+        "--rag-db",
+        rag_db.to_str().unwrap(),
+    ];
+    let (stdout, stderr, ndjson_status) = run_hash(&ndjson_args);
+    assert!(
+        ndjson_status.success(),
+        "NDJSON failed:\n{stdout}\n{stderr}"
+    );
+    let records = assert_ndjson_output(&ndjson_args, &stdout);
+    assert_eq!(records.len(), 1);
+    assert_eq!(records[0]["suggestion"]["tag"], "rag");
+    assert!(records[0].get("suggestions").is_none());
+
+    let (applied, apply_status) = run_hash_json(&[
+        "--db",
+        db.root().to_str().unwrap(),
+        "--output-format",
+        "json",
+        "tags",
+        "suggest",
+        "11111111-1111-4111-8111-111111111111",
+        "--rag-db",
+        rag_db.to_str().unwrap(),
+        "--apply",
+    ]);
+    assert!(apply_status.success());
+    assert_eq!(applied["applied"], true);
+    let content = std::fs::read_to_string(&target_path).unwrap();
+    assert!(content.contains("#+title: Target Note\n#+filetags: :rag:\n"));
+}
+
+#[test]
+fn test_tags_suggest_task_recommends_only_heading_tags_and_applies_additively() {
+    let db = TestDb::clean();
+    db.write_roam(
+        "a-target-task.org",
+        r#":PROPERTIES:
+:ID:       33333333-3333-4333-8333-333333333333
+:END:
+#+title: Target Tasks
+#+filetags: :agenda:
+
+* TODO Call supplier about semantic retrieval :existing:
+Discuss the local retrieval workflow.
+"#,
+    );
+    let target_path = db.root().join("roam/a-target-task.org");
+    db.write_roam(
+        "b-neighbor-task.org",
+        r#":PROPERTIES:
+:ID:       44444444-4444-4444-8444-444444444444
+:END:
+#+title: Neighbor Tasks
+#+filetags: :work:
+
+* TODO Call supplier about semantic retrieval :phone:
+Discuss the local retrieval workflow.
+"#,
+    );
+    let rag_db = db.root().join("rag.sqlite3");
+    let (_, stderr, status) = run_hash(&[
+        "--db",
+        db.root().to_str().unwrap(),
+        "rag",
+        "index",
+        "--rag-db",
+        rag_db.to_str().unwrap(),
+    ]);
+    assert!(status.success(), "index failed: {stderr}");
+
+    let (output, tag_status) = run_hash_json(&[
+        "--db",
+        db.root().to_str().unwrap(),
+        "--output-format",
+        "json",
+        "tags",
+        "suggest",
+        "p1",
+        "--rag-db",
+        rag_db.to_str().unwrap(),
+        "--apply",
+    ]);
+    assert!(tag_status.success());
+    assert_eq!(output["target"]["kind"], "task");
+    assert_eq!(output["suggestions"][0]["tag"], "phone");
+    assert!(
+        output["suggestions"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|item| item["tag"] != "work")
+    );
+    assert_eq!(output["applied"], true);
+    let content = std::fs::read_to_string(&target_path).unwrap();
+    assert!(content.contains(":existing:phone:"));
+    assert!(content.contains("#+filetags: :agenda:"));
+}
+
+#[test]
+fn test_tags_suggest_reports_empty_index_and_rejects_ambiguous_targets() {
+    let db = TestDb::clean();
+    db.write_roam(
+        "target.org",
+        r#":PROPERTIES:
+:ID:       55555555-5555-4555-8555-555555555555
+:END:
+#+title: Target
+
+Body.
+"#,
+    );
+    let rag_db = db.root().join("empty.sqlite3");
+    let (stdout, stderr, status) = run_hash(&[
+        "--db",
+        db.root().to_str().unwrap(),
+        "tags",
+        "suggest",
+        "55555555-5555-4555-8555-555555555555",
+        "--rag-db",
+        rag_db.to_str().unwrap(),
+    ]);
+    assert!(!status.success());
+    assert!(stdout.is_empty());
+    assert!(stderr.contains("run `pkms rag index` first"));
+
+    let (_, stderr, status) = run_hash(&[
+        "--db",
+        db.root().to_str().unwrap(),
+        "tags",
+        "suggest",
+        "todoist:123",
+        "--rag-db",
+        rag_db.to_str().unwrap(),
+    ]);
+    assert!(!status.success());
+    assert!(stderr.contains("full note UUID or canonical task ID"));
 }
 
 #[test]

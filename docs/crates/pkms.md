@@ -20,6 +20,9 @@ cross-domain orchestration.
   domain-specific config structs for `pkms-org`, `pkms-db`, `pkms-task`, and
   `pkms-web`, and, when the `rag` feature is enabled, wire resolved RAG options
   into `pkms-rag`.
+- List direct note and heading tag assignments through `pkms tags`, resolve
+  live note/task targets for `pkms tags suggest`, and apply additive source
+  mutations while `pkms-rag` owns recommendation scoring.
 
 ## Main Modules
 

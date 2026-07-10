@@ -22,6 +22,7 @@ mod serve;
 mod snapshot;
 mod stats;
 mod suggest;
+mod tags;
 mod task;
 mod validate;
 

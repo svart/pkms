@@ -94,6 +94,8 @@ pub enum Command {
     InitConfig(InitConfigArgs),
     #[command(about = "List, inspect, and update tasks across configured sources")]
     Task(TaskArgs),
+    #[command(about = "List tags by usage or suggest tags for a note or task")]
+    Tags(TagsArgs),
     #[cfg(feature = "rag")]
     #[command(about = "Local retrieval over org-roam notes")]
     Rag(RagArgs),
@@ -121,6 +123,7 @@ impl Command {
             Command::Info => "info",
             Command::InitConfig(_) => "init-config",
             Command::Task(_) => "task",
+            Command::Tags(_) => "tags",
             #[cfg(feature = "rag")]
             Command::Rag(_) => "rag",
             Command::Path(_) => "path",
@@ -128,6 +131,42 @@ impl Command {
             Command::Serve(_) => "serve",
         }
     }
+}
+
+#[derive(Debug, Args)]
+pub struct TagsArgs {
+    #[cfg(feature = "rag")]
+    #[command(subcommand)]
+    pub command: Option<TagsCommand>,
+}
+
+#[cfg(feature = "rag")]
+#[derive(Debug, Subcommand)]
+pub enum TagsCommand {
+    #[command(about = "Suggest existing corpus tags for a note UUID or local task ID")]
+    Suggest(TagSuggestArgs),
+}
+
+#[cfg(feature = "rag")]
+#[derive(Debug, Args)]
+pub struct TagSuggestArgs {
+    #[arg(help = "Full note UUID or canonical local task ID, such as p12")]
+    pub target: String,
+    #[command(flatten)]
+    pub options: TagSuggestionOptions,
+}
+
+#[cfg(feature = "rag")]
+#[derive(Debug, Args)]
+pub struct TagSuggestionOptions {
+    #[arg(long, default_value_t = 5, value_parser = parse_positive_usize, help = "Maximum suggested tags")]
+    pub limit: usize,
+    #[arg(long, default_value_t = 20, value_parser = parse_positive_usize, help = "Number of similar chunks to evaluate")]
+    pub neighbors: usize,
+    #[arg(long, value_name = "PATH", help = "Path to RAG SQLite index")]
+    pub rag_db: Option<PathBuf>,
+    #[arg(long, help = "Add suggestions to the source note or task")]
+    pub apply: bool,
 }
 
 #[cfg(feature = "rag")]
@@ -633,6 +672,36 @@ mod tests {
         };
         assert!(args.force_rebuild);
         assert_eq!(args.rag_db, Some(PathBuf::from("/tmp/rag.sqlite3")));
+    }
+
+    #[cfg(feature = "rag")]
+    #[test]
+    fn tags_suggest_parses_safe_defaults_and_apply() {
+        let target = "11111111-1111-1111-1111-111111111111";
+        let cli = parse(&["pkms", "tags", "suggest", target, "--apply"]);
+
+        let Command::Tags(TagsArgs {
+            command: Some(TagsCommand::Suggest(args)),
+        }) = cli.command
+        else {
+            panic!("expected tags suggest command");
+        };
+        assert_eq!(args.target, target);
+        assert_eq!(args.options.limit, 5);
+        assert_eq!(args.options.neighbors, 20);
+        assert!(args.options.apply);
+    }
+
+    #[cfg(feature = "rag")]
+    #[test]
+    fn tags_suggest_rejects_zero_limits_at_cli_boundary() {
+        let error = match Cli::try_parse_from(["pkms", "tags", "suggest", "p1", "--neighbors", "0"])
+        {
+            Ok(_) => panic!("expected zero neighbors to fail"),
+            Err(error) => error,
+        };
+
+        assert_eq!(error.kind(), clap::error::ErrorKind::ValueValidation);
     }
 
     #[cfg(feature = "rag")]

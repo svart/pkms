@@ -9,4 +9,5 @@ pub mod query;
 pub mod resolve;
 pub mod stats;
 pub mod suggest;
+pub mod tags;
 pub mod validate;

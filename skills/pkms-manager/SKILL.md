@@ -55,6 +55,7 @@ Load only the file needed for the task:
 - Suggestions and orphan linking: `references/suggest.md`, `references/orphans.md`
 - TODO and agenda tasks: `references/task.md`
 - Pipelines: `references/pipelining.md`
+- RAG retrieval and tag recommendations: `references/rag.md`
 - Configuration: `references/info.md`, `references/init-config.md`
 
 JSON schemas for maintained structured outputs live in `schemas/`.
@@ -66,7 +67,7 @@ JSON schemas for maintained structured outputs live in `schemas/`.
 1. Use `pkms resolve --title <term>` for fast title/alias lookup.
 2. Use `pkms query "<terms>"` for broad title/tag/content search.
 3. Inspect promising results with `pkms get <target> --links`.
-4. Use `pkms stats --tags` or `pkms stats --hubs` to find broader entry points.
+4. Use `pkms tags` or `pkms stats --hubs` to find broader entry points.
 5. Use `pkms suggest <uuid>` after resolving an exact UUID.
 
 ### Build Research Context

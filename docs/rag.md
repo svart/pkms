@@ -163,6 +163,8 @@ pkms rag index --force-rebuild
 pkms rag index --embedding-batch-size 128 --embedding-max-body-chars 8000
 pkms rag search "externalHostname"
 pkms rag retrieve "agenda inspect tasks" --limit 5 --mode hybrid
+pkms tags suggest 11111111-1111-4111-8111-111111111111
+pkms tags suggest p12
 pkms rag serve --host 127.0.0.1 --port 7337
 ```
 
@@ -171,6 +173,43 @@ pkms rag serve --host 127.0.0.1 --port 7337
 response object, and NDJSON emits one result per line for search and retrieval.
 Each search/retrieve result includes `uuid`, the source note UUID, so RAG output
 can feed pipeline consumers such as `get`, `validate`, and `task list`.
+
+## Tag Recommendations
+
+Use semantically similar indexed notes and headings to recommend tags already
+present in the corpus:
+
+```bash
+pkms tags suggest 11111111-1111-4111-8111-111111111111
+pkms tags suggest p12
+pkms tags suggest p12 --limit 3 --neighbors 30
+```
+
+The command uses cleaned live target content as its dense-search query. Note
+recommendations draw only from neighboring note filetags and exclude the target
+note. Task recommendations draw only from heading-specific tags, exclude the
+target subtree, and never copy inherited note filetags onto the heading.
+Repeated chunks from one source note contribute only their best similarity to
+each tag. Results contain a relative score, distinct-note support count, and up
+to three evidence sources.
+
+Both target kinds preview by default. Add recommendations explicitly:
+
+```bash
+pkms tags suggest 11111111-1111-4111-8111-111111111111 --apply
+pkms tags suggest p12 --apply
+```
+
+Targets must be a full note UUID or canonical local `p<ID>` task ID. Apply is
+additive: existing tags are preserved. Notes receive a canonical
+`#+filetags:` directive; local tasks receive heading tags through the existing
+task mutation path. Todoist targets are rejected. Source files remain
+authoritative, and applying does not rebuild the RAG index automatically.
+
+JSON returns one complete response. NDJSON emits one object per recommendation
+under `suggestion`; use JSON when an empty recommendation response must still
+produce a record. The command requires a non-empty index with embeddings for
+the configured provider.
 
 Use a token budget when passing retrieval output to an LLM context:
 

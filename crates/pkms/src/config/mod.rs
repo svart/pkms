@@ -37,7 +37,11 @@ pub struct ResolvedConfig {
     pub tasks: Option<TaskConfig>,
     pub agenda: Option<AgendaConfig>,
     pub todoist: Option<TodoistConfig>,
+    #[cfg(any(feature = "rag", test))]
     pub rag: Option<RagConfig>,
+    // Keep non-RAG builds compatible with config files that contain `[rag]`.
+    #[cfg(not(any(feature = "rag", test)))]
+    _rag: Option<RagConfig>,
     pub(crate) runtime: RuntimeInputs,
 }
 
@@ -137,7 +141,10 @@ impl Config {
             tasks: self.tasks,
             agenda: self.agenda,
             todoist: self.todoist,
+            #[cfg(any(feature = "rag", test))]
             rag: self.rag,
+            #[cfg(not(any(feature = "rag", test)))]
+            _rag: self.rag,
             runtime,
         };
         tracing::debug!(
@@ -157,7 +164,7 @@ impl Config {
 }
 
 impl ResolvedConfig {
-    #[cfg(test)]
+    #[cfg(all(test, feature = "rag"))]
     pub fn for_test_db(db_root: impl Into<PathBuf>) -> Self {
         Self {
             db_root: db_root.into(),
@@ -197,6 +204,7 @@ impl ResolvedConfig {
         }
     }
 
+    #[cfg(any(feature = "rag", test))]
     fn resolve_optional_configured_path(&self, path: Option<&PathBuf>) -> Option<PathBuf> {
         path.map(|path| {
             if path.is_absolute() {
@@ -211,6 +219,7 @@ impl ResolvedConfig {
         self.ignore_patterns.clone().unwrap_or_default()
     }
 
+    #[cfg(feature = "rag")]
     pub fn resolved_db_root(&self) -> &Path {
         &self.db_root
     }
@@ -262,10 +271,12 @@ impl ResolvedConfig {
         }
     }
 
+    #[cfg(any(feature = "rag", test))]
     pub fn resolve_rag_db(&self) -> Option<PathBuf> {
         self.resolve_optional_configured_path(self.rag.as_ref().and_then(|rag| rag.rag_db.as_ref()))
     }
 
+    #[cfg(any(feature = "rag", test))]
     pub fn resolve_rag_fastembed_model_dir(&self) -> Option<PathBuf> {
         self.resolve_optional_configured_path(
             self.rag
@@ -274,6 +285,7 @@ impl ResolvedConfig {
         )
     }
 
+    #[cfg(any(feature = "rag", test))]
     pub fn rag_embedding_model(&self) -> Option<&str> {
         self.rag
             .as_ref()
@@ -317,6 +329,7 @@ impl ResolvedConfig {
         self.todoist.as_ref().is_some_and(|todoist| todoist.enabled)
     }
 
+    #[cfg(any(feature = "todoist", test))]
     pub fn todoist_token_env(&self) -> &str {
         self.todoist
             .as_ref()
@@ -324,12 +337,14 @@ impl ResolvedConfig {
             .unwrap_or("TODOIST_API_TOKEN")
     }
 
+    #[cfg(any(feature = "todoist", test))]
     pub fn todoist_default_filter(&self) -> Option<&str> {
         self.todoist
             .as_ref()
             .and_then(|todoist| todoist.default_filter.as_deref())
     }
 
+    #[cfg(any(feature = "todoist", test))]
     pub fn todoist_token(&self) -> Result<String> {
         let env_name = self.todoist_token_env();
         if let Some(token) = self.runtime.non_empty_var(env_name) {
@@ -351,6 +366,7 @@ impl ResolvedConfig {
         )
     }
 
+    #[cfg(feature = "todoist")]
     pub fn todoist_api_base_url(&self) -> String {
         self.runtime
             .non_empty_var("PKMS_TODOIST_API_BASE_URL")

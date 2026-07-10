@@ -2,7 +2,8 @@
 
 use crate::embeddings::EmbeddingProvider;
 use crate::models::{
-    IngestSummary, RetrievalRecord, RetrieveRequest, RetrieveResponse, SearchResult, StatusResponse,
+    IngestSummary, RetrievalRecord, RetrieveRequest, RetrieveResponse, SearchResult,
+    StatusResponse, TagRecommendation, TagRecommendationRequest,
 };
 use anyhow::Result;
 use std::path::{Path, PathBuf};
@@ -54,6 +55,31 @@ impl RagIndex {
     ) -> Result<RetrieveResponse> {
         let connection = sqlite::connect(&self.db_path)?;
         crate::retrieve::retrieve(&connection, request, embedding_provider)
+    }
+
+    pub fn recommend_tags(
+        &self,
+        request: &TagRecommendationRequest,
+        embedding_provider: &dyn EmbeddingProvider,
+    ) -> Result<Vec<TagRecommendation>> {
+        let connection = sqlite::connect(&self.db_path)?;
+        let status = sqlite::status(&connection, &self.db_path)?;
+        anyhow::ensure!(
+            status.notes > 0 && status.embeddings > 0,
+            "RAG index has no embedded notes; run `pkms rag index` first"
+        );
+        let compatible_embeddings = sqlite::compatible_embedding_count(
+            &connection,
+            embedding_provider.model_name(),
+            embedding_provider.dimension(),
+        )?;
+        anyhow::ensure!(
+            compatible_embeddings > 0,
+            "RAG index does not contain compatible embeddings for model {} with dimension {}; run `pkms rag index` with the configured embedding provider",
+            embedding_provider.model_name(),
+            embedding_provider.dimension()
+        );
+        crate::tags::recommend_tags(&connection, request, embedding_provider)
     }
 
     pub fn path(&self) -> &Path {

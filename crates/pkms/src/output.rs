@@ -89,6 +89,7 @@ impl OutputContext {
         matches!(self.format, OutputFormat::Json | OutputFormat::Ndjson)
     }
 
+    #[cfg(any(feature = "rag", test))]
     pub fn is_json(&self) -> bool {
         matches!(self.format, OutputFormat::Json)
     }

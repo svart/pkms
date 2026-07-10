@@ -20,6 +20,8 @@ with `--features rag`.
   binary downloads.
 - Search with SQLite FTS.
 - Retrieve cited chunks with BM25, dense, or hybrid scoring.
+- Recommend existing note filetags or heading-specific tags from dense-neighbor
+  evidence while keeping target resolution and source writes outside this crate.
 - Track background index progress with serialized `IndexPhase` and `IndexStep`
   enums while returning synchronous failures as `Result` values.
 - Serve the local HTTP API and browser UI used by `pkms rag serve`.
@@ -41,6 +43,7 @@ with `--features rag`.
 | `embeddings.rs` | Embedding provider trait, FastEmbed, hash provider, and typed provider config. |
 | `indexer.rs` | Synchronous and background rebuild orchestration. |
 | `retrieve.rs` | BM25, dense, and hybrid retrieval. |
+| `tags.rs` | Dense-neighbor tag recommendation, provenance separation, scoring, and query cleanup. |
 | `api/` | Axum routes, state, viewer bridge, errors, and foreground server. |
 | `web.rs` | Embedded browser UI assets. |
 
@@ -58,6 +61,8 @@ with `--features rag`.
 - The foreground RAG server may start a background rebuild, but it is not a
   daemon or watcher.
 - No public API accepts or returns `rusqlite::Connection`.
+- Tag recommendations use indexed taxonomy only: note scope reads note tags,
+  while heading scope subtracts inherited note tags from chunk tags.
 
 ## Configuration Surface
 

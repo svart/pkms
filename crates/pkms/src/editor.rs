@@ -28,6 +28,7 @@ impl EditorTarget {
     }
 }
 
+#[cfg(feature = "web")]
 pub fn target_for_note(
     graph: &Graph,
     target: &str,
@@ -42,6 +43,7 @@ pub fn target_for_note(
     })
 }
 
+#[cfg(feature = "web")]
 pub fn open_target(graph: &Graph, target: &str, editor: &str, line: Option<usize>) -> Result<()> {
     open(editor, &target_for_note(graph, target, line)?)
 }
@@ -74,6 +76,7 @@ fn title_for_path(graph: &Graph, path: &Path) -> String {
         })
 }
 
+#[cfg(feature = "web")]
 fn first_task_line(graph: &Graph, path: &Path) -> usize {
     graph
         .file(path)

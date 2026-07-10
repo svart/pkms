@@ -22,6 +22,7 @@ pub mod resolve;
 pub mod serve;
 pub mod stats;
 pub mod suggest;
+pub mod tags;
 pub mod task;
 pub mod task_common;
 pub mod validate;

@@ -403,7 +403,7 @@ fn retrieve_mode(mode: RagRetrieveMode) -> pkms_rag::RetrieveMode {
     }
 }
 
-fn resolve_rag_db(rag_db: Option<&PathBuf>, config: &ResolvedConfig) -> PathBuf {
+pub(super) fn resolve_rag_db(rag_db: Option<&PathBuf>, config: &ResolvedConfig) -> PathBuf {
     rag_db
         .cloned()
         .or_else(|| runtime_path(config, RAG_DB_ENV))
@@ -425,7 +425,7 @@ fn resolve_index_sources(
     }
 }
 
-fn resolve_embedding_provider_config(
+pub(super) fn resolve_embedding_provider_config(
     config: &ResolvedConfig,
 ) -> Result<pkms_rag::EmbeddingProviderConfig> {
     let runtime = config.runtime_inputs();

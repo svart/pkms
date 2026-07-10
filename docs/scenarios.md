@@ -80,6 +80,9 @@ pkms rag index
 pkms rag status
 pkms rag search "agenda inspect tasks" --limit 5
 pkms rag retrieve "agenda inspect tasks" --limit 5 --mode hybrid
+pkms tags
+pkms tags suggest 11111111-1111-4111-8111-111111111111
+pkms tags suggest p12 --apply
 pkms rag serve --host 127.0.0.1 --port 7337
 ```
 

@@ -10,6 +10,7 @@ mod org_export;
 mod retrieve;
 mod schema;
 mod storage;
+mod tags;
 mod web;
 
 pub use api::{
@@ -25,7 +26,9 @@ pub use models::{
     ChunkRecord, DeleteEntityType, DeleteRecord, IndexPhase, IndexProgress, IndexStep,
     IngestSummary, LinkRecord, NoteRecord, RetrievalRecord, RetrieveMode, RetrieveRequest,
     RetrieveResponse, RetrieveResult, RetrieveWeights, SUPPORTED_SCHEMA_VERSION, ScoreBreakdown,
-    SearchRequest, SearchResponse, SearchResult, StatusResponse,
+    SearchRequest, SearchResponse, SearchResult, StatusResponse, TagRecommendation,
+    TagRecommendationEvidence, TagRecommendationRequest, TagScope, TagSourceRange,
 };
 pub use ndjson::{NdjsonError, load_ndjson};
 pub use storage::RagIndex;
+pub use tags::tag_query_text;

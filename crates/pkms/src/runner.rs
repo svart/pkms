@@ -103,6 +103,7 @@ fn dispatch(cli: &Cli, command_ctx: &CommandContext<'_>) -> Result<ExitCode> {
             &commands::query::options_from_args(args)?,
         ))?,
         Command::Task(args) => commands::task::run(command_ctx, &args.command)?,
+        Command::Tags(args) => success(commands::tags::run(command_ctx, args))?,
         #[cfg(feature = "rag")]
         Command::Rag(args) => success(commands::rag::run(command_ctx, &args.command))?,
         Command::Path(args) => success(commands::path::run(

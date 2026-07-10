@@ -369,6 +369,49 @@ pub struct SearchResponse {
     pub results: Vec<SearchResult>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TagScope {
+    Note,
+    Heading,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TagRecommendationEvidence {
+    pub uuid: String,
+    pub title: String,
+    pub path: String,
+    pub heading_path: Vec<String>,
+    pub score: f64,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TagRecommendation {
+    pub tag: String,
+    pub score: f64,
+    pub support: usize,
+    pub evidence: Vec<TagRecommendationEvidence>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TagSourceRange {
+    pub start_line: u32,
+    pub end_line: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TagRecommendationRequest {
+    pub query: String,
+    pub scope: TagScope,
+    pub target_note_id: String,
+    #[serde(default)]
+    pub target_range: Option<TagSourceRange>,
+    #[serde(default)]
+    pub existing_tags: Vec<String>,
+    pub limit: usize,
+    pub neighbor_limit: usize,
+}
+
 fn deserialize_schema_version<'de, D>(deserializer: D) -> Result<u8, D::Error>
 where
     D: Deserializer<'de>,

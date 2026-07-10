@@ -256,11 +256,43 @@ pub(crate) fn search(conn: &Connection, query: &str, limit: usize) -> Result<Vec
         .context("failed to read RAG search rows")
 }
 
+pub(crate) fn note_tags(conn: &Connection, note_id: &str) -> Result<Vec<String>> {
+    conn.query_row(
+        "SELECT tags_json FROM notes WHERE note_id = ?",
+        [note_id],
+        |row| json_column(row, "tags_json"),
+    )
+    .context("failed to query indexed note tags")
+}
+
+pub(crate) fn compatible_embedding_count(
+    conn: &Connection,
+    model_name: &str,
+    dimension: usize,
+) -> Result<i64> {
+    conn.query_row(
+        "SELECT COUNT(*) FROM chunk_embeddings e JOIN chunks c ON c.chunk_id = e.chunk_id WHERE e.model_name = ? AND e.dimension = ? AND c.stale = 0",
+        params![model_name, dimension as i64],
+        |row| row.get(0),
+    )
+    .context("failed to count compatible embeddings")
+}
+
 pub(crate) fn dense_search(
     conn: &Connection,
     query: &str,
     limit: usize,
     embedding_provider: &dyn EmbeddingProvider,
+) -> Result<Vec<SearchResult>> {
+    dense_search_filtered(conn, query, limit, embedding_provider, |_| true)
+}
+
+pub(crate) fn dense_search_filtered(
+    conn: &Connection,
+    query: &str,
+    limit: usize,
+    embedding_provider: &dyn EmbeddingProvider,
+    mut include: impl FnMut(&SearchResult) -> bool,
 ) -> Result<Vec<SearchResult>> {
     let query = query.trim();
     if query.is_empty() || limit == 0 {
@@ -319,6 +351,9 @@ pub(crate) fn dense_search(
     while let Some(row) = rows.next().context("failed to read RAG dense search row")? {
         let mut result = row_to_stored_search_result(row, ScoreBreakdown::default())
             .context("failed to read RAG dense search result")?;
+        if !include(&result) {
+            continue;
+        }
         let vector_blob = row
             .get::<_, Vec<u8>>("vector")
             .context("failed to read RAG dense search vector blob")?;
