@@ -597,7 +597,7 @@ pub struct SuggestOptions {
 }
 
 pub fn execute(config: &OrgConfig, opts: &SuggestOptions) -> Result<Vec<SuggestOutput>> {
-    let graph = Graph::load(config)?;
+    let graph = crate::load_graph(config)?;
 
     opts.targets
         .iter()

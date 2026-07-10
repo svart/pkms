@@ -177,7 +177,7 @@ pub struct ValidateOptions {
 }
 
 pub fn execute(config: &OrgConfig, opts: &ValidateOptions) -> Result<Vec<ValidateOutput>> {
-    let graph = Graph::load(config)?;
+    let graph = crate::load_graph(config)?;
     let db_root = config.db_root.as_path();
 
     opts.targets

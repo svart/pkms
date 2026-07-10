@@ -112,7 +112,7 @@ pub struct StatsOptions {
 }
 
 pub fn execute(config: &OrgConfig, opts: &StatsOptions) -> Result<StatsCommandOutput> {
-    let graph = Graph::load(config)?;
+    let graph = crate::load_graph(config)?;
     let db_root = config.db_root.as_path();
 
     if let Some(limit) = opts.hubs {

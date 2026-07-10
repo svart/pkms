@@ -23,7 +23,7 @@ pub struct PathOptions {
 }
 
 pub fn execute(config: &OrgConfig, opts: &PathOptions) -> Result<PathOutput> {
-    let graph = Graph::load(config)?;
+    let graph = crate::load_graph(config)?;
     build_output(&graph, opts)
 }
 
