@@ -2,12 +2,7 @@ use crate::output::table::{TableLayout, adaptive_table_layout, table_padding_wid
 use crate::output::{ALL_COLUMNS, Column, terminal_markup};
 use chrono::{NaiveDate, Timelike};
 use pkms_org::org_date::parse_org_date;
-use pkms_task::TaskClock;
-pub use pkms_task::{
-    AgendaWindow, TaskGroupField, TaskSortField, agenda_day_section_label, apply_limit,
-    date_in_agenda_window, group_task_items, parse_task_group_field, parse_task_sort_fields,
-    retain_agenda_window_task_items_on, retain_upcoming_task_items_on, sort_task_items,
-};
+pub use pkms_task::{AgendaWindow, TaskGroupField, agenda_day_section_label, apply_limit};
 use std::collections::HashSet;
 use tabled::builder::Builder;
 use tabled::settings::object::{Columns, Object, Rows};
@@ -23,37 +18,6 @@ pub fn combine_tags(filetags: &[String], heading_tags: &[String]) -> String {
         }
     }
     result.join(", ")
-}
-
-pub fn extract_date(raw: Option<&String>) -> Option<String> {
-    let raw = raw.as_ref()?;
-    let parsed = parse_org_date(raw)?;
-    Some(parsed.base_date.format("%Y-%m-%d").to_string())
-}
-
-pub fn is_overdue(raw: Option<&String>) -> bool {
-    is_overdue_on(raw, TaskClock::now())
-}
-
-pub fn is_overdue_on(raw: Option<&String>, clock: TaskClock) -> bool {
-    let raw = match raw {
-        Some(r) => r,
-        None => return false,
-    };
-    let parsed = match parse_org_date(raw) {
-        Some(d) => d,
-        None => return false,
-    };
-    let compare_date = parsed.base_date_end.unwrap_or(parsed.base_date);
-    if compare_date < clock.today {
-        return true;
-    }
-    if compare_date == clock.today
-        && let Some(et) = parsed.time_end
-    {
-        return clock.now > et;
-    }
-    false
 }
 
 pub trait RowItem {
@@ -98,32 +62,6 @@ pub trait RowItem {
         self.scheduled_date_str() == Some(date)
             || self.deadline_date_str() == Some(date)
             || self.implicit_daily_file_date() == Some(date)
-    }
-
-    fn sort_by_field(&self, other: &Self, field: TaskSortField) -> std::cmp::Ordering {
-        match field {
-            TaskSortField::State => self.todo_state().cmp(&other.todo_state()),
-            TaskSortField::File => self.title().cmp(other.title()),
-            TaskSortField::Priority => {
-                let a_p = self
-                    .priority()
-                    .map(crate::util::priority_value)
-                    .unwrap_or(3);
-                let b_p = other
-                    .priority()
-                    .map(crate::util::priority_value)
-                    .unwrap_or(3);
-                a_p.cmp(&b_p)
-            }
-            TaskSortField::Scheduled => self.scheduled_date_str().cmp(&other.scheduled_date_str()),
-            TaskSortField::Deadline => self.deadline_date_str().cmp(&other.deadline_date_str()),
-            TaskSortField::Date => self.effective_date().cmp(&other.effective_date()),
-            TaskSortField::Source => std::cmp::Ordering::Equal,
-            TaskSortField::Task | TaskSortField::Title => {
-                self.heading_title().cmp(other.heading_title())
-            }
-            TaskSortField::Project => self.project().cmp(&other.project()),
-        }
     }
 
     fn format_rows(&self) -> Vec<[String; 9]> {
@@ -215,18 +153,6 @@ pub fn filter_row(row: &[String; 9], cols: &[Column]) -> Vec<String> {
     cols.iter().map(|c| row[c.index()].clone()).collect()
 }
 
-pub fn sort_items<T: RowItem>(items: &mut [T], sort_fields: &[TaskSortField]) {
-    items.sort_by(|a, b| {
-        for &field in sort_fields {
-            let ord = a.sort_by_field(b, field);
-            if ord != std::cmp::Ordering::Equal {
-                return ord;
-            }
-        }
-        std::cmp::Ordering::Equal
-    });
-}
-
 fn rendered_section_width(
     cols: &[Column],
     max_widths: &[usize; 9],
@@ -274,15 +200,6 @@ impl RowSeparatorMode {
     fn is_enabled(self) -> bool {
         matches!(self, RowSeparatorMode::On)
     }
-}
-
-pub fn print_table<T: RowItem>(
-    sections: &[(&str, &[T])],
-    cols: &[Column],
-    row_separators: RowSeparatorMode,
-    footer: &str,
-) {
-    print_table_with_empty_message(sections, cols, row_separators, footer, "No items found.");
 }
 
 pub fn print_table_with_empty_message<T: RowItem>(

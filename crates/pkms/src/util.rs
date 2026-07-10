@@ -1,34 +1,5 @@
 use anyhow::Result;
 use std::io::{self, BufRead, IsTerminal};
-use std::path::Path;
-
-pub fn priority_value(p: char) -> u8 {
-    match p {
-        'A' => 0,
-        'B' => 1,
-        'C' => 2,
-        _ => 3,
-    }
-}
-
-pub fn path_string(path: &Path) -> String {
-    path.display().to_string()
-}
-
-pub fn format_size(bytes: u64) -> String {
-    const UNITS: &[&str] = &["B", "KB", "MB", "GB"];
-    let mut unit = 0;
-    let mut divisor = 1u64;
-    while bytes / divisor >= 1024 && unit < UNITS.len() - 1 {
-        divisor *= 1024;
-        unit += 1;
-    }
-    let whole = bytes / divisor;
-    let frac = (bytes % divisor) * 10 / divisor;
-    format!("{}.{} {}", whole, frac, UNITS[unit])
-}
-
-pub use pkms_org::attachments::{attachment_target_exists, resolve_attachment_path};
 
 pub fn is_stdin_piped() -> bool {
     !io::stdin().is_terminal()
