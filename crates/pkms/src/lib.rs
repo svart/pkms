@@ -3,6 +3,7 @@ pub mod cli;
 pub mod command_context;
 pub mod commands;
 pub mod config;
+pub mod editor;
 pub mod input;
 pub mod logging;
 pub mod output;

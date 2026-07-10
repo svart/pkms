@@ -2970,6 +2970,7 @@ dependencies = [
  "pkms-web",
  "serde",
  "serde_json",
+ "shlex",
  "tabled",
  "tempfile",
  "terminal_size",

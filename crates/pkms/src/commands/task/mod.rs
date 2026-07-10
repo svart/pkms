@@ -223,7 +223,7 @@ pub(super) fn run_open(
                 ctx,
                 &OpenOptions {
                     targets: vec![OpenTarget::Location {
-                        path: location.path,
+                        path: location.path.into(),
                         line_number: location.line_number,
                     }],
                     editor: editor.to_string(),
