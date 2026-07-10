@@ -6,13 +6,13 @@ use pkms_task::ShowOutput;
 
 pub use pkms_task::{HeadingTarget, ShowOptions, TaskIdEntry};
 
-pub fn run(ctx: &CommandContext<'_>, opts: &ShowOptions) -> Result<()> {
+pub(super) fn run(ctx: &CommandContext<'_>, opts: &ShowOptions) -> Result<()> {
     let org_config = ctx.config().org_config();
     let outputs = pkms_task::execute_show(&org_config, opts)?;
     render(ctx.output(), &outputs)
 }
 
-pub fn render(ctx: &OutputContext, outputs: &[ShowOutput]) -> Result<()> {
+fn render(ctx: &OutputContext, outputs: &[ShowOutput]) -> Result<()> {
     match ctx.format {
         OutputFormat::Text => {
             let text = pkms_task::render_show_text(outputs);

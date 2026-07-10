@@ -20,7 +20,6 @@ pub mod rag;
 pub mod resolve;
 #[cfg(feature = "web")]
 pub mod serve;
-pub mod show;
 pub mod stats;
 pub mod suggest;
 pub mod task;

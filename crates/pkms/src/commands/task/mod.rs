@@ -2,7 +2,6 @@
 use crate::cli::OutputFormat;
 use crate::cli::{TaskAgendaArgs, TaskCommand, TaskListArgs, TaskShortcutArgs};
 use crate::command_context::CommandContext;
-use crate::commands::show::{HeadingTarget, ShowOptions, TaskIdEntry};
 #[cfg(feature = "todoist")]
 use crate::commands::task_common::RowSeparatorMode;
 use crate::config::{ResolvedConfig, TaskCommandConfig};
@@ -24,6 +23,9 @@ mod open;
 mod plan;
 mod providers;
 mod render;
+mod show;
+
+use show::{HeadingTarget, ShowOptions, TaskIdEntry};
 
 use mutations::{run_add, run_done, run_postpone, run_state, unsupported_task_source};
 use plan::{
@@ -191,7 +193,7 @@ pub(super) fn run_show(ctx: &CommandContext<'_>, id: &str) -> Result<()> {
             let task_config = config.task_command_config();
             let entries = load_canonical_task_entries(&task_config)?;
             let location = resolve_task_location_from_entries(&entries, id)?;
-            crate::commands::show::run(
+            show::run(
                 ctx,
                 &ShowOptions {
                     targets: vec![HeadingTarget::Location {
