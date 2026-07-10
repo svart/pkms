@@ -8,9 +8,7 @@ mod defaults;
 mod paths;
 
 use columns::default_columns_for;
-pub use columns::{
-    ColumnMatrixConfig, ColumnSource, ColumnView, ColumnsConfig, SourceColumnConfig,
-};
+pub use columns::{ColumnSource, ColumnView, ColumnsConfig};
 pub use defaults::generate_default_config;
 use defaults::{default_closed_todo_states, default_open_todo_states};
 pub use paths::canonicalize_or_abs;
@@ -362,23 +360,6 @@ impl ResolvedConfig {
 
     pub fn runtime_inputs(&self) -> &RuntimeInputs {
         &self.runtime
-    }
-
-    pub fn task_inbox(&self) -> Result<&str> {
-        self.tasks
-            .as_ref()
-            .and_then(|tasks| tasks.inbox.as_deref())
-            .map(str::trim)
-            .filter(|inbox| !inbox.is_empty())
-            .ok_or_else(|| anyhow::anyhow!("PKMS task inbox is not configured. Set [tasks].inbox."))
-    }
-
-    pub fn default_columns(
-        &self,
-        source: ColumnSource,
-        view: ColumnView,
-    ) -> Result<Option<&[String]>> {
-        default_columns_for(self.columns.as_ref(), source, view)
     }
 
     pub fn resolved_info(&self) -> ConfigInfo {

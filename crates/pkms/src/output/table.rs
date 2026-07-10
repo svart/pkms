@@ -56,10 +56,6 @@ impl TableLayout {
         &self.column_widths
     }
 
-    fn into_column_widths(self) -> Vec<(Column, usize)> {
-        self.column_widths
-    }
-
     pub(crate) fn rendered_width(&self) -> usize {
         self.column_widths.iter().map(|(_, w)| *w).sum::<usize>()
             + table_padding_width(self.column_widths.len())
@@ -92,13 +88,6 @@ fn wrap_weight(col: Column) -> f64 {
         Column::Heading => HEADING_WEIGHT,
         _ => 0.0,
     }
-}
-
-pub fn adaptive_column_widths(
-    enabled_columns: &[Column],
-    max_widths: &[usize],
-) -> Option<Vec<(Column, usize)>> {
-    adaptive_table_layout(enabled_columns, max_widths).map(TableLayout::into_column_widths)
 }
 
 pub(crate) fn adaptive_table_layout(
@@ -353,7 +342,7 @@ mod tests {
         let max_widths = [5, 0, 10, 0, 0, 0, 0, 0, 0];
         let result = compute_layout(&cols, &max_widths, 120);
         assert!(result.is_some());
-        let widths = result.unwrap().into_column_widths();
+        let widths = result.unwrap().column_widths().to_vec();
         assert_eq!(widths.len(), 2);
         assert_eq!(widths[0], (Column::Id, 5));
         assert_eq!(widths[1], (Column::State, 10));

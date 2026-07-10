@@ -75,14 +75,6 @@ impl RowItem for TaskRow<'_> {
     fn daily_file_date(&self) -> Option<&str> {
         self.item.daily_file_date.as_deref()
     }
-
-    fn scheduled_date_str(&self) -> Option<&str> {
-        self.item.scheduled_date_str()
-    }
-
-    fn deadline_date_str(&self) -> Option<&str> {
-        self.item.deadline_date_str()
-    }
 }
 
 pub(super) fn print_metadata_rows(

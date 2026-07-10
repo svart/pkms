@@ -41,28 +41,6 @@ pub trait RowItem {
     fn scheduled(&self) -> Option<&str>;
     fn deadline(&self) -> Option<&str>;
     fn daily_file_date(&self) -> Option<&str>;
-    fn scheduled_date_str(&self) -> Option<&str>;
-    fn deadline_date_str(&self) -> Option<&str>;
-
-    fn implicit_daily_file_date(&self) -> Option<&str> {
-        if self.scheduled().is_none() && self.deadline().is_none() {
-            self.daily_file_date()
-        } else {
-            None
-        }
-    }
-
-    fn effective_date(&self) -> Option<&str> {
-        self.scheduled_date_str()
-            .or_else(|| self.deadline_date_str())
-            .or_else(|| self.implicit_daily_file_date())
-    }
-
-    fn has_effective_date(&self, date: &str) -> bool {
-        self.scheduled_date_str() == Some(date)
-            || self.deadline_date_str() == Some(date)
-            || self.implicit_daily_file_date() == Some(date)
-    }
 
     fn format_rows(&self) -> Vec<[String; 9]> {
         let id = self.display_id();

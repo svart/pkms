@@ -5,7 +5,6 @@ use std::str::FromStr;
 
 pub mod table;
 pub mod terminal_markup;
-pub use table::adaptive_column_widths;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Column {

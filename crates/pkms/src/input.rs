@@ -1,13 +1,8 @@
 use crate::output::{ALL_COLUMNS, Column};
 use crate::util::{is_stdin_piped, read_stdin_ndjson};
 use anyhow::{Result, bail};
-use chrono::NaiveDate;
 #[cfg(test)]
-use chrono::NaiveDateTime;
-
-pub fn parse_date(value: Option<&str>) -> Option<NaiveDate> {
-    value.and_then(|d| NaiveDate::parse_from_str(d, "%Y-%m-%d").ok())
-}
+use chrono::{NaiveDate, NaiveDateTime};
 
 #[cfg(test)]
 pub fn parse_datetime(value: Option<&str>) -> Option<NaiveDateTime> {
@@ -199,17 +194,6 @@ fn parse_column_name(name: &str) -> Result<Column> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn parse_date_accepts_iso_dates_only() {
-        assert_eq!(
-            parse_date(Some("2026-05-20")),
-            Some(NaiveDate::from_ymd_opt(2026, 5, 20).unwrap())
-        );
-        assert_eq!(parse_date(Some("2026-02-30")), None);
-        assert_eq!(parse_date(Some("20.05.2026")), None);
-        assert_eq!(parse_date(None), None);
-    }
 
     #[test]
     fn parse_datetime_accepts_minute_precision_and_date_only_midnight() {
