@@ -59,10 +59,6 @@ pub struct HashEmbeddingProvider {
 }
 
 impl HashEmbeddingProvider {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
     pub fn with_dimension(dimension: usize) -> Self {
         assert!(dimension > 0, "hash embedding dimension must be positive");
         Self {
@@ -272,10 +268,6 @@ fn read_fastembed_model_file(model_dir: &Path, relative_path: &str) -> Result<Ve
     let path = model_dir.join(relative_path);
     std::fs::read(&path)
         .with_context(|| format!("failed to read FastEmbed model file {}", path.display()))
-}
-
-pub fn embedding_text(chunk: &ChunkRecord) -> String {
-    embedding_text_with_max_body_chars(chunk, DEFAULT_EMBEDDING_MAX_BODY_CHARS)
 }
 
 pub(crate) fn embedding_text_with_max_body_chars(
