@@ -13,7 +13,7 @@ For implementation boundaries, see the [pkms-rag crate docs](crates/pkms-rag.md)
 Install or run with the feature enabled:
 
 ```bash
-cargo install --path . --features rag
+cargo install --path crates/pkms --features rag
 cargo run --features rag -- --db ~/Documents/org rag status
 ```
 

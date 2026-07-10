@@ -5,37 +5,41 @@
 Install from a local checkout:
 
 ```bash
-cargo install --path .
+cargo install --path crates/pkms
 ```
+
+The repository root is a virtual Cargo workspace, so installation must target
+the umbrella binary package rather than `.`. Workspace-level `cargo run`
+commands work because `crates/pkms` is the default member.
 
 Build with Todoist task provider support:
 
 ```bash
-cargo install --path . --features todoist
+cargo install --path crates/pkms --features todoist
 ```
 
 Build with the local web viewer:
 
 ```bash
-cargo install --path . --features web
+cargo install --path crates/pkms --features web
 ```
 
 Build with SSH-backed remote file-link checks:
 
 ```bash
-cargo install --path . --features ssh
+cargo install --path crates/pkms --features ssh
 ```
 
 Build with local RAG retrieval:
 
 ```bash
-cargo install --path . --features rag
+cargo install --path crates/pkms --features rag
 ```
 
 Features can be combined when needed:
 
 ```bash
-cargo install --path . --features todoist,web,ssh,rag
+cargo install --path crates/pkms --features todoist,web,ssh,rag
 ```
 
 Run directly from the checkout:

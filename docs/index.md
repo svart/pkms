@@ -31,15 +31,10 @@ lives here under `docs/`.
 
 - [Architecture](architecture.md): workspace boundaries, command flow, data
   flow, and feature flags.
-- [Crate Boundary Decision](adr/0001-maintainable-crate-boundaries.md): accepted
-  ownership, loading, runtime-input, storage, and facade decisions.
 - [Development](development.md): local development loop, checks, project
   structure, command conventions, and release workflow.
 - [Task System Design](task-system.md): implementation rules for task IDs,
   source semantics, filters, and mutations.
-- [Refactoring Assessment and Plan](refactoring-assessment-and-plan.md):
-  evidence-backed crate-boundary and maintainability review with a staged
-  implementation plan.
 
 ## Crate Documentation
 

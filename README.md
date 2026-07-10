@@ -15,7 +15,7 @@ and keep no hidden persistent state.
 Install from a local checkout:
 
 ```bash
-cargo install --path .
+cargo install --path crates/pkms
 ```
 
 Or run without installing:

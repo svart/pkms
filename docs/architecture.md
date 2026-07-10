@@ -76,6 +76,23 @@ Reusable behavior belongs in domain crates:
   `pkms-rag`; callers use `RagIndex` rather than SQLite connections.
 - Web note rendering and HTTP routes for `pkms serve` go in `pkms-web`.
 
+## Public Facades
+
+Crate roots expose the stable cross-crate surface; implementation modules stay
+private when callers do not need their types:
+
+- The `pkms` library exposes only `run()`; parsing, config, dispatch, and output
+  modules are binary implementation details.
+- `pkms-org` exposes `Graph`, `OrgSnapshot`, focused loading inputs, parsed org
+  models, and edit primitives while keeping graph construction, analytics, and
+  traversal internals private.
+- `pkms-task` exposes typed task use cases and read-only filter accessors rather
+  than its parsed filter representation.
+- `pkms-rag` exposes typed indexing/retrieval services and `RagIndex`; SQLite
+  connections and queries remain private storage details.
+- `pkms-web` exposes its viewer config/request/server facade from the crate root
+  while routing and rendering modules remain private.
+
 ## Data Flows
 
 ### Note Database Commands

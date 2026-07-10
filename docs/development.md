@@ -159,12 +159,13 @@ crates/pkms/                # umbrella binary crate
   src/command_context.rs    # shared resolved config/output access
   src/app.rs                # app construction and error formatting
   src/cli.rs                # clap derive structs and Command enum
-  src/config.rs             # config loading, db_root resolution, per-crate config mapping
+  src/config/               # config loading, db_root resolution, defaults, paths, columns
   src/logging.rs            # PKMS_LOG and PKMS_LOG_FORMAT setup
   src/commands/             # thin command wrappers and output rendering
   src/commands/task/        # task CLI planning/orchestration/rendering
   src/input.rs              # target/stdin/date/column parsing helpers
-  src/output.rs             # OutputContext and output format helpers
+  src/output.rs             # OutputContext, columns, and structured output helpers
+  src/output/               # task tables and terminal markup
   tests/integration/        # binary-level integration tests with mock databases
 crates/pkms-org/            # org discovery, parsing, graph, snapshots, org edits
 crates/pkms-tokens/         # token encoding/counting leaf utilities
@@ -181,10 +182,12 @@ skills/                     # agent skills for note and pkms workflows
 
 Dependency direction is intentionally one-way: `pkms` may depend on all domain
 crates; `pkms-db`, `pkms-rag`, `pkms-task`, and `pkms-web` may depend on
-`pkms-org`; domain crates must not depend on each other or on the umbrella
-`pkms` crate unless `scripts/check-crate-boundaries.sh` explicitly allows it. Run
-`scripts/check-crate-boundaries.sh` after changing manifests. The script checks
-all-feature transitive dependency trees, not only direct manifest entries.
+`pkms-org`; `pkms-db` and `pkms-rag` may also depend on the leaf `pkms-tokens`
+crate. Domain crates must not depend on peer domain crates or on the umbrella
+`pkms` crate, and `pkms-tokens` must not depend on any domain crate, unless
+`scripts/check-crate-boundaries.sh` explicitly allows the edge. Run the script
+after changing manifests. It checks all-feature transitive dependency trees,
+not only direct manifest entries.
 
 ## Adding or Changing Commands
 

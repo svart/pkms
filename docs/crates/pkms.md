@@ -8,7 +8,7 @@ cross-domain orchestration.
 
 - Define the user-facing CLI in `src/cli.rs` and `src/cli/task.rs`.
 - Build application state from CLI arguments and config in `src/app.rs` and
-  `src/config.rs`.
+  `src/config/`.
 - Capture environment variables and process paths once in immutable
   `RuntimeInputs`; resolve precedence through pure config functions.
 - Dispatch commands from `src/runner.rs`.
@@ -31,9 +31,10 @@ cross-domain orchestration.
 | `src/cli/task.rs` | Task namespace parser, filters, modifiers, and help text. |
 | `src/runner.rs` | Command dispatch and exit-code conversion. |
 | `src/command_context.rs` | Shared access to resolved config and output. |
-| `src/config.rs` | Config file parsing, `db_root` resolution, and per-domain config mapping. |
+| `src/app.rs` | Startup state construction and structured startup/command errors. |
+| `src/config/` | Config parsing, defaults, path precedence, columns, and per-domain config mapping. |
 | `src/commands/` | CLI adapters and output rendering for command namespaces. |
-| `src/output.rs` | Output format selection and structured output helpers. |
+| `src/output.rs` and `src/output/` | Output format selection, structured output, task tables, and terminal markup. |
 | `src/input.rs` | Stdin target detection, target parsing, and command input helpers. |
 | `src/logging.rs` | `PKMS_LOG`, `PKMS_LOG_FORMAT`, and stderr logging setup. |
 | `src/environment.rs` | Immutable process inputs captured once at startup. |
@@ -54,9 +55,11 @@ cross-domain orchestration.
 
 ## Boundaries
 
-This crate may depend on all domain crates, but domain crates must not depend on
-`pkms`. If a change tempts you to import `pkms` from a domain crate, move the
-shared behavior down into the correct domain crate or keep it in the adapter.
+This crate may depend on all domain crates and on `pkms-tokens`, but domain and
+leaf crates must not depend on `pkms`. The library facade intentionally exposes
+only `run()`; CLI implementation modules remain private. If a change tempts you
+to import `pkms` from another crate, move shared behavior into the owning domain
+crate or keep it in the command adapter.
 
 ## Related Docs
 

@@ -32,8 +32,7 @@ the database-oriented work.
 | `commands/new.rs` | New note filename, UUID, and boilerplate generation. |
 | `commands/extract.rs` | Heading subtree extraction. |
 | `commands/fix.rs` | UUID and attachment repair flows. |
-| `commands/open.rs` | Source target opening helpers. |
-| `link_check.rs` | Link target checks, including optional SSH behavior. |
+| `link_check/` | Local and optional SSH link-check implementations plus shared result models. |
 
 ## Invariants
 

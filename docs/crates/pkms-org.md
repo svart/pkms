@@ -26,7 +26,7 @@ primitives.
 | `discovery.rs` | Walks the note database and finds candidate org files. |
 | `parser.rs` | Parses org note metadata, headings, links, TODO data, and planning data. |
 | `corpus.rs` | Loads parsed notes from discovered files. |
-| `graph/` | Builds search, analytics, validation, traversal, and task views over parsed notes. |
+| `graph/` | Builds graph storage plus search, analytics, validation, and traversal over parsed notes. |
 | `snapshot.rs` | Loads parsed content and graph indexes from one fresh scan. |
 | `domain.rs` | Shared domain identifiers such as note IDs and link targets. |
 | `attachments.rs` | Org-attach path and target helpers. |
@@ -48,6 +48,9 @@ primitives.
   not resolve the process environment itself.
 - Task state policy, task projection, and canonical task IDs belong to
   `pkms-task`, which consumes parsed org headings through this crate's models.
+- Graph construction, analytics, and traversal implementation modules are
+  private; callers use `Graph` methods and the intentionally public search and
+  validation types.
 - Org editing helpers should preserve user content around the specific edit.
 - Domain crates and command adapters should use these helpers instead of
   open-coded org string manipulation.

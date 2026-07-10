@@ -64,6 +64,8 @@ Crate-specific docs:
   retrieval, and RAG HTTP API.
 - [pkms-web](docs/crates/pkms-web.md): local web viewer, rendering, routes, and
   assets.
+- [pkms-tokens](docs/crates/pkms-tokens.md): token encoding, counting, and
+  truncation leaf utilities.
 
 Prefer checking the current source over trusting any map when a file has moved
 or behavior has changed.
@@ -73,13 +75,17 @@ or behavior has changed.
 `pkms` is primarily a stateless single-run CLI:
 
 - Parse args, resolve config, load org files, compute, print, exit.
-- Do not introduce persistent caches, databases, daemons, or watch mode.
+- Do not introduce implicit persistent caches, databases, daemons, or watch
+  mode.
 - `pkms serve` is the explicit foreground local HTTP viewer exception. It must
   keep no persistent derived state.
+- `pkms rag` is the explicit derived-state exception: it owns a local SQLite
+  retrieval index, and `pkms rag serve` is a foreground server rather than a
+  daemon or watcher. Org files remain authoritative.
 - `Graph::load_from()` and `OrgSnapshot::load()` re-scan and re-parse `.org`
   files for each invocation.
-- `Config::load()` reads optional user config; `Config::resolve()` produces a
-  `ResolvedConfig`.
+- `Config::load_from()` reads optional user config; `Config::resolve()`
+  produces a `ResolvedConfig` from that config and captured `RuntimeInputs`.
 - `db_root` resolution happens once through CLI `--db`, then `PKMS_DB_ROOT`, then
   config file `db_root`.
 - Commands read paths from `ResolvedConfig`, usually through
@@ -92,8 +98,9 @@ or behavior has changed.
   `crates/pkms/src/runner.rs`.
 - Put umbrella command wiring/output in `crates/pkms/src/commands/<name>.rs`, or
   `crates/pkms/src/commands/<name>/` for a namespace with subcommands.
-- Put reusable domain behavior in `pkms-org`, `pkms-db`, `pkms-task`, or
-  `pkms-rag`, or `pkms-web` according to the crate boundary documented in
+- Put reusable domain behavior in `pkms-org`, `pkms-db`, `pkms-task`,
+  `pkms-rag`, or `pkms-web`; put token encoding/counting primitives in the
+  leaf `pkms-tokens` crate according to the boundaries documented in
   [docs/architecture.md](docs/architecture.md) and
   [crate-specific docs](docs/index.md#crate-documentation).
 - Use option structs for command input when arguments are more than trivial.
@@ -103,8 +110,9 @@ or behavior has changed.
 - Return `anyhow::Result`; `check` may return an `ExitCode` for unhealthy
   database state.
 - Derive `serde::Serialize` for command output structs.
-- Every command should support `--output-format json`; stream-like commands
-  should support `ndjson` when practical.
+- Commands should support `--output-format json` unless they document a
+  text-only contract, such as `pkms rag index`; stream-like commands should
+  support `ndjson` when practical.
 - Dispatch structured output through `OutputContext` helpers:
   `print_json`, `print_ndjson`, or `print_json_adaptive`.
 - For read-only commands with non-trivial shaping, prefer an internal
@@ -137,7 +145,8 @@ Command pipelining:
 - NDJSON producers emit one JSON object per line, usually with a `uuid` field.
 - Consumers read targets from stdin via automatic pipe detection or
   `--from-stdin`.
-- Producers: `resolve`, `query`, `orphans`, `stats --hubs`, `suggest`.
+- Producers: `resolve`, `query`, `orphans`, `stats --hubs`, `suggest`, and,
+  with the `rag` feature, `rag search` and `rag retrieve`.
 - Consumers: `get`, `suggest`, `validate`, `task list`.
 
 Feature flags:

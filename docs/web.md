@@ -14,7 +14,7 @@ cargo run --features web -- --db ~/Documents/org serve "Project Alpha"
 Or install a binary with the web feature:
 
 ```bash
-cargo install --path . --features web
+cargo install --path crates/pkms --features web
 pkms serve "Project Alpha"
 ```
 
@@ -72,4 +72,3 @@ assets live in `pkms-web`.
 - [Command Reference](commands.md#navigation)
 - [pkms-web crate](crates/pkms-web.md)
 - [Architecture](architecture.md)
-

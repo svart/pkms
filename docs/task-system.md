@@ -82,6 +82,7 @@ outside the current `pkms task` surface.
 The source-neutral task model lives under `crates/pkms-task/src/`:
 
 ```text
+  common.rs
   clock.rs
   config.rs
   execution.rs
@@ -91,9 +92,11 @@ The source-neutral task model lives under `crates/pkms-task/src/`:
   modifiers.rs
   mutation.rs
   pkms.rs
+  projection.rs
   provider.rs
   providers.rs
   scope.rs
+  show.rs
   task_index.rs
   todoist.rs
   todoist_mutation.rs
@@ -118,11 +121,15 @@ Task command orchestration lives under `crates/pkms/src/commands/task/`:
 
 ```text
 crates/pkms/src/commands/task/
-  mod.rs          # command dispatch and cross-domain show/open handling
-  id_command.rs   # ID-first parsing and dispatch adapter
-  providers.rs    # CLI config mapping and provider adapters
-  render.rs       # text, JSON, NDJSON, table, and mutation output helpers
-  execution.rs    # CLI-level list and agenda adapters
+  mod.rs            # namespace dispatch and shared task command wiring
+  id_command.rs     # ID-first parsing and action dispatch
+  plan.rs           # list, agenda, inbox, source, and filter planning
+  providers.rs      # CLI config mapping and provider adapters
+  render.rs         # text, JSON, NDJSON, table, and mutation output helpers
+  show.rs           # cross-domain show dispatch adapter
+  open.rs           # local editor-opening adapter
+  mutations.rs      # source-neutral mutation dispatch
+  mutations/        # PKMS and Todoist mutation adapters
 ```
 
 Keep provider and mutation logic in `pkms-task` unless it is only command-line
@@ -431,7 +438,8 @@ pre-commit gate. Run the full matrix only when explicitly requested.
 
 ```bash
 cargo fmt --all -- --check
-cargo clippy --all-targets --all-features -- -D warnings
-cargo test --all-features
-cargo build --all-features
+scripts/check-crate-boundaries.sh
+cargo clippy --workspace --all-targets --all-features -- -D warnings
+cargo test --workspace --all-features
+cargo build --workspace --all-features
 ```
