@@ -9,7 +9,6 @@
 pub mod analytics;
 pub mod builder;
 pub mod search;
-pub mod tasks;
 pub mod traversal;
 pub mod validation;
 
