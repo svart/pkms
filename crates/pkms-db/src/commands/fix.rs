@@ -297,14 +297,14 @@ pub fn execute_attach(config: &OrgConfig, opts: &FixAttachOptions) -> Result<Att
 
 fn collect_attachment_candidates(graph: &Graph, db_root: &Path) -> Vec<AttachmentCandidate> {
     let mut candidates = Vec::new();
-    for result in &graph.results {
+    for result in graph.files() {
         if result.parse_error.is_some() {
             continue;
         }
         let Some(primary_uuid) = result.parsed.uuids.first() else {
             continue;
         };
-        let Some(primary_node) = graph.nodes.get(primary_uuid.as_str()) else {
+        let Some(primary_node) = graph.node(primary_uuid.as_str()) else {
             continue;
         };
         let primary_title = primary_node.title.clone();
@@ -315,8 +315,7 @@ fn collect_attachment_candidates(graph: &Graph, db_root: &Path) -> Vec<Attachmen
                 .as_ref()
                 .and_then(|uuid| {
                     graph
-                        .nodes
-                        .get(uuid.as_str())
+                        .node(uuid.as_str())
                         .map(|node| (uuid.to_string(), node.title.clone()))
                 })
                 .unwrap_or_else(|| (primary_uuid.to_string(), primary_title.clone()));

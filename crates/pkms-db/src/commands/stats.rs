@@ -157,7 +157,7 @@ fn build_hubs_output(graph: &Graph, limit: usize) -> HubsOutput {
 
 fn build_tags_output(graph: &Graph) -> TagsOutput {
     let mut tag_counts: HashMap<String, usize> = HashMap::new();
-    for result in &graph.results {
+    for result in graph.files() {
         let mut seen_tags = HashSet::new();
         for tag in &result.parsed.filetags {
             if seen_tags.insert(tag.as_str()) {
@@ -185,12 +185,12 @@ fn build_todo_stats(graph: &Graph) -> TodoStats {
     let mut by_state: BTreeMap<String, usize> = BTreeMap::new();
 
     let files_with_todos = graph
-        .results
+        .files()
         .iter()
         .filter(|result| result.parsed.has_todo_headings())
         .count();
 
-    for result in &graph.results {
+    for result in graph.files() {
         for heading in &result.parsed.headings {
             if let Some(ref state) = heading.todo_state {
                 *by_state.entry(state.to_uppercase()).or_default() += 1;
