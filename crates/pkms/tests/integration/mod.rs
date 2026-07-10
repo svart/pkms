@@ -1,6 +1,7 @@
 mod all_commands;
 mod check;
 mod config;
+mod contracts;
 mod error;
 mod extract;
 mod fix;
