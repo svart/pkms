@@ -96,8 +96,8 @@ or behavior has changed.
   [docs/architecture.md](docs/architecture.md) and
   [crate-specific docs](docs/index.md#crate-documentation).
 - Use option structs for command input when arguments are more than trivial.
-- Command implementations usually accept `&ResolvedConfig` and `&OutputContext`;
-  use `&CommandContext` when shared graph/workspace loader helpers are useful.
+- Command implementations usually accept `&CommandContext` for shared resolved
+  config and output access.
 - Load the graph or workspace only when the command needs that data.
 - Return `anyhow::Result`; `check` may return an `ExitCode` for unhealthy
   database state.

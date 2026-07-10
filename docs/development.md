@@ -156,7 +156,7 @@ crates/pkms/                # umbrella binary crate
   src/main.rs               # thin binary wrapper
   src/lib.rs                # umbrella library surface used by tests
   src/runner.rs             # CommandContext construction and command dispatch
-  src/command_context.rs    # shared config/output access plus loaders
+  src/command_context.rs    # shared resolved config/output access
   src/app.rs                # app construction and error formatting
   src/cli.rs                # clap derive structs and Command enum
   src/config.rs             # config loading, db_root resolution, per-crate config mapping
@@ -195,12 +195,10 @@ Follow the existing command shape:
    or in `crates/pkms/src/commands/<name>/` when the command is a namespace with
    subcommands.
 4. Use option structs for command input when more than trivial args are needed.
-5. Accept `&ResolvedConfig` and `&OutputContext`, or `&CommandContext` when the
-   command benefits from shared graph/workspace loader helpers.
+5. Accept `&CommandContext` for shared resolved config and output access.
 6. Load the graph only when the command needs graph data. Use
-   `Graph::load(config)` or `CommandContext::load_graph()`. Use
-   `Workspace::load(config)` or `CommandContext::load_workspace()` when a
-   command needs both parsed files and graph data.
+   `Graph::load(config)`, or `Workspace::load(config)` when a command needs both
+   parsed files and graph data.
 7. Dispatch structured output through `OutputContext` helpers:
    `print_json`, `print_ndjson`, or `print_json_adaptive`.
 8. Add or update integration tests under `crates/pkms/tests/integration/`.

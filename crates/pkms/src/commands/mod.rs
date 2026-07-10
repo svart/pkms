@@ -1,11 +1,10 @@
 //! CLI subcommand implementations.
 //!
 //! Each subcommand in [`Command`](crate::cli::Command) has a corresponding module here
-//! with a small `run(...)` entry point. Most commands accept resolved config, output
-//! context, and typed options; commands that benefit from shared loaders can accept
-//! [`CommandContext`](crate::command_context::CommandContext). Commands are stateless:
-//! they load the graph or workspace from disk when needed, compute results, and dispatch
-//! output via [`OutputContext`](crate::output::OutputContext).
+//! with a small `run(...)` entry point. Commands receive shared resolved config and output
+//! access through [`CommandContext`](crate::command_context::CommandContext). Commands are
+//! stateless: they load domain data when needed, compute results, and dispatch output via
+//! [`OutputContext`](crate::output::OutputContext).
 
 pub mod check;
 pub mod extract;

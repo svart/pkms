@@ -1,7 +1,5 @@
 use crate::config::ResolvedConfig;
 use crate::output::OutputContext;
-use anyhow::Result;
-use pkms_org::{Graph, Workspace};
 
 pub struct CommandContext<'a> {
     config: &'a ResolvedConfig,
@@ -19,13 +17,5 @@ impl<'a> CommandContext<'a> {
 
     pub fn output(&self) -> &'a OutputContext {
         self.output
-    }
-
-    pub fn load_graph(&self) -> Result<Graph> {
-        Graph::load(&self.config.org_config())
-    }
-
-    pub fn load_workspace(&self) -> Result<Workspace> {
-        Workspace::load(&self.config.org_config())
     }
 }

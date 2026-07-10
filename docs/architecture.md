@@ -55,8 +55,8 @@ CLI wiring lives in the umbrella crate:
 
 - `crates/pkms/src/cli.rs` and `crates/pkms/src/cli/task.rs` define arguments.
 - `crates/pkms/src/runner.rs` dispatches parsed commands.
-- `crates/pkms/src/command_context.rs` exposes shared config, output, graph, and
-  workspace loaders.
+- `crates/pkms/src/command_context.rs` bundles shared resolved config and output
+  access for command adapters.
 - `crates/pkms/src/commands/` adapts CLI arguments to domain crates and renders
   output.
 

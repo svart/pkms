@@ -10,7 +10,7 @@ cross-domain orchestration.
 - Build application state from CLI arguments and config in `src/app.rs` and
   `src/config.rs`.
 - Dispatch commands from `src/runner.rs`.
-- Provide shared loaders and context in `src/command_context.rs`.
+- Provide shared resolved config and output context in `src/command_context.rs`.
 - Render text, JSON, and NDJSON through `src/output.rs` and `src/output/`.
 - Keep command adapter modules under `src/commands/` thin.
 - Map CLI arguments, environment variables, and `ResolvedConfig` into
@@ -27,7 +27,7 @@ cross-domain orchestration.
 | `src/cli.rs` | Top-level `clap` parser and command enum. |
 | `src/cli/task.rs` | Task namespace parser, filters, modifiers, and help text. |
 | `src/runner.rs` | Command dispatch and exit-code conversion. |
-| `src/command_context.rs` | Shared access to resolved config, output, graph, and workspace loaders. |
+| `src/command_context.rs` | Shared access to resolved config and output. |
 | `src/config.rs` | Config file parsing, `db_root` resolution, and per-domain config mapping. |
 | `src/commands/` | CLI adapters and output rendering for command namespaces. |
 | `src/output.rs` | Output format selection and structured output helpers. |
