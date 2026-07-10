@@ -8,12 +8,12 @@ use std::io::{self, BufRead, BufReader, Write};
 use std::net::TcpStream;
 use std::path::{Path, PathBuf};
 
-pub(super) struct ServeState<'a> {
-    pub(super) config: &'a WebConfig,
-    pub(super) graph: &'a Graph,
-    pub(super) initial_uuid: Option<&'a NoteId>,
-    pub(super) open_target: OpenTargetFn,
-    pub(super) default_editor: &'a str,
+pub(crate) struct ServeState<'a> {
+    pub(crate) config: &'a WebConfig,
+    pub(crate) graph: &'a Graph,
+    pub(crate) initial_uuid: Option<&'a NoteId>,
+    pub(crate) open_target: OpenTargetFn,
+    pub(crate) default_editor: &'a str,
 }
 
 enum Route<'a> {
@@ -75,7 +75,7 @@ impl<'a> HttpRequest<'a> {
     }
 }
 
-pub(super) fn log_request_error(err: &anyhow::Error) {
+pub(crate) fn log_request_error(err: &anyhow::Error) {
     if is_client_disconnect(err) {
         tracing::debug!(error = %err, "serve client disconnected before response completed");
     } else {
@@ -83,7 +83,7 @@ pub(super) fn log_request_error(err: &anyhow::Error) {
     }
 }
 
-pub(super) fn log_connection_error(err: &io::Error) {
+pub(crate) fn log_connection_error(err: &io::Error) {
     if is_client_disconnect_kind(err.kind()) {
         tracing::debug!(error = %err, "serve client disconnected before request handling");
     } else {
@@ -91,7 +91,7 @@ pub(super) fn log_connection_error(err: &io::Error) {
     }
 }
 
-pub(super) fn is_client_disconnect(err: &anyhow::Error) -> bool {
+pub(crate) fn is_client_disconnect(err: &anyhow::Error) -> bool {
     err.chain().any(|cause| {
         cause
             .downcast_ref::<io::Error>()
@@ -108,7 +108,7 @@ fn is_client_disconnect_kind(kind: io::ErrorKind) -> bool {
     )
 }
 
-pub(super) fn handle_connection(mut stream: TcpStream, state: &ServeState<'_>) -> Result<()> {
+pub(crate) fn handle_connection(mut stream: TcpStream, state: &ServeState<'_>) -> Result<()> {
     let mut reader = BufReader::new(stream.try_clone()?);
     let mut request_line = String::new();
     reader.read_line(&mut request_line)?;
@@ -136,7 +136,7 @@ pub(super) fn handle_connection(mut stream: TcpStream, state: &ServeState<'_>) -
     }
 }
 
-pub(super) fn response_for_viewer_request(
+pub(crate) fn response_for_viewer_request(
     state: &ServeState<'_>,
     method: ViewerMethod,
     path: &str,
@@ -181,10 +181,10 @@ fn drain_headers(reader: &mut BufReader<TcpStream>) -> Result<()> {
     Ok(())
 }
 
-pub(super) struct HttpResponse {
-    pub(super) status: u16,
-    pub(super) content_type: assets::ContentType,
-    pub(super) body: Vec<u8>,
+pub(crate) struct HttpResponse {
+    pub(crate) status: u16,
+    pub(crate) content_type: assets::ContentType,
+    pub(crate) body: Vec<u8>,
 }
 
 impl HttpResponse {
@@ -367,7 +367,7 @@ fn note_declares_asset_link(
         }))
 }
 
-pub(super) fn open_response(state: &ServeState<'_>, query: Option<&str>) -> Result<HttpResponse> {
+pub(crate) fn open_response(state: &ServeState<'_>, query: Option<&str>) -> Result<HttpResponse> {
     let Some(note_uuid) = query_param(query, "id") else {
         return Ok(HttpResponse::not_found("Missing id"));
     };

@@ -178,7 +178,7 @@ fn asset_href(note_uuid: &str, asset: AssetRef<'_>) -> String {
     )
 }
 
-pub(super) fn render_formatted_text(text: &str) -> String {
+pub(crate) fn render_formatted_text(text: &str) -> String {
     let mut html = String::new();
     let mut rest = text;
     while let Some(start) = rest.find('$') {
@@ -238,7 +238,7 @@ fn render_inline_math(input: &str) -> String {
     render_katex(input, false)
 }
 
-pub(super) fn render_display_math(input: &str) -> String {
+pub(crate) fn render_display_math(input: &str) -> String {
     format!(
         "<div class=\"math-display\">{}</div>\n",
         render_katex(input, true)
@@ -462,7 +462,7 @@ pub(super) fn escape_html(text: &str) -> String {
         .replace('"', "&quot;")
 }
 
-pub(super) fn percent_encode(text: &str) -> String {
+pub(crate) fn percent_encode(text: &str) -> String {
     let mut encoded = String::new();
     for byte in text.bytes() {
         match byte {
@@ -475,7 +475,7 @@ pub(super) fn percent_encode(text: &str) -> String {
     encoded
 }
 
-pub(super) fn percent_decode(text: &str) -> String {
+pub(crate) fn percent_decode(text: &str) -> String {
     let bytes = text.as_bytes();
     let mut decoded = Vec::with_capacity(bytes.len());
     let mut i = 0;

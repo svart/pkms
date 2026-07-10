@@ -3,7 +3,7 @@ use std::fmt;
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum ContentType {
+pub(crate) enum ContentType {
     Html,
     PlainText,
     Css,
@@ -18,7 +18,7 @@ pub(super) enum ContentType {
 }
 
 impl ContentType {
-    pub(super) fn as_str(self) -> &'static str {
+    pub(crate) fn as_str(self) -> &'static str {
         match self {
             ContentType::Html => "text/html; charset=utf-8",
             ContentType::PlainText => "text/plain; charset=utf-8",
@@ -108,7 +108,7 @@ static SERVED_FONTS: &[ServedFont] = &[
     },
 ];
 
-pub(super) fn favicon_response() -> super::HttpResponse {
+pub(crate) fn favicon_response() -> super::HttpResponse {
     super::HttpResponse {
         status: 200,
         content_type: ContentType::Svg,
@@ -116,7 +116,7 @@ pub(super) fn favicon_response() -> super::HttpResponse {
     }
 }
 
-pub(super) fn font_response(name: &str) -> super::HttpResponse {
+pub(crate) fn font_response(name: &str) -> super::HttpResponse {
     SERVED_FONTS
         .iter()
         .find(|font| font.name == name)

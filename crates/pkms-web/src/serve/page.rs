@@ -10,7 +10,7 @@ use pkms_org::parser::{HEADING_RE, Heading, parse_note, strip_org_links};
 use std::collections::BTreeMap;
 use std::fmt::Write as FmtWrite;
 
-pub(super) fn render_note_html(
+pub(crate) fn render_note_html(
     graph: &Graph,
     config: &WebConfig,
     node: &Node,
@@ -59,7 +59,7 @@ pub(super) fn render_note_html(
     )
 }
 
-pub(super) fn render_preview_html(
+pub(crate) fn render_preview_html(
     graph: &Graph,
     config: &WebConfig,
     node: &Node,

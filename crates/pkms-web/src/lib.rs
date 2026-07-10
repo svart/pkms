@@ -4,29 +4,18 @@ use serde::Serialize;
 use std::net::TcpListener;
 use std::path::Path;
 
-#[path = "serve/assets.rs"]
-mod assets;
-#[path = "serve/highlight.rs"]
-mod highlight;
-#[path = "serve/http.rs"]
-mod http;
-#[path = "serve/inline.rs"]
-mod inline;
-#[path = "serve/org_html.rs"]
-mod org_html;
-#[path = "serve/page.rs"]
-mod page;
+mod serve;
 
 #[cfg(test)]
-use highlight::highlight_code;
-use highlight::syntect_css;
-use http::HttpResponse;
-use http::ServeState;
+use serve::highlight::highlight_code;
+use serve::http::ServeState;
 #[cfg(test)]
-use http::{is_client_disconnect, open_response};
+use serve::http::{is_client_disconnect, open_response};
 #[cfg(test)]
-use inline::{percent_decode, percent_encode, render_display_math, render_formatted_text};
-use page::{render_note_html, render_preview_html};
+use serve::inline::{percent_decode, percent_encode, render_display_math, render_formatted_text};
+use serve::{HttpResponse, http};
+#[cfg(test)]
+use serve::{assets, page_css, page_js, render_note_html, render_preview_html};
 
 pub struct ServeOptions {
     pub target: String,
@@ -185,17 +174,6 @@ pub fn serve(
         }
     }
     Ok(())
-}
-
-fn page_css() -> String {
-    let mut css = include_str!("serve.css").to_string();
-    css.push('\n');
-    css.push_str(&syntect_css());
-    css
-}
-
-fn page_js() -> &'static str {
-    include_str!("serve/page.js")
 }
 
 #[cfg(test)]

@@ -9,7 +9,7 @@ static SYNTAX_SET: LazyLock<SyntaxSet> = LazyLock::new(SyntaxSet::load_defaults_
 static THEME_SET: LazyLock<ThemeSet> = LazyLock::new(ThemeSet::load_defaults);
 const SYNTECT_CLASS_STYLE: ClassStyle = ClassStyle::SpacedPrefixed { prefix: "syn-" };
 
-pub(super) fn highlight_code(lang: &str, code: &str) -> String {
+pub(crate) fn highlight_code(lang: &str, code: &str) -> String {
     let syntax_set = &SYNTAX_SET;
     let syntax = syntax_for_lang(lang, syntax_set);
     let mut generator =
@@ -53,7 +53,7 @@ fn syntect_theme() -> &'static Theme {
         .expect("syntect default themes should include at least one theme")
 }
 
-pub(super) fn syntect_css() -> String {
+pub(crate) fn syntect_css() -> String {
     let mut css =
         css_for_theme_with_class_style(syntect_theme(), SYNTECT_CLASS_STYLE).unwrap_or_default();
     css.push_str(
