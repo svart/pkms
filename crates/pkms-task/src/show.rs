@@ -282,7 +282,7 @@ fn resolve_location_heading_target<'a>(
 ) -> Result<ResolvedHeadingTarget<'a>> {
     let content = std::fs::read_to_string(path)?;
 
-    let result = graph.results.iter().find(|r| r.path.as_path() == path);
+    let result = graph.file(path);
     let parsed = match result {
         Some(r) => &r.parsed,
         None => anyhow::bail!("No parsed data for path: {}", path.display()),
@@ -346,7 +346,7 @@ fn resolve_fallback_heading_target<'a>(
     let target_lower = note_target.to_lowercase();
     let mut found = None;
 
-    for result in &graph.results {
+    for result in graph.files() {
         if !fallback_result_matches(result, &target_lower) {
             continue;
         }

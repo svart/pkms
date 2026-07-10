@@ -202,7 +202,7 @@ pub fn resolve_canonical_task_id(
 fn sorted_task_entries(task_states: &TaskStateConfig, graph: &Graph) -> Vec<TaskEntry> {
     let mut items: Vec<TaskEntry> = Vec::new();
 
-    for result in &graph.results {
+    for result in graph.files() {
         if result.parse_error.is_some() {
             continue;
         }

@@ -540,7 +540,7 @@ fn ensure_state_change_allowed(
     new_state: &OrgTodoState,
 ) -> Result<()> {
     let path = Path::new(path);
-    let Some(result) = graph.results.iter().find(|result| result.path == path) else {
+    let Some(result) = graph.file(path) else {
         return Ok(());
     };
     let Some((index, heading)) = result

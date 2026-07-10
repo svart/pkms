@@ -62,7 +62,7 @@ fn resolve_paths(graph: &Graph, db_root: &Path, raw: &[String]) -> Vec<PathBuf> 
                 .into_iter()
                 .chain(candidate.canonicalize().ok())
             {
-                if graph.results.iter().any(|result| result.path == path) {
+                if graph.contains_file(&path) {
                     scope_paths.push(path);
                     matched = true;
                     break;
@@ -81,7 +81,7 @@ fn resolve_paths(graph: &Graph, db_root: &Path, raw: &[String]) -> Vec<PathBuf> 
             .into_iter()
             .chain(joined.canonicalize().ok())
         {
-            if graph.results.iter().any(|result| result.path == path) {
+            if graph.contains_file(&path) {
                 scope_paths.push(path);
                 break;
             }
