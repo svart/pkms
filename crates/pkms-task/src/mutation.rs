@@ -113,7 +113,7 @@ pub fn mod_pkms_task(
             .map(|description| description.trim().to_string()),
     };
 
-    let graph = Graph::load(&config.org)?;
+    let graph = crate::config::load_graph(&config.org)?;
     let location =
         task_index::resolve_canonical_task_id(&config.task_states, &graph, canonical_id)?;
     if let Some(new_state) = &modifier.state {
@@ -318,7 +318,7 @@ pub fn set_pkms_state(
     dry_run: bool,
 ) -> Result<TaskStateChangeOutput> {
     let new_state = canonical_state(config, requested_state)?;
-    let graph = Graph::load(&config.org)?;
+    let graph = crate::config::load_graph(&config.org)?;
     let location =
         task_index::resolve_canonical_task_id(&config.task_states, &graph, canonical_id)?;
     ensure_state_change_allowed(
@@ -386,7 +386,7 @@ pub fn postpone_pkms_task(
     clock: TaskClock,
 ) -> Result<TaskItem> {
     let date = parse_mutation_due_date(to, clock.today)?;
-    let graph = Graph::load(&config.org)?;
+    let graph = crate::config::load_graph(&config.org)?;
     let location =
         task_index::resolve_canonical_task_id(&config.task_states, &graph, canonical_id)?;
     org_task_mutation::update_recurring_planning_date(&location.path, location.line_number, &date)?;
@@ -426,7 +426,7 @@ fn add_dependency_task(
     spec: &TaskModifierSpec,
     canonical_id: usize,
 ) -> Result<pkms::TaskLocation> {
-    let graph = Graph::load(&config.org)?;
+    let graph = crate::config::load_graph(&config.org)?;
     let location =
         task_index::resolve_canonical_task_id(&config.task_states, &graph, canonical_id)?;
     let location = pkms_task_location(location);

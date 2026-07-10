@@ -301,7 +301,7 @@ impl TaskIdSnapshot {
 }
 
 fn load_canonical_task_entries(config: &TaskCommandConfig) -> Result<Vec<CanonicalTaskEntry>> {
-    let graph = pkms_org::Graph::load(&config.org)?;
+    let graph = config.load_graph()?;
     Ok(pkms_task::all_task_entries(&config.task_states, &graph))
 }
 

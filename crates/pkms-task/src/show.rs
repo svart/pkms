@@ -420,7 +420,7 @@ fn resolve_outgoing_titles(output: &mut ShowOutput, graph: &Graph) {
 }
 
 pub fn execute(org_config: &OrgConfig, opts: &ShowOptions) -> Result<Vec<ShowOutput>> {
-    let graph = Graph::load(org_config)?;
+    let graph = crate::config::load_graph(org_config)?;
     let task_ids: TaskIdMap = opts
         .task_ids
         .iter()

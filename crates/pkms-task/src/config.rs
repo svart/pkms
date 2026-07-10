@@ -47,3 +47,7 @@ impl PkmsTaskConfig {
             .ok_or_else(|| anyhow::anyhow!("PKMS task inbox is not configured. Set [tasks].inbox."))
     }
 }
+
+pub(crate) fn load_graph(config: &OrgConfig) -> Result<pkms_org::Graph> {
+    pkms_org::Graph::load_from(&config.scan_config(), &config.link_resolution_context())
+}

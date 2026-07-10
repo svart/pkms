@@ -52,6 +52,10 @@ pub struct TaskCommandConfig {
 }
 
 impl TaskCommandConfig {
+    pub fn load_graph(&self) -> Result<pkms_org::Graph> {
+        pkms_org::Graph::load_from(&self.org.scan_config(), &self.org.link_resolution_context())
+    }
+
     pub fn default_columns(
         &self,
         source: ColumnSource,
@@ -225,6 +229,11 @@ impl ResolvedConfig {
             ignore_patterns: self.resolve_ignore_patterns(),
             home_dir: dirs::home_dir(),
         }
+    }
+
+    pub fn load_graph(&self) -> Result<pkms_org::Graph> {
+        let config = self.org_config();
+        pkms_org::Graph::load_from(&config.scan_config(), &config.link_resolution_context())
     }
 
     pub fn note_creation_config(&self) -> pkms_db::NoteCreationConfig {

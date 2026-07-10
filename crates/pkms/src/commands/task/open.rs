@@ -10,7 +10,7 @@ pub(super) fn run(
     editor_command: &str,
     line_override: Option<usize>,
 ) -> Result<()> {
-    let graph = pkms_org::Graph::load(&ctx.config().org_config())?;
+    let graph = ctx.config().load_graph()?;
     let target = EditorTarget::from_location(&graph, path, line_number, line_override);
     editor::open(editor_command, &target)
 }

@@ -7,7 +7,6 @@ use crate::task_index::{
 };
 use anyhow::Result;
 use chrono::NaiveDate;
-use pkms_org::Graph;
 use pkms_org::org_task_edit;
 use pkms_org::parser::find_daily_file_date;
 use std::collections::HashSet;
@@ -100,7 +99,7 @@ pub fn resolve_inbox_target_on(
         return resolve_daily_inbox_target(config, create_daily, today);
     }
 
-    let graph = Graph::load(&config.org)?;
+    let graph = crate::config::load_graph(&config.org)?;
     if let Some(node) = graph.find_node(target) {
         return Ok(PkmsInboxTarget::Note(node.path.clone()));
     }
@@ -120,7 +119,7 @@ pub fn resolve_inbox_target_on(
 }
 
 pub fn resolve_note_task_target(config: &PkmsTaskConfig, target: &str) -> Result<PkmsInboxTarget> {
-    let graph = Graph::load(&config.org)?;
+    let graph = crate::config::load_graph(&config.org)?;
     if let Some(node) = graph.find_node(target) {
         return Ok(PkmsInboxTarget::Note(node.path.clone()));
     }
@@ -156,7 +155,7 @@ fn resolve_daily_inbox_target(
         });
     }
 
-    let graph = Graph::load(&config.org)?;
+    let graph = crate::config::load_graph(&config.org)?;
     if let Some(result) = graph
         .files()
         .iter()
