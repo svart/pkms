@@ -12,7 +12,6 @@ ssh = ["dep:russh", "dep:russh-sftp", "dep:tokio"]
 [dependencies]
 anyhow = "1"
 chrono = { version = "0.4", default-features = false, features = ["clock", "serde", "std"] }
-dirs = "6"
 pkms-org = { path = "../pkms-org" }
 rayon = "1"
 regex = "1"

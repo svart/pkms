@@ -5,10 +5,6 @@ description = "Local web viewer for pkms notes"
 edition = "2024"
 license = "MIT"
 
-[features]
-default = ["web"]
-web = []
-
 [dependencies]
 anyhow = "1"
 katex = "0.4.6"
