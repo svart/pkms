@@ -162,7 +162,7 @@ fn neighbor_relevance(
     if target_node.uuid == neighbor_uuid {
         return 0.0;
     }
-    let neighbor = match graph.nodes.get(neighbor_uuid) {
+    let neighbor = match graph.node(neighbor_uuid) {
         Some(n) => n,
         None => return 0.0,
     };
@@ -388,11 +388,9 @@ fn score_neighborhood(
         }
     }
 
-    if let Some(incoming) = graph.backlinks.get(&other.uuid) {
-        for uuid in incoming {
-            total_neighbor_score += neighbor_relevance(uuid, graph, node, ctx);
-            neighbor_count += 1;
-        }
+    for uuid in graph.backlinks_to(other.uuid.as_str()) {
+        total_neighbor_score += neighbor_relevance(uuid, graph, node, ctx);
+        neighbor_count += 1;
     }
 
     if neighbor_count == 0 {
@@ -421,7 +419,7 @@ fn compute_scores<'a>(
 ) -> Vec<ScoredItem<'a>> {
     let mut scored: Vec<ScoredItem<'a>> = Vec::new();
 
-    for other in graph.nodes.values() {
+    for other in graph.nodes() {
         if other.uuid == node.uuid {
             continue;
         }

@@ -30,17 +30,13 @@ pub struct ExtractOutput {
 pub fn execute(config: &OrgConfig, opts: &ExtractOptions) -> Result<ExtractOutput> {
     let graph = Graph::load(config)?;
     let location = resolve_heading_location(&graph, &opts.heading_uuid)?;
-    let source_node = graph.nodes.get(&location.primary_uuid).ok_or_else(|| {
+    let source_node = graph.node(location.primary_uuid.as_str()).ok_or_else(|| {
         anyhow::anyhow!("Source note not found for heading {}", opts.heading_uuid)
     })?;
     let source_path = source_node.path.clone();
-    let source_result = graph
-        .results
-        .iter()
-        .find(|result| result.path == source_path)
-        .ok_or_else(|| {
-            anyhow::anyhow!("Parsed source note not found: {}", source_path.display())
-        })?;
+    let source_result = graph.file(&source_path).ok_or_else(|| {
+        anyhow::anyhow!("Parsed source note not found: {}", source_path.display())
+    })?;
     let heading = source_result
         .parsed
         .headings
@@ -156,7 +152,7 @@ fn resolve_heading_location(graph: &Graph, heading_uuid: &str) -> Result<Heading
         return Ok(location);
     }
 
-    if graph.nodes.contains_key(heading_uuid) {
+    if graph.contains_node(heading_uuid) {
         anyhow::bail!(
             "Cannot extract note-level UUID {heading_uuid}; provide a heading-level UUID"
         );

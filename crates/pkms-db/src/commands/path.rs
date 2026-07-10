@@ -41,7 +41,7 @@ fn build_output(graph: &Graph, opts: &PathOptions) -> Result<PathOutput> {
                     let nodes: Vec<PathNode> = uuids
                         .iter()
                         .filter_map(|uuid| {
-                            graph.nodes.get(uuid.as_str()).map(|n| PathNode {
+                            graph.node(uuid.as_str()).map(|n| PathNode {
                                 uuid: n.uuid.to_string(),
                                 title: n.title.clone(),
                             })

@@ -149,11 +149,10 @@ fn validate_node(
         .map(|issue| issue.target_path.to_string())
         .collect();
 
-    let incoming = graph.backlinks.get(&node.uuid).cloned().unwrap_or_default();
-
+    let incoming = graph.backlinks_to(node.uuid.as_str());
     let backlink_entries: Vec<BacklinkEntry> = incoming
         .iter()
-        .filter_map(|uuid| graph.nodes.get(uuid).map(BacklinkEntry::from))
+        .filter_map(|uuid| graph.node(uuid.as_str()).map(BacklinkEntry::from))
         .collect();
 
     if !broken_internal.is_empty() {
