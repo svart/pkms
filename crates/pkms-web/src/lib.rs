@@ -1,5 +1,4 @@
 use anyhow::{Context, Result};
-use pkms_org::graph::tasks::TaskStateConfig;
 use pkms_org::{Graph, OrgConfig};
 use serde::Serialize;
 use std::net::TcpListener;
@@ -38,7 +37,8 @@ pub struct ServeOptions {
 #[derive(Debug, Clone)]
 pub struct WebConfig {
     pub org: OrgConfig,
-    pub task_states: TaskStateConfig,
+    pub open_todo_states: Vec<String>,
+    pub closed_todo_states: Vec<String>,
 }
 
 impl WebConfig {
@@ -47,11 +47,11 @@ impl WebConfig {
     }
 
     pub fn open_todo_states(&self) -> &[String] {
-        &self.task_states.open_states
+        &self.open_todo_states
     }
 
     pub fn closed_todo_states(&self) -> &[String] {
-        &self.task_states.closed_states
+        &self.closed_todo_states
     }
 }
 
@@ -210,11 +210,8 @@ mod tests {
                 db_root,
                 home_dir: None,
             },
-            task_states: TaskStateConfig {
-                valid_states: vec!["TODO".to_string(), "DONE".to_string()],
-                open_states: vec!["TODO".to_string()],
-                closed_states: vec!["DONE".to_string()],
-            },
+            open_todo_states: vec!["TODO".to_string()],
+            closed_todo_states: vec!["DONE".to_string()],
         }
     }
 

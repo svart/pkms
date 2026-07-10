@@ -7,12 +7,13 @@ use crate::task_index::{
 };
 use anyhow::Result;
 use chrono::NaiveDate;
-use pkms_org::graph::tasks::TaskStateConfig;
 use pkms_org::org_task_edit;
 use pkms_org::parser::find_daily_file_date;
 use pkms_org::{Graph, Workspace};
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
+
+use crate::config::TaskStateConfig;
 
 #[derive(Debug, Clone)]
 pub enum PkmsInboxTarget {

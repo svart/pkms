@@ -2,7 +2,6 @@ use super::*;
 use anyhow::Result;
 use pkms_org::OrgConfig;
 use pkms_org::graph::Graph;
-use pkms_org::graph::tasks::TaskStateConfig;
 use std::fs;
 use std::path::PathBuf;
 
@@ -15,11 +14,8 @@ fn web_config(db_root: PathBuf) -> WebConfig {
             db_root,
             home_dir: None,
         },
-        task_states: TaskStateConfig {
-            valid_states: vec!["TODO".to_string(), "DONE".to_string()],
-            open_states: vec!["TODO".to_string()],
-            closed_states: vec!["DONE".to_string()],
-        },
+        open_todo_states: vec!["TODO".to_string()],
+        closed_todo_states: vec!["DONE".to_string()],
     }
 }
 

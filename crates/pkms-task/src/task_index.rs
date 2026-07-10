@@ -1,4 +1,5 @@
 use crate::clock::TaskClock;
+use crate::config::TaskStateConfig;
 use crate::filter::{TextFilter, matches_tag_filters, matches_text_filters, matches_type_filters};
 use crate::model::{TaskDateValue, TaskPriority, TaskState};
 use crate::projection;
@@ -7,7 +8,6 @@ use chrono::{NaiveDateTime, NaiveTime};
 use pkms_org::Graph;
 use pkms_org::corpus::Corpus;
 use pkms_org::domain::NoteId;
-use pkms_org::graph::tasks::TaskStateConfig;
 use pkms_org::parser::find_daily_file_date;
 use std::cmp::Ordering;
 use std::path::Path;

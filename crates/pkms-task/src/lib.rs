@@ -28,7 +28,7 @@ pub use common::{
     parse_task_group_field, parse_task_sort_fields, retain_agenda_window_task_items_on,
     retain_upcoming_task_items_on, sort_task_items,
 };
-pub use config::{PkmsTaskConfig, TodoistProviderConfig};
+pub use config::{PkmsTaskConfig, TaskStateConfig, TodoistProviderConfig};
 pub use execution::{
     AgendaExecution, AgendaRequest, TaskListExecution, TaskListItems, TaskListRequest,
     collect_shortcut_items_on, execute_task_agenda, execute_task_list,

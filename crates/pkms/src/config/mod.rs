@@ -47,7 +47,7 @@ pub type WebCommandConfig = pkms_web::WebConfig;
 #[derive(Debug, Clone)]
 pub struct TaskCommandConfig {
     pub org: pkms_org::OrgConfig,
-    pub task_states: pkms_org::graph::tasks::TaskStateConfig,
+    pub task_states: pkms_task::TaskStateConfig,
     pub columns: Option<ColumnsConfig>,
 }
 
@@ -233,7 +233,8 @@ impl ResolvedConfig {
     pub fn web_command_config(&self) -> WebCommandConfig {
         pkms_web::WebConfig {
             org: self.org_config(),
-            task_states: self.task_state_config(),
+            open_todo_states: self.open_todo_states(),
+            closed_todo_states: self.closed_todo_states(),
         }
     }
 
@@ -274,8 +275,8 @@ impl ResolvedConfig {
             .filter(|model| !model.is_empty())
     }
 
-    pub fn task_state_config(&self) -> pkms_org::graph::tasks::TaskStateConfig {
-        pkms_org::graph::tasks::TaskStateConfig {
+    pub fn task_state_config(&self) -> pkms_task::TaskStateConfig {
+        pkms_task::TaskStateConfig {
             valid_states: self.todo_states(),
             open_states: self.open_todo_states(),
             closed_states: self.closed_todo_states(),
