@@ -321,7 +321,8 @@ heading of an existing PKMS task subtree.
 
 Task schedule and deadline dates accept unambiguous prefixes of `today`,
 `tomorrow`, or weekday names; weekdays resolve to the next upcoming matching
-weekday.
+weekday. They also accept `YYYY-MM-DD`, `YYYY-MM-DD HH:MM`, or `HH:MM`; a time
+without a date uses today.
 
 Todoist task reads require a build with `--features todoist` and a token from
 `TODOIST_API_TOKEN` or `[todoist].token` in config. Prefer the environment

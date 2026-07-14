@@ -1,5 +1,5 @@
 use anyhow::{Result, bail};
-use chrono::{Datelike, NaiveDate, NaiveDateTime, Weekday};
+use chrono::{Datelike, NaiveDate, NaiveDateTime, NaiveTime, Weekday};
 
 use crate::clock::TaskClock;
 use crate::id::TaskId;
@@ -354,8 +354,13 @@ pub fn parse_task_date_arg_on(name: &str, value: &str, today: NaiveDate) -> Resu
             datetime.format("%Y-%m-%d %H:%M").to_string(),
         ));
     }
+    if let Ok(time) = NaiveTime::parse_from_str(value, "%H:%M") {
+        return Ok(TaskDateValue::new(
+            today.and_time(time).format("%Y-%m-%d %H:%M").to_string(),
+        ));
+    }
     Err(anyhow::anyhow!(
-        "Invalid {name} date '{value}'. Use an unambiguous prefix of today, tomorrow, or a weekday; YYYY-MM-DD; or YYYY-MM-DD HH:MM."
+        "Invalid {name} date '{value}'. Use an unambiguous prefix of today, tomorrow, or a weekday; YYYY-MM-DD; YYYY-MM-DD HH:MM; or HH:MM."
     ))
 }
 
@@ -642,6 +647,22 @@ mod tests {
             parse_task_date_arg_on("due", "2026-05-27 09:30", today).unwrap(),
             "2026-05-27 09:30"
         );
+    }
+
+    #[test]
+    fn parses_add_time_without_date_as_today() {
+        let today = NaiveDate::from_ymd_opt(2026, 5, 27).unwrap();
+        let spec = TaskModifierSpec::parse_on(&tokens(&["sch:09:30"]), today).unwrap();
+
+        assert_eq!(date_value(spec.due.as_ref()), Some("2026-05-27 09:30"));
+    }
+
+    #[test]
+    fn parses_mod_time_without_date_as_today() {
+        let today = NaiveDate::from_ymd_opt(2026, 5, 27).unwrap();
+        let spec = TaskModifierSpec::parse_mod_on(&tokens(&["dl:13:00"]), today).unwrap();
+
+        assert_eq!(date_value(spec.deadline.as_ref()), Some("2026-05-27 13:00"));
     }
 
     #[test]

@@ -8,7 +8,7 @@ const TASK_SIMPLE_FILTER_HELP: &str = "Filters:\n  source:pkms|todoist|all, src:
 
 const TASK_SHARED_MODIFIER_HELP: &str = "  state:<state>             PKMS TODO state from configured agenda states\n  tag:<label>, tags:<a,b>   Labels/tags; repeat or comma-separate\n  schedule:<date>, sch:<date>, due:<date>\n  deadline:<date>, dead:<date>, dl:<date>\n  project:<name-or-id>, proj:<name-or-id>, prio:A|B|C, desc:<text>, source:pkms|todoist\n";
 
-const TASK_DATE_MODIFIER_HELP: &str = "Date shortcuts for schedule/deadline: unambiguous prefixes of today, tomorrow, or weekdays; YYYY-MM-DD; or YYYY-MM-DD HH:MM.";
+const TASK_DATE_MODIFIER_HELP: &str = "Date shortcuts for schedule/deadline: unambiguous prefixes of today, tomorrow, or weekdays; YYYY-MM-DD; YYYY-MM-DD HH:MM; or HH:MM (today).";
 
 #[derive(Debug, Args)]
 pub struct TaskTableArgs {

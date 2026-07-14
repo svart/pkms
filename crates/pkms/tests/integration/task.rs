@@ -2720,6 +2720,28 @@ fn test_task_mod_pkms_sets_deadline_date() {
 }
 
 #[test]
+fn test_task_mod_pkms_assumes_today_for_time_without_date() {
+    let db = TestDb::new()
+        .note(
+            "timed-task.org",
+            "Timed Task",
+            "27272727-2727-4727-8727-272727272727",
+        )
+        .task("timed-task.org", "TODO", "Task to modify");
+    let today = org_date(0);
+    let (v, status) = db.run_json(&["task", "p1", "mod", "sch:09:30"]);
+
+    assert!(status.success());
+    assert_eq!(v["item"]["scheduled"]["date"], today);
+    assert!(
+        v["item"]["scheduled"]["raw"]
+            .as_str()
+            .unwrap()
+            .contains("09:30")
+    );
+}
+
+#[test]
 fn test_task_mod_pkms_accepts_add_style_metadata_modifiers() {
     let (_dir, root) = setup_db();
     let (v, status) = run_json(&[
@@ -4085,6 +4107,44 @@ fn test_task_add_pkms_accepts_scheduled_and_deadline_times() {
     assert!(content.contains("* TODO [#A] Test with deadline"));
     assert!(content.contains("SCHEDULED: <2025-05-26 Mon 09:30>"));
     assert!(content.contains("DEADLINE: <2025-05-26 Mon 13:00>"));
+}
+
+#[test]
+fn test_task_add_pkms_assumes_today_for_times_without_dates() {
+    let db = TestDb::new().note("inbox.org", "Inbox", "26262626-2626-4626-8626-262626262626");
+    let today = org_date(0);
+    let config = format!("{TEST_CONFIG}\n[tasks]\ninbox = \"Inbox\"\n");
+    let (stdout, stderr, status) = run_with_config(
+        &[
+            "--db",
+            db.root().to_str().unwrap(),
+            "--output-format",
+            "json",
+            "task",
+            "add",
+            "title:Timed task",
+            "sch:09:30",
+            "dl:13:00",
+        ],
+        &config,
+    );
+
+    assert!(status.success(), "task add failed:\n{stdout}\n{stderr}");
+    let v: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    assert_eq!(v["item"]["scheduled"]["date"], today);
+    assert_eq!(v["item"]["deadline"]["date"], today);
+    assert!(
+        v["item"]["scheduled"]["raw"]
+            .as_str()
+            .unwrap()
+            .contains("09:30")
+    );
+    assert!(
+        v["item"]["deadline"]["raw"]
+            .as_str()
+            .unwrap()
+            .contains("13:00")
+    );
 }
 
 #[test]

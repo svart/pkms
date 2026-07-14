@@ -331,11 +331,12 @@ Add modifiers mirror task filters where practical:
 
 `schedule:`/`deadline:` values accept unambiguous case-insensitive prefixes of
 `today`, `tomorrow`, or weekday names, plus `YYYY-MM-DD` or
-`YYYY-MM-DD HH:MM`. Weekday names resolve to the next upcoming matching weekday,
-so `sch:fri` on a Friday means next Friday. Ambiguous prefixes fail with an
-error. Modifier keys also accept unambiguous prefixes, so `proj:` and `pro:`
-resolve to `project:` while `pr:` fails as ambiguous. Priorities use the
-source-neutral `A`, `B`, or `C` convention.
+`YYYY-MM-DD HH:MM`. A time-only `HH:MM` value uses today. Weekday names resolve
+to the next upcoming matching weekday, so `sch:fri` on a Friday means next
+Friday. Ambiguous prefixes fail with an error. Modifier keys also accept
+unambiguous prefixes, so `proj:` and `pro:` resolve to `project:` while `pr:`
+fails as ambiguous. Priorities use the source-neutral `A`, `B`, or `C`
+convention.
 Label modifiers can be repeated or comma-separated. `project:` accepts either a
 Todoist project id or an exact project name. If a name matches multiple projects
 case-insensitively, `pkms` fails before creating the task and asks for the
