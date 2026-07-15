@@ -18,6 +18,9 @@ pkms task agenda today
 pkms task agenda week
 pkms task agenda overdue
 pkms task agenda upcoming
+pkms task calendar
+pkms task calendar --months 3
+pkms task calendar -m -1
 pkms task inbox
 pkms task list projects
 pkms task list tags
@@ -34,6 +37,15 @@ pkms task p<ID> mod dl:2026-05-30
 pkms task p<ID> mod dep:<parent-id>
 pkms task p<ID> postpone --to tomorrow
 ```
+
+`task calendar` is a compact text-only view of open PKMS task dates. It shows
+the current month by default, or consecutive months from the current month with
+positive `-m N` / `--months N`. A negative value includes that many previous
+months plus the current month, so `-m -1` shows the previous and current month.
+Multiple months are printed horizontally and wrap onto additional rows when the
+terminal is too narrow. On ANSI-capable terminals, dates with scheduled tasks
+are underlined and dates with deadlines are red. The current day is blue unless
+it has a deadline. A compact styled legend precedes the calendar.
 
 With a build that includes the `todoist` feature, task views can include Todoist
 tasks when filters select `source:todoist` or `source:all`. Todoist creation uses

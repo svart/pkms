@@ -65,6 +65,22 @@ fn test_task_agenda_help_lists_shortcut_subcommands() {
 }
 
 #[test]
+fn test_task_calendar_shows_current_month_with_weekdays() {
+    let db = TestDb::clean();
+    let today = chrono::Local::now().date_naive();
+    let title = today.format("%B %Y").to_string();
+
+    let (stdout, stderr, status) = db.run(&["task", "calendar"]);
+
+    assert!(
+        status.success(),
+        "task calendar failed:\n{stdout}\n{stderr}"
+    );
+    assert!(stdout.contains(&title), "stdout:\n{stdout}");
+    assert!(stdout.contains("Mo Tu We Th Fr Sa Su"), "stdout:\n{stdout}");
+}
+
+#[test]
 fn test_task_list_help_shows_filters() {
     let (stdout, stderr, status) = run(&["task", "list", "--help"]);
     assert!(

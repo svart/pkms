@@ -9,12 +9,24 @@ pkms task agenda today
 pkms task agenda week
 pkms task agenda overdue
 pkms task agenda upcoming
+pkms task calendar
+pkms task calendar --months 3
+pkms task calendar -m -1
 pkms task p5 show
 pkms task p5 open
 pkms task p5 state WAITING
 pkms task p5 done
 pkms task p5 done --dry-run
 ```
+
+`task calendar` is a text-only Monday-first view of open PKMS task dates. It
+shows the current month by default. Positive `-m N` / `--months N` values start
+with the current month; negative values include that many previous months plus
+the current month. Months print horizontally and wrap to additional rows when
+necessary. On ANSI-capable terminals, scheduled dates are underlined, deadline
+dates are red, and the current day is blue unless it has a deadline. It does not
+accept task filters or provider selection. A compact styled legend precedes the
+calendar.
 
 PKMS task IDs can be written as bare canonical IDs, `p<ID>`, or `pkms:<ID>`.
 Provider-backed tasks use stable `<source>:<remote-id>` IDs, such as

@@ -1,6 +1,6 @@
 #[cfg(feature = "todoist")]
 use crate::cli::OutputFormat;
-use crate::cli::{TaskAgendaArgs, TaskCommand, TaskListArgs, TaskShortcutArgs};
+use crate::cli::{TaskAgendaArgs, TaskCalendarArgs, TaskCommand, TaskListArgs, TaskShortcutArgs};
 use crate::command_context::CommandContext;
 #[cfg(feature = "todoist")]
 use crate::commands::task_common::RowSeparatorMode;
@@ -17,6 +17,7 @@ use std::collections::HashMap;
 use std::io::{self, Write};
 use std::process::ExitCode;
 
+mod calendar;
 mod id_command;
 mod mutations;
 mod open;
@@ -46,6 +47,7 @@ pub fn run(ctx: &CommandContext<'_>, command: &TaskCommand) -> Result<ExitCode> 
     let exit_code = match command {
         TaskCommand::List(args) => success(run_list(runtime, args)),
         TaskCommand::Agenda(args) => success(run_agenda(runtime, args)),
+        TaskCommand::Calendar(args) => success(run_calendar(runtime, args)),
         TaskCommand::Inbox(args) => success(run_shortcut(runtime, args, ShortcutKind::Inbox)),
         TaskCommand::Show(args) => success(run_show(ctx, &args.id)),
         TaskCommand::Open(args) => success(run_open(ctx, &args.id, &args.editor, args.line)),
@@ -59,6 +61,31 @@ pub fn run(ctx: &CommandContext<'_>, command: &TaskCommand) -> Result<ExitCode> 
     }?;
     maybe_warn_task_ids_changed(&task_config, task_id_snapshot);
     Ok(exit_code)
+}
+
+fn run_calendar(runtime: TaskRuntime<'_>, args: &TaskCalendarArgs) -> Result<()> {
+    if runtime.output.is_structured() {
+        bail!("task calendar supports text output only");
+    }
+    let task_config = runtime.config.pkms_task_config();
+    let (_, items) = pkms_task::collect_shortcut_items_on(
+        runtime.config,
+        &task_config,
+        &[],
+        pkms_task::TaskListView::Agenda,
+        runtime.clock,
+    )?;
+    print!(
+        "{}",
+        calendar::render(
+            &items,
+            runtime.clock.today,
+            args.months,
+            terminal_markup::terminal_markup_enabled(),
+            crate::output::table::terminal_width(),
+        )?
+    );
+    Ok(())
 }
 
 fn success(result: Result<()>) -> Result<ExitCode> {
@@ -411,6 +438,7 @@ fn command_may_change_pkms_task_ids(command: &TaskCommand) -> bool {
         TaskCommand::Target(args) => target_may_write_pkms_task(args),
         TaskCommand::List(_)
         | TaskCommand::Agenda(_)
+        | TaskCommand::Calendar(_)
         | TaskCommand::Inbox(_)
         | TaskCommand::Show(_)
         | TaskCommand::Open(_) => false,

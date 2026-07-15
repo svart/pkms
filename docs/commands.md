@@ -269,6 +269,9 @@ pkms task agenda today
 pkms task agenda overdue
 pkms task agenda upcoming
 pkms task agenda upcoming --days 7
+pkms task calendar
+pkms task calendar --months 3
+pkms task calendar -m -1
 pkms task list --group state
 pkms task list --from-stdin
 pkms task list state:TODO tags:work,!blocked

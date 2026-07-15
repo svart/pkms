@@ -653,6 +653,38 @@ mod tests {
         assert_eq!(args.to, "Note C");
     }
 
+    #[test]
+    fn task_calendar_parses_month_count() {
+        let cli = parse(&["pkms", "task", "calendar"]);
+        let Command::Task(TaskArgs {
+            command: TaskCommand::Calendar(args),
+        }) = cli.command
+        else {
+            panic!("expected task calendar command");
+        };
+        assert_eq!(args.months, 1);
+
+        let cli = parse(&["pkms", "task", "calendar", "-m", "3"]);
+        let Command::Task(TaskArgs {
+            command: TaskCommand::Calendar(args),
+        }) = cli.command
+        else {
+            panic!("expected task calendar command");
+        };
+        assert_eq!(args.months, 3);
+
+        let cli = parse(&["pkms", "task", "calendar", "-m", "-1"]);
+        let Command::Task(TaskArgs {
+            command: TaskCommand::Calendar(args),
+        }) = cli.command
+        else {
+            panic!("expected task calendar command");
+        };
+        assert_eq!(args.months, -1);
+
+        assert!(Cli::try_parse_from(["pkms", "task", "calendar", "--months", "0"]).is_err());
+    }
+
     #[cfg(feature = "rag")]
     #[test]
     fn rag_index_parses_force_rebuild_and_rag_db() {

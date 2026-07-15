@@ -1,5 +1,15 @@
 use clap::{Args, Subcommand};
 
+fn parse_nonzero_i32(value: &str) -> Result<i32, String> {
+    let value = value
+        .parse::<i32>()
+        .map_err(|_| format!("expected a non-zero integer, got '{value}'"))?;
+    if value == 0 {
+        return Err("value must not be zero".to_string());
+    }
+    Ok(value)
+}
+
 const TASK_ID_ACTION_HELP: &str = "ID-first actions:\n  pkms task <ID> show\n  pkms task <ID> open [--editor <COMMAND>] [--line <LINE>]\n  pkms task <ID> state <STATE> [--dry-run]\n  pkms task <ID> done [--dry-run]\n  pkms task <ID> postpone --to <DATE>\n  pkms task <ID> mod <MODIFIER>...\n  pkms task <ID> mod dep:<PARENT-ID>";
 
 const TASK_FILTER_HELP_WITH_DATES: &str = "Filters:\n  source:pkms|todoist|all, src:pkms|todoist|all\n  state:TODO|opened|closed, tags:tag,!other, type:SCHED,DEADL, prio:A[,B,C], project:Name\n  date:today|week|overdue|upcoming|YYYY-MM-DD|tom|fri[,value...], after:YYYY-MM-DD[ HH:MM]|tom|fri, before:YYYY-MM-DD[ HH:MM]|tom|fri\n  todoist.filter:<query> (requires source:todoist or source:all)";
@@ -45,6 +55,8 @@ pub enum TaskCommand {
     List(TaskListArgs),
     #[command(about = "Show scheduled and deadline tasks")]
     Agenda(TaskAgendaArgs),
+    #[command(about = "Show scheduled tasks and deadlines on a calendar")]
+    Calendar(TaskCalendarArgs),
     #[command(about = "Show inbox tasks")]
     Inbox(TaskShortcutArgs),
     #[command(about = "Show detailed task information", hide = true)]
@@ -61,6 +73,19 @@ pub enum TaskCommand {
     Postpone(TaskPostponeArgs),
     #[command(external_subcommand)]
     Target(Vec<String>),
+}
+
+#[derive(Debug, Args)]
+pub struct TaskCalendarArgs {
+    #[arg(
+        short = 'm',
+        long,
+        default_value_t = 1,
+        allow_hyphen_values = true,
+        value_parser = parse_nonzero_i32,
+        help = "Months to show: positive starts now; negative includes that many previous months"
+    )]
+    pub months: i32,
 }
 
 #[derive(Debug, Args)]

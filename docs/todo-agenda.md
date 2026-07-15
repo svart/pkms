@@ -98,6 +98,26 @@ The `today`, `week`, `overdue`, and `upcoming` subcommands are aliases for
 `task agenda upcoming --days N` for a bounded upcoming window; this is
 equivalent to `task agenda --days N date:upcoming`.
 
+## Calendar
+
+Show open PKMS task dates in a Monday-first monthly calendar:
+
+```bash
+pkms task calendar
+pkms task calendar -m 3
+pkms task calendar --months 3
+pkms task calendar -m -1
+```
+
+The current month is shown by default. Positive month counts start with the
+current month; negative counts include that many previous months plus the
+current month. Multiple months are printed horizontally and wrap onto
+additional rows when the terminal is too narrow. On ANSI-capable terminals,
+scheduled dates are underlined, deadline dates are red, and dates with both use
+both styles. The calendar is text-only and does not accept task filters. The
+current day is blue unless it has a deadline. A compact legend for deadlines,
+schedules, and today is shown above the calendar.
+
 ## Filters
 
 Comma-separated filters use AND logic. Prefix a value with `!` for negation.
