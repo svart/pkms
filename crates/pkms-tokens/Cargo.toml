@@ -6,4 +6,4 @@ edition = "2024"
 license = "MIT"
 
 [dependencies]
-tiktoken-rs = "0.11"
+tiktoken-rs = "0.12"
