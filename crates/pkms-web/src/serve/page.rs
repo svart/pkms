@@ -1,6 +1,6 @@
 use super::inline::{escape_html, percent_encode, render_formatted_text};
 use super::org_html::{
-    heading_title_with_unconfigured_todo, is_configured_todo_state, render_org_body,
+    heading_title_with_visible_prefixes, is_configured_todo_state, render_org_body,
 };
 use super::{page_css, page_js};
 use crate::WebConfig;
@@ -116,7 +116,7 @@ fn collect_outline_headings(config: &WebConfig, content: &str) -> Vec<OutlineHea
             let todo = raw_todo
                 .filter(|state| is_configured_todo_state(config, state))
                 .map(std::string::ToString::to_string);
-            let title = heading_title_with_unconfigured_todo(
+            let title = heading_title_with_visible_prefixes(
                 raw_todo.filter(|_| todo.is_none()),
                 cap.get(3).map(|m| m.as_str()),
                 cap.get(4).map_or("", |m| m.as_str()),

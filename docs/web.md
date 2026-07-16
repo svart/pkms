@@ -40,8 +40,8 @@ The process stays in the foreground until interrupted.
 - Internal `id:` links as viewer navigation.
 - Backlinks and table of contents panels.
 - Hover previews for internal note links.
-- Org tables, lists, tags, planning badges, inline markup, source blocks,
-  syntax highlighting, and static KaTeX formula HTML.
+- Org tables, lists, tags, TODO states, priorities, planning badges, inline
+  markup, source blocks, syntax highlighting, and static KaTeX formula HTML.
 - Free-standing `http://` and `https://` URLs after org links are resolved.
 - An "Open in Emacs" action that uses the same default editor path as
   `task open`.

@@ -305,7 +305,7 @@ fn render_heading_line(
     let todo = raw_todo
         .filter(|state| is_configured_todo_state(context.config, state))
         .unwrap_or_default();
-    let title = heading_title_with_unconfigured_todo(
+    let title = heading_title_with_visible_prefixes(
         raw_todo.filter(|_| todo.is_empty()),
         cap.get(3).map(|m| m.as_str()),
         cap.get(4).map_or("", |m| m.as_str()),
@@ -354,20 +354,22 @@ pub(super) fn is_configured_todo_state(config: &WebConfig, state: &str) -> bool 
             || is_closed_todo_state(config, state))
 }
 
-pub(super) fn heading_title_with_unconfigured_todo(
-    raw_todo: Option<&str>,
+pub(super) fn heading_title_with_visible_prefixes(
+    unconfigured_todo: Option<&str>,
     priority: Option<&str>,
     title: &str,
 ) -> String {
-    let Some(raw_todo) = raw_todo else {
-        return title.to_string();
-    };
-    let mut restored = raw_todo.to_string();
+    let mut restored = unconfigured_todo.unwrap_or_default().to_string();
     if let Some(priority) = priority {
-        let _ = write!(restored, " [#{priority}]");
+        if !restored.is_empty() {
+            restored.push(' ');
+        }
+        let _ = write!(restored, "[#{priority}]");
     }
     if !title.is_empty() {
-        restored.push(' ');
+        if !restored.is_empty() {
+            restored.push(' ');
+        }
         restored.push_str(title);
     }
     restored

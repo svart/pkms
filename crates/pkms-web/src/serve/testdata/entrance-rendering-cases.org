@@ -1,0 +1,146 @@
+:PROPERTIES:
+:ID:       aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa
+:END:
+#+title: Entrance rendering cases
+#+filetags: :agenda:projects:
+
+Here starts the formula: $S=\pi{r}^2$.
+
+Link to a file with [[file:~/work/project/source.rs::40][line number]].
+Link to a file with [[~/work/project/source.rs::40][line number]] but without ~file:~.
+[[file:~/work/project/source.rs::pub const VALUE: &str =][search link]]
+
+Link to [[id:bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb][another note]].
+Link to [[id:dddddddd-dddd-4ddd-8ddd-dddddddddddd][a heading in another note]].
+
+#+begin_src rust
+fn main() -> Result<()> {
+    println!("hello");
+}
+#+end_src
+
+#+begin_src c++
+class ThisIsClass {
+public:
+    int SomeMethod(int x);
+};
+#+end_src
+
+| head 1 | head 2 | head 3                                        |
+|--------+--------+-----------------------------------------------|
+| l1     | l2     | [[id:bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb][link]] |
+
+#+caption: ascii caption
+#+begin_export ascii
+ascii export block
+#+end_export
+
+#+caption: center caption
+#+begin_center
+center /block/
+#+end_center
+
+#+begin_comment
+comment block
+#+end_comment
+
+#+begin_example
+example <block>
+#+end_example
+
+#+caption: generic export caption
+#+begin_export
+generic export block
+#+end_export
+
+#+begin_export html
+<strong>html export is escaped</strong>
+#+end_export
+
+#+caption: latex caption
+#+begin_export latex
+\frac{a}{b}
+#+end_export
+
+#+begin_quote
+quote block
+another line in it
+     -- author
+#+end_quote
+
+#+caption: source caption
+#+begin_src
+untyped source block
+#+end_src
+
+#+begin_verse
+first verse line
+second verse line
+#+end_verse
+
+The ~starting~ point to =think= with @OneName and @another_name.
+
+Leveled lists:
+- first level
+  - second level
+    - third level
+      1. one
+      2. two
+- first level with numbers
+  1. one
+  2. two
+
+Wrapped and alphabetic lists:
+- First wrapped line
+  continued first line
+  a) Alpha child first line
+     continued alpha child
+  b) Beta child
+- Second item
+  1. Number child first line
+     continued number child
+  2. Number child second line
+
+Many-line list items:
+- Long unordered item starts here
+  and continues on its second source line
+  then on its third source line
+  and finally on its fourth source line
+- Following unordered sibling
+1. Long numbered item starts here
+   and continues on its second source line
+   then on its third source line
+   and finally on its fourth source line
+2. Following numbered sibling
+
+* A lot of things
+
+** TODO Open task :test:another:
+SCHEDULED: <2026-05-27 Wed>
+** DONE [#B] Closed task :another:
+SCHEDULED: <2026-06-26 Fri>
+** WAITING [#B] Waiting task :test:
+DEADLINE: <2026-05-28 Thu> SCHEDULED: <2026-05-27 Wed>
+** CANCELED [#C] Canceled task
+** PROBLEM Problem task
+
+Directory with [[file:~/work/sources/project/][project directory]].
+
+#+begin_src sh
+CC=clang ./configure --enable-tests
+./build
+#+end_src
+
+File to analyze: [[header.h]].
+
+* Browser
+
+- [[https://example.org/docs][Example documentation]]
+- Plain URL: https://example.com/path?x=1.
+
+* Checkboxes
+
+- [X] Complete
+- [-] In progress
+- [ ] Open
+  - [ ] Nested open
