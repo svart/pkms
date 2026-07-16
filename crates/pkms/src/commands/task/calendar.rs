@@ -18,8 +18,6 @@ pub(super) fn render(
     ansi: bool,
     terminal_width: Option<usize>,
 ) -> Result<String> {
-    let scheduled = task_dates(items, |item| item.scheduled.as_ref());
-    let deadlines = task_dates(items, |item| item.deadline.as_ref());
     let current_month = today
         .with_day(1)
         .context("current month has no first day")?;
@@ -32,6 +30,21 @@ pub(super) fn render(
     } else {
         (current_month, months as usize)
     };
+    let visible_end = first
+        .checked_add_months(Months::new(
+            month_count.try_into().context("month count is too large")?,
+        ))
+        .and_then(|date| date.pred_opt())
+        .context("calendar month is outside the supported date range")?;
+    let mut scheduled = task_dates(items, first, visible_end, |item| item.scheduled.as_ref());
+    scheduled.extend(
+        items
+            .iter()
+            .filter_map(TaskItem::implicit_daily_file_date)
+            .filter_map(|date| NaiveDate::parse_from_str(date, "%Y-%m-%d").ok())
+            .filter(|date| *date >= first && *date <= visible_end),
+    );
+    let deadlines = task_dates(items, first, visible_end, |item| item.deadline.as_ref());
     let mut rendered_months = Vec::with_capacity(month_count);
 
     for offset in 0..month_count {
@@ -109,14 +122,42 @@ fn visible_width(line: &str) -> usize {
 
 fn task_dates<'a>(
     items: &'a [TaskItem],
+    visible_start: NaiveDate,
+    visible_end: NaiveDate,
     select: impl Fn(&'a TaskItem) -> Option<&'a pkms_task::TaskDate>,
 ) -> HashSet<NaiveDate> {
-    items
-        .iter()
-        .filter_map(select)
-        .filter_map(|task_date| task_date.date.as_ref())
-        .filter_map(pkms_task::TaskDateValue::parse_naive_date)
-        .collect()
+    let mut dates = HashSet::new();
+    for task_date in items.iter().filter_map(select) {
+        if let Some(parsed) = pkms_org::org_date::parse_org_date(&task_date.raw) {
+            let range_end = parsed
+                .base_date_end
+                .unwrap_or(parsed.base_date)
+                .max(parsed.base_date);
+            let mut date = parsed.base_date.max(visible_start);
+            let end = range_end.min(visible_end);
+            if date > end {
+                continue;
+            }
+            loop {
+                dates.insert(date);
+                if date >= end {
+                    break;
+                }
+                let Some(next) = date.succ_opt() else {
+                    break;
+                };
+                date = next;
+            }
+        } else if let Some(date) = task_date
+            .date
+            .as_ref()
+            .and_then(pkms_task::TaskDateValue::parse_naive_date)
+            .filter(|date| *date >= visible_start && *date <= visible_end)
+        {
+            dates.insert(date);
+        }
+    }
+    dates
 }
 
 fn render_month(
@@ -366,5 +407,55 @@ mod tests {
 
         assert!(output.contains("\x1b[4m 8\x1b[0m"));
         assert!(output.contains("\x1b[31m10\x1b[0m"));
+    }
+
+    #[test]
+    fn styles_every_day_in_scheduled_and_deadline_ranges() {
+        let mut item = task(Some("2026-06-20"), Some("2026-06-24"));
+        item.scheduled.as_mut().unwrap().raw = "<2026-06-20 Sat>--<2026-06-22 Mon>".to_string();
+        item.deadline.as_mut().unwrap().raw = "<2026-06-24 Wed>--<2026-06-26 Fri>".to_string();
+
+        let output = render(
+            &[item],
+            NaiveDate::from_ymd_opt(2026, 7, 17).unwrap(),
+            -1,
+            true,
+            None,
+        )
+        .unwrap();
+
+        for day in [20, 21, 22] {
+            assert!(
+                output.contains(&format!("\x1b[4m{day}\x1b[0m")),
+                "scheduled day {day} was not underlined:\n{output}"
+            );
+        }
+        for day in [24, 25, 26] {
+            assert!(
+                output.contains(&format!("\x1b[31m{day}\x1b[0m")),
+                "deadline day {day} was not colored:\n{output}"
+            );
+        }
+    }
+
+    #[test]
+    fn underlines_unscheduled_task_on_its_daily_file_date() {
+        let mut item = task(None, None);
+        item.is_daily_file = true;
+        item.daily_file_date = Some(TaskDateValue::new("2026-06-22"));
+
+        let output = render(
+            &[item],
+            NaiveDate::from_ymd_opt(2026, 7, 17).unwrap(),
+            -1,
+            true,
+            None,
+        )
+        .unwrap();
+
+        assert!(
+            output.contains("\x1b[4m22\x1b[0m"),
+            "daily task date was not underlined:\n{output}"
+        );
     }
 }

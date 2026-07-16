@@ -81,6 +81,100 @@ fn test_task_calendar_shows_current_month_with_weekdays() {
 }
 
 #[test]
+fn test_task_calendar_marks_every_day_in_scheduled_and_deadline_ranges() {
+    let today = chrono::Local::now().date_naive();
+    let previous_month = today.with_day(1).unwrap().pred_opt().unwrap();
+    let scheduled_start = previous_month.with_day(20).unwrap();
+    let scheduled_end = previous_month.with_day(22).unwrap();
+    let deadline_start = previous_month.with_day(24).unwrap();
+    let deadline_end = previous_month.with_day(26).unwrap();
+    let db = TestDb::new().note_with_content(
+        "calendar-ranges.org",
+        &format!(
+            ":PROPERTIES:\n:ID:       12121212-1212-4212-8212-121212121212\n:END:\n#+title: Calendar ranges\n#+filetags: :agenda:\n\n* TODO Scheduled range\nSCHEDULED: <{scheduled_start}>--<{scheduled_end}>\n* TODO Deadline range\nDEADLINE: <{deadline_start}>--<{deadline_end}>\n"
+        ),
+    );
+
+    let config_home = setup_test_config_home();
+    let mut command = std::process::Command::new(pkms_binary());
+    configure_test_command(&mut command, config_home.path());
+    let output = command
+        .args([
+            "--db",
+            db.root().to_str().unwrap(),
+            "task",
+            "calendar",
+            "-m",
+            "-1",
+        ])
+        .env("CLICOLOR_FORCE", "1")
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    assert!(
+        output.status.success(),
+        "task calendar failed:\n{stdout}\n{stderr}"
+    );
+    for day in 20..=22 {
+        assert!(
+            stdout.contains(&format!("\x1b[4m{day}\x1b[0m")),
+            "scheduled day {day} was not underlined:\n{stdout}"
+        );
+    }
+    for day in 24..=26 {
+        assert!(
+            stdout.contains(&format!("\x1b[31m{day}\x1b[0m")),
+            "deadline day {day} was not colored:\n{stdout}"
+        );
+    }
+}
+
+#[test]
+fn test_task_calendar_marks_unscheduled_task_on_daily_file_date() {
+    let today = chrono::Local::now().date_naive();
+    let daily_date = today
+        .with_day(1)
+        .unwrap()
+        .pred_opt()
+        .unwrap()
+        .with_day(22)
+        .unwrap();
+    let db = TestDb::new().note_with_content(
+        &format!("daily/{daily_date}.org"),
+        ":PROPERTIES:\n:ID:       34343434-3434-4434-8434-343434343434\n:END:\n#+title: Daily tasks\n\n* TODO Unscheduled daily task\n",
+    );
+
+    let config_home = setup_test_config_home();
+    let mut command = std::process::Command::new(pkms_binary());
+    configure_test_command(&mut command, config_home.path());
+    let output = command
+        .args([
+            "--db",
+            db.root().to_str().unwrap(),
+            "task",
+            "calendar",
+            "-m",
+            "-1",
+        ])
+        .env("CLICOLOR_FORCE", "1")
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    assert!(
+        output.status.success(),
+        "task calendar failed:\n{stdout}\n{stderr}"
+    );
+    assert!(
+        stdout.contains("\x1b[4m22\x1b[0m"),
+        "daily task date was not underlined:\n{stdout}"
+    );
+}
+
+#[test]
 fn test_task_list_help_shows_filters() {
     let (stdout, stderr, status) = run(&["task", "list", "--help"]);
     assert!(
