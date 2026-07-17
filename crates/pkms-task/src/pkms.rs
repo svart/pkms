@@ -20,6 +20,14 @@ pub enum PkmsInboxTarget {
     Daily { path: PathBuf },
 }
 
+impl PkmsInboxTarget {
+    pub fn path(&self) -> &Path {
+        match self {
+            PkmsInboxTarget::Note(path) | PkmsInboxTarget::Daily { path } => path,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TaskLocation {
     pub path: PathBuf,
@@ -94,12 +102,24 @@ pub fn resolve_inbox_target_on(
     create_daily: bool,
     today: NaiveDate,
 ) -> Result<PkmsInboxTarget> {
+    if config.task_inbox()?.eq_ignore_ascii_case("daily") {
+        return resolve_daily_inbox_target(config, create_daily, today);
+    }
+    let graph = crate::config::load_graph(&config.org)?;
+    resolve_inbox_target_with_graph_on(config, &graph, create_daily, today)
+}
+
+pub fn resolve_inbox_target_with_graph_on(
+    config: &PkmsTaskConfig,
+    graph: &pkms_org::Graph,
+    create_daily: bool,
+    today: NaiveDate,
+) -> Result<PkmsInboxTarget> {
     let target = config.task_inbox()?;
     if target.eq_ignore_ascii_case("daily") {
         return resolve_daily_inbox_target(config, create_daily, today);
     }
 
-    let graph = crate::config::load_graph(&config.org)?;
     if let Some(node) = graph.find_node(target) {
         return Ok(PkmsInboxTarget::Note(node.path.clone()));
     }
@@ -118,8 +138,11 @@ pub fn resolve_inbox_target_on(
         .ok_or_else(|| anyhow::anyhow!("PKMS task inbox note not found: {target}"))
 }
 
-pub fn resolve_note_task_target(config: &PkmsTaskConfig, target: &str) -> Result<PkmsInboxTarget> {
-    let graph = crate::config::load_graph(&config.org)?;
+pub fn resolve_note_task_target_with_graph(
+    config: &PkmsTaskConfig,
+    graph: &pkms_org::Graph,
+    target: &str,
+) -> Result<PkmsInboxTarget> {
     if let Some(node) = graph.find_node(target) {
         return Ok(PkmsInboxTarget::Note(node.path.clone()));
     }

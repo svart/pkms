@@ -343,7 +343,7 @@ Add modifiers mirror task filters where practical:
 | `tag:<label>` | `tags:`, `label:`, `labels:` | Add labels/tags. Values can be comma-separated. |
 | `schedule:<date>` | `sch:`, `sched:`, `due:` | Set scheduled/due date. |
 | `deadline:<date>` | `dead:`, `dl:` | Set deadline date. |
-| `project:<name-or-id>` | `proj:` | Set project for Todoist tasks. |
+| `project:<name-or-id>` | `proj:` | Set the PKMS `PROJECT` value or Todoist project. |
 | `prio:<A-B-C>` | `priority:`, `pri:` | Set source-neutral priority. |
 | `desc:<text>` | `description:`, `body:` | Set description/body text. |
 | `note:<target>` | | PKMS only; append to this note instead of the configured inbox. |
@@ -362,6 +362,13 @@ Todoist project id or an exact project name. If a name matches multiple projects
 case-insensitively, `pkms` fails before creating the task and asks for the
 project id. Todoist task creation rejects `note:`.
 Todoist task creation also rejects `state:` and `dep:`/`depend:`.
+
+For PKMS tasks, `project:` compares the requested value with the destination
+note's `PROJECT` property case-insensitively. When they match, the task inherits
+the note project without a redundant heading property. When they differ, or the
+note has no project, `pkms` writes `:PROJECT:` in the task heading's property
+drawer. The same rule applies to `task <ID> mod project:<value>`; changing a task
+to its note's project removes a redundant heading-level override.
 
 Listing or showing Todoist tasks detects `pkms:id:<uuid>` PKMS note markers in
 Todoist descriptions and populates `note_uuid` and `note_title` when the note

@@ -14,6 +14,7 @@ pub struct OrgTaskInsertSpec {
     pub tags: Vec<String>,
     pub scheduled: Option<String>,
     pub deadline: Option<String>,
+    pub project: Option<String>,
     pub description: Option<String>,
 }
 
@@ -151,6 +152,11 @@ fn format_org_task_entry(spec: &OrgTaskInsertSpec) -> Result<String> {
     if let Some(planning) = format_org_task_planning(spec)? {
         entry.push_str(&planning);
         entry.push('\n');
+    }
+    if let Some(project) = spec.project.as_deref() {
+        entry.push_str(":PROPERTIES:\n:PROJECT: ");
+        entry.push_str(project);
+        entry.push_str("\n:END:\n");
     }
     if let Some(description) = format_org_task_description(spec.description.as_deref()) {
         entry.push('\n');
@@ -493,6 +499,7 @@ mod tests {
                 tags: vec!["phone".to_string(), "urgent".to_string()],
                 scheduled: Some("2026-05-27".to_string()),
                 deadline: Some("2026-05-28 09:30".to_string()),
+                project: Some("Focus".to_string()),
                 description: Some("Discuss renewal".to_string()),
             },
         )
@@ -501,7 +508,7 @@ mod tests {
         assert_eq!(line, 3);
         assert_eq!(
             std::fs::read_to_string(&path).unwrap(),
-            "#+title: Inbox\n\n* TODO [#A] Call Alice :phone:urgent:\nSCHEDULED: <2026-05-27 Wed> DEADLINE: <2026-05-28 Thu 09:30>\n\nDiscuss renewal\n"
+            "#+title: Inbox\n\n* TODO [#A] Call Alice :phone:urgent:\nSCHEDULED: <2026-05-27 Wed> DEADLINE: <2026-05-28 Thu 09:30>\n:PROPERTIES:\n:PROJECT: Focus\n:END:\n\nDiscuss renewal\n"
         );
     }
 
@@ -536,6 +543,7 @@ mod tests {
                 tags: Vec::new(),
                 scheduled: None,
                 deadline: None,
+                project: None,
                 description: None,
             },
         )
@@ -629,6 +637,7 @@ mod tests {
                 tags: Vec::new(),
                 scheduled: None,
                 deadline: None,
+                project: None,
                 description: None,
             },
         )

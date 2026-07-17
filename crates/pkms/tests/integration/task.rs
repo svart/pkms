@@ -2907,6 +2907,37 @@ fn test_task_mod_pkms_accepts_add_style_metadata_modifiers() {
 }
 
 #[test]
+fn test_task_mod_pkms_removes_redundant_project_matching_note_project() {
+    let db = TestDb::new().note_with_content(
+        "redundant-project.org",
+        r#":PROPERTIES:
+:ID:       70707070-7070-4070-8070-707070707070
+:PROJECT: Focus
+:END:
+#+title: Redundant Project
+
+* TODO Project task
+:PROPERTIES:
+:PROJECT: Work
+:END:
+"#,
+    );
+    let path = db.root().join("roam/redundant-project.org");
+
+    let (v, status) = db.run_json(&["task", "p1", "mod", "project:focus"]);
+
+    assert!(status.success());
+    assert_eq!(v["changed"], true);
+    assert_eq!(v["changes"][0]["property"], "Project");
+    assert_eq!(v["changes"][0]["old"], "Work");
+    assert_eq!(v["changes"][0]["new"], serde_json::Value::Null);
+    assert_eq!(v["item"]["project"], "Focus");
+    let content = std::fs::read_to_string(path).unwrap();
+    assert_eq!(content.matches(":PROJECT: Focus").count(), 1);
+    assert!(!content.contains(":PROJECT: Work"));
+}
+
+#[test]
 fn test_task_mod_pkms_empty_values_clear_metadata() {
     let db = TestDb::new().note_with_content(
         "clear-modifiers.org",
@@ -4301,6 +4332,83 @@ fn test_task_add_pkms_accepts_modifiers_and_note_target() {
     assert!(content.contains("SCHEDULED: <"));
     assert!(content.contains("DEADLINE: <"));
     assert!(content.contains("Body text"));
+}
+
+#[test]
+fn test_task_add_pkms_omits_project_matching_note_project() {
+    let db = TestDb::new().note_with_content(
+        "matching-project.org",
+        r#":PROPERTIES:
+:ID:       68686868-6868-4868-8868-686868686868
+:PROJECT: Focus
+:END:
+#+title: Matching Project
+"#,
+    );
+    let path = db.root().join("roam/matching-project.org");
+
+    let (v, status) = db.run_json(&[
+        "task",
+        "add",
+        "title:Inherited project task",
+        "project:focus",
+        "note:Matching Project",
+    ]);
+
+    assert!(status.success());
+    assert_eq!(v["item"]["project"], "Focus");
+    let content = std::fs::read_to_string(path).unwrap();
+    assert_eq!(content.matches(":PROJECT: Focus").count(), 1);
+}
+
+#[test]
+fn test_task_add_pkms_writes_project_when_note_has_no_project() {
+    let db = TestDb::new().note(
+        "projectless-note.org",
+        "Projectless Note",
+        "71717171-7171-4171-8171-717171717171",
+    );
+    let path = db.root().join("roam/projectless-note.org");
+
+    let (v, status) = db.run_json(&[
+        "task",
+        "add",
+        "title:Assigned project task",
+        "project:Focus",
+        "note:Projectless Note",
+    ]);
+
+    assert!(status.success());
+    assert_eq!(v["item"]["project"], "Focus");
+    let content = std::fs::read_to_string(path).unwrap();
+    assert!(content.contains("* TODO Assigned project task\n:PROPERTIES:\n:PROJECT: Focus\n:END:"));
+}
+
+#[test]
+fn test_task_add_pkms_writes_project_differing_from_note_project() {
+    let db = TestDb::new().note_with_content(
+        "different-project.org",
+        r#":PROPERTIES:
+:ID:       69696969-6969-4969-8969-696969696969
+:PROJECT: Work
+:END:
+#+title: Different Project
+"#,
+    );
+    let path = db.root().join("roam/different-project.org");
+
+    let (v, status) = db.run_json(&[
+        "task",
+        "add",
+        "title:Specific project task",
+        "project:Focus",
+        "note:Different Project",
+    ]);
+
+    assert!(status.success());
+    assert_eq!(v["item"]["project"], "Focus");
+    let content = std::fs::read_to_string(path).unwrap();
+    assert!(content.contains("* TODO Specific project task\n:PROPERTIES:\n:PROJECT: Focus\n:END:"));
 }
 
 #[test]

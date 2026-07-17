@@ -336,6 +336,7 @@ PKMS add modifiers:
 | `tag:<value>` | `tags:`, `label:`, `labels:` | Add tags; repeat or comma-separate. |
 | `schedule:<date>` | `sch:`, `sched:`, `due:` | Add `SCHEDULED`. |
 | `deadline:<date>` | `dead:`, `dl:` | Add `DEADLINE`. |
+| `project:<value>` | `proj:` | Set `PROJECT` when it differs from the destination note project. |
 | `prio:<A-B-C>` | `priority:`, `pri:` | Add source-neutral priority. |
 | `desc:<text>` | `description:`, `body:` | Add body text. |
 | `note:<target>` | | Choose destination note. |
@@ -348,6 +349,13 @@ Friday. Ambiguous prefixes fail with an error.
 Modifier keys accept documented aliases and unambiguous prefixes; for example
 `proj:` and `pro:` resolve to `project:`, while `pr:` is ambiguous between
 `project:` and `priority:`.
+
+PKMS project planning belongs in `pkms-task`. It compares an explicitly
+requested project with the parsed note-level `PROJECT` value
+case-insensitively. Matching values inherit from the note without writing a
+heading property; differing values are passed to `pkms-org` as a typed task
+insertion or heading mutation property. Changing an existing task to its note's
+project removes the heading-level override.
 
 Local mutation rules:
 

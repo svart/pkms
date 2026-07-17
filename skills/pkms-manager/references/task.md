@@ -203,10 +203,13 @@ to the next upcoming matching weekday.
 Modifier keys accept documented aliases and unambiguous prefixes; `proj:` and
 `pro:` resolve to `project:`, while `pr:` fails as ambiguous.
 Priority must be `A`, `B`, or `C`. Repeat or comma-separate tag modifiers for
-multiple labels. `project:` accepts either a Todoist project id or an exact
+multiple labels. For PKMS tasks, `project:` writes a heading-level `PROJECT`
+property only when the requested value differs case-insensitively from the
+destination note's project; a matching value is inherited from the note.
+Changing an existing task to its note's project removes a redundant heading
+override. For Todoist tasks, `project:` accepts either a project id or an exact
 project name. If a project name is duplicated case-insensitively, use the
-project id. Todoist task creation rejects `state:`, `note:`, and
-`dep:`/`depend:`.
+project id. Todoist task creation rejects `state:`, `note:`, and `dep:`/`depend:`.
 
 Todoist descriptions containing `pkms:id:<uuid>` PKMS note markers are detected
 by `task list source:todoist` and `task todoist:<remote-id> show`.

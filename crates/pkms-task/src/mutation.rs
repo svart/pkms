@@ -98,6 +98,10 @@ pub fn mod_pkms_task(
         bail!("note is available only for PKMS task creation.");
     }
 
+    let graph = crate::config::load_graph(&config.org)?;
+    let location =
+        task_index::resolve_canonical_task_id(&config.task_states, &graph, canonical_id)?;
+    let note_project = note_project(&graph, Path::new(&location.path));
     let title = mod_title(spec)?;
     let modifier = org_task_mutation::HeadingMod {
         state: mod_state(config, spec)?,
@@ -106,16 +110,13 @@ pub fn mod_pkms_task(
         tags: spec.labels.clone(),
         scheduled: mod_pkms_date(spec.due.as_ref()),
         deadline: mod_pkms_date(spec.deadline.as_ref()),
-        project: mod_pkms_optional_text(spec.project.as_deref()),
+        project: mod_pkms_project(spec.project.as_deref(), note_project),
         description: spec
             .description
             .as_deref()
             .map(|description| description.trim().to_string()),
     };
 
-    let graph = crate::config::load_graph(&config.org)?;
-    let location =
-        task_index::resolve_canonical_task_id(&config.task_states, &graph, canonical_id)?;
     if let Some(new_state) = &modifier.state {
         ensure_state_change_allowed(
             config,
@@ -283,6 +284,13 @@ fn mod_pkms_optional_text(value: Option<&str>) -> Change<String> {
     }
 }
 
+fn mod_pkms_project(value: Option<&str>, note_project: Option<&str>) -> Change<String> {
+    match mod_pkms_optional_text(value) {
+        Change::Set(project) if project_matches_note(note_project, &project) => Change::Clear,
+        change => change,
+    }
+}
+
 fn mod_state(config: &PkmsTaskConfig, spec: &TaskModifierSpec) -> Result<Option<OrgTodoState>> {
     spec.state
         .as_deref()
@@ -361,13 +369,14 @@ pub fn add_pkms_task(
         bail!("note and dep cannot be used together for PKMS task creation.");
     }
 
+    let graph = crate::config::load_graph(&config.org)?;
     let location = match spec.dependency.as_ref() {
         Some(TaskDependencyArg::Set(TaskId::Pkms(parent_id))) => {
-            add_dependency_task(config, spec, *parent_id)?
+            add_dependency_task(config, &graph, spec, *parent_id)?
         }
         Some(TaskDependencyArg::Set(_)) => bail!("dep is available only for PKMS task IDs."),
         Some(TaskDependencyArg::Clear) => bail!("dep requires a PKMS task ID for task creation."),
-        None => add_inbox_task(config, spec, clock)?,
+        None => add_inbox_task(config, &graph, spec, clock)?,
     };
     pkms::find_task_item_on(config, &location.path, location.line_number, clock)?.with_context(
         || {
@@ -406,32 +415,42 @@ pub fn postpone_pkms_task(
 
 fn add_inbox_task(
     config: &PkmsTaskConfig,
+    graph: &Graph,
     spec: &TaskModifierSpec,
     clock: TaskClock,
 ) -> Result<pkms::TaskLocation> {
     let inbox_target = match spec.note.as_deref() {
-        Some(note) => pkms::resolve_note_task_target(config, note)?,
-        None => pkms::resolve_inbox_target_on(config, true, clock.today)?,
+        Some(note) => pkms::resolve_note_task_target_with_graph(config, graph, note)?,
+        None => pkms::resolve_inbox_target_with_graph_on(config, graph, true, clock.today)?,
     };
     let heading_level = match inbox_target {
         PkmsInboxTarget::Note(_) => 1,
         PkmsInboxTarget::Daily { .. } => 2,
     };
-    let task = task_insert_spec(config, spec, heading_level)?;
+    let task = task_insert_spec(
+        config,
+        spec,
+        heading_level,
+        note_project(graph, inbox_target.path()),
+    )?;
     pkms::append_inbox_task(&inbox_target, &task)
 }
 
 fn add_dependency_task(
     config: &PkmsTaskConfig,
+    graph: &Graph,
     spec: &TaskModifierSpec,
     canonical_id: usize,
 ) -> Result<pkms::TaskLocation> {
-    let graph = crate::config::load_graph(&config.org)?;
-    let location =
-        task_index::resolve_canonical_task_id(&config.task_states, &graph, canonical_id)?;
+    let location = task_index::resolve_canonical_task_id(&config.task_states, graph, canonical_id)?;
     let location = pkms_task_location(location);
     let parent_level = pkms::heading_level_at(&location)?;
-    let task = task_insert_spec(config, spec, parent_level + 1)?;
+    let task = task_insert_spec(
+        config,
+        spec,
+        parent_level + 1,
+        note_project(graph, &location.path),
+    )?;
     pkms::append_child_task(&location, &task)
 }
 
@@ -439,6 +458,7 @@ fn task_insert_spec(
     config: &PkmsTaskConfig,
     spec: &TaskModifierSpec,
     heading_level: usize,
+    note_project: Option<&str>,
 ) -> Result<OrgTaskInsertSpec> {
     let title = add_title(spec)?.to_string();
     let state = match spec.state.as_deref() {
@@ -462,6 +482,13 @@ fn task_insert_spec(
         .map(str::trim)
         .filter(|description| !description.is_empty())
         .map(str::to_string);
+    let project = spec
+        .project
+        .as_deref()
+        .map(str::trim)
+        .filter(|project| !project.is_empty())
+        .filter(|project| !project_matches_note(note_project, project))
+        .map(str::to_string);
 
     Ok(OrgTaskInsertSpec {
         level: heading_level,
@@ -471,8 +498,19 @@ fn task_insert_spec(
         tags: spec.labels().to_vec(),
         scheduled,
         deadline,
+        project,
         description,
     })
+}
+
+fn note_project<'a>(graph: &'a Graph, path: &Path) -> Option<&'a str> {
+    graph
+        .file(path)
+        .and_then(|result| result.parsed.project.as_deref())
+}
+
+fn project_matches_note(note_project: Option<&str>, project: &str) -> bool {
+    note_project.is_some_and(|note_project| note_project.eq_ignore_ascii_case(project))
 }
 
 fn add_date<'a>(name: &str, value: Option<&'a TaskDateArg>) -> Result<Option<&'a TaskDateValue>> {

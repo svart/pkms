@@ -55,6 +55,27 @@ primitives.
 - Domain crates and command adapters should use these helpers instead of
   open-coded org string manipulation.
 
+## Task Project Edit Primitives
+
+`pkms-org` parses note-level and heading-level `PROJECT` properties independently
+and exposes both through its parsed note and heading models. It does not apply
+property inheritance or decide whether a task needs a heading override; that
+policy belongs to `pkms-task`.
+
+For task writes, the org backend provides two policy-free typed mechanisms:
+
+- `OrgTaskInsertSpec.project` optionally serializes a `:PROJECT:` entry in the
+  new task heading's property drawer. Planning metadata is written before the
+  drawer, consistent with existing task mutations.
+- `org_task_mutation::HeadingMod.project` accepts `Change::Set`,
+  `Change::Clear`, or `Change::Unchanged` and applies that operation only to the
+  target heading's property drawer.
+
+Insertion writes the task and optional project property together in one file
+operation. Mutation reports the direct heading-property change; after a clear,
+the effective task project may still come from the note-level property when
+`pkms-task` reloads and projects the task.
+
 ## Boundaries
 
 `pkms-org` is the lowest-level domain crate. It must not depend on `pkms`,

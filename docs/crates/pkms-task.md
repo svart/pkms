@@ -57,6 +57,30 @@ Todoist-backed tasks. It does not own CLI parsing or raw org text edits.
 - Parsed filter criteria stay private; command adapters receive read-only
   accessors and pass the typed filter value back into task use cases.
 
+## Org-Backed Project Properties
+
+For local PKMS tasks, `PROJECT` is note or heading metadata rather than a
+separate project object. Task projection uses the heading-level `PROJECT` value
+when present and otherwise falls back to the note-level value.
+
+`pkms-task` owns the policy for explicit `project:` modifiers:
+
+- `task add project:<value>` resolves the destination note from the same fresh
+  graph used for the add operation and reads its parsed note-level project.
+- If the requested value matches the note project case-insensitively, the new
+  heading omits `PROJECT` and inherits the note value.
+- If the values differ, or the note has no project, `pkms-task` includes the
+  requested value in `OrgTaskInsertSpec` as a heading override.
+- `task <ID> mod project:<value>` applies the same comparison. Matching the note
+  project produces a typed clear operation for the heading property; a
+  different value produces a typed set operation.
+- `task <ID> mod project:` always clears the heading-level override. The task
+  then inherits the note project when one exists.
+
+The comparison and inheritance decision must remain here. `pkms-org` receives
+only the resulting typed set, clear, or omitted property operation and does not
+decide task project semantics.
+
 ## Boundaries
 
 `pkms-task` may depend on `pkms-org`. It must not depend on `pkms`,
