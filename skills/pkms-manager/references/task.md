@@ -106,6 +106,9 @@ case-insensitive, but the file is written with the canonical config spelling.
 
 `task <ID> done` is shorthand for the first configured closed state, defaulting
 to `DONE` if none is configured.
+After a real PKMS state change, text output prints the resulting canonical task
+ID. JSON and NDJSON keep the requested ID in `id`, report the resulting ID in
+`new_id`, and use `null` for `new_id` during `--dry-run`.
 
 Todoist read support is available only in builds made with `--features todoist`:
 

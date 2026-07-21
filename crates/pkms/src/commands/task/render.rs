@@ -135,6 +135,9 @@ pub(super) fn print_state_change(
                 "{action} {}:{} from {} to {}",
                 output.path, output.line_number, output.old_state, output.new_state
             );
+            if let Some(new_id) = &output.new_id {
+                println!("New task ID: {new_id}");
+            }
             Ok(())
         }
         OutputFormat::Json => ctx.print_json(output),

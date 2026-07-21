@@ -1,6 +1,6 @@
 [package]
 name = "pkms-db"
-version = "2.3.4"
+version = "2.3.5"
 description = "Note database command logic for pkms"
 edition = "2024"
 license = "MIT"

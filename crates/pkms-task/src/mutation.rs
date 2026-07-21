@@ -63,6 +63,7 @@ pub fn unsupported_task_source(source: impl AsRef<str>) -> Result<()> {
 #[derive(Debug, Serialize)]
 pub struct TaskStateChangeOutput {
     pub id: String,
+    pub new_id: Option<String>,
     #[serde(skip_serializing)]
     pub title: String,
     pub path: String,
@@ -349,8 +350,24 @@ pub fn set_pkms_state(
         &new_state,
         dry_run,
     )?;
+    let new_id = if dry_run {
+        None
+    } else {
+        let updated_graph = crate::config::load_graph(&config.org)?;
+        let entry = task_index::all_task_entries(&config.task_states, &updated_graph)
+            .into_iter()
+            .find(|entry| entry.path == location.path && entry.line_number == location.line_number)
+            .with_context(|| {
+                format!(
+                    "Changed task but could not resolve its new canonical ID at {}:{}",
+                    location.path, location.line_number
+                )
+            })?;
+        Some(TaskId::Pkms(entry.id).display_id())
+    };
     Ok(TaskStateChangeOutput {
         id: TaskId::Pkms(canonical_id).display_id(),
+        new_id,
         title,
         path: output.path,
         line_number: output.line_number,

@@ -371,6 +371,9 @@ Local mutation rules:
   spelling.
 - `task <ID> done` uses the first configured closed state, defaulting to
   `DONE`.
+- Successful PKMS state changes report the resulting canonical task ID because
+  moving between open and closed state groups can renumber tasks. Structured
+  output keeps the requested ID in `id` and reports the result as `new_id`.
 - `task <ID> mod` changes add-style task properties such as `title:`,
   `state:`, `tag:`, `sch:`, `dl:`, `project:`, `prio:`, `desc:`, and `dep:`.
 - Unlike `task add`, `task <ID> mod` does not accept positional title text;

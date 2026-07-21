@@ -465,6 +465,9 @@ configured state.
 
 `task <ID> done` is shorthand for setting the first configured closed state. If
 no closed state is configured, it defaults to `DONE`.
+After a real PKMS state change, text output prints the task's resulting
+canonical ID. JSON and NDJSON keep the requested ID in `id` and expose the
+resulting ID in `new_id`; `new_id` is `null` for `--dry-run`.
 
 For Todoist tasks, `task todoist:<remote-id> state done` closes the task and
 `task todoist:<remote-id> state open` reopens it. Other Todoist states fail.

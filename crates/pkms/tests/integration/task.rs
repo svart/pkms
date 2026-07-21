@@ -2535,6 +2535,7 @@ fn test_task_state_dry_run_does_not_edit_file() {
     assert_eq!(v["old_state"], "TODO");
     assert_eq!(v["new_state"], "WAITING");
     assert_eq!(v["dry_run"], true);
+    assert_eq!(v["new_id"], serde_json::Value::Null);
     let path = v["path"].as_str().unwrap();
     let line_number = v["line_number"].as_u64().unwrap() as usize;
     let content = std::fs::read_to_string(path).unwrap();
@@ -2708,6 +2709,10 @@ fn test_task_done_warns_when_task_ids_change() {
         "mutation output should stay on stdout:\n{stdout}"
     );
     assert!(
+        stdout.contains("New task ID: p2"),
+        "expected the completed task's new canonical ID:\n{stdout}"
+    );
+    assert!(
         stderr
             .lines()
             .last()
@@ -2760,6 +2765,7 @@ fn test_task_json_stdout_stays_parseable_when_task_ids_change() {
     let v: serde_json::Value = serde_json::from_str(stdout.trim()).unwrap();
     assert_eq!(v["old_state"], "TODO");
     assert_eq!(v["new_state"], "DONE");
+    assert_eq!(v["new_id"], "p2");
     assert!(
         stderr.contains("WARN: Task IDs changed"),
         "expected warning on stderr:\n{stderr}"
