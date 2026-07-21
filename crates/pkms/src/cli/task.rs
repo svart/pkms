@@ -10,7 +10,7 @@ fn parse_nonzero_i32(value: &str) -> Result<i32, String> {
     Ok(value)
 }
 
-const TASK_ID_ACTION_HELP: &str = "ID-first actions:\n  pkms task <ID> show\n  pkms task <ID> open [--editor <COMMAND>] [--line <LINE>]\n  pkms task <ID> state <STATE> [--dry-run]\n  pkms task <ID> done [--dry-run]\n  pkms task <ID> postpone --to <DATE>\n  pkms task <ID> mod <MODIFIER>...\n  pkms task <ID> mod dep:<PARENT-ID>";
+const TASK_ID_ACTION_HELP: &str = "ID-first actions:\n  pkms task <ID> show\n  pkms task <ID> open [--editor <COMMAND>] [--line <LINE>]\n  pkms task <ID> state <STATE> [--dry-run]\n  pkms task <ID> done [--dry-run]\n  pkms task <ID> postpone [--to <DATE>]\n  pkms task <ID> mod <MODIFIER>...\n  pkms task <ID> mod dep:<PARENT-ID>";
 
 const TASK_FILTER_HELP_WITH_DATES: &str = "Filters:\n  source:pkms|todoist|all, src:pkms|todoist|all\n  state:TODO|opened|closed, tags:tag,!other, type:SCHED,DEADL, prio:A[,B,C], project:Name\n  date:today|week|overdue|upcoming|YYYY-MM-DD|tom|fri[,value...], after:YYYY-MM-DD[ HH:MM]|tom|fri, before:YYYY-MM-DD[ HH:MM]|tom|fri\n  todoist.filter:<query> (requires source:todoist or source:all)";
 
@@ -250,7 +250,7 @@ pub struct TaskPostponeArgs {
     #[arg(
         long,
         value_name = "DATE",
-        help = "New due date: today, tomorrow, weekday, or YYYY-MM-DD"
+        help = "New due date; omit to advance to the next recurring occurrence"
     )]
-    pub to: String,
+    pub to: Option<String>,
 }

@@ -133,7 +133,9 @@ pkms task add source:todoist "Buy milk tomorrow"
 pkms task add source:todoist title:"Call Alice" due:2026-05-24 tag:phone priority:B
 pkms task add source:todoist title:"Call Alice" sch:tod tag:phone prio:B
 pkms task todoist:<remote-id> done
+pkms task p<canonical-id> postpone
 pkms task p<canonical-id> postpone --to 2026-06-01
+pkms task todoist:<remote-id> postpone
 pkms task todoist:<remote-id> postpone --to tomorrow
 pkms task p<canonical-id> mod sch:2026-05-24
 pkms task todoist:<remote-id> mod sch:
@@ -236,8 +238,9 @@ pkms task todoist:<remote-id> done --dry-run
 ```
 
 Use stable `todoist:<remote-id>` ids for Todoist mutations. `task <ID>
-postpone` accepts `--to tomorrow` or `--to YYYY-MM-DD` and works only for
-recurring PKMS or Todoist tasks; non-recurring tasks fail. `task <ID> mod`
+postpone` advances to the next occurrence by default, or accepts `--to
+tomorrow` / `--to YYYY-MM-DD` to choose a date. It works only for recurring
+PKMS or Todoist tasks; non-recurring tasks fail. `task <ID> mod`
 accepts add-style modifiers such as `title:`, `tag:`, `project:`, `prio:`,
 `desc:`, `sch:tomorrow`, `dl:YYYY-MM-DD`, or PKMS-only `state:WAITING` and
 `dep:<task-id>`.

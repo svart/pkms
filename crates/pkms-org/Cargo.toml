@@ -1,6 +1,6 @@
 [package]
 name = "pkms-org"
-version = "2.3.2"
+version = "2.3.3"
 description = "Org parsing and editing primitives for pkms"
 edition = "2024"
 license = "MIT"

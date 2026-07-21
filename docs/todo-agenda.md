@@ -263,6 +263,7 @@ pkms task add source:todoist title:"Call Alice" due:2026-05-24 tag:phone priorit
 pkms task add source:todoist title:"Call Alice" sch:tod tag:phone prio:B
 pkms task todoist:<remote-id> done
 pkms task todoist:<remote-id> done --dry-run
+pkms task todoist:<remote-id> postpone
 pkms task todoist:<remote-id> postpone --to tomorrow
 pkms task todoist:<remote-id> mod sch:2026-05-24
 pkms task todoist:<remote-id> mod sch:
@@ -402,7 +403,9 @@ When changes are made, text output starts with `Task: <task title>` and then
 prints one diff line per changed property, such as
 `Scheduled: Today (2026-06-02) -> Scheduled: Tomorrow (2026-06-03)`.
 If no properties change, it prints `Nothing changed` and exits
-nonzero. ID-first `task <ID> postpone` works only for recurring tasks. For PKMS,
+nonzero. ID-first `task <ID> postpone` works only for recurring tasks and
+advances to the next occurrence by default; `--to DATE` overrides the next
+date. For PKMS,
 the task must have a recurring `SCHEDULED` or `DEADLINE` timestamp and the
 repeater/warning syntax is preserved. For Todoist, the Todoist due date must be
 recurring. Non-recurring tasks fail instead of being silently rescheduled.

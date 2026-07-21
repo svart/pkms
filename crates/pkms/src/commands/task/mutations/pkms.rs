@@ -49,7 +49,7 @@ pub(super) fn postpone(
     config: &ResolvedConfig,
     ctx: &OutputContext,
     canonical_id: usize,
-    to: &str,
+    to: Option<&str>,
     clock: TaskClock,
 ) -> Result<()> {
     let item = postpone_pkms_task(&config.pkms_task_config(), canonical_id, to, clock)?;

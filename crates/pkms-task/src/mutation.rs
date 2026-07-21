@@ -391,14 +391,27 @@ pub fn add_pkms_task(
 pub fn postpone_pkms_task(
     config: &PkmsTaskConfig,
     canonical_id: usize,
-    to: &str,
+    to: Option<&str>,
     clock: TaskClock,
 ) -> Result<TaskItem> {
-    let date = parse_mutation_due_date(to, clock.today)?;
     let graph = crate::config::load_graph(&config.org)?;
     let location =
         task_index::resolve_canonical_task_id(&config.task_states, &graph, canonical_id)?;
-    org_task_mutation::update_recurring_planning_date(&location.path, location.line_number, &date)?;
+    match to {
+        Some(to) => {
+            let date = parse_mutation_due_date(to, clock.today)?;
+            org_task_mutation::update_recurring_planning_date(
+                &location.path,
+                location.line_number,
+                &date,
+            )?;
+        }
+        None => org_task_mutation::advance_recurring_planning_date(
+            &location.path,
+            location.line_number,
+            clock.today,
+        )?,
+    }
     pkms::find_task_item_on(
         config,
         Path::new(&location.path),

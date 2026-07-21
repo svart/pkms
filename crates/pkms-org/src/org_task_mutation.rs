@@ -1,8 +1,8 @@
 use crate::org_date::format_org_date;
 use crate::org_edit;
 use crate::parser::{DEADLINE_RE, HEADING_RE, OrgPriority, OrgTodoState, SCHEDULED_RE};
-use anyhow::{Result, bail};
-use chrono::NaiveDate;
+use anyhow::{Context, Result, bail};
+use chrono::{Days, Months, NaiveDate, NaiveDateTime, NaiveTime, TimeDelta};
 
 #[derive(Debug, Clone, Copy)]
 pub enum PlanningKind {
@@ -568,6 +568,23 @@ pub fn update_recurring_planning_date(path: &str, line_number: usize, date: &str
     Ok(())
 }
 
+pub fn advance_recurring_planning_date(
+    path: &str,
+    line_number: usize,
+    today: NaiveDate,
+) -> Result<()> {
+    let mut lines = org_edit::read_lines(path)?;
+    let heading_idx = line_number
+        .checked_sub(1)
+        .ok_or_else(|| anyhow::anyhow!("Invalid task line number: {line_number}"))?;
+    let planning_idx = find_planning_line_index(&lines, heading_idx).ok_or_else(|| {
+        anyhow::anyhow!("Task does not have a recurring scheduled or deadline date")
+    })?;
+    lines[planning_idx] = advance_recurring_planning_line(&lines[planning_idx], today)?;
+    org_edit::write_lines(path, &lines)?;
+    Ok(())
+}
+
 fn find_planning_line_index(lines: &[String], heading_idx: usize) -> Option<usize> {
     for (idx, line) in lines.iter().enumerate().skip(heading_idx + 1) {
         let body = line.trim_end();
@@ -593,6 +610,96 @@ fn postpone_recurring_planning_line(line: &str, new_date: NaiveDate) -> Result<S
         return Ok(updated);
     }
     bail!("Task does not have a recurring scheduled or deadline date")
+}
+
+fn advance_recurring_planning_line(line: &str, today: NaiveDate) -> Result<String> {
+    if let Some(updated) = advance_recurring_token(line, &SCHEDULED_RE, "SCHEDULED", today)? {
+        return Ok(updated);
+    }
+    if let Some(updated) = advance_recurring_token(line, &DEADLINE_RE, "DEADLINE", today)? {
+        return Ok(updated);
+    }
+    bail!("Task does not have a recurring scheduled or deadline date")
+}
+
+fn advance_recurring_token(
+    line: &str,
+    regex: &regex::Regex,
+    label: &str,
+    today: NaiveDate,
+) -> Result<Option<String>> {
+    let Some(captures) = regex.captures(line) else {
+        return Ok(None);
+    };
+    let Some(raw_match) = captures.get(1) else {
+        return Ok(None);
+    };
+    let parsed = crate::org_date::parse_org_date(raw_match.as_str())
+        .ok_or_else(|| anyhow::anyhow!("Could not parse existing {label} date"))?;
+    let new_date = next_recurrence_date(&parsed, today)
+        .with_context(|| format!("Could not advance recurring {label} date"))?;
+    let replacement = format!("{label}: {}", format_org_date_like(&parsed, new_date));
+    Ok(Some(regex.replace(line, replacement.as_str()).to_string()))
+}
+
+fn next_recurrence_date(
+    existing: &crate::org_date::OrgDate,
+    today: NaiveDate,
+) -> Result<NaiveDate> {
+    let repeater = existing
+        .repeater
+        .as_deref()
+        .ok_or_else(|| anyhow::anyhow!("Task date is not recurring"))?;
+    let (mode, interval) = if let Some(interval) = repeater.strip_prefix(".+") {
+        (".+", interval)
+    } else if let Some(interval) = repeater.strip_prefix("++") {
+        ("++", interval)
+    } else if let Some(interval) = repeater.strip_prefix('+') {
+        ("+", interval)
+    } else {
+        bail!("Unsupported repeater: {repeater}");
+    };
+    let (amount, unit) = interval.split_at(interval.len().saturating_sub(1));
+    let amount = amount.parse::<u32>()?;
+    if amount == 0 {
+        bail!("Repeater interval must be greater than zero");
+    }
+
+    let anchor = if mode == ".+" {
+        today
+    } else {
+        existing.base_date
+    };
+    let mut next = add_recurrence_interval(anchor, existing.time, amount, unit)?;
+    if mode == "++" {
+        while next <= today {
+            next = add_recurrence_interval(next, existing.time, amount, unit)?;
+        }
+    }
+    Ok(next)
+}
+
+fn add_recurrence_interval(
+    date: NaiveDate,
+    time: Option<NaiveTime>,
+    amount: u32,
+    unit: &str,
+) -> Result<NaiveDate> {
+    let next = match unit {
+        "h" => NaiveDateTime::new(date, time.unwrap_or(NaiveTime::MIN))
+            .checked_add_signed(TimeDelta::hours(i64::from(amount)))
+            .map(|value| value.date()),
+        "d" => date.checked_add_days(Days::new(u64::from(amount))),
+        "w" => date.checked_add_days(Days::new(u64::from(amount) * 7)),
+        "m" => date.checked_add_months(Months::new(amount)),
+        "y" => date.checked_add_months(Months::new(
+            amount
+                .checked_mul(12)
+                .ok_or_else(|| anyhow::anyhow!("Repeater interval is too large"))?,
+        )),
+        _ => bail!("Unsupported repeater unit: {unit}"),
+    };
+    next.ok_or_else(|| anyhow::anyhow!("Recurring date is out of range"))
 }
 
 fn postpone_recurring_token(
@@ -666,4 +773,39 @@ fn replace_planning_token(line: &str, kind: PlanningKind, value: Option<&str>) -
         }
     };
     format!("{}{}", updated.trim(), newline)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn next_recurrence_uses_existing_date_for_cumulative_repeater() {
+        let existing = crate::org_date::parse_org_date("<2026-05-24 Sun +1w>").unwrap();
+
+        let next =
+            next_recurrence_date(&existing, NaiveDate::from_ymd_opt(2026, 6, 20).unwrap()).unwrap();
+
+        assert_eq!(next, NaiveDate::from_ymd_opt(2026, 5, 31).unwrap());
+    }
+
+    #[test]
+    fn next_recurrence_catches_up_strict_repeater_after_today() {
+        let existing = crate::org_date::parse_org_date("<2026-05-24 Sun ++1w>").unwrap();
+
+        let next =
+            next_recurrence_date(&existing, NaiveDate::from_ymd_opt(2026, 6, 20).unwrap()).unwrap();
+
+        assert_eq!(next, NaiveDate::from_ymd_opt(2026, 6, 21).unwrap());
+    }
+
+    #[test]
+    fn next_recurrence_uses_today_for_restart_repeater() {
+        let existing = crate::org_date::parse_org_date("<2026-05-24 Sun .+1m>").unwrap();
+
+        let next =
+            next_recurrence_date(&existing, NaiveDate::from_ymd_opt(2026, 6, 20).unwrap()).unwrap();
+
+        assert_eq!(next, NaiveDate::from_ymd_opt(2026, 7, 20).unwrap());
+    }
 }

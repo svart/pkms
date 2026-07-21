@@ -35,7 +35,7 @@ pub(super) fn run(
         }
         "postpone" => {
             let to = parse_postpone_args(command_args)?;
-            super::mutations::run_postpone(runtime, id, &to).map(|()| ExitCode::SUCCESS)
+            super::mutations::run_postpone(runtime, id, to.as_deref()).map(|()| ExitCode::SUCCESS)
         }
         "mod" => {
             parse_mod_args(command_args)?;
@@ -117,8 +117,8 @@ fn parse_done_args(raw: &[String]) -> Result<bool> {
     Ok(dry_run)
 }
 
-fn parse_postpone_args(raw: &[String]) -> Result<String> {
-    parse_single_value_option(raw, "--to", "task postpone")
+fn parse_postpone_args(raw: &[String]) -> Result<Option<String>> {
+    parse_optional_value_option(raw, "--to", "task postpone")
 }
 
 fn parse_mod_args(raw: &[String]) -> Result<()> {
@@ -128,7 +128,11 @@ fn parse_mod_args(raw: &[String]) -> Result<()> {
     Ok(())
 }
 
-fn parse_single_value_option(raw: &[String], option: &str, command: &str) -> Result<String> {
+fn parse_optional_value_option(
+    raw: &[String],
+    option: &str,
+    command: &str,
+) -> Result<Option<String>> {
     let mut value = None;
     let mut iter = raw.iter();
     while let Some(arg) = iter.next() {
@@ -139,11 +143,11 @@ fn parse_single_value_option(raw: &[String], option: &str, command: &str) -> Res
             value = Some(
                 iter.next()
                     .cloned()
-                    .with_context(|| format!("Expected value after {option}"))?,
+                    .with_context(|| format!("Expected value after {arg}"))?,
             );
         } else {
             bail!("Unexpected argument for {command}: {arg}");
         }
     }
-    value.with_context(|| format!("Expected {option} for {command}"))
+    Ok(value)
 }

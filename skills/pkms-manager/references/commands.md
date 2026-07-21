@@ -144,7 +144,9 @@ pkms task add source:todoist "Buy milk tomorrow"
 pkms task add source:todoist title:"Call Alice" due:2026-05-24 priority:B
 pkms task add source:todoist title:"Call Alice" sch:tod tag:phone prio:B
 pkms task todoist:<remote-id> done
+pkms task p<canonical-id> postpone
 pkms task p<canonical-id> postpone --to 2026-06-01
+pkms task todoist:<remote-id> postpone
 pkms task todoist:<remote-id> postpone --to tomorrow
 pkms task p<canonical-id> mod sch:2026-05-24
 pkms task p<canonical-id> mod state:WAITING

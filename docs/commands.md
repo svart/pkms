@@ -289,6 +289,7 @@ pkms task add note:"Project Alpha" title:"Follow up"
 pkms task add dep:2 title:"Follow up on parent task"
 pkms task p<id> mod sch:2026-05-24
 pkms task p<id> mod dep:<parent-id>
+pkms task p<id> postpone
 pkms task p<id> postpone --to 2026-06-01
 pkms task add source:todoist "Buy milk tomorrow"
 pkms task add source:todoist title:"Call Alice" due:2026-05-24 priority:B
@@ -297,6 +298,7 @@ pkms task agenda week source:all
 pkms task inbox source:todoist
 pkms task todoist:<remote-id> show
 pkms task todoist:<remote-id> done
+pkms task todoist:<remote-id> postpone
 pkms task todoist:<remote-id> postpone --to tomorrow
 pkms task todoist:<remote-id> mod sch:
 pkms task todoist:<remote-id> mod dl:

@@ -43,6 +43,8 @@ pub struct TodoistDue {
     #[serde(default)]
     pub string: Option<String>,
     #[serde(default)]
+    pub lang: Option<String>,
+    #[serde(default)]
     pub is_recurring: Option<bool>,
 }
 

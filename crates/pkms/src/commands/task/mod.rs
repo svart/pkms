@@ -56,7 +56,7 @@ pub fn run(ctx: &CommandContext<'_>, command: &TaskCommand) -> Result<ExitCode> 
         }
         TaskCommand::Done(args) => success(run_done(runtime, &args.id, args.dry_run)),
         TaskCommand::Add(args) => success(run_add(runtime, &args.text)),
-        TaskCommand::Postpone(args) => success(run_postpone(runtime, &args.id, &args.to)),
+        TaskCommand::Postpone(args) => success(run_postpone(runtime, &args.id, args.to.as_deref())),
         TaskCommand::Target(args) => id_command::run(ctx, args, runtime),
     }?;
     maybe_warn_task_ids_changed(&task_config, task_id_snapshot);

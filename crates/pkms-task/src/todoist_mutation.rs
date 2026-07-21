@@ -249,7 +249,7 @@ pub fn mod_todoist_task(
 pub fn postpone_todoist_task(
     config: &TodoistProviderConfig,
     id: &str,
-    to: &str,
+    to: Option<&str>,
     clock: TaskClock,
 ) -> Result<TaskItem> {
     let client = crate::todoist::TodoistClient::with_base_url(
@@ -265,10 +265,34 @@ pub fn postpone_todoist_task(
     if !is_recurring {
         bail!("Todoist task todoist:{id} is not recurring");
     }
-    client.update_task(
-        id,
-        &serde_json::json!({ "due_date": crate::mutation::parse_mutation_due_date(to, clock.today)? }),
-    )?;
+    let update = match to {
+        Some(to) => {
+            serde_json::json!({ "due_date": crate::mutation::parse_mutation_due_date(to, clock.today)? })
+        }
+        None => {
+            let due = existing
+                .due
+                .as_ref()
+                .ok_or_else(|| anyhow::anyhow!("Todoist task todoist:{id} has no due date"))?;
+            let due_string = due
+                .string
+                .as_deref()
+                .filter(|value| !value.trim().is_empty())
+                .ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "Todoist recurring task todoist:{id} has no recurrence expression"
+                    )
+                })?;
+            let mut update = serde_json::json!({ "due_string": due_string });
+            if let Some(lang) = due.lang.as_deref()
+                && let Some(update) = update.as_object_mut()
+            {
+                update.insert("due_lang".to_string(), serde_json::json!(lang));
+            }
+            update
+        }
+    };
+    client.update_task(id, &update)?;
     let task = client.get_task(id)?;
     let metadata = metadata_for_task(&client, &task)?;
     let mut item = crate::todoist::task_to_item_with_metadata(task, metadata.as_ref());
@@ -280,7 +304,7 @@ pub fn postpone_todoist_task(
 pub fn postpone_todoist_task(
     _config: &TodoistProviderConfig,
     _id: &str,
-    _to: &str,
+    _to: Option<&str>,
     _clock: TaskClock,
 ) -> Result<TaskItem> {
     bail!("Todoist support is not available in this build. Rebuild with --features todoist.")

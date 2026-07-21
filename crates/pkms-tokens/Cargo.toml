@@ -1,6 +1,6 @@
 [package]
 name = "pkms-tokens"
-version = "2.3.2"
+version = "2.3.3"
 description = "Token encoding and counting primitives for pkms"
 edition = "2024"
 license = "MIT"

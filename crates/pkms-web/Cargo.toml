@@ -1,6 +1,6 @@
 [package]
 name = "pkms-web"
-version = "2.3.2"
+version = "2.3.3"
 description = "Local web viewer for pkms notes"
 edition = "2024"
 license = "MIT"

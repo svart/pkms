@@ -100,7 +100,7 @@ pub(super) fn postpone(
     config: &ResolvedConfig,
     ctx: &OutputContext,
     id: &str,
-    to: &str,
+    to: Option<&str>,
     clock: TaskClock,
 ) -> Result<()> {
     let item =
@@ -113,7 +113,7 @@ pub(super) fn postpone(
     _config: &ResolvedConfig,
     _ctx: &OutputContext,
     _id: &str,
-    _to: &str,
+    _to: Option<&str>,
     _clock: TaskClock,
 ) -> Result<()> {
     bail!("Todoist support is not available in this build. Rebuild with --features todoist.")

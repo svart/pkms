@@ -67,7 +67,7 @@ pub(in crate::commands::task) fn run_add(
 pub(in crate::commands::task) fn run_postpone(
     runtime: TaskRuntime<'_>,
     id: &str,
-    to: &str,
+    to: Option<&str>,
 ) -> Result<()> {
     match id.parse::<TaskId>()? {
         TaskId::Pkms(canonical_id) => pkms::postpone(

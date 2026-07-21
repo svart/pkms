@@ -35,6 +35,7 @@ pkms task p<ID> done
 pkms task p<ID> mod sch:2026-05-24
 pkms task p<ID> mod dl:2026-05-30
 pkms task p<ID> mod dep:<parent-id>
+pkms task p<ID> postpone
 pkms task p<ID> postpone --to tomorrow
 ```
 
@@ -180,7 +181,7 @@ pkms task <ID> show
 pkms task <ID> open [--editor <COMMAND>] [--line <LINE>]
 pkms task <ID> state <STATE> [--dry-run]
 pkms task <ID> done [--dry-run]
-pkms task <ID> postpone --to <DATE>
+pkms task <ID> postpone [--to <DATE>]
 pkms task <ID> mod <MODIFIER>...
 ```
 
@@ -381,8 +382,9 @@ Local mutation rules:
   whole subtree out to the end of the parent task's subtree.
 - If `task <ID> mod` would not change anything, it prints `Nothing changed`
   and exits nonzero.
-- `task <ID> postpone --to DATE` is only for recurring planned tasks and must
-  preserve repeater/warning syntax.
+- `task <ID> postpone [--to DATE]` is only for recurring planned tasks. Without
+  `--to`, it advances to the next occurrence; an explicit date overrides that
+  default. PKMS mutations preserve repeater/warning syntax.
 - Preserve unmodified heading title, priority, tags, body, surrounding file
   content, and unrelated planning metadata.
 - Do not add close timestamps unless the project adopts a clear org convention.
