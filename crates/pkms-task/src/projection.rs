@@ -3,7 +3,10 @@ use crate::model::{TaskDateValue, TaskPriority, TaskState};
 use crate::task_index::TaskRecord;
 use pkms_org::corpus::Corpus;
 use pkms_org::org_date::parse_org_date;
-use pkms_org::parser::{Heading, OrgPriority, OrgTodoState, find_daily_file_date, strip_org_links};
+use pkms_org::parser::{
+    Heading, OrgPriority, OrgTodoState, find_daily_file_date, inherited_heading_tags,
+    strip_org_links,
+};
 
 #[derive(Debug, Clone, Copy)]
 enum ProjectionKind {
@@ -72,7 +75,8 @@ fn collect_records(corpus: &Corpus, query: ProjectionQuery<'_>) -> Vec<TaskRecor
                 .unwrap_or_default()
         }));
 
-        for heading in &parsed.headings {
+        let inherited_tags = inherited_heading_tags(&parsed.headings);
+        for (heading_idx, heading) in parsed.headings.iter().enumerate() {
             if !include_heading(query, heading, is_daily) {
                 continue;
             }
@@ -102,7 +106,7 @@ fn collect_records(corpus: &Corpus, query: ProjectionQuery<'_>) -> Vec<TaskRecor
                 deadline: heading.deadline.clone(),
                 deadline_date: extract_date(heading.deadline.as_ref()),
                 is_overdue: item_is_overdue,
-                heading_tags: heading.tags.clone(),
+                heading_tags: inherited_tags[heading_idx].clone(),
             };
             if matches!(query.kind, ProjectionKind::Agenda)
                 && record.is_daily_file
@@ -228,5 +232,33 @@ mod tests {
         );
         assert!(record.is_overdue);
         assert_eq!(record.heading_tags, vec!["phone"]);
+    }
+
+    #[test]
+    fn task_tags_include_all_parent_heading_tags() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("note.org");
+        std::fs::write(
+            &path,
+            ":PROPERTIES:\n:ID:       aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa\n:END:\n#+title: Tagged hierarchy\n#+filetags: :note:\n\n* Area :area:shared:\n** WAITING Parent task :taskparent:shared:\n*** TODO Child task :child:shared:\n",
+        )
+        .unwrap();
+        let corpus = Corpus::scan(dir.path(), &[]).unwrap();
+        let states = vec!["TODO".to_string()];
+
+        let records = collect_todo_records(
+            &corpus,
+            &states,
+            TaskClock {
+                today: NaiveDate::from_ymd_opt(2026, 5, 24).unwrap(),
+                now: NaiveTime::from_hms_opt(12, 0, 0).unwrap(),
+            },
+        );
+
+        assert_eq!(records.len(), 1);
+        assert_eq!(
+            records[0].heading_tags,
+            vec!["area", "shared", "taskparent", "child"]
+        );
     }
 }

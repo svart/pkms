@@ -120,6 +120,8 @@ The source-neutral task model lives under `crates/pkms-task/src/`:
 source identity, display identity, title/body, status/state, priority, dates,
 tags, project metadata, PKMS note references, source path/line when available,
 URL, and PKMS-specific metadata such as daily-file and agenda-tag fields.
+For PKMS tasks, tags are the de-duplicated combination of note `#+filetags`,
+all parent-heading tags, and the task heading's own tags, in that order.
 
 Keep source-specific fields optional. Todoist tasks should not need local
 heading metadata, and PKMS tasks should not need remote metadata.

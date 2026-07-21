@@ -212,10 +212,15 @@ fn show_heading_by_line(ctx: HeadingShowContext<'_>, line_number: usize) -> Resu
         String::new()
     };
 
+    let inherited_tags = pkms_org::parser::inherited_heading_tags(ctx.headings);
     let all_tags: Vec<String> = {
         let mut seen = std::collections::HashSet::new();
         let mut result = Vec::new();
-        for tag in ctx.filetags.iter().chain(heading.tags.iter()) {
+        for tag in ctx
+            .filetags
+            .iter()
+            .chain(inherited_tags[heading_idx].iter())
+        {
             if seen.insert(tag.clone()) {
                 result.push(tag.clone());
             }

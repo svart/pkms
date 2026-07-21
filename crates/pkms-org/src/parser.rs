@@ -9,6 +9,7 @@ use crate::domain::{LinkTarget, NoteId};
 use chrono::NaiveDate;
 use regex::Regex;
 use serde::{Serialize, Serializer};
+use std::collections::HashSet;
 use std::fmt;
 use std::ops::Deref;
 use std::sync::LazyLock;
@@ -182,6 +183,33 @@ pub struct Heading {
     pub line_number: usize,
     pub outgoing: Vec<Link>,
     pub raw: String,
+}
+
+/// Return each heading's own tags together with tags inherited from every
+/// parent heading, preserving outline order and removing duplicates.
+pub fn inherited_heading_tags(headings: &[Heading]) -> Vec<Vec<String>> {
+    let mut ancestry = Vec::new();
+    let mut inherited = Vec::with_capacity(headings.len());
+    for heading in headings {
+        while ancestry
+            .last()
+            .is_some_and(|parent: &&Heading| parent.level >= heading.level)
+        {
+            ancestry.pop();
+        }
+        ancestry.push(heading);
+
+        let mut seen = HashSet::new();
+        inherited.push(
+            ancestry
+                .iter()
+                .flat_map(|heading| heading.tags.iter())
+                .filter(|tag| seen.insert((*tag).clone()))
+                .cloned()
+                .collect(),
+        );
+    }
+    inherited
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -888,6 +916,17 @@ Some text
         assert_eq!(note.headings[0].tags, vec!["tag1"]);
         assert_eq!(note.headings[1].tags, vec!["tag2", "tag3"]);
         assert!(note.headings[2].tags.is_empty());
+    }
+
+    #[test]
+    fn inherited_heading_tags_follow_current_outline_ancestry() {
+        let note = parse_note(
+            "* First :first:shared:\n** Child :child:shared:\n* Second :second:\n** Target :target:\n",
+        );
+
+        let tags = inherited_heading_tags(&note.headings);
+        assert_eq!(tags[1], vec!["first", "shared", "child"]);
+        assert_eq!(tags[3], vec!["second", "target"]);
     }
 
     #[test]

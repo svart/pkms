@@ -1162,6 +1162,59 @@ fn test_task_list_tags_pkms_uses_filetags_and_heading_tags() {
 }
 
 #[test]
+fn test_pkms_task_inherits_note_and_parent_heading_tags() {
+    let db = TestDb::new().note_with_content(
+        "inherited-tags.org",
+        r#":PROPERTIES:
+:ID:       91919191-9191-4191-8191-919191919191
+:END:
+#+title: Inherited Tags
+#+filetags: :note:
+
+* Area :area:shared:
+** WAITING Parent task :taskparent:shared:
+*** TODO Child task :child:shared:
+"#,
+    );
+
+    let (list, status) = run_json(&[
+        "--db",
+        db.root().to_str().unwrap(),
+        "--output-format",
+        "json",
+        "task",
+        "list",
+    ]);
+    assert!(status.success());
+    let child = list["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|item| item["title"] == "Child task")
+        .unwrap();
+    assert_eq!(
+        child["tags"],
+        serde_json::json!(["note", "area", "shared", "taskparent", "child"])
+    );
+
+    let child_id = format!("p{}", child["source_id"].as_str().unwrap());
+    let (show, status) = run_json(&[
+        "--db",
+        db.root().to_str().unwrap(),
+        "--output-format",
+        "json",
+        "task",
+        &child_id,
+        "show",
+    ]);
+    assert!(status.success());
+    assert_eq!(
+        show["tags"],
+        serde_json::json!(["note", "area", "shared", "taskparent", "child"])
+    );
+}
+
+#[test]
 fn test_task_list_accepts_state_tags_type_and_prio_filters() {
     let (_dir, root) = setup_db();
     let (v, status) = run_json(&[

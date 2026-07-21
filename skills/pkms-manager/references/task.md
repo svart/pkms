@@ -69,7 +69,7 @@ only source filters:
 | Todoist raw filter | `todoist.filter:<query>` | Uses Todoist's server-side filter endpoint. Requires `source:todoist` or `source:all`. |
 | State | `state:TODO`, `state:opened`, `state:closed` | Matches a TODO state case-insensitively. `opened` and `closed` expand to configured open and closed task states. |
 | State exclusion | `state:!DONE`, `state:!closed` | Excludes matching states. Comma-separated state filters use AND logic. |
-| Tags | `tags:tag1,tag2` | Matches combined note filetags and heading tags for PKMS, and labels for Todoist. Tags are exact. |
+| Tags | `tags:tag1,tag2` | Matches note filetags plus tags inherited from every parent heading and the task heading for PKMS, and labels for Todoist. Tags are exact. |
 | Tag alias | `tag:tag1,tag2` | Short form of `tags:`. |
 | Tag exclusion | `tags:!tag1,tag2` | Excludes `tag1` and requires `tag2`. Comma-separated tag filters use AND logic. |
 | Type | `type:SCHED`, `type:DEADL` | Matches scheduled or deadline tasks. `kind:` is an alias. |
@@ -220,7 +220,8 @@ by `task list source:todoist` and `task todoist:<remote-id> show`.
 
 Use `task list projects` and `task list tags` when you need task metadata. With
 `source:pkms`, projects come from note-level or heading-level `PROJECT`
-properties, and tags combine note `#+filetags` with heading tags. With
+properties, and tags combine note `#+filetags` with tags from every parent
+heading and the task heading. With
 `source:todoist`, projects and tags come from Todoist
 metadata. `source:all` combines both sources. Todoist task output uses a
 human-readable `project` when metadata is available and keeps the raw id in
