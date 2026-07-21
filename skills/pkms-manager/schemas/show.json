@@ -23,7 +23,7 @@
         "type": "object",
         "additionalProperties": true,
         "properties": {
-          "id": { "type": "integer" },
+          "id": { "type": ["integer", "null"] },
           "title": { "type": "string" },
           "todo_state": { "type": ["string", "null"] },
           "priority": { "type": ["string", "null"] },

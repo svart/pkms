@@ -2386,10 +2386,45 @@ fn test_task_show_includes_parent_and_child_chain_ids() {
 
     assert!(status.success(), "task show failed:\n{stdout}\n{stderr}");
     assert!(stdout.contains("Parent chain (depends on):"));
-    assert!(stdout.contains("p1 TODO Parent task"));
+    assert!(stdout.contains("* p1 TODO Parent task"));
     assert!(stdout.contains("Child chain (blocks):"));
     assert!(stdout.contains("p3 TODO Child task"));
     assert!(stdout.contains("p4 TODO Grandchild task"));
+}
+
+#[test]
+fn test_task_show_includes_non_task_parent_headings() {
+    let db = TestDb::new().note_with_content(
+        "show-heading-chain.org",
+        r#":PROPERTIES:
+:ID:       68686868-6868-4868-8868-686868686868
+:END:
+#+title: Show Heading Chain
+
+* Project heading
+** TODO Parent task
+*** Section heading
+**** TODO Target task
+"#,
+    );
+
+    let (v, status) = db.run_json(&["task", "p2", "show"]);
+
+    assert!(status.success());
+    assert_eq!(v["parents"][0]["id"], serde_json::Value::Null);
+    assert_eq!(v["parents"][0]["title"], "Project heading");
+    assert_eq!(v["parents"][0]["todo_state"], serde_json::Value::Null);
+    assert_eq!(v["parents"][1]["id"], 1);
+    assert_eq!(v["parents"][1]["title"], "Parent task");
+    assert_eq!(v["parents"][2]["id"], serde_json::Value::Null);
+    assert_eq!(v["parents"][2]["title"], "Section heading");
+
+    let (stdout, stderr, status) = db.run(&["task", "p2", "show"]);
+
+    assert!(status.success(), "task show failed:\n{stdout}\n{stderr}");
+    assert!(stdout.contains("* Project heading (line 6)"));
+    assert!(stdout.contains("** p1 TODO Parent task (line 7)"));
+    assert!(stdout.contains("*** Section heading (line 8)"));
 }
 
 #[test]

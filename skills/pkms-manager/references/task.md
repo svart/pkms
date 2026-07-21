@@ -146,9 +146,11 @@ Use stable `todoist:<remote-id>` IDs for Todoist mutations.
 Never print the Todoist token. It is read from `TODOIST_API_TOKEN` by default,
 or from `[todoist].token` in config when the environment variable is unset.
 
-`task <ID> show` includes parent and child task chains for nested PKMS tasks.
-Each chain entry includes the canonical task ID used by `task list`,
-`task agenda`, `task p<ID> show`, and `task p<ID> open`.
+`task <ID> show` includes all parent headings and the child task chain for nested
+PKMS tasks. Parent TODO headings and every child entry include the canonical
+task ID used by `task list`, `task agenda`, `task p<ID> show`, and
+`task p<ID> open`; ordinary parent headings have a null `id` and `todo_state` in
+structured output.
 
 For Todoist-backed agenda views, bare `task agenda source:todoist` uses the
 Todoist `!no date` filter to fetch scheduled tasks. Agenda shortcuts are aliases

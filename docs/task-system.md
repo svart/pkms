@@ -206,9 +206,11 @@ PKMS and `<remote-id>` for Todoist. In `source:all` text views, IDs are
 disambiguated as `p<ID>` for PKMS and `todoist:<remote-id>` for Todoist. Scripts
 should rely on source identity fields in JSON/NDJSON.
 
-`task <ID> show` includes parent and child task chains for nested PKMS tasks.
-Each chain entry carries the same canonical task ID used by `task list`,
-`task agenda`, `task p<ID> show`, and `task p<ID> open`.
+`task <ID> show` includes all parent headings and the child task chain for nested
+PKMS tasks. Parent TODO headings and every child entry carry the same canonical
+task ID used by `task list`, `task agenda`, `task p<ID> show`, and
+`task p<ID> open`; ordinary parent headings have a null `id` and `todo_state` in
+structured output.
 
 ## Filters And Views
 

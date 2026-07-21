@@ -12,7 +12,7 @@ use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, Serialize)]
 pub struct RelatedTaskHeading {
-    pub id: usize,
+    pub id: Option<usize>,
     pub title: String,
     pub todo_state: Option<String>,
     pub priority: Option<char>,
@@ -85,9 +85,10 @@ fn find_parents(
             continue;
         }
         seen_levels.push(h.level);
-        if let Some(id) = canonical_task_id(task_ids, path, h.line_number) {
-            parents.push(related_task_heading(id, h));
-        }
+        parents.push(related_task_heading(
+            canonical_task_id(task_ids, path, h.line_number),
+            h,
+        ));
     }
     parents.reverse();
     parents
@@ -109,7 +110,7 @@ fn find_children(
         if h.level > target_level
             && let Some(id) = canonical_task_id(task_ids, path, h.line_number)
         {
-            children.push(related_task_heading(id, h));
+            children.push(related_task_heading(Some(id), h));
         }
     }
     children
@@ -125,7 +126,10 @@ fn canonical_task_id(
         .copied()
 }
 
-fn related_task_heading(id: usize, heading: &pkms_org::parser::Heading) -> RelatedTaskHeading {
+fn related_task_heading(
+    id: Option<usize>,
+    heading: &pkms_org::parser::Heading,
+) -> RelatedTaskHeading {
     RelatedTaskHeading {
         id,
         title: heading.title.clone(),
@@ -479,12 +483,18 @@ fn render_one_text(output: &ShowOutput) -> String {
         text.push('\n');
         text.push_str("Parent chain (depends on):\n");
         for p in &output.parents {
-            let state_display = p.todo_state.as_deref().unwrap_or("");
+            let heading_prefix = "*".repeat(p.level);
+            let task_display = match (p.id, p.todo_state.as_deref()) {
+                (Some(id), Some(state)) => format!("p{id} {state} "),
+                (Some(id), None) => format!("p{id} "),
+                (None, Some(state)) => format!("{state} "),
+                (None, None) => String::new(),
+            };
             let prio_display = p.priority.map(|c| format!(" [#{}]", c)).unwrap_or_default();
             let _ = writeln!(
                 text,
-                "  p{} {} {}{} (line {}, level {})",
-                p.id, state_display, p.title, prio_display, p.line_number, p.level
+                "  {} {}{}{} (line {})",
+                heading_prefix, task_display, p.title, prio_display, p.line_number
             );
         }
     }
@@ -498,7 +508,12 @@ fn render_one_text(output: &ShowOutput) -> String {
             let _ = writeln!(
                 text,
                 "  p{} {} {}{} (line {}, level {})",
-                c.id, state_display, c.title, prio_display, c.line_number, c.level
+                c.id.expect("child task headings have canonical IDs"),
+                state_display,
+                c.title,
+                prio_display,
+                c.line_number,
+                c.level
             );
         }
     }
@@ -546,7 +561,7 @@ mod tests {
             note_uuid: "11111111-1111-4111-8111-111111111111".to_string(),
             heading_uuid: Some("22222222-2222-4222-8222-222222222222".to_string()),
             parents: vec![RelatedTaskHeading {
-                id: 1,
+                id: Some(1),
                 title: "Parent".to_string(),
                 todo_state: Some("TODO".to_string()),
                 priority: None,
@@ -554,7 +569,7 @@ mod tests {
                 level: 1,
             }],
             children: vec![RelatedTaskHeading {
-                id: 3,
+                id: Some(3),
                 title: "Child".to_string(),
                 todo_state: Some("NEXT".to_string()),
                 priority: Some('B'),
@@ -579,7 +594,7 @@ mod tests {
         assert!(text.contains("  Lines:    10 – 14"));
         assert!(text.contains("  Priority: [#A]"));
         assert!(text.contains("Parent chain (depends on):"));
-        assert!(text.contains("p1 TODO Parent (line 5, level 1)"));
+        assert!(text.contains("* p1 TODO Parent (line 5)"));
         assert!(text.contains("Child chain (blocks):"));
         assert!(text.contains("p3 NEXT Child [#B] (line 12, level 3)"));
         assert!(text.contains("id:33333333-3333-4333-8333-333333333333 → Linked Note"));
