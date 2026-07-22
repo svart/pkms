@@ -132,7 +132,7 @@ fn related_task_heading(
 ) -> RelatedTaskHeading {
     RelatedTaskHeading {
         id,
-        title: heading.title.clone(),
+        title: strip_org_links(&heading.title),
         todo_state: heading.todo_state.as_ref().map(|state| state.to_string()),
         priority: heading.priority.map(|priority| priority.as_char()),
         line_number: heading.line_number,

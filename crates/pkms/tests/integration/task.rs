@@ -2454,7 +2454,7 @@ fn test_task_show_includes_non_task_parent_headings() {
 :END:
 #+title: Show Heading Chain
 
-* Project heading
+* [[id:a1537bed-fc3b-4a4f-a065-07b690b9284b][Project]] heading
 ** TODO Parent task
 *** Section heading
 **** TODO Target task
@@ -2476,6 +2476,7 @@ fn test_task_show_includes_non_task_parent_headings() {
 
     assert!(status.success(), "task show failed:\n{stdout}\n{stderr}");
     assert!(stdout.contains("* Project heading (line 6)"));
+    assert!(!stdout.contains("[[id:"));
     assert!(stdout.contains("** p1 TODO Parent task (line 7)"));
     assert!(stdout.contains("*** Section heading (line 8)"));
 }
