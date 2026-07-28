@@ -107,6 +107,56 @@ fn test_rag_ingest_search_and_retrieve_json() {
 }
 
 #[test]
+fn test_rag_retrieve_text_uses_readable_chunk_layout() {
+    let db = TestDb::clean();
+    let rag_db = db.root().join("rag.sqlite3");
+    let fixture = rag_fixture();
+
+    let (_, ingest_stderr, ingest_status) = run_hash(&[
+        "--db",
+        db.root().to_str().unwrap(),
+        "rag",
+        "ingest",
+        fixture.to_str().unwrap(),
+        "--rag-db",
+        rag_db.to_str().unwrap(),
+    ]);
+    assert!(ingest_status.success(), "ingest failed: {ingest_stderr}");
+
+    let (stdout, stderr, status) = run_hash(&[
+        "--db",
+        db.root().to_str().unwrap(),
+        "rag",
+        "retrieve",
+        "agenda jellyfin",
+        "--limit",
+        "2",
+        "--mode",
+        "bm25",
+        "--rag-db",
+        rag_db.to_str().unwrap(),
+    ]);
+
+    assert!(
+        status.success(),
+        "retrieve failed\nstdout: {stdout}\nstderr: {stderr}"
+    );
+    assert_eq!(
+        stdout,
+        "\
+[ops/media-library.org:40-58] score 0.585 (bm25+metadata+links)
+Media Library Migration to Jellyfin
+Jellyfin internal host stays jellyfin:8096/jellyfin, but jellyfin.externalHostname must be http://server.in.svart.io/jellyfin so browser Play on Jellyfin links are reachable.
+
+[tasks/pkms-task.org:10-16] score 0.454 (bm25+metadata+links)
+PKMS Task Backend
+Use pkms task agenda week --output-format json to inspect the week's local tasks without mutating them.
+",
+        "stdout used an unexpected chunk layout"
+    );
+}
+
+#[test]
 fn test_tags_suggest_note_previews_then_adds_filetags() {
     let db = TestDb::clean();
     db.write_roam(

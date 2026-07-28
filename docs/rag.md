@@ -169,10 +169,12 @@ pkms rag serve --host 127.0.0.1 --port 7337
 ```
 
 `pkms rag search` uses SQLite FTS. `pkms rag retrieve` supports `hybrid`,
-`bm25`, and `dense` modes. Text output is concise; JSON returns the full
-response object, and NDJSON emits one result per line for search and retrieval.
-Each search/retrieve result includes `uuid`, the source note UUID, so RAG output
-can feed pipeline consumers such as `get`, `validate`, and `task list`.
+`bm25`, and `dense` modes. Text output separates results with blank lines; JSON
+returns the full response object, and NDJSON emits one result per line for search
+and retrieval. Each search/retrieve result includes `uuid`, the source note UUID,
+so RAG output can feed pipeline consumers such as `get`, `validate`, and
+`task list`. Each text retrieval result prints its source path and line range,
+score and match reason, title, then snippet on separate lines.
 
 ## Tag Recommendations
 

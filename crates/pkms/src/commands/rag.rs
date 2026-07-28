@@ -376,21 +376,17 @@ fn render_retrieve_response(
         println!("No RAG retrieval results for '{}'.", response.query);
         return Ok(());
     }
-    for result in &response.results {
+    for (index, result) in response.results.iter().enumerate() {
+        if index > 0 {
+            println!();
+        }
         let item = &result.result;
         println!(
-            "{} [{}:{}-{}] score {:.4} ({})",
-            item.title,
-            item.path,
-            item.start_line,
-            item.end_line,
-            item.scores.final_score,
-            result.reason
+            "[{}:{}-{}] score {:.3} ({})",
+            item.path, item.start_line, item.end_line, item.scores.final_score, result.reason
         );
-        if !item.heading_path.is_empty() {
-            println!("  {}", item.heading_path.join(" / "));
-        }
-        println!("  {}", text_snippet(&item.text, 220));
+        println!("{}", item.title);
+        println!("{}", text_snippet(&item.text, 220));
     }
     Ok(())
 }
