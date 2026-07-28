@@ -437,7 +437,7 @@ mod tests {
 
         assert_eq!(
             text,
-            "PKMS Task Backend\nTask backend\npkms tasks\nTodoist agenda\nChunk body"
+            "PKMS Task Backend\nTask backend\npkms tasks\nWeekly agenda\nChunk body"
         );
     }
 
@@ -591,13 +591,13 @@ mod tests {
     fn sample_chunk(body: &str) -> ChunkRecord {
         ChunkRecord {
             schema_version: SUPPORTED_SCHEMA_VERSION,
-            chunk_id: "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa:todoist-agenda:def456".to_string(),
+            chunk_id: "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa:weekly-agenda:def456".to_string(),
             note_id: "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa".to_string(),
             path: "tasks/pkms-task.org".to_string(),
             title: "PKMS Task Backend".to_string(),
             aliases: vec!["Task backend".to_string()],
             tags: vec!["pkms".to_string(), "tasks".to_string()],
-            heading_path: vec!["Todoist agenda".to_string()],
+            heading_path: vec!["Weekly agenda".to_string()],
             heading_level: 1,
             body: body.to_string(),
             start_line: 10,

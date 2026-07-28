@@ -30,11 +30,20 @@ use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::{Command, ExitStatus};
+use std::sync::{Mutex, MutexGuard};
 
 const TEST_CONFIG: &str = r#"[agenda]
 open_todo_states = ["TODO", "IN-PROGRESS", "IDEA", "PROBLEM", "WAITING", "DELEGATED", "POSTPONED"]
 closed_todo_states = ["DONE", "CANCELED"]
 "#;
+
+static SERVER_TEST_LOCK: Mutex<()> = Mutex::new(());
+
+fn lock_server_test() -> MutexGuard<'static, ()> {
+    SERVER_TEST_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
 
 pub fn pkms_binary() -> PathBuf {
     PathBuf::from(env!("CARGO_BIN_EXE_pkms"))

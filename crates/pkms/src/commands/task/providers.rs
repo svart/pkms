@@ -1,8 +1,6 @@
 use crate::config::ResolvedConfig;
 use anyhow::Result;
-use pkms_task::{
-    PkmsTaskConfig, TaskClock, TaskMetadataRow, TaskProviderEnvironment, TodoistProviderConfig,
-};
+use pkms_task::{PkmsTaskConfig, TaskClock, TaskMetadataRow, TaskProviderEnvironment};
 
 pub(super) use pkms_task::MetadataKind;
 
@@ -10,33 +8,6 @@ impl TaskProviderEnvironment for ResolvedConfig {
     fn pkms_config(&self) -> PkmsTaskConfig {
         self.pkms_task_config()
     }
-
-    #[cfg(feature = "todoist")]
-    fn todoist_config(&self) -> Result<TodoistProviderConfig> {
-        todoist_config(self)
-    }
-
-    #[cfg(not(feature = "todoist"))]
-    fn todoist_config(&self) -> Result<TodoistProviderConfig> {
-        Ok(TodoistProviderConfig {
-            org: self.org_config(),
-            token: String::new(),
-            api_base_url: String::new(),
-            default_filter: None,
-        })
-    }
-}
-
-#[cfg(feature = "todoist")]
-pub(in crate::commands::task) fn todoist_config(
-    config: &ResolvedConfig,
-) -> Result<TodoistProviderConfig> {
-    Ok(TodoistProviderConfig {
-        org: config.org_config(),
-        token: config.todoist_token()?,
-        api_base_url: config.todoist_api_base_url(),
-        default_filter: config.todoist_default_filter().map(str::to_string),
-    })
 }
 
 pub(super) fn collect_task_metadata(

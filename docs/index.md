@@ -9,7 +9,7 @@ lives here under `docs/`.
 - [Installation](installation.md): install from source and build optional
   feature sets.
 - [Configuration](configuration.md): database root resolution, note
-  directories, task settings, Todoist, RAG, and diagnostics.
+  directories, task settings, RAG, and diagnostics.
 - [Notes Database Format](database-format.md): org-roam note shape, IDs, links,
   filetags, heading nodes, and task headings.
 - [Command Reference](commands.md): grouped CLI commands and flags. Run
@@ -17,8 +17,8 @@ lives here under `docs/`.
 - [Note Database Commands](note-database-commands.md): practical scenarios for
   health checks, lookup, search, graph navigation, note creation, extraction,
   repair, and pipelines.
-- [TODO and Agenda](todo-agenda.md): task list, agenda, filters, columns, task
-  IDs, mutations, and Todoist-backed task usage.
+- [TODO and Agenda](todo-agenda.md): local task list, agenda, filters, columns,
+  IDs, and mutations.
 - [Web Viewer](web.md): how to build and run `pkms serve`.
 - [RAG Retrieval](rag.md): how to build, index, retrieve, and serve local
   retrieval over notes.
@@ -43,8 +43,8 @@ lives here under `docs/`.
 - [pkms-org](crates/pkms-org.md): org discovery, parsing, graph, snapshots, and
   edit primitives.
 - [pkms-db](crates/pkms-db.md): note database command logic and link checks.
-- [pkms-task](crates/pkms-task.md): task domain model, IDs, filters, providers,
-  mutations, and Todoist support.
+- [pkms-task](crates/pkms-task.md): local task domain model, IDs, filters,
+  providers, and mutations.
 - [pkms-rag](crates/pkms-rag.md): local retrieval models, SQLite index,
   embeddings, search, retrieval, and RAG HTTP API.
 - [pkms-web](crates/pkms-web.md): local note viewer, HTML rendering, assets, and

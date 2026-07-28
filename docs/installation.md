@@ -12,12 +12,6 @@ The repository root is a virtual Cargo workspace, so installation must target
 the umbrella binary package rather than `.`. Workspace-level `cargo run`
 commands work because `crates/pkms` is the default member.
 
-Build with Todoist task provider support:
-
-```bash
-cargo install --path crates/pkms --features todoist
-```
-
 Build with the local web viewer:
 
 ```bash
@@ -39,7 +33,7 @@ cargo install --path crates/pkms --features rag
 Features can be combined when needed:
 
 ```bash
-cargo install --path crates/pkms --features todoist,web,ssh,rag
+cargo install --path crates/pkms --features web,ssh,rag
 ```
 
 Run directly from the checkout:
@@ -47,13 +41,6 @@ Run directly from the checkout:
 ```bash
 cargo run -- <args>
 ```
-
-## Todoist Feature
-
-The `todoist` feature enables Todoist-backed task reads and writes through the
-`task` namespace. Default builds reject `source:todoist` and `source:all`
-commands that need Todoist data. Configure a token with `TODOIST_API_TOKEN` or
-`[todoist].token`; see [Configuration](configuration.md).
 
 ## Web Feature
 

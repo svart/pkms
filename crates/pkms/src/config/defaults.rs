@@ -37,10 +37,6 @@ pub fn generate_default_config(db_root: Option<&Path>) -> String {
 # tasks = ["Id", "State", "Prio", "Tags", "Note", "Heading"]
 # agenda = ["Id", "Date", "State", "Type", "Prio", "Tags", "Note", "Heading"]
 #
-# [columns.todoist]
-# tasks = ["Id", "State", "Prio", "Tags", "Project", "Heading"]
-# agenda = ["Id", "Date", "State", "Type", "Prio", "Tags", "Project", "Heading"]
-
 # Task section: configure the PKMS inbox note used by `pkms task inbox` and `pkms task add`
 # [tasks]
 # inbox = "Inbox"
@@ -49,13 +45,6 @@ pub fn generate_default_config(db_root: Option<&Path>) -> String {
 # [agenda]
 # open_todo_states = ["TODO"]
 # closed_todo_states = ["DONE"]
-
-# Todoist is disabled by default. Prefer storing the token in the environment.
-# [todoist]
-# enabled = false
-# token = "..." # optional; env var below takes precedence
-# token_env = "TODOIST_API_TOKEN"
-# default_filter = "today | overdue"
 
 # RAG retrieval index configuration. Relative paths are resolved under db_root.
 # [rag]

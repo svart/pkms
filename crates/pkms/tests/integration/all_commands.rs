@@ -257,7 +257,7 @@ fn test_all_commands_json() {
                 "--output-format".into(),
                 "json".into(),
                 "task".into(),
-                "p1".into(),
+                "1".into(),
                 "show".into(),
             ],
             true,

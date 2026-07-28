@@ -5,6 +5,7 @@ use std::process::{Command, Stdio};
 
 #[test]
 fn test_serve_renders_initial_note_and_linked_note() {
+    let _server_guard = lock_server_test();
     let (_dir, root) = setup_db();
     let config_home = setup_test_config_home();
     let mut child = Command::new(pkms_binary())
@@ -76,6 +77,7 @@ fn test_serve_renders_initial_note_and_linked_note() {
 
 #[test]
 fn test_serve_heading_id_link_anchors_and_preview_block() {
+    let _server_guard = lock_server_test();
     let db = TestDb::clean()
         .note_with_content(
             "a.org",
@@ -166,6 +168,7 @@ Sibling body.
 
 #[test]
 fn test_serve_accepts_db_relative_note_path() {
+    let _server_guard = lock_server_test();
     let (_dir, root) = setup_db();
     let config_home = setup_test_config_home();
     let mut child = Command::new(pkms_binary())
@@ -199,6 +202,7 @@ fn test_serve_accepts_db_relative_note_path() {
 
 #[test]
 fn test_serve_accepts_cwd_relative_note_path() {
+    let _server_guard = lock_server_test();
     let (_dir, root) = setup_db();
     let config_home = setup_test_config_home();
     let parent = root.parent().unwrap();
@@ -236,6 +240,7 @@ fn test_serve_accepts_cwd_relative_note_path() {
 
 #[test]
 fn test_serve_ndjson_startup_emits_single_json_line() {
+    let _server_guard = lock_server_test();
     let (_dir, root) = setup_db();
     let config_home = setup_test_config_home();
     let mut child = Command::new(pkms_binary())
@@ -270,6 +275,7 @@ fn test_serve_ndjson_startup_emits_single_json_line() {
 
 #[test]
 fn test_serve_asset_endpoint_only_serves_linked_note_assets() {
+    let _server_guard = lock_server_test();
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path().to_path_buf();
     let home = tempfile::tempdir().unwrap();

@@ -118,8 +118,8 @@ HTML:
 pkms tags
 pkms tags --output-format json
 pkms tags suggest 11111111-1111-4111-8111-111111111111
-pkms tags suggest p12 --limit 3 --neighbors 30
-pkms tags suggest p12 --apply
+pkms tags suggest 12 --limit 3 --neighbors 30
+pkms tags suggest 12 --apply
 ```
 
 `pkms tags` lists tags with their usage counts, sorted by count descending and
@@ -176,11 +176,11 @@ source note so they can be piped to note-target consumers.
 
 When the RAG feature is enabled, `pkms tags suggest` uses dense similarity to
 recommend tags that already exist in the indexed corpus. Targets are either a
-full note UUID or a canonical local `p<ID>` task ID.
+full note UUID or a canonical local `<ID>` task ID.
 The default is a five-tag preview over twenty similar chunks. `--apply` adds the
 recommendations without removing current tags. Note recommendations use
 filetags, while task recommendations use heading-specific tags and exclude
-inherited filetags. Todoist tasks are not supported. Applying changes org
+inherited filetags. Applying changes org
 source but does not automatically rebuild the derived RAG index.
 
 `pkms rag serve` starts a foreground local HTTP server with the browser UI and
@@ -278,30 +278,19 @@ pkms task list state:TODO tags:work,!blocked
 pkms task list after:tom before:"2026-06-19 12:00"
 pkms task list --columns +Project
 pkms task agenda week type:SCHED project:Alpha
-pkms task p<id> show
-pkms task p<id> open
-pkms task p<id> state WAITING
-pkms task p<id> done
+pkms task <id> show
+pkms task <id> open
+pkms task <id> state WAITING
+pkms task <id> done
 pkms task inbox
 pkms task add "Capture local task"
 pkms task add title:"Call Alice" sch:mon dead:to tag:phone prio:B
 pkms task add note:"Project Alpha" title:"Follow up"
 pkms task add dep:2 title:"Follow up on parent task"
-pkms task p<id> mod sch:2026-05-24
-pkms task p<id> mod dep:<parent-id>
-pkms task p<id> postpone
-pkms task p<id> postpone --to 2026-06-01
-pkms task add source:todoist "Buy milk tomorrow"
-pkms task add source:todoist title:"Call Alice" due:2026-05-24 priority:B
-pkms task list source:todoist
-pkms task agenda week source:all
-pkms task inbox source:todoist
-pkms task todoist:<remote-id> show
-pkms task todoist:<remote-id> done
-pkms task todoist:<remote-id> postpone
-pkms task todoist:<remote-id> postpone --to tomorrow
-pkms task todoist:<remote-id> mod sch:
-pkms task todoist:<remote-id> mod dl:
+pkms task <id> mod sch:2026-05-24
+pkms task <id> mod dep:<parent-id>
+pkms task <id> postpone
+pkms task <id> postpone --to 2026-06-01
 ```
 
 On ANSI-capable terminals, task text output renders inline `=code=`,
@@ -313,7 +302,7 @@ prints a colored `WARN: Task IDs changed` line to stderr after the command
 output. JSON/NDJSON stdout is unchanged and remains parseable.
 
 See [TODO and Agenda](todo-agenda.md) for the full task guide, including task
-IDs, filters, table columns, editor behavior, source selection, Todoist details,
+IDs, filters, table columns, editor behavior, source selection,
 state changes, and show output parent/child chains.
 
 `pkms task inbox` and default `pkms task add` use the PKMS inbox note configured
@@ -328,12 +317,6 @@ Task schedule and deadline dates accept unambiguous prefixes of `today`,
 `tomorrow`, or weekday names; weekdays resolve to the next upcoming matching
 weekday. They also accept `YYYY-MM-DD`, `YYYY-MM-DD HH:MM`, or `HH:MM`; a time
 without a date uses today.
-
-Todoist task reads require a build with `--features todoist` and a token from
-`TODOIST_API_TOKEN` or `[todoist].token` in config. Prefer the environment
-variable unless the config file is private and not committed. HTTPS uses the
-platform certificate verifier, so system trust-store corporate proxy roots are
-honored.
 
 ## Configuration
 

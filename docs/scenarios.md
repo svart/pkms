@@ -34,7 +34,7 @@ repeatable cleanup recipes.
 ## Task Commands
 
 Use `pkms task` when the work is task-first: agenda views, inbox capture,
-task inspection, local org task mutations, or Todoist-backed reads and writes.
+task inspection and local org task mutations.
 
 Common workflows:
 
@@ -43,13 +43,11 @@ pkms task list
 pkms task agenda today
 pkms task agenda overdue
 pkms task list state:TODO tags:work,!blocked prio:A
-pkms task p5 show
-pkms task p5 done --dry-run
-pkms task p5 done
+pkms task 5 show
+pkms task 5 done --dry-run
+pkms task 5 done
 pkms task add title:"Call Alice" sch:tom tag:phone prio:B
 pkms task add dep:5 title:"Follow up"
-pkms task list source:todoist 'todoist.filter:today | overdue'
-pkms task add source:todoist title:"Buy milk" due:tomorrow project:Inbox
 ```
 
 Start with [TODO and Agenda](todo-agenda.md). Use
@@ -82,7 +80,7 @@ pkms rag search "agenda inspect tasks" --limit 5
 pkms rag retrieve "agenda inspect tasks" --limit 5 --mode hybrid
 pkms tags
 pkms tags suggest 11111111-1111-4111-8111-111111111111
-pkms tags suggest p12 --apply
+pkms tags suggest 12 --apply
 pkms rag serve --host 127.0.0.1 --port 7337
 ```
 

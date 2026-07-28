@@ -229,7 +229,7 @@ mod tests {
     fn task(scheduled: Option<&str>, deadline: Option<&str>) -> TaskItem {
         TaskItem {
             id: TaskId::Pkms(1),
-            display_id: "p1".to_string(),
+            display_id: "1".to_string(),
             source: TaskSourceKind::Pkms,
             source_id: "1".to_string(),
             title: "Calendar task".to_string(),

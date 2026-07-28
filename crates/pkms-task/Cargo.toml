@@ -5,18 +5,12 @@ description = "Task management logic for pkms"
 edition = "2024"
 license = "MIT"
 
-[features]
-default = []
-todoist = ["dep:serde_json", "dep:ureq", "ureq/platform-verifier"]
-
 [dependencies]
 anyhow = "1"
 chrono = { version = "0.4", default-features = false, features = ["clock", "serde", "std"] }
 pkms-org = { path = "../pkms-org" }
 serde = { version = "1", features = ["derive"] }
-serde_json = { version = "1", optional = true }
 tracing = "0.1"
-ureq = { version = "3.3.0", optional = true, features = ["json"] }
 uuid = { version = "1", features = ["v4"] }
 
 [dev-dependencies]

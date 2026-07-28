@@ -11,14 +11,12 @@ use std::str::FromStr;
 #[serde(rename_all = "lowercase")]
 pub enum TaskSourceKind {
     Pkms,
-    Todoist,
 }
 
 impl TaskSourceKind {
     pub fn as_str(&self) -> &'static str {
         match self {
             TaskSourceKind::Pkms => "pkms",
-            TaskSourceKind::Todoist => "todoist",
         }
     }
 }
@@ -35,8 +33,7 @@ impl FromStr for TaskSourceKind {
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         match value.trim().to_ascii_lowercase().as_str() {
             "pkms" => Ok(TaskSourceKind::Pkms),
-            "todoist" => Ok(TaskSourceKind::Todoist),
-            _ => anyhow::bail!("Unknown task source '{value}'. Use pkms or todoist."),
+            _ => anyhow::bail!("Unknown task source '{value}'. Use pkms."),
         }
     }
 }

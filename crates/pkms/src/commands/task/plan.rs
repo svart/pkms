@@ -38,11 +38,8 @@ pub(super) struct PlannedAgenda {
 }
 
 fn column_source(source: SourceSelection) -> ColumnSource {
-    match source {
-        SourceSelection::Pkms => ColumnSource::Pkms,
-        SourceSelection::Todoist => ColumnSource::Todoist,
-        SourceSelection::All => ColumnSource::All,
-    }
+    let SourceSelection::Pkms = source;
+    ColumnSource::Pkms
 }
 
 pub(super) fn split_task_list_mode(filters: &[String]) -> (TaskListMode, Vec<String>) {
@@ -66,7 +63,6 @@ pub(super) fn plan_task_list_request(
     tracing::debug!(
         source = ?filters.source(),
         filter_count = raw_filters.len(),
-        has_todoist_filter = filters.todoist_filter().is_some(),
         has_criteria = filters.has_criteria(),
         "running task list"
     );
@@ -193,7 +189,6 @@ fn plan_agenda_request_from_filters(
     tracing::debug!(
         source = ?filters.source(),
         filter_count = raw_filters.len(),
-        has_todoist_filter = filters.todoist_filter().is_some(),
         has_criteria = filters.has_criteria(),
         "running task agenda"
     );

@@ -4,8 +4,7 @@ Use `pkms <command> --help` for exact current flags. This page is a compact map
 for choosing commands.
 
 Optional command surfaces depend on build features: `pkms serve` requires
-`web`, `pkms rag` requires `rag`, SSH remote file-link checks require `ssh`, and
-Todoist-backed task sources require `todoist`.
+`web`, `pkms rag` requires `rag`, and SSH remote file-link checks require `ssh`.
 
 ## Health
 
@@ -80,13 +79,13 @@ require the `rag` feature and preview unless `--apply` is passed:
 
 ```bash
 pkms tags suggest <full-note-uuid>
-pkms tags suggest p<canonical-id>
-pkms tags suggest p12 --limit 5 --neighbors 20 --apply
+pkms tags suggest <canonical-id>
+pkms tags suggest 12 --limit 5 --neighbors 20 --apply
 ```
 
 Note recommendations use note filetags. Local task recommendations use
 heading-only tags and exclude inherited filetags. Applying adds tags without
-removing current tags; Todoist tasks are not supported.
+removing current tags.
 
 ## Create and Repair
 
@@ -122,38 +121,22 @@ pkms task agenda upcoming
 pkms task agenda upcoming --days 7
 pkms task list state:TODO tags:work,!blocked
 pkms task agenda week type:SCHED project:Alpha
-pkms task p<canonical-id> show
-pkms task p<canonical-id> open
-pkms task p<canonical-id> state WAITING
-pkms task p<canonical-id> done
-pkms task list source:todoist
-pkms task agenda today source:todoist
-pkms task agenda week source:all
-pkms task agenda today source:all
+pkms task <canonical-id> show
+pkms task <canonical-id> open
+pkms task <canonical-id> state WAITING
+pkms task <canonical-id> done
 pkms task inbox
-pkms task inbox source:todoist
-pkms task list projects source:todoist
-pkms task list tags source:todoist
-pkms task todoist:<remote-id> show
 pkms task add "Capture local task"
 pkms task add title:"Call Alice" sch:mon dead:to tag:phone prio:B
 pkms task add title:"Waiting on Alice" state:WAITING
 pkms task add note:"Project Alpha" title:"Follow up"
 pkms task add dep:2 title:"Follow up on parent task"
-pkms task add source:todoist "Buy milk tomorrow"
-pkms task add source:todoist title:"Call Alice" due:2026-05-24 priority:B
-pkms task add source:todoist title:"Call Alice" sch:tod tag:phone prio:B
-pkms task todoist:<remote-id> done
-pkms task p<canonical-id> postpone
-pkms task p<canonical-id> postpone --to 2026-06-01
-pkms task todoist:<remote-id> postpone
-pkms task todoist:<remote-id> postpone --to tomorrow
-pkms task p<canonical-id> mod sch:2026-05-24
-pkms task p<canonical-id> mod state:WAITING
-pkms task todoist:<remote-id> mod sch:
-pkms task p<canonical-id> mod dl:2026-05-30
-pkms task p<canonical-id> mod dep:<parent-id>
-pkms task todoist:<remote-id> mod dl:
+pkms task <canonical-id> postpone
+pkms task <canonical-id> postpone --to 2026-06-01
+pkms task <canonical-id> mod sch:2026-05-24
+pkms task <canonical-id> mod state:WAITING
+pkms task <canonical-id> mod dl:2026-05-30
+pkms task <canonical-id> mod dep:<parent-id>
 ```
 
 ## Statistics

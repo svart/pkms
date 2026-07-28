@@ -29,7 +29,7 @@ SCHEDULED: <2026-07-10 Fri>
     let listed = item_by_title(&list, "Contract target");
     let source_id = listed["source_id"].as_str().expect("source ID");
     let display_id = listed["display_id"].as_str().expect("display ID");
-    assert_eq!(display_id, format!("p{source_id}"));
+    assert_eq!(display_id, source_id);
 
     let (agenda, agenda_status) = db.run_json(&["task", "agenda"]);
     assert!(agenda_status.success());
@@ -79,7 +79,7 @@ fn structured_stream_shapes_and_check_exit_status_are_stable() {
     assert_eq!(json["total"], 1);
     assert_eq!(json["items"][0]["source"], "pkms");
     assert_eq!(json["items"][0]["source_id"], "1");
-    assert_eq!(json["items"][0]["display_id"], "p1");
+    assert_eq!(json["items"][0]["display_id"], "1");
 
     let ndjson_args = ["--output-format", "ndjson", "task", "list"];
     let (stdout, stderr, ndjson_status) = db.run(&ndjson_args);
@@ -91,7 +91,7 @@ fn structured_stream_shapes_and_check_exit_status_are_stable() {
     assert_eq!(items.len(), 1);
     assert_eq!(items[0]["source"], "pkms");
     assert_eq!(items[0]["source_id"], "1");
-    assert_eq!(items[0]["display_id"], "p1");
+    assert_eq!(items[0]["display_id"], "1");
     assert!(items[0].get("total").is_none());
 
     db.write_roam(

@@ -490,8 +490,8 @@ fn render_one_text(output: &ShowOutput) -> String {
         for p in &output.parents {
             let heading_prefix = "*".repeat(p.level);
             let task_display = match (p.id, p.todo_state.as_deref()) {
-                (Some(id), Some(state)) => format!("p{id} {state} "),
-                (Some(id), None) => format!("p{id} "),
+                (Some(id), Some(state)) => format!("{id} {state} "),
+                (Some(id), None) => format!("{id} "),
                 (None, Some(state)) => format!("{state} "),
                 (None, None) => String::new(),
             };
@@ -599,9 +599,9 @@ mod tests {
         assert!(text.contains("  Lines:    10 – 14"));
         assert!(text.contains("  Priority: [#A]"));
         assert!(text.contains("Parent chain (depends on):"));
-        assert!(text.contains("* p1 TODO Parent (line 5)"));
+        assert!(text.contains("* 1 TODO Parent (line 5)"));
         assert!(text.contains("Child chain (blocks):"));
-        assert!(text.contains("p3 NEXT Child [#B] (line 12, level 3)"));
+        assert!(text.contains("3 NEXT Child [#B] (line 12, level 3)"));
         assert!(text.contains("id:33333333-3333-4333-8333-333333333333 → Linked Note"));
         assert!(text.contains("--- Content ---\n* TODO Task heading\nBody\n--- End Content ---"));
     }

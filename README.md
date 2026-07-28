@@ -60,8 +60,8 @@ pkms get <uuid-or-title> --links
 pkms check
 pkms task list --columns Id,Date,Prio,Note,Heading
 pkms task agenda today
-pkms task p5 show
-pkms task p5 open
+pkms task 5 show
+pkms task 5 open
 pkms new "My Note" --create --tags "topic,project"
 pkms extract <heading-uuid> "New Note Title" --apply
 ```
@@ -99,7 +99,7 @@ pkms query "rust" --output-format ndjson | pkms get --links --from-stdin
 - Internal links use `[[id:<uuid>][description]]`.
 - Headings with `:ID:` properties are first-class graph nodes.
 - TODO headings get deterministic global IDs shared by `task list`,
-  `task agenda`, and task ID actions such as `task p<ID> show`.
+  `task agenda`, and task ID actions such as `task <ID> show`.
 - `serve` is available only when built with `--features web`.
 - `pkms rag` is available only when built with `--features rag`; it stores its
   retrieval index in SQLite and serves a foreground local HTTP API/UI with
@@ -113,7 +113,7 @@ The workspace is split into focused crates:
   resolution, and raw typed org edit primitives.
 - `pkms-db`: note database commands and link checks.
 - `pkms-task`: task IDs, filtering, providers, mutations, typed org edit
-  requests, and Todoist execution.
+  requests, and local org-task execution.
 - `pkms-rag`: local retrieval indexing, embeddings, search, and HTTP API.
 - `pkms-web`: the local `serve` HTTP viewer, HTML rendering, and static assets.
 - `pkms-tokens`: token encoding, counting, and truncation leaf utilities.

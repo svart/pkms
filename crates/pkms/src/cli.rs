@@ -150,7 +150,7 @@ pub enum TagsCommand {
 #[cfg(feature = "rag")]
 #[derive(Debug, Args)]
 pub struct TagSuggestArgs {
-    #[arg(help = "Full note UUID or canonical local task ID, such as p12")]
+    #[arg(help = "Full note UUID or canonical local task ID, such as 12")]
     pub target: String,
     #[command(flatten)]
     pub options: TagSuggestionOptions,
@@ -727,7 +727,7 @@ mod tests {
     #[cfg(feature = "rag")]
     #[test]
     fn tags_suggest_rejects_zero_limits_at_cli_boundary() {
-        let error = match Cli::try_parse_from(["pkms", "tags", "suggest", "p1", "--neighbors", "0"])
+        let error = match Cli::try_parse_from(["pkms", "tags", "suggest", "1", "--neighbors", "0"])
         {
             Ok(_) => panic!("expected zero neighbors to fail"),
             Err(error) => error,

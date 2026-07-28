@@ -30,12 +30,12 @@
       "total": 1,
       "items": [
         {
-          "id": { "source": "todoist", "id": "6XGgm6PHrGgMpCFX" },
-          "source": "todoist",
-          "source_id": "6XGgm6PHrGgMpCFX",
-          "display_id": "todoist:6XGgm6PHrGgMpCFX",
+          "id": { "source": "pkms", "id": 5 },
+          "source": "pkms",
+          "source_id": "5",
+          "display_id": "5",
           "status": "open",
-          "title": "Buy milk"
+          "title": "Review notes"
         }
       ]
     }

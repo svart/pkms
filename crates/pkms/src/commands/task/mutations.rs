@@ -1,12 +1,10 @@
 use anyhow::Result;
-pub(super) use pkms_task::unsupported_task_source;
-use pkms_task::{TaskId, TaskModifierSpec, TaskSourceKind};
+use pkms_task::{TaskId, TaskModifierSpec};
 use std::process::ExitCode;
 
 use super::TaskRuntime;
 
 mod pkms;
-mod todoist;
 
 pub(in crate::commands::task) fn run_state(
     runtime: TaskRuntime<'_>,
@@ -14,15 +12,8 @@ pub(in crate::commands::task) fn run_state(
     state: &str,
     dry_run: bool,
 ) -> Result<()> {
-    match id.parse::<TaskId>()? {
-        TaskId::Pkms(canonical_id) => {
-            pkms::set_state(runtime.config, runtime.output, canonical_id, state, dry_run)
-        }
-        TaskId::Todoist(id) => {
-            todoist::set_state(runtime.config, runtime.output, &id, state, dry_run)
-        }
-        TaskId::External { source, .. } => unsupported_task_source(&source),
-    }
+    let TaskId::Pkms(canonical_id) = id.parse::<TaskId>()?;
+    pkms::set_state(runtime.config, runtime.output, canonical_id, state, dry_run)
 }
 
 pub(in crate::commands::task) fn run_done(
@@ -30,25 +21,20 @@ pub(in crate::commands::task) fn run_done(
     id: &str,
     dry_run: bool,
 ) -> Result<()> {
-    match id.parse::<TaskId>()? {
-        TaskId::Todoist(id) => todoist::close(runtime.config, runtime.output, &id, dry_run),
-        TaskId::External { source, .. } => unsupported_task_source(&source),
-        TaskId::Pkms(canonical_id) => {
-            let closed_state = runtime
-                .config
-                .closed_todo_states()
-                .first()
-                .cloned()
-                .unwrap_or_else(|| "DONE".to_string());
-            pkms::set_state(
-                runtime.config,
-                runtime.output,
-                canonical_id,
-                &closed_state,
-                dry_run,
-            )
-        }
-    }
+    let TaskId::Pkms(canonical_id) = id.parse::<TaskId>()?;
+    let closed_state = runtime
+        .config
+        .closed_todo_states()
+        .first()
+        .cloned()
+        .unwrap_or_else(|| "DONE".to_string());
+    pkms::set_state(
+        runtime.config,
+        runtime.output,
+        canonical_id,
+        &closed_state,
+        dry_run,
+    )
 }
 
 pub(in crate::commands::task) fn run_add(
@@ -56,12 +42,7 @@ pub(in crate::commands::task) fn run_add(
     tokens: &[String],
 ) -> Result<()> {
     let spec = TaskModifierSpec::parse_on(tokens, runtime.clock.today)?;
-    match spec.source_or_default() {
-        TaskSourceKind::Pkms => pkms::add(runtime.config, runtime.output, &spec, runtime.clock),
-        TaskSourceKind::Todoist => {
-            todoist::add(runtime.config, runtime.output, &spec, runtime.clock)
-        }
-    }
+    pkms::add(runtime.config, runtime.output, &spec, runtime.clock)
 }
 
 pub(in crate::commands::task) fn run_postpone(
@@ -69,19 +50,14 @@ pub(in crate::commands::task) fn run_postpone(
     id: &str,
     to: Option<&str>,
 ) -> Result<()> {
-    match id.parse::<TaskId>()? {
-        TaskId::Pkms(canonical_id) => pkms::postpone(
-            runtime.config,
-            runtime.output,
-            canonical_id,
-            to,
-            runtime.clock,
-        ),
-        TaskId::Todoist(id) => {
-            todoist::postpone(runtime.config, runtime.output, &id, to, runtime.clock)
-        }
-        TaskId::External { source, .. } => unsupported_task_source(&source),
-    }
+    let TaskId::Pkms(canonical_id) = id.parse::<TaskId>()?;
+    pkms::postpone(
+        runtime.config,
+        runtime.output,
+        canonical_id,
+        to,
+        runtime.clock,
+    )
 }
 
 pub(in crate::commands::task) fn run_mod(
@@ -90,19 +66,12 @@ pub(in crate::commands::task) fn run_mod(
     modifiers: &[String],
 ) -> Result<ExitCode> {
     let spec = TaskModifierSpec::parse_mod_on(modifiers, runtime.clock.today)?;
-    match id.parse::<TaskId>()? {
-        TaskId::Pkms(canonical_id) => pkms::mod_task(
-            runtime.config,
-            runtime.output,
-            canonical_id,
-            &spec,
-            runtime.clock,
-        ),
-        TaskId::Todoist(id) => {
-            todoist::mod_task(runtime.config, runtime.output, &id, &spec, runtime.clock)
-        }
-        TaskId::External { source, .. } => {
-            unsupported_task_source(&source).map(|()| ExitCode::SUCCESS)
-        }
-    }
+    let TaskId::Pkms(canonical_id) = id.parse::<TaskId>()?;
+    pkms::mod_task(
+        runtime.config,
+        runtime.output,
+        canonical_id,
+        &spec,
+        runtime.clock,
+    )
 }

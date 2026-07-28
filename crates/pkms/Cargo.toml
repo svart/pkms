@@ -7,7 +7,6 @@ license = "MIT"
 
 [features]
 default = []
-todoist = ["pkms-task/todoist"]
 web = ["dep:pkms-web"]
 ssh = ["pkms-db/ssh"]
 rag = ["dep:pkms-rag"]

@@ -23,7 +23,6 @@ pub struct Config {
     pub columns: Option<ColumnsConfig>,
     pub tasks: Option<TaskConfig>,
     pub agenda: Option<AgendaConfig>,
-    pub todoist: Option<TodoistConfig>,
     pub rag: Option<RagConfig>,
 }
 
@@ -36,7 +35,6 @@ pub struct ResolvedConfig {
     pub columns: Option<ColumnsConfig>,
     pub tasks: Option<TaskConfig>,
     pub agenda: Option<AgendaConfig>,
-    pub todoist: Option<TodoistConfig>,
     #[cfg(any(feature = "rag", test))]
     pub rag: Option<RagConfig>,
     // Keep non-RAG builds compatible with config files that contain `[rag]`.
@@ -76,16 +74,6 @@ pub struct AgendaConfig {
     pub open_todo_states: Vec<String>,
     #[serde(default = "default_closed_todo_states")]
     pub closed_todo_states: Vec<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct TodoistConfig {
-    #[serde(default)]
-    pub enabled: bool,
-    pub token: Option<String>,
-    pub token_env: Option<String>,
-    pub default_filter: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -140,7 +128,6 @@ impl Config {
             columns: self.columns,
             tasks: self.tasks,
             agenda: self.agenda,
-            todoist: self.todoist,
             #[cfg(any(feature = "rag", test))]
             rag: self.rag,
             #[cfg(not(any(feature = "rag", test)))]
@@ -151,7 +138,6 @@ impl Config {
             db_root = %resolved.db_root.display(),
             db_root_source,
             ignore_pattern_count = resolved.ignore_patterns.as_ref().map_or(0, Vec::len),
-            todoist_enabled = resolved.todoist_enabled(),
             has_task_inbox = resolved
                 .tasks
                 .as_ref()
@@ -174,7 +160,6 @@ impl ResolvedConfig {
             columns: None,
             tasks: None,
             agenda: None,
-            todoist: None,
             rag: None,
             runtime: RuntimeInputs::default(),
         }
@@ -325,55 +310,6 @@ impl ResolvedConfig {
             .unwrap_or_else(default_closed_todo_states)
     }
 
-    pub fn todoist_enabled(&self) -> bool {
-        self.todoist.as_ref().is_some_and(|todoist| todoist.enabled)
-    }
-
-    #[cfg(any(feature = "todoist", test))]
-    pub fn todoist_token_env(&self) -> &str {
-        self.todoist
-            .as_ref()
-            .and_then(|todoist| todoist.token_env.as_deref())
-            .unwrap_or("TODOIST_API_TOKEN")
-    }
-
-    #[cfg(any(feature = "todoist", test))]
-    pub fn todoist_default_filter(&self) -> Option<&str> {
-        self.todoist
-            .as_ref()
-            .and_then(|todoist| todoist.default_filter.as_deref())
-    }
-
-    #[cfg(any(feature = "todoist", test))]
-    pub fn todoist_token(&self) -> Result<String> {
-        let env_name = self.todoist_token_env();
-        if let Some(token) = self.runtime.non_empty_var(env_name) {
-            return Ok(token.to_string());
-        }
-
-        if let Some(token) = self
-            .todoist
-            .as_ref()
-            .and_then(|todoist| todoist.token.as_deref())
-            .map(str::trim)
-            .filter(|token| !token.is_empty())
-        {
-            return Ok(token.to_string());
-        }
-
-        anyhow::bail!(
-            "Todoist token is not configured. Set env var {env_name} or [todoist].token in config"
-        )
-    }
-
-    #[cfg(feature = "todoist")]
-    pub fn todoist_api_base_url(&self) -> String {
-        self.runtime
-            .non_empty_var("PKMS_TODOIST_API_BASE_URL")
-            .unwrap_or("https://api.todoist.com/api/v1")
-            .to_string()
-    }
-
     pub fn runtime_inputs(&self) -> &RuntimeInputs {
         &self.runtime
     }
@@ -441,7 +377,6 @@ mod tests {
             columns: None,
             tasks: None,
             agenda: None,
-            todoist: None,
             rag: None,
             runtime: RuntimeInputs::default(),
         };
@@ -461,7 +396,6 @@ mod tests {
             columns: None,
             tasks: None,
             agenda: None,
-            todoist: None,
             rag: None,
             runtime: RuntimeInputs::default(),
         };
@@ -478,7 +412,6 @@ mod tests {
             columns: None,
             tasks: None,
             agenda: None,
-            todoist: None,
             rag: None,
             runtime: RuntimeInputs::default(),
         };
@@ -498,7 +431,6 @@ mod tests {
             columns: None,
             tasks: None,
             agenda: None,
-            todoist: None,
             rag: None,
             runtime: RuntimeInputs::default(),
         };
@@ -518,7 +450,6 @@ mod tests {
             columns: None,
             tasks: None,
             agenda: None,
-            todoist: None,
             rag: None,
             runtime: RuntimeInputs::default(),
         };
@@ -538,7 +469,6 @@ mod tests {
             columns: None,
             tasks: None,
             agenda: None,
-            todoist: None,
             rag: None,
             runtime: RuntimeInputs::default(),
         };
@@ -558,7 +488,6 @@ mod tests {
             columns: None,
             tasks: None,
             agenda: None,
-            todoist: None,
             rag: None,
             runtime: RuntimeInputs::default(),
         };
@@ -577,7 +506,6 @@ mod tests {
             columns: None,
             tasks: None,
             agenda: None,
-            todoist: None,
             rag: None,
             runtime: RuntimeInputs::default(),
         };
@@ -624,7 +552,6 @@ mod tests {
             columns: None,
             tasks: None,
             agenda: None,
-            todoist: None,
             rag: None,
             runtime: RuntimeInputs::default(),
         };
@@ -646,12 +573,6 @@ ignore_patterns = [".attach"]
 [tasks]
 inbox = "Inbox"
 
-[todoist]
-enabled = true
-token = "config-token"
-token_env = "PKMS_TEST_TODOIST_TOKEN"
-default_filter = "today | overdue"
-
 [rag]
 rag_db = ".data/rag.sqlite3"
 embedding_model = "Xenova/bge-small-en-v1.5"
@@ -669,14 +590,6 @@ fastembed_model_dir = "models/bge-small"
                 .and_then(|tasks| tasks.inbox.as_deref()),
             Some("Inbox")
         );
-        let todoist = config.todoist.unwrap();
-        assert!(todoist.enabled);
-        assert_eq!(todoist.token.as_deref(), Some("config-token"));
-        assert_eq!(
-            todoist.token_env.as_deref(),
-            Some("PKMS_TEST_TODOIST_TOKEN")
-        );
-        assert_eq!(todoist.default_filter.as_deref(), Some("today | overdue"));
         let rag = config.rag.unwrap();
         assert_eq!(rag.rag_db.as_deref(), Some(Path::new(".data/rag.sqlite3")));
         assert_eq!(
@@ -712,20 +625,6 @@ open_todo_states = ["TODO"]
 typo = true
 "#,
             "typo",
-        );
-    }
-
-    #[test]
-    fn test_todoist_config_rejects_unknown_fields() {
-        assert_unknown_config_field_rejected(
-            r#"
-db_root = "/test/db"
-
-[todoist]
-enabled = true
-tokne = "secret"
-"#,
-            "tokne",
         );
     }
 
@@ -773,7 +672,6 @@ rag_database = "typo.sqlite3"
             columns: None,
             tasks: None,
             agenda: None,
-            todoist: None,
             rag: Some(RagConfig {
                 rag_db: Some(PathBuf::from(".data/rag.sqlite3")),
                 embedding_model: Some("Xenova/bge-small-en-v1.5".to_string()),
@@ -827,9 +725,6 @@ db_root = "/test/db"
 tasks = ["Id", "Heading"]
 agenda = ["Id", "Date", "Heading"]
 
-[columns.todoist]
-tasks = ["Id", "Project", "Heading"]
-agenda = ["Id", "Date", "Project", "Heading"]
 "#,
         )
         .unwrap();
@@ -840,105 +735,5 @@ agenda = ["Id", "Date", "Project", "Heading"]
                 .unwrap(),
             Some(["Id".to_string(), "Heading".to_string()].as_slice())
         );
-        assert_eq!(
-            columns
-                .default_for(ColumnSource::Todoist, ColumnView::Agenda)
-                .unwrap(),
-            Some(
-                [
-                    "Id".to_string(),
-                    "Date".to_string(),
-                    "Project".to_string(),
-                    "Heading".to_string()
-                ]
-                .as_slice()
-            )
-        );
-    }
-
-    #[test]
-    fn test_source_all_columns_error_when_source_defaults_differ() {
-        let config: Config = toml::from_str(
-            r#"
-db_root = "/test/db"
-
-[columns.pkms]
-tasks = ["Id", "Heading"]
-
-[columns.todoist]
-tasks = ["Id", "Project", "Heading"]
-"#,
-        )
-        .unwrap();
-        let columns = config.columns.as_ref().unwrap();
-        assert!(
-            columns
-                .default_for(ColumnSource::All, ColumnView::Tasks)
-                .is_err()
-        );
-    }
-
-    #[test]
-    fn test_todoist_config_defaults() {
-        let config = ResolvedConfig {
-            db_root: PathBuf::from("/test/root"),
-            new_notes_dir: None,
-            daily_notes_dir: None,
-            ignore_patterns: None,
-            columns: None,
-            tasks: None,
-            agenda: None,
-            todoist: None,
-            rag: None,
-            runtime: RuntimeInputs::default(),
-        };
-        assert!(!config.todoist_enabled());
-        assert_eq!(config.todoist_token_env(), "TODOIST_API_TOKEN");
-        assert_eq!(config.todoist_default_filter(), None);
-    }
-
-    #[test]
-    fn test_todoist_token_error_does_not_include_secret_value() {
-        let config = ResolvedConfig {
-            db_root: PathBuf::from("/test/root"),
-            new_notes_dir: None,
-            daily_notes_dir: None,
-            ignore_patterns: None,
-            columns: None,
-            tasks: None,
-            agenda: None,
-            todoist: Some(TodoistConfig {
-                enabled: true,
-                token: None,
-                token_env: Some("PKMS_TEST_MISSING_TODOIST_TOKEN".to_string()),
-                default_filter: None,
-            }),
-            rag: None,
-            runtime: RuntimeInputs::default(),
-        };
-        let error = config.todoist_token().unwrap_err().to_string();
-        assert!(error.contains("PKMS_TEST_MISSING_TODOIST_TOKEN"));
-    }
-
-    #[test]
-    fn test_todoist_token_can_come_from_config() {
-        let config = ResolvedConfig {
-            db_root: PathBuf::from("/test/root"),
-            new_notes_dir: None,
-            daily_notes_dir: None,
-            ignore_patterns: None,
-            columns: None,
-            tasks: None,
-            agenda: None,
-            todoist: Some(TodoistConfig {
-                enabled: true,
-                token: Some(" config-token ".to_string()),
-                token_env: Some("PKMS_TEST_MISSING_TODOIST_TOKEN".to_string()),
-                default_filter: None,
-            }),
-            rag: None,
-            runtime: RuntimeInputs::default(),
-        };
-        assert_eq!(config.todoist_token().unwrap(), "config-token");
     }
 }

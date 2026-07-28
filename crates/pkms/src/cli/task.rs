@@ -12,11 +12,11 @@ fn parse_nonzero_i32(value: &str) -> Result<i32, String> {
 
 const TASK_ID_ACTION_HELP: &str = "ID-first actions:\n  pkms task <ID> show\n  pkms task <ID> open [--editor <COMMAND>] [--line <LINE>]\n  pkms task <ID> state <STATE> [--dry-run]\n  pkms task <ID> done [--dry-run]\n  pkms task <ID> postpone [--to <DATE>]\n  pkms task <ID> mod <MODIFIER>...\n  pkms task <ID> mod dep:<PARENT-ID>";
 
-const TASK_FILTER_HELP_WITH_DATES: &str = "Filters:\n  source:pkms|todoist|all, src:pkms|todoist|all\n  state:TODO|opened|closed, tags:tag,!other, type:SCHED,DEADL, prio:A[,B,C], project:Name\n  date:today|week|overdue|upcoming|YYYY-MM-DD|tom|fri[,value...], after:YYYY-MM-DD[ HH:MM]|tom|fri, before:YYYY-MM-DD[ HH:MM]|tom|fri\n  todoist.filter:<query> (requires source:todoist or source:all)";
+const TASK_FILTER_HELP_WITH_DATES: &str = "Filters:\n  source:pkms, src:pkms\n  state:TODO|opened|closed, tags:tag,!other, type:SCHED,DEADL, prio:A[,B,C], project:Name\n  date:today|week|overdue|upcoming|YYYY-MM-DD|tom|fri[,value...], after:YYYY-MM-DD[ HH:MM]|tom|fri, before:YYYY-MM-DD[ HH:MM]|tom|fri";
 
-const TASK_SIMPLE_FILTER_HELP: &str = "Filters:\n  source:pkms|todoist|all, src:pkms|todoist|all\n  state:TODO|opened|closed, tags:tag,!other, type:SCHED,DEADL, prio:A, project:Name\n  todoist.filter:<query> (requires source:todoist or source:all)";
+const TASK_SIMPLE_FILTER_HELP: &str = "Filters:\n  source:pkms, src:pkms\n  state:TODO|opened|closed, tags:tag,!other, type:SCHED,DEADL, prio:A, project:Name";
 
-const TASK_SHARED_MODIFIER_HELP: &str = "  state:<state>             PKMS TODO state from configured agenda states\n  tag:<label>, tags:<a,b>   Labels/tags; repeat or comma-separate\n  schedule:<date>, sch:<date>, due:<date>\n  deadline:<date>, dead:<date>, dl:<date>\n  project:<name-or-id>, proj:<name-or-id>, prio:A|B|C, desc:<text>, source:pkms|todoist\n";
+const TASK_SHARED_MODIFIER_HELP: &str = "  state:<state>             PKMS TODO state from configured agenda states\n  tag:<label>, tags:<a,b>   Labels/tags; repeat or comma-separate\n  schedule:<date>, sch:<date>, due:<date>\n  deadline:<date>, dead:<date>, dl:<date>\n  project:<name-or-id>, proj:<name-or-id>, prio:A|B|C, desc:<text>, source:pkms\n";
 
 const TASK_DATE_MODIFIER_HELP: &str = "Date shortcuts for schedule/deadline: unambiguous prefixes of today, tomorrow, or weekdays; YYYY-MM-DD; YYYY-MM-DD HH:MM; or HH:MM (today).";
 
@@ -92,7 +92,7 @@ pub struct TaskCalendarArgs {
 #[command(
     after_help = [
         TASK_FILTER_HELP_WITH_DATES,
-        "\n\nExamples:\n  pkms task list source:todoist tag:phone prio:A\n  pkms task list state:opened,!waiting prio:A,B,C\n  pkms task list source:all date:today,overdue project:Inbox",
+        "\n\nExamples:\n  pkms task list tag:phone prio:A\n  pkms task list state:opened,!waiting prio:A,B,C\n  pkms task list date:today,overdue project:Inbox",
     ]
     .concat()
 )]
@@ -118,7 +118,7 @@ pub struct TaskListArgs {
 #[command(
     after_help = [
         TASK_FILTER_HELP_WITH_DATES,
-        "\n\nExamples:\n  pkms task agenda source:todoist\n  pkms task agenda --days 7\n  pkms task agenda source:all date:today,overdue tag:waiting\n  pkms task agenda state:opened,!waiting prio:A,B,C\n  pkms task agenda today source:todoist",
+        "\n\nExamples:\n  pkms task agenda\n  pkms task agenda --days 7\n  pkms task agenda date:today,overdue tag:waiting\n  pkms task agenda state:opened,!waiting prio:A,B,C\n  pkms task agenda today",
     ]
     .concat()
 )]
@@ -153,7 +153,7 @@ pub enum TaskAgendaCommand {
 #[command(
     after_help = [
         TASK_SIMPLE_FILTER_HELP,
-        "\n\nExamples:\n  pkms task agenda today source:todoist\n  pkms task inbox source:all state:!closed project:Inbox",
+        "\n\nExamples:\n  pkms task agenda today\n  pkms task inbox state:!closed project:Inbox",
     ]
     .concat()
 )]
@@ -170,7 +170,7 @@ pub struct TaskShortcutArgs {
 #[command(
     after_help = [
         TASK_SIMPLE_FILTER_HELP,
-        "\n\nExamples:\n  pkms task agenda upcoming --days 14 source:all tag:phone\n  pkms task agenda upcoming source:todoist state:opened prio:B",
+        "\n\nExamples:\n  pkms task agenda upcoming --days 14 tag:phone\n  pkms task agenda upcoming state:opened prio:B",
     ]
     .concat()
 )]
@@ -187,13 +187,13 @@ pub struct TaskUpcomingArgs {
 
 #[derive(Debug, Args)]
 pub struct TaskTargetArgs {
-    #[arg(help = "Task ID: 12, p12, pkms:12, or todoist:<remote-id>")]
+    #[arg(help = "Task ID: a positive integer such as 12")]
     pub id: String,
 }
 
 #[derive(Debug, Args)]
 pub struct TaskOpenArgs {
-    #[arg(help = "Task ID: 12, p12, pkms:12, or todoist:<remote-id>")]
+    #[arg(help = "Task ID: a positive integer such as 12")]
     pub id: String,
     #[arg(
         long,
@@ -207,7 +207,7 @@ pub struct TaskOpenArgs {
 
 #[derive(Debug, Args)]
 pub struct TaskStateArgs {
-    #[arg(help = "Task ID: 12, p12, pkms:12, or todoist:<remote-id>")]
+    #[arg(help = "Task ID: a positive integer such as 12")]
     pub id: String,
     #[arg(help = "TODO state from configured open_todo_states or closed_todo_states")]
     pub state: String,
@@ -217,7 +217,7 @@ pub struct TaskStateArgs {
 
 #[derive(Debug, Args)]
 pub struct TaskDoneArgs {
-    #[arg(help = "Task ID: 12, p12, pkms:12, or todoist:<remote-id>")]
+    #[arg(help = "Task ID: a positive integer such as 12")]
     pub id: String,
     #[arg(long, help = "Print the planned change without writing")]
     pub dry_run: bool,
@@ -232,7 +232,7 @@ pub struct TaskDoneArgs {
         "  note:<uuid-title-or-path> PKMS only; choose the note to append into\n",
         "  dep:<task-id>, depend:<task-id> PKMS only; add as child of a task\n\n",
         TASK_DATE_MODIFIER_HELP,
-        "\n\nExamples:\n  pkms task add title:\"This is title\" sch:mon dead:to prio:a tag:phone\n  pkms task add dep:2 title:\"Follow up\"\n  pkms task add source:todoist title:\"Call Alice\" proj:Inbox tag:phone prio:b\n  pkms task add note:\"Project Alpha\" title:\"Follow up\"",
+        "\n\nExamples:\n  pkms task add title:\"This is title\" sch:mon dead:to prio:a tag:phone\n  pkms task add dep:2 title:\"Follow up\"\n  pkms task add title:\"Call Alice\" proj:Inbox tag:phone prio:b\n  pkms task add note:\"Project Alpha\" title:\"Follow up\"",
     ]
     .concat()
 )]
@@ -245,7 +245,7 @@ pub struct TaskAddArgs {
 
 #[derive(Debug, Args)]
 pub struct TaskPostponeArgs {
-    #[arg(help = "Task ID: 12, p12, pkms:12, or todoist:<remote-id>")]
+    #[arg(help = "Task ID: a positive integer such as 12")]
     pub id: String,
     #[arg(
         long,

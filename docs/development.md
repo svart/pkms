@@ -25,8 +25,6 @@ about the installed version. If the user provides example files from the notes
 database, inspect those files before broader analysis.
 
 For output or parsing bugs, prefer the smallest fixture that shows the issue.
-For task bugs, preserve the distinction between local PKMS tasks and Todoist
-tasks, because they have different source and mutation paths.
 
 ## Local Development Loop
 
@@ -88,15 +86,6 @@ edit-test loop while working inside one feature area. Run the relevant focused
 check when it helps, then use the [Fast Pre-Commit Gate](#fast-pre-commit-gate)
 before committing.
 
-Todoist changes:
-
-```bash
-cargo clippy --features todoist -- -D warnings
-cargo test --features todoist <test-name>
-cargo test --features todoist --test integration <test-name>
-cargo build --features todoist
-```
-
 Web viewer or rendered HTML changes:
 
 ```bash
@@ -142,7 +131,7 @@ When feature interactions are relevant during implementation, prefer an
 explicit combined-feature build:
 
 ```bash
-cargo build --features todoist,web,ssh,rag
+cargo build --features web,ssh,rag
 cargo build --all-features
 ```
 
@@ -171,7 +160,7 @@ crates/pkms-org/            # org discovery, parsing, graph, snapshots, org edit
 crates/pkms-tokens/         # token encoding/counting leaf utilities
 crates/pkms-db/             # note database command logic and link checks
 crates/pkms-rag/            # local retrieval, SQLite index, embeddings, RAG API
-crates/pkms-task/           # task domain logic, providers, mutations, Todoist integration
+crates/pkms-task/           # local task domain logic, providers, and mutations
 crates/pkms-web/            # local HTTP viewer, HTML rendering, assets, fonts
 docs/                       # detailed user, agent, architecture, scenario, and crate docs
   index.md                  # documentation map
@@ -234,17 +223,15 @@ retrieval indexing/search/API behavior; and `pkms-web` for the local viewer. The
 umbrella `pkms` crate should keep CLI parsing, config mapping, output
 formatting, and cross-domain orchestration.
 
-Task command boundaries are stricter because local org edits and Todoist
-network actions both mutate user data:
+Task command boundaries are strict because local org edits mutate user data:
 
 - `pkms-org` owns org task syntax, typed task insertion, daily note creation,
   and raw org file writes.
-- `pkms-task` owns canonical task IDs, source selection, filtering, provider
-  collection, task mutations, Todoist API execution, and typed requests into
-  `pkms-org`.
+- `pkms-task` owns canonical task IDs, filtering, local provider collection,
+  task mutations, and typed requests into `pkms-org`.
 - `pkms` task command modules own CLI argument adapters, config mapping, output
   rendering, and cross-domain show/open dispatch. They should not format raw org
-  task text or call Todoist HTTP APIs directly.
+  task text directly.
 
 The web viewer keeps its public command entry point in
 `crates/pkms/src/commands/serve.rs`, but HTTP routing, static/font assets, page
@@ -273,8 +260,8 @@ Update schemas under `skills/pkms-manager/schemas/` when JSON output changes.
 ## Task-System Changes
 
 TODO headings receive deterministic global IDs shared by `task list`,
-`task agenda`, and ID-first task actions such as `task p<ID> show` and
-`task p<ID> open`. IDs are based on task status grouping and stable
+`task agenda`, and ID-first task actions such as `task <ID> show` and
+`task <ID> open`. IDs are based on task status grouping and stable
 file/heading ordering within the parsed database: open tasks before closed
 tasks; timestamped files (`YYYYMMDDHHMMSS-rest.org`) newest to oldest; equal
 timestamps by the rest-of-name; daily files (`YYYY-MM-DD.org`) participate as
@@ -306,10 +293,6 @@ Logs are written to stderr so text, JSON, and NDJSON stdout remain parseable.
 `PKMS_LOG=1` enables debug logs; module filters such as
 `PKMS_LOG=pkms::graph=debug` keep output focused. Add `PKMS_LOG_FORMAT=json`
 when logs need to be parsed by tools.
-
-For Todoist API issues, prefer `PKMS_LOG_HTTP=1`. It emits request/response
-metadata and pagination counts without logging tokens, request bodies, task
-content, or descriptions.
 
 ## Documentation and Release Workflow
 

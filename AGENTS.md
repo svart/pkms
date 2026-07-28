@@ -125,8 +125,8 @@ or behavior has changed.
 Canonical task IDs:
 
 - TODO headings receive deterministic global IDs shared by `task list`,
-  `task agenda`, and ID-first task actions such as `task p<ID> show` and
-  `task p<ID> open`.
+  `task agenda`, and ID-first task actions such as `task <ID> show` and
+  `task <ID> open`.
 - IDs are based on task status grouping and stable ordering within the parsed
   database.
 - Filtered views can show non-contiguous IDs because excluded tasks still occupy
@@ -153,7 +153,6 @@ Feature flags:
 
 | Feature | Default | Description |
 |---------|---------|-------------|
-| `todoist` | off | Enables Todoist task reads and writes through `ureq`. |
 | `web` | off | Enables the local `serve` web viewer and static rendering through `katex` and `syntect`. |
 | `ssh` | off | Enables remote SSH `file:` link checks. |
 | `rag` | off | Enables `pkms rag` local retrieval and the optional `pkms-rag` dependency. |
@@ -197,10 +196,6 @@ Task behavior: preserve canonical task IDs and source semantics. Follow
 Structured output or pipelining: preserve JSON and NDJSON contracts. Follow
 [Output contracts](docs/development.md#output-contracts) and update schemas under
 `skills/pkms-manager/schemas/` when output changes.
-
-Todoist changes: keep token handling out of logs and stdout. Use
-`PKMS_LOG_HTTP=1` only for scrubbed request metadata, and run the Todoist checks
-from [Feature-specific checks](docs/development.md#feature-specific-checks).
 
 Web viewer changes: keep `serve` foreground-only and free of persistent derived
 state. Run the web checks from

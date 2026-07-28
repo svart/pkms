@@ -247,7 +247,7 @@ Discuss the local retrieval workflow.
         "json",
         "tags",
         "suggest",
-        "p1",
+        "1",
         "--rag-db",
         rag_db.to_str().unwrap(),
         "--apply",
@@ -300,7 +300,7 @@ Body.
         db.root().to_str().unwrap(),
         "tags",
         "suggest",
-        "todoist:123",
+        "remote:123",
         "--rag-db",
         rag_db.to_str().unwrap(),
     ]);
@@ -598,6 +598,7 @@ The RAG force rebuild path starts from an empty SQLite index.
 #[cfg(feature = "web")]
 #[test]
 fn test_rag_serve_note_route_uses_pkms_serve_viewer() {
+    let _server_guard = lock_server_test();
     let db = TestDb::clean();
     db.write_roam(
         "rag-viewer.org",
@@ -636,9 +637,21 @@ RAG result titles open the rendered note viewer.
     let mut reader = BufReader::new(stdout);
     let mut line = String::new();
     reader.read_line(&mut line).unwrap();
+    let startup_stderr = if line.is_empty() {
+        let mut stderr = String::new();
+        child
+            .stderr
+            .take()
+            .unwrap()
+            .read_to_string(&mut stderr)
+            .unwrap();
+        stderr
+    } else {
+        String::new()
+    };
     assert!(
         line.starts_with("Serving http://"),
-        "unexpected line: {line}"
+        "unexpected line: {line}; stderr: {startup_stderr}"
     );
     let url = line.trim().strip_prefix("Serving ").unwrap();
     let (_, rest) = url.split_once("://").unwrap();

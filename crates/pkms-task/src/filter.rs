@@ -12,14 +12,11 @@ use crate::scope::ResolvedScope;
 #[serde(rename_all = "lowercase")]
 pub enum SourceSelection {
     Pkms,
-    Todoist,
-    All,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TaskFilters {
     pub(crate) source: SourceSelection,
-    pub(crate) todoist_filter: Option<String>,
     pub(crate) criteria: TaskFilterCriteria,
 }
 
@@ -53,7 +50,6 @@ fn parse_task_filters(filters: &[String]) -> Result<TaskFilters> {
 
 pub fn parse_task_filters_on(filters: &[String], today: NaiveDate) -> Result<TaskFilters> {
     let mut selected = Vec::new();
-    let mut todoist_filter = None;
     let mut criteria = TaskFilterCriteria::default();
     for filter in filters {
         if let Some(value) = filter
@@ -62,17 +58,8 @@ pub fn parse_task_filters_on(filters: &[String], today: NaiveDate) -> Result<Tas
         {
             match value.to_ascii_lowercase().as_str() {
                 "pkms" => selected.push(SourceSelection::Pkms),
-                "todoist" => selected.push(SourceSelection::Todoist),
-                "all" => selected.push(SourceSelection::All),
-                _ => bail!(
-                    "Unknown task source '{value}'. Use source:pkms, source:todoist, or source:all."
-                ),
+                _ => bail!("Unknown task source '{value}'. Use source:pkms."),
             }
-            continue;
-        }
-
-        if let Some(value) = filter.strip_prefix("todoist.filter:") {
-            todoist_filter = Some(unquote(value).to_string());
             continue;
         }
 
@@ -108,15 +95,7 @@ pub fn parse_task_filters_on(filters: &[String], today: NaiveDate) -> Result<Tas
     }
 
     let source = normalize_sources(selected);
-    if todoist_filter.is_some() && matches!(source, SourceSelection::Pkms) {
-        bail!("todoist.filter requires source:todoist or source:all");
-    }
-
-    Ok(TaskFilters {
-        source,
-        todoist_filter,
-        criteria,
-    })
+    Ok(TaskFilters { source, criteria })
 }
 
 impl TaskFilters {
@@ -124,20 +103,8 @@ impl TaskFilters {
         self.source
     }
 
-    pub fn todoist_filter(&self) -> Option<&str> {
-        self.todoist_filter.as_deref()
-    }
-
     pub fn scope(&self) -> &[String] {
         &self.criteria.scope
-    }
-
-    pub fn with_todoist_filter(&self, todoist_filter: Option<String>) -> Self {
-        Self {
-            source: self.source,
-            todoist_filter,
-            criteria: self.criteria.clone(),
-        }
     }
 
     pub fn has_criteria(&self) -> bool {
@@ -393,27 +360,8 @@ fn matches_scope_filter(
     raw_scope.is_empty() || scope.is_some_and(|scope| scope.matches_task_item(item))
 }
 
-fn normalize_sources(mut selected: Vec<SourceSelection>) -> SourceSelection {
-    if selected.is_empty() {
-        return SourceSelection::Pkms;
-    }
-
-    if selected.contains(&SourceSelection::All) {
-        return SourceSelection::All;
-    }
-
-    selected.sort_by_key(|source| match source {
-        SourceSelection::Pkms => 0,
-        SourceSelection::Todoist => 1,
-        SourceSelection::All => 2,
-    });
-    selected.dedup();
-
-    match selected.as_slice() {
-        [SourceSelection::Pkms] => SourceSelection::Pkms,
-        [SourceSelection::Todoist] => SourceSelection::Todoist,
-        _ => SourceSelection::All,
-    }
+fn normalize_sources(_selected: Vec<SourceSelection>) -> SourceSelection {
+    SourceSelection::Pkms
 }
 
 fn unquote(value: &str) -> &str {
@@ -522,22 +470,6 @@ mod tests {
                 .unwrap()
                 .source,
             SourceSelection::Pkms
-        );
-        assert_eq!(
-            parse_task_filters(&["source:todoist".to_string()])
-                .unwrap()
-                .source,
-            SourceSelection::Todoist
-        );
-    }
-
-    #[test]
-    fn repeated_sources_combine_to_all() {
-        assert_eq!(
-            parse_task_filters(&["source:pkms".to_string(), "source:todoist".to_string()])
-                .unwrap()
-                .source,
-            SourceSelection::All
         );
     }
 
@@ -734,29 +666,6 @@ mod tests {
                     .and_hms_opt(18, 45, 0)
                     .unwrap()
             )
-        );
-    }
-
-    #[test]
-    fn parses_todoist_filter() {
-        let filters = parse_task_filters(&[
-            "source:todoist".to_string(),
-            "todoist.filter:\"today | overdue\"".to_string(),
-        ])
-        .unwrap();
-        assert_eq!(filters.source, SourceSelection::Todoist);
-        assert_eq!(filters.todoist_filter.as_deref(), Some("today | overdue"));
-    }
-
-    #[test]
-    fn rejects_todoist_filter_for_pkms_source() {
-        assert!(parse_task_filters(&["todoist.filter:today".to_string()]).is_err());
-        assert!(
-            parse_task_filters(&[
-                "source:pkms".to_string(),
-                "todoist.filter:today".to_string()
-            ])
-            .is_err()
         );
     }
 }

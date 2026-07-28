@@ -1,261 +1,102 @@
-# pkms task
+# Local task workflows
 
-Task-first namespace for local PKMS tasks.
+`pkms task` manages TODO headings in the org database.
+
+## Inspect
 
 ```bash
 pkms task list
+pkms task list state:TODO tags:work,!blocked prio:A
 pkms task agenda
 pkms task agenda today
 pkms task agenda week
 pkms task agenda overdue
-pkms task agenda upcoming
+pkms task agenda upcoming --days 7
 pkms task calendar
-pkms task calendar --months 3
-pkms task calendar -m -1
-pkms task p5 show
-pkms task p5 open
-pkms task p5 state WAITING
-pkms task p5 done
-pkms task p5 done --dry-run
-```
-
-`task calendar` is a text-only Monday-first view of open PKMS task dates. It
-shows the current month by default. Positive `-m N` / `--months N` values start
-with the current month; negative values include that many previous months plus
-the current month. Months print horizontally and wrap to additional rows when
-necessary. On ANSI-capable terminals, scheduled dates are underlined, deadline
-dates are red, and the current day is blue unless it has a deadline. It does not
-accept task filters or provider selection. A compact styled legend precedes the
-calendar.
-
-PKMS task IDs can be written as bare canonical IDs, `p<ID>`, or `pkms:<ID>`.
-Provider-backed tasks use stable `<source>:<remote-id>` IDs, such as
-`todoist:<remote-id>`. Unknown provider IDs fail unless that provider is
-configured in the current build.
-
-PKMS canonical IDs are assigned globally with open tasks before closed tasks,
-then timestamped files (`YYYYMMDDHHMMSS-rest.org`) newest to oldest. Daily
-files (`YYYY-MM-DD.org`) use `YYYY-MM-DD 00:00:00` as their timestamp. Equal
-timestamps sort by the rest of the filename alphanumerically; files without a
-recognized timestamp sort last by path alphanumerically; tasks within a file
-sort top to bottom. Priority, schedule, deadline, tags, project, today,
-overdue, and upcoming do not affect canonical ID assignment.
-After successful PKMS task mutations, a colored `WARN: Task IDs changed` line
-is written to stderr when the edit changes the canonical task ID assignment.
-Rerun `pkms task list` before issuing more numeric task-ID commands. Structured
-stdout remains JSON/NDJSON only.
-
-Explicit Todoist and mixed-source task views use the same table shape plus a
-`Project` column:
-`Id,Date,State,Type,Prio,Tags,Project,Note,Heading`. With only one source, the
-`Id` column is the bare source id. With `source:all`, local PKMS ids use
-`p<ID>` and Todoist ids use `todoist:<remote-id>`. All `task list` and
-`task agenda` JSON/NDJSON item records use the source-neutral `TaskItem` shape,
-including the default `source:pkms` views. Text `Date` cells use `YYYY-MM-DD Day`;
-daily-note tasks without planning markers use the daily note date.
-On ANSI-capable terminals, text task output renders inline `=code=`,
-`~orange code~`, and mention tokens such as `@alice`; captured or piped text
-output keeps the stored strings unchanged unless ANSI output is forced.
-JSON/NDJSON output is unchanged.
-
-Item-producing task commands accept positional string filters after the
-subcommand. Metadata commands, `task list projects` and `task list tags`, accept
-only source filters:
-
-| Filter | Syntax | Notes |
-|--------|--------|-------|
-| Source | `source:pkms`, `source:todoist`, `source:all` | Select local PKMS tasks, Todoist tasks, or both. Defaults to `source:pkms`. |
-| Source alias | `src:pkms`, `src:todoist`, `src:all` | Short form of `source:`. |
-| Todoist raw filter | `todoist.filter:<query>` | Uses Todoist's server-side filter endpoint. Requires `source:todoist` or `source:all`. |
-| State | `state:TODO`, `state:opened`, `state:closed` | Matches a TODO state case-insensitively. `opened` and `closed` expand to configured open and closed task states. |
-| State exclusion | `state:!DONE`, `state:!closed` | Excludes matching states. Comma-separated state filters use AND logic. |
-| Tags | `tags:tag1,tag2` | Matches note filetags plus tags inherited from every parent heading and the task heading for PKMS, and labels for Todoist. Tags are exact. |
-| Tag alias | `tag:tag1,tag2` | Short form of `tags:`. |
-| Tag exclusion | `tags:!tag1,tag2` | Excludes `tag1` and requires `tag2`. Comma-separated tag filters use AND logic. |
-| Type | `type:SCHED`, `type:DEADL` | Matches scheduled or deadline tasks. `kind:` is an alias. |
-| Type exclusion | `type:!SCHED` | Excludes tasks with a scheduled timestamp. |
-| Priority | `prio:A`, `priority:A` | Matches priority `A`, `B`, or `C`; matching is case-insensitive. |
-| No priority | `prio:none`, `priority:none` | Matches tasks without a priority. |
-| Exact date | `date:YYYY-MM-DD`, `date:tom`, `date:fri` | Matches scheduled or deadline dates on that day. Accepts the same date words as `sch:`/`dl:` modifiers. |
-| Today | `date:today` | Matches scheduled or deadline dates today. |
-| Week | `date:week` | Matches scheduled or deadline dates through the next 7 days. |
-| Overdue | `date:overdue`, `overdue` | Matches overdue tasks. |
-| Upcoming | `date:upcoming`, `upcoming` | Matches non-overdue tasks after today. |
-| Multiple dates | `date:today,overdue,YYYY-MM-DD,fri` | Matches any listed date filter. |
-| After | `after:YYYY-MM-DD`, `after:YYYY-MM-DD HH:MM`, `after:tom`, `after:fri` | Matches tasks on or after the date/time. Date words use the same parser as `sch:`/`dl:` modifiers; date-only values resolve to `00:00`. |
-| Before | `before:YYYY-MM-DD`, `before:YYYY-MM-DD HH:MM`, `before:tom`, `before:fri` | Matches tasks on or before the date/time. Date words use the same parser as `sch:`/`dl:` modifiers; date-only values resolve to `00:00`. |
-| Scope | `scope:<target>` | Restricts PKMS tasks to a note title, UUID, or path. |
-| Project | `project:<name-or-id>` | Matches PKMS `PROJECT` properties and Todoist project names or ids. |
-| Project exclusion | `project:!<name-or-id>` | Excludes matching projects. |
-
-Examples:
-
-```bash
-pkms task list state:TODO tags:work,!blocked prio:A
-pkms task agenda week type:SCHED project:Alpha
-pkms task agenda source:all date:overdue tags:!waiting
-pkms task agenda source:all date:today,overdue
-pkms task agenda upcoming --days 14 source:all priority:B
-pkms task list 'scope:Some Note Title' after:2026-05-01 before:"2026-05-25 18:00"
-pkms task list source:todoist 'todoist.filter:today | overdue'
-```
-
-`task <ID> state` changes only the TODO keyword. Valid states come from
-configured `open_todo_states` and `closed_todo_states`. State input is
-case-insensitive, but the file is written with the canonical config spelling.
-
-`task <ID> done` is shorthand for the first configured closed state, defaulting
-to `DONE` if none is configured.
-After a real PKMS state change, text output prints the resulting canonical task
-ID. JSON and NDJSON keep the requested ID in `id`, report the resulting ID in
-`new_id`, and use `null` for `new_id` during `--dry-run`.
-
-Todoist read support is available only in builds made with `--features todoist`:
-
-```bash
-pkms task list source:todoist
-pkms task list source:all
-pkms task agenda today source:todoist
-pkms task agenda week source:all
-pkms task agenda today source:all
-pkms task agenda overdue source:todoist
-pkms task agenda upcoming source:all
-pkms task agenda upcoming --days 7 source:all
 pkms task inbox
-pkms task inbox source:todoist
-pkms task list projects source:todoist
-pkms task list tags source:todoist
-pkms task list projects source:all
-pkms task list tags source:all
-pkms task list source:todoist 'todoist.filter:today | overdue'
-pkms task todoist:<remote-id> show
-pkms task add "Capture local task"
-pkms task add note:"Project Alpha" title:"Follow up"
-pkms task add dep:2 title:"Follow up on parent task"
-pkms task add source:todoist "Buy milk tomorrow"
-pkms task add source:todoist title:"Call Alice" due:2026-05-24 tag:phone priority:B
-pkms task add source:todoist title:"Call Alice" sch:tod tag:phone prio:B
-pkms task todoist:<remote-id> done
-pkms task p<canonical-id> postpone
-pkms task p<canonical-id> postpone --to 2026-06-01
-pkms task todoist:<remote-id> postpone
-pkms task todoist:<remote-id> postpone --to tomorrow
-pkms task p<canonical-id> mod sch:2026-05-24
-pkms task todoist:<remote-id> mod sch:
-pkms task p<canonical-id> mod dl:2026-05-30
-pkms task p<canonical-id> mod dep:<parent-id>
-pkms task todoist:<remote-id> mod dl:
+pkms task list projects
+pkms task list tags
 ```
 
-Use stable `todoist:<remote-id>` IDs for Todoist mutations.
-Never print the Todoist token. It is read from `TODOIST_API_TOKEN` by default,
-or from `[todoist].token` in config when the environment variable is unset.
+Canonical IDs are global, deterministic positive integers. Filtered views may
+have gaps because excluded tasks retain their global positions.
 
-`task <ID> show` includes all parent headings and the child task chain for nested
-PKMS tasks. Parent TODO headings and every child entry include the canonical
-task ID used by `task list`, `task agenda`, `task p<ID> show`, and
-`task p<ID> open`; ordinary parent headings have a null `id` and `todo_state` in
-structured output.
+Useful filters:
 
-For Todoist-backed agenda views, bare `task agenda source:todoist` uses the
-Todoist `!no date` filter to fetch scheduled tasks. Agenda shortcuts are aliases
-for local date filters: `today` equals `date:today`, `week` equals `date:week`,
-`overdue` equals `date:overdue`, and `upcoming` equals `date:upcoming`.
-`task agenda upcoming --days N` is equivalent to `task agenda --days N
-date:upcoming`. `todoist.filter:<query>` overrides the default Todoist fetch
-query when the assistant needs custom Todoist syntax, while local criteria such
-as `date:today` still apply to fetched items.
+- `state:TODO`, `state:opened`, `state:!closed`
+- `tags:work,!blocked`, `tag:phone`
+- `type:SCHED,DEADL`
+- `prio:A,B`, `priority:none`
+- `date:today`, `date:week`, `date:overdue`, `date:upcoming`
+- `after:YYYY-MM-DD`, `before:YYYY-MM-DD HH:MM`
+- `scope:<note-title-uuid-or-path>`
+- `project:<name>`, including exclusions
 
-Prefer stable shortcuts for common assistant requests: `task agenda today`,
-`task agenda overdue`, `task agenda upcoming`, and `task inbox`. The first three
-accept `source:pkms`, `source:todoist`, or `source:all`; `task inbox` defaults
-to the PKMS inbox note configured as `[tasks].inbox`. Use
-`task inbox source:todoist` for Todoist's `#Inbox` filter. When `[tasks].inbox`
-is `daily`, PKMS inbox tasks live in today's daily note under the top-level
-`* Inbox` heading. New daily notes are created under `daily_notes_dir`, or
-`new_notes_dir` when `daily_notes_dir` is unset.
+Use `--output-format json` for a wrapper with `total` and `items`, or
+`--output-format ndjson` for one `TaskItem` per line. The maintained schema is
+`../schemas/task-item.json`.
 
-Default `task add` appends a TODO heading to the configured PKMS inbox note.
-Use positional text or add modifiers. `note:` is PKMS-only and chooses the note
-to append into. `dep:`/`depend:` is PKMS-only and appends the new task as the
-final child heading in the referenced PKMS task's subtree:
+## Columns
+
+```bash
+pkms task list --columns Id,Heading
+pkms task list --columns +Project
+pkms task agenda --columns -Project
+pkms task list --line-sep
+```
+
+Columns are `Id`, `Date`, `State`, `Type`, `Prio`, `Tags`, `Project`, `Note`,
+and `Heading`. Defaults may be global or under `[columns.pkms]`.
+
+## Show and open
+
+```bash
+pkms task 5 show
+pkms task 5 open
+pkms task 5 open --editor "emacsclient -n" --line 42
+```
+
+Show output includes relevant parent and child heading chains. Open resolves
+the canonical ID to the current source line.
+
+## Create
+
+Configure `[tasks].inbox`, or pass `note:<target>`:
 
 ```bash
 pkms task add "Capture local task"
-pkms task add title:"Call Alice" due:2026-05-24 deadline:2026-05-30 tag:phone priority:B
 pkms task add title:"Call Alice" sch:mon dead:to tag:phone prio:B
-pkms task add title:"Waiting on Alice" state:WAITING
-pkms task add note:"Project Alpha" title:"Follow up" schedule:tomorrow
-pkms task add dep:2 title:"Follow up on parent task"
+pkms task add note:"Project Alpha" title:"Follow up"
+pkms task add dep:2 title:"Child task"
 ```
 
-Use positional text with `task add source:todoist` for Todoist Quick Add
-natural-language parsing. Use structured creation for deterministic assistant
-tasks:
+Supported modifiers include `title:`, `state:`, `tag:`/`tags:`,
+`sch:`/`due:`, `dead:`/`dl:`, `project:`/`proj:`, `prio:`, `desc:`, `note:`,
+and `dep:`/`depend:`.
+
+Dates accept ISO dates, optional times, time-only values for today, and
+unambiguous prefixes of today, tomorrow, and weekdays.
+
+## Mutate
 
 ```bash
-pkms task add source:todoist title:"Call Alice" due:2026-05-24 deadline:2026-05-30 project:inbox tag:phone priority:B desc:"Discuss migration plan"
-pkms task add source:todoist title:"Call Alice" sch:tod dead:tom project:inbox tag:phone,migration prio:B desc:"Discuss migration plan"
+pkms task 5 state WAITING
+pkms task 5 state DONE --dry-run
+pkms task 5 done
+pkms task 5 done --dry-run
+pkms task 5 mod title:"New title" sch:tomorrow
+pkms task 5 mod sch:
+pkms task 5 mod dl:
+pkms task 5 mod dep:2
+pkms task 5 mod dep:
+pkms task 5 postpone
+pkms task 5 postpone --to 2026-06-01
 ```
 
-Add modifiers: `source:`/`src:`, `title:`, PKMS-only `state:`,
-`tag:`/`tags:`/`label:`/`labels:`, `schedule:`/`sch:`/`sched:`/`due:`,
-`deadline:`/`dead:`/`dl:`, `project:`/`proj:`, `prio:`/`priority:`/`pri:`,
-`desc:`/`description:`/`body:`, and PKMS-only `note:` and `dep:`/`depend:`.
+Use explicit modifiers with `mod`; positional title text is rejected. Empty
+values clear supported properties. A no-op exits nonzero. Recurring postpone
+preserves org repeater and warning syntax.
 
-Structured due and deadline values accept unambiguous case-insensitive prefixes
-of `today`, `tomorrow`, or weekday names, plus `YYYY-MM-DD` or
-`YYYY-MM-DD HH:MM`. A time-only `HH:MM` value uses today. Weekday names resolve
-to the next upcoming matching weekday.
-Modifier keys accept documented aliases and unambiguous prefixes; `proj:` and
-`pro:` resolve to `project:`, while `pr:` fails as ambiguous.
-Priority must be `A`, `B`, or `C`. Repeat or comma-separate tag modifiers for
-multiple labels. For PKMS tasks, `project:` writes a heading-level `PROJECT`
-property only when the requested value differs case-insensitively from the
-destination note's project; a matching value is inherited from the note.
-Changing an existing task to its note's project removes a redundant heading
-override. For Todoist tasks, `project:` accepts either a project id or an exact
-project name. If a project name is duplicated case-insensitively, use the
-project id. Todoist task creation rejects `state:`, `note:`, and `dep:`/`depend:`.
-
-Todoist descriptions containing `pkms:id:<uuid>` PKMS note markers are detected
-by `task list source:todoist` and `task todoist:<remote-id> show`.
-
-Use `task list projects` and `task list tags` when you need task metadata. With
-`source:pkms`, projects come from note-level or heading-level `PROJECT`
-properties, and tags combine note `#+filetags` with tags from every parent
-heading and the task heading. With
-`source:todoist`, projects and tags come from Todoist
-metadata. `source:all` combines both sources. Todoist task output uses a
-human-readable `project` when metadata is available and keeps the raw id in
-`project_id`.
-
-JSON output from `task add source:todoist` is a creation wrapper with
-`created: true` and the created source-neutral `TaskItem` in `item`. Use
-`item.display_id` for confirmation to the user and `item.source_id` for the raw
-Todoist id.
-
-Use `--dry-run` before completing Todoist tasks when operating on a real token:
-
-```bash
-pkms task todoist:<remote-id> done --dry-run
-```
-
-Use stable `todoist:<remote-id>` ids for Todoist mutations. `task <ID>
-postpone` advances to the next occurrence by default, or accepts `--to
-tomorrow` / `--to YYYY-MM-DD` to choose a date. It works only for recurring
-PKMS or Todoist tasks; non-recurring tasks fail. `task <ID> mod`
-accepts add-style modifiers such as `title:`, `tag:`, `project:`, `prio:`,
-`desc:`, `sch:tomorrow`, `dl:YYYY-MM-DD`, or PKMS-only `state:WAITING` and
-`dep:<task-id>`.
-Empty values clear metadata: `tag:`, `sch:`, `dl:`, `prio:`, `project:`, and
-`desc:`. For PKMS, `dep:` removes the current parent task dependency. Schedule
-and deadline edits work for PKMS and Todoist tasks. For PKMS,
-`state:` rewrites the org TODO keyword and `dep:`/`depend:` moves the whole
-task subtree to the end of the referenced task's subtree when a task ID is
-provided. `task mod` is strict: task titles change only through `title:<text>`,
-and unrecognized modifiers fail instead of becoming title text. Changed-task
-detail text output starts with `Task: <task title>` before the change lines. If
-no properties change, `mod` prints `Nothing changed` and exits nonzero.
-Todoist `task mod` rejects `state:`. Todoist `task <ID> state` supports only
-`open` and `done`.
+State changes use configured agenda states. Closing a parent with an open child
+fails. Mutations may renumber canonical IDs; when they do, `pkms` warns on
+stderr while keeping structured stdout parseable.

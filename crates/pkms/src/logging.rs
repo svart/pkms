@@ -2,14 +2,9 @@ use tracing_subscriber::EnvFilter;
 
 const LOG_ENV: &str = "PKMS_LOG";
 const LOG_FORMAT_ENV: &str = "PKMS_LOG_FORMAT";
-const HTTP_LOG_ENV: &str = "PKMS_LOG_HTTP";
-const TODOIST_HTTP_DIRECTIVE: &str = "pkms::tasks::todoist::http=debug";
 
 pub fn init() {
-    let Some(filter) = log_filter(
-        std::env::var(LOG_ENV).ok().as_deref(),
-        std::env::var(HTTP_LOG_ENV).ok().as_deref(),
-    ) else {
+    let Some(filter) = log_filter(std::env::var(LOG_ENV).ok().as_deref(), None) else {
         return;
     };
     let format = LogFormat::from_env(std::env::var(LOG_FORMAT_ENV).ok().as_deref());
@@ -58,9 +53,7 @@ fn log_directive(log_value: Option<&str>, http_value: Option<&str>) -> Option<St
     if let Some(directive) = base_log_directive(log_value) {
         directives.push(directive);
     }
-    if enabled(http_value) {
-        directives.push(TODOIST_HTTP_DIRECTIVE.to_string());
-    }
+    let _ = http_value;
 
     if directives.is_empty() {
         None
@@ -85,13 +78,6 @@ fn base_log_directive(value: Option<&str>) -> Option<String> {
     )
 }
 
-fn enabled(value: Option<&str>) -> bool {
-    let Some(value) = value.map(str::trim) else {
-        return false;
-    };
-    !(value.is_empty() || value == "0" || value.eq_ignore_ascii_case("false"))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -108,18 +94,6 @@ mod tests {
     fn test_log_filter_accepts_boolean_enable() {
         assert!(log_filter(Some("1"), None).is_some());
         assert!(log_filter(Some("true"), None).is_some());
-    }
-
-    #[test]
-    fn test_http_log_env_enables_todoist_http_target() {
-        assert_eq!(
-            log_directive(None, Some("1")).as_deref(),
-            Some(TODOIST_HTTP_DIRECTIVE)
-        );
-        assert_eq!(
-            log_directive(Some("pkms::config=debug"), Some("true")).as_deref(),
-            Some("pkms::config=debug,pkms::tasks::todoist::http=debug")
-        );
     }
 
     #[test]

@@ -1360,11 +1360,7 @@ mod tests {
 
         assert!(!results.is_empty());
         assert_eq!(results[0].title, "PKMS Task Backend");
-        assert!(
-            results[0]
-                .text
-                .contains("pkms task agenda today source:all")
-        );
+        assert!(results[0].text.contains("pkms task agenda week"));
     }
 
     #[test]
@@ -1398,18 +1394,14 @@ mod tests {
         ingest_records(&mut conn, &fixture_records(), &provider, false).expect("fixture ingests");
 
         let results =
-            dense_search(&conn, "today agenda inspect tasks", 10, &provider).expect("dense search");
+            dense_search(&conn, "week agenda inspect tasks", 10, &provider).expect("dense search");
 
         assert!(!results.is_empty());
         assert_eq!(results[0].title, "PKMS Task Backend");
         assert!(results[0].scores.dense > 0.0);
         assert_eq!(results[0].scores.final_score, results[0].scores.dense);
         assert_eq!(results[0].scores.bm25, 0.0);
-        assert!(
-            results[0]
-                .text
-                .contains("pkms task agenda today source:all")
-        );
+        assert!(results[0].text.contains("pkms task agenda week"));
     }
 
     #[test]

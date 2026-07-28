@@ -78,34 +78,11 @@ state changes:
 ```bash
 pkms task list
 pkms task agenda today
-pkms task p5 show
-pkms task p5 state WAITING
-pkms task p5 done --dry-run
-pkms task p5 done
+pkms task 5 show
+pkms task 5 state WAITING
+pkms task 5 done --dry-run
+pkms task 5 done
 ```
 
 Use positional filters such as `scope:`, `state:`, `tags:`, and `type:` for
 scoped task views. Use `task list --group` for grouped TODO output.
-
-When built with Todoist support, phone-captured Todoist tasks can be included in
-terminal task views:
-
-```bash
-pkms task list source:todoist 'todoist.filter:today | overdue'
-pkms task list source:all
-```
-
-Use stable remote IDs for Todoist task inspection:
-
-```bash
-pkms task todoist:<remote-id> show
-```
-
-Capture to Todoist from the terminal when phone capture is the intended
-cross-device workflow:
-
-```bash
-pkms task add source:todoist "Buy milk tomorrow"
-pkms task todoist:<remote-id> done --dry-run
-pkms task todoist:<remote-id> done
-```

@@ -12,7 +12,6 @@ pub enum ColumnsConfig {
 #[serde(deny_unknown_fields)]
 pub struct ColumnMatrixConfig {
     pub pkms: Option<SourceColumnConfig>,
-    pub todoist: Option<SourceColumnConfig>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -25,8 +24,6 @@ pub struct SourceColumnConfig {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ColumnSource {
     Pkms,
-    Todoist,
-    All,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -48,19 +45,6 @@ impl ColumnMatrixConfig {
     fn default_for(&self, source: ColumnSource, view: ColumnView) -> Result<Option<&[String]>> {
         match source {
             ColumnSource::Pkms => Ok(source_default(self.pkms.as_ref(), view)),
-            ColumnSource::Todoist => Ok(source_default(self.todoist.as_ref(), view)),
-            ColumnSource::All => {
-                let pkms = source_default(self.pkms.as_ref(), view);
-                let todoist = source_default(self.todoist.as_ref(), view);
-                if pkms == todoist {
-                    Ok(pkms)
-                } else {
-                    anyhow::bail!(
-                        "Ambiguous default columns for source:all. Configure matching pkms and \
-                         todoist defaults for this view or pass --columns explicitly."
-                    )
-                }
-            }
         }
     }
 }

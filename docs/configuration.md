@@ -23,22 +23,12 @@ ignore_patterns = [".attach", "*.bak"]
 tasks = ["Id", "State", "Prio", "Tags", "Note", "Heading"]
 agenda = ["Id", "Date", "State", "Type", "Prio", "Tags", "Note", "Heading"]
 
-[columns.todoist]
-tasks = ["Id", "State", "Prio", "Tags", "Project", "Heading"]
-agenda = ["Id", "Date", "State", "Type", "Prio", "Tags", "Project", "Heading"]
-
 [tasks]
 inbox = "Inbox"
 
 [agenda]
 open_todo_states = ["TODO", "WAITING", "IN-PROGRESS"]
 closed_todo_states = ["DONE"]
-
-[todoist]
-enabled = false
-token_env = "TODOIST_API_TOKEN"
-token = "..." # optional; prefer an environment variable
-default_filter = "today | overdue"
 
 [rag]
 rag_db = ".data/pkms-rag.sqlite3"
@@ -72,26 +62,9 @@ task table columns. Available task columns are `Id`, `Date`, `State`, `Type`,
 | `columns` | - | `pkms task list --columns COLS`, `pkms task agenda --columns COLS`, `pkms task inbox --columns COLS` | Global default task table columns. CLI values replace the configured set, or use `+Column`/`-Column` adjustments. |
 | `[columns.pkms].tasks` | - | `pkms task list --columns COLS`, `pkms task inbox --columns COLS` | Default columns for local PKMS task lists and inbox views. |
 | `[columns.pkms].agenda` | - | `pkms task agenda --columns COLS` | Default columns for local PKMS agenda-style views. |
-| `[columns.todoist].tasks` | - | `pkms task list --columns COLS`, `pkms task inbox --columns COLS` | Default columns for Todoist task lists and inbox views. |
-| `[columns.todoist].agenda` | - | `pkms task agenda --columns COLS` | Default columns for Todoist agenda-style views. For `source:all`, source defaults must match or `--columns` must be passed. |
 | `[tasks].inbox` | - | - | Inbox note for `pkms task inbox` and default `pkms task add`. Use `daily` to append under today's daily note `* Inbox` heading. |
 | `[agenda].open_todo_states` | - | - | States treated as active tasks by task commands. Defaults to `["TODO"]`. |
 | `[agenda].closed_todo_states` | - | - | States treated as completed tasks. Defaults to `["DONE"]`. These state lists affect canonical task ID ordering. |
-
-## Todoist
-
-Todoist support requires a binary built with `--features todoist`. Environment
-tokens are preferred over storing secrets in the config file.
-
-| Configuration option | Environment variable | CLI flag | Notes |
-|---|---|---|---|
-| `[todoist].enabled` | - | - | Parsed as part of Todoist config. Current Todoist commands are gated by feature build and token availability. |
-| `[todoist].token_env` | - | - | Name of the environment variable used for the Todoist token. Defaults to `TODOIST_API_TOKEN`. |
-| `[todoist].token` | value named by `[todoist].token_env`, default `TODOIST_API_TOKEN` | - | Token fallback when the environment variable is unset or empty. Keep config files containing this value private. |
-| `[todoist].default_filter` | - | - | Default Todoist filter used for list requests when no task filter `todoist.filter:<query>` is supplied. |
-| - | `PKMS_TODOIST_API_BASE_URL` | - | Overrides the Todoist API base URL, mainly for tests and mock servers. Defaults to `https://api.todoist.com/api/v1`. |
-
-`pkms info` does not print Todoist token values.
 
 ## RAG Retrieval
 
@@ -124,7 +97,6 @@ remains parseable for text, JSON, and NDJSON consumers.
 |---|---|---|---|
 | - | `PKMS_LOG` | - | Enables internal logs. `1` and `true` mean `debug`; `0`, `false`, and an empty value disable logs. Also accepts `tracing-subscriber` env-filter directives such as `pkms::config=debug`. |
 | - | `PKMS_LOG_FORMAT` | - | Set to `json` for JSON log records. Any other value uses text logs. |
-| - | `PKMS_LOG_HTTP` | - | Enables Todoist HTTP metadata logs without logging tokens, request bodies, task content, or descriptions. |
 | - | `COLUMNS` | - | Overrides detected terminal width for adaptive task table layout. |
 | - | `TERM`, `NO_COLOR`, `CLICOLOR`, `CLICOLOR_FORCE` | - | Standard terminal color controls used for text styling. |
 | - | - | global `--output-format FMT` | Selects stdout format: `text`, `json`, or `ndjson` where supported. |
@@ -135,7 +107,6 @@ Examples:
 PKMS_LOG=debug pkms --db ~/Documents/org task agenda
 PKMS_LOG=pkms::config=debug pkms info
 PKMS_LOG_FORMAT=json PKMS_LOG=debug pkms --output-format json info
-PKMS_LOG_HTTP=1 pkms task todoist:<remote-id> done
 ```
 
 ## SSH File-Link Checks

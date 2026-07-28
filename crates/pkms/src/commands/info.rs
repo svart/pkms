@@ -75,7 +75,6 @@ mod tests {
             columns: None,
             tasks: None,
             agenda: None,
-            todoist: None,
             rag: None,
             runtime: crate::environment::RuntimeInputs::default(),
         }

@@ -22,7 +22,7 @@ Recommend existing corpus tags for a note or canonical local task:
 
 ```bash
 pkms tags suggest <full-note-uuid>
-pkms tags suggest p<canonical-id>
+pkms tags suggest <canonical-id>
 ```
 
 Both commands preview by default. Inspect the evidence and use `--apply` only
@@ -30,14 +30,13 @@ when the recommendations fit the target:
 
 ```bash
 pkms tags suggest 11111111-1111-4111-8111-111111111111 --apply
-pkms tags suggest p12 --limit 3 --neighbors 30 --apply
+pkms tags suggest 12 --limit 3 --neighbors 30 --apply
 ```
 
 Recommendations come only from tags already present in similar indexed notes
 or headings. Note recommendations use filetags; task recommendations use
 heading-specific tags and do not copy inherited note filetags onto the task.
-Applying is additive and never removes existing tags. Todoist tasks are not
-supported.
+Applying is additive and never removes existing tags.
 
 JSON returns one response matching `schemas/tags-suggest.json`. NDJSON emits one
 record per suggestion under the `suggestion` field. An empty recommendation set

@@ -1,5 +1,4 @@
 use crate::clock::TaskClock;
-use crate::filter::TaskFilters;
 use crate::model::{TaskItem, TaskSourceKind};
 use anyhow::Result;
 use serde::Serialize;
@@ -17,7 +16,6 @@ pub enum TaskListView {
 
 #[derive(Debug, Clone)]
 pub struct TaskQuery {
-    pub filters: TaskFilters,
     pub view: TaskListView,
     pub clock: TaskClock,
 }

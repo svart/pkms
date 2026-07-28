@@ -484,7 +484,7 @@ mod tests {
     #[test]
     fn parses_structured_task_add_tokens() {
         let spec = TaskModifierSpec::parse(&tokens(&[
-            "source:todoist",
+            "source:pkms",
             "title:Call Alice",
             "tag:phone,urgent",
             "sch:2026-05-27",
@@ -497,7 +497,7 @@ mod tests {
         ]))
         .unwrap();
 
-        assert_eq!(spec.source.map(|source| source.as_str()), Some("todoist"));
+        assert_eq!(spec.source.map(|source| source.as_str()), Some("pkms"));
         assert_eq!(spec.title.as_deref(), Some("Call Alice"));
         assert_eq!(
             spec.labels,
@@ -542,7 +542,7 @@ mod tests {
 
     #[test]
     fn parses_dependency_modifiers_as_typed_values() {
-        let spec = TaskModifierSpec::parse_mod(&tokens(&["dep:p2"])).unwrap();
+        let spec = TaskModifierSpec::parse_mod(&tokens(&["dep:2"])).unwrap();
         assert_eq!(
             spec.dependency,
             Some(TaskDependencyArg::Set(crate::id::TaskId::Pkms(2)))
@@ -555,7 +555,7 @@ mod tests {
     #[test]
     fn parses_unambiguous_modifier_key_prefixes() {
         let spec = TaskModifierSpec::parse(&tokens(&[
-            "sou:todoist",
+            "sou:pkms",
             "tit:Call Alice",
             "ta:phone,urgent",
             "sche:2026-05-27",
@@ -567,7 +567,7 @@ mod tests {
         ]))
         .unwrap();
 
-        assert_eq!(spec.source.map(|source| source.as_str()), Some("todoist"));
+        assert_eq!(spec.source.map(|source| source.as_str()), Some("pkms"));
         assert_eq!(spec.title.as_deref(), Some("Call Alice"));
         assert_eq!(
             spec.labels,

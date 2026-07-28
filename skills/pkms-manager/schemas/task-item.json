@@ -14,7 +14,7 @@
       "required": ["source", "id"]
     },
     "display_id": { "type": "string" },
-    "source": { "type": "string", "enum": ["pkms", "todoist"] },
+    "source": { "type": "string", "enum": ["pkms"] },
     "source_id": { "type": "string" },
     "title": { "type": "string" },
     "body": { "type": ["string", "null"] },

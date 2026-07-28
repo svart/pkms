@@ -36,28 +36,8 @@ pub fn mod_title(spec: &TaskModifierSpec) -> Result<Option<String>> {
         .map(str::to_string))
 }
 
-#[cfg(feature = "todoist")]
-pub fn mod_optional_text(value: Option<&str>) -> Option<Option<String>> {
-    value.map(|value| {
-        let value = value.trim();
-        (!is_clear_value(value)).then(|| value.to_string())
-    })
-}
-
-#[cfg(feature = "todoist")]
-pub fn mod_date(value: Option<&TaskDateArg>) -> Option<Option<TaskDateValue>> {
-    value.map(|date| date.as_value().cloned())
-}
-
 pub fn parse_mutation_due_date(value: &str, today: NaiveDate) -> Result<String> {
     Ok(parse_task_date_arg_on("due", value, today)?.to_string())
-}
-
-pub fn unsupported_task_source(source: impl AsRef<str>) -> Result<()> {
-    bail!(
-        "Task source '{}' is not configured in this build.",
-        source.as_ref()
-    )
 }
 
 #[derive(Debug, Serialize)]
@@ -209,7 +189,6 @@ fn mod_dependency(spec: &TaskModifierSpec) -> Result<Option<DependencyMod>> {
         Some(TaskDependencyArg::Set(TaskId::Pkms(canonical_id))) => {
             Ok(Some(DependencyMod::Set(*canonical_id)))
         }
-        Some(TaskDependencyArg::Set(_)) => bail!("dep is available only for PKMS task IDs."),
     }
 }
 
@@ -391,7 +370,6 @@ pub fn add_pkms_task(
         Some(TaskDependencyArg::Set(TaskId::Pkms(parent_id))) => {
             add_dependency_task(config, &graph, spec, *parent_id)?
         }
-        Some(TaskDependencyArg::Set(_)) => bail!("dep is available only for PKMS task IDs."),
         Some(TaskDependencyArg::Clear) => bail!("dep requires a PKMS task ID for task creation."),
         None => add_inbox_task(config, &graph, spec, clock)?,
     };

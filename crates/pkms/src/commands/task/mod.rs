@@ -1,14 +1,8 @@
-#[cfg(feature = "todoist")]
-use crate::cli::OutputFormat;
 use crate::cli::{TaskAgendaArgs, TaskCalendarArgs, TaskCommand, TaskListArgs, TaskShortcutArgs};
 use crate::command_context::CommandContext;
-#[cfg(feature = "todoist")]
-use crate::commands::task_common::RowSeparatorMode;
 use crate::config::{ResolvedConfig, TaskCommandConfig};
 use crate::output::{OutputContext, terminal_markup};
 use anyhow::{Result, anyhow, bail};
-#[cfg(feature = "todoist")]
-use pkms_task::SourceSelection;
 use pkms_task::{
     CanonicalTaskEntry, TaskClock, TaskId, TaskListItems, TaskLocation, TaskModifierSpec,
     TaskSourceKind,
@@ -28,7 +22,7 @@ mod show;
 
 use show::{HeadingTarget, ShowOptions, TaskIdEntry};
 
-use mutations::{run_add, run_done, run_postpone, run_state, unsupported_task_source};
+use mutations::{run_add, run_done, run_postpone, run_state};
 use plan::{
     ShortcutKind, TaskListMode, plan_agenda_request, plan_task_list_request, split_task_list_mode,
 };
@@ -214,26 +208,20 @@ fn render_task_agenda(
 
 pub(super) fn run_show(ctx: &CommandContext<'_>, id: &str) -> Result<()> {
     let config = ctx.config();
-    let output = ctx.output();
-    match id.parse::<TaskId>()? {
-        TaskId::Pkms(id) => {
-            let task_config = config.task_command_config();
-            let entries = load_canonical_task_entries(&task_config)?;
-            let location = resolve_task_location_from_entries(&entries, id)?;
-            show::run(
-                ctx,
-                &ShowOptions {
-                    targets: vec![HeadingTarget::Location {
-                        path: location.path.into(),
-                        line_number: location.line_number,
-                    }],
-                    task_ids: show_task_id_entries(&entries),
-                },
-            )
-        }
-        TaskId::Todoist(id) => show_todoist_task(config, output, &id),
-        TaskId::External { source, .. } => unsupported_task_source(&source),
-    }
+    let TaskId::Pkms(id) = id.parse::<TaskId>()?;
+    let task_config = config.task_command_config();
+    let entries = load_canonical_task_entries(&task_config)?;
+    let location = resolve_task_location_from_entries(&entries, id)?;
+    show::run(
+        ctx,
+        &ShowOptions {
+            targets: vec![HeadingTarget::Location {
+                path: location.path.into(),
+                line_number: location.line_number,
+            }],
+            task_ids: show_task_id_entries(&entries),
+        },
+    )
 }
 
 pub(super) fn run_open(
@@ -243,39 +231,11 @@ pub(super) fn run_open(
     line: Option<usize>,
 ) -> Result<()> {
     let config = ctx.config();
-    match id.parse::<TaskId>()? {
-        TaskId::Pkms(id) => {
-            let task_config = config.task_command_config();
-            let entries = load_canonical_task_entries(&task_config)?;
-            let location = resolve_task_location_from_entries(&entries, id)?;
-            open::run(ctx, location.path, location.line_number, editor, line)
-        }
-        TaskId::Todoist(_) => bail!("Todoist task source is not implemented yet"),
-        TaskId::External { source, .. } => unsupported_task_source(&source),
-    }
-}
-
-#[cfg(feature = "todoist")]
-fn show_todoist_task(config: &ResolvedConfig, ctx: &OutputContext, id: &str) -> Result<()> {
-    let item = pkms_task::get_todoist_item(&providers::todoist_config(config)?, id)?;
-    match ctx.format {
-        OutputFormat::Text => render::print_task_table(
-            &[item],
-            1,
-            SourceSelection::Todoist,
-            render::TaskTableRenderOptions {
-                columns: None,
-                row_separators: RowSeparatorMode::Off,
-            },
-        ),
-        OutputFormat::Json => ctx.print_json(&item),
-        OutputFormat::Ndjson => ctx.print_ndjson(&[item]),
-    }
-}
-
-#[cfg(not(feature = "todoist"))]
-fn show_todoist_task(_config: &ResolvedConfig, _ctx: &OutputContext, _id: &str) -> Result<()> {
-    bail!("Todoist support is not available in this build. Rebuild with --features todoist.")
+    let TaskId::Pkms(id) = id.parse::<TaskId>()?;
+    let task_config = config.task_command_config();
+    let entries = load_canonical_task_entries(&task_config)?;
+    let location = resolve_task_location_from_entries(&entries, id)?;
+    open::run(ctx, location.path, location.line_number, editor, line)
 }
 
 fn run_projects(runtime: TaskRuntime<'_>, filters: &[String]) -> Result<()> {

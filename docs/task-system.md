@@ -28,15 +28,15 @@ pkms task add "Capture local task"
 pkms task add title:"Call Alice" sch:mon dead:to tag:phone prio:B
 pkms task add title:"Waiting on Alice" state:WAITING
 pkms task add dep:2 title:"Follow up on parent task"
-pkms task p<ID> show
-pkms task p<ID> open
-pkms task p<ID> state WAITING
-pkms task p<ID> done
-pkms task p<ID> mod sch:2026-05-24
-pkms task p<ID> mod dl:2026-05-30
-pkms task p<ID> mod dep:<parent-id>
-pkms task p<ID> postpone
-pkms task p<ID> postpone --to tomorrow
+pkms task <ID> show
+pkms task <ID> open
+pkms task <ID> state WAITING
+pkms task <ID> done
+pkms task <ID> mod sch:2026-05-24
+pkms task <ID> mod dl:2026-05-30
+pkms task <ID> mod dep:<parent-id>
+pkms task <ID> postpone
+pkms task <ID> postpone --to tomorrow
 ```
 
 `task calendar` is a compact text-only view of open PKMS task dates. It shows
@@ -48,28 +48,9 @@ terminal is too narrow. On ANSI-capable terminals, dates with scheduled tasks
 are underlined and dates with deadlines are red. The current day is blue unless
 it has a deadline. A compact styled legend precedes the calendar.
 
-With a build that includes the `todoist` feature, task views can include Todoist
-tasks when filters select `source:todoist` or `source:all`. Todoist creation uses
-`source:todoist`, and supported Todoist ID-first actions use stable
-`todoist:<remote-id>` targets:
-
-```bash
-pkms task list source:todoist
-pkms task agenda today source:all
-pkms task inbox source:todoist
-pkms task list projects source:all
-pkms task list tags source:all
-pkms task add source:todoist title:"Call Alice" due:2026-05-24 prio:B
-pkms task todoist:<remote-id> show
-pkms task todoist:<remote-id> done
-pkms task todoist:<remote-id> mod sch:
-pkms task todoist:<remote-id> mod dl:
-```
-
 ## Philosophy
 
-`pkms` remains a stateless, terminal-first CLI over an org-roam database, with
-optional provider-backed task access.
+`pkms` remains a stateless, terminal-first CLI over an org-roam database.
 
 The task system should stay:
 
@@ -77,18 +58,15 @@ The task system should stay:
   and exits.
 - Scriptable: no prompts, TUI, hidden last-result state, or view-local command
   IDs.
-- Source-neutral where useful: PKMS and Todoist tasks share one `TaskItem`
-  model for list, agenda, inbox, metadata, show, and supported mutations.
+- Stable structured output: local tasks use one `TaskItem` model for list,
+  agenda, inbox, metadata, show, and mutations.
 - Conservative with local edits: PKMS writes are explicit heading edits for
   state, schedule, deadline, recurring postponement, and inbox task creation.
-- Explicit with remote edits: Todoist mutations require stable
-  `todoist:<remote-id>` targets and a `todoist` feature build.
 - Plain by default: compact text output first, with JSON and NDJSON for agents
   and pipelines.
 
-Todoist is a source integration, not a sync layer. Taskwarrior remains a useful
-UX reference for terminal filtering, but Taskwarrior grammar and storage are
-outside the current `pkms task` surface.
+Taskwarrior remains a useful UX reference for terminal filtering, but
+Taskwarrior grammar and storage are outside the current `pkms task` surface.
 
 ## Source Model
 
@@ -111,9 +89,6 @@ The source-neutral task model lives under `crates/pkms-task/src/`:
   scope.rs
   show.rs
   task_index.rs
-  todoist.rs
-  todoist_mutation.rs
-  todoist_provider.rs
 ```
 
 `TaskItem` is the common shape used by task views and mutations. It carries
@@ -123,12 +98,8 @@ URL, and PKMS-specific metadata such as daily-file and agenda-tag fields.
 For PKMS tasks, tags are the de-duplicated combination of note `#+filetags`,
 all parent-heading tags, and the task heading's own tags, in that order.
 
-Keep source-specific fields optional. Todoist tasks should not need local
-heading metadata, and PKMS tasks should not need remote metadata.
-
-Todoist support is compiled behind the non-default `todoist` feature. Local
-PKMS commands must not require Todoist configuration or network access unless
-the selected source set includes Todoist.
+Keep optional fields stable so existing JSON consumers are not forced to
+special-case missing local metadata.
 
 ## Implementation Boundaries
 
@@ -143,14 +114,14 @@ crates/pkms/src/commands/task/
   render.rs         # text, JSON, NDJSON, table, and mutation output helpers
   show.rs           # cross-domain show dispatch adapter
   open.rs           # local editor-opening adapter
-  mutations.rs      # source-neutral mutation dispatch
-  mutations/        # PKMS and Todoist mutation adapters
+  mutations.rs      # local mutation dispatch
+  mutations/        # PKMS mutation adapters
 ```
 
 Keep provider and mutation logic in `pkms-task` unless it is only command-line
-or presentation glue. `pkms-task` owns validation, source selection,
-clock-sensitive date windows, provider collection, sorting, limiting, canonical
-task IDs, Todoist API execution, and typed local task mutation requests. It
+or presentation glue. `pkms-task` owns validation, clock-sensitive date
+windows, local provider collection, sorting, limiting, canonical task IDs, and
+typed local task mutation requests. It
 builds typed `pkms-org` edit specs for local org writes; it should not construct
 raw org task text or write org files directly.
 
@@ -166,15 +137,7 @@ parsing, and mutation reloads.
 
 ## IDs And Actions
 
-Supported PKMS task target forms:
-
-- `12`: PKMS canonical task shorthand.
-- `p12`: explicit PKMS display ID.
-- `pkms:12`: explicit PKMS source ID for scripts.
-
-Supported provider target form:
-
-- `todoist:<remote-id>`: stable Todoist task ID.
+PKMS task targets are positive integer canonical IDs such as `12`.
 
 ID-first actions are the preferred command style:
 
@@ -186,9 +149,6 @@ pkms task <ID> done [--dry-run]
 pkms task <ID> postpone [--to <DATE>]
 pkms task <ID> mod <MODIFIER>...
 ```
-
-`open` is PKMS-only because provider-backed tasks do not have a local source
-heading to open.
 
 Hidden subcommands such as `pkms task show <ID>` may exist internally for clap
 dispatch, but docs and examples should prefer ID-first usage.
@@ -204,35 +164,26 @@ line number. Mutable task properties such as priority, `DEADLINE`,
 `SCHEDULED`, tags, and project do not affect canonical IDs. Clock-relative
 concepts such as today, overdue, and upcoming do not affect canonical IDs.
 Filtered views may show non-contiguous IDs because excluded tasks still occupy
-global ID positions. Single-source text views show bare source IDs: `<ID>` for
-PKMS and `<remote-id>` for Todoist. In `source:all` text views, IDs are
-disambiguated as `p<ID>` for PKMS and `todoist:<remote-id>` for Todoist. Scripts
-should rely on source identity fields in JSON/NDJSON.
+global ID positions. Text views show bare canonical PKMS IDs. Scripts should
+rely on source identity fields in JSON/NDJSON.
 
 `task <ID> show` includes all parent headings and the child task chain for nested
 PKMS tasks. Parent TODO headings and every child entry carry the same canonical
-task ID used by `task list`, `task agenda`, `task p<ID> show`, and
-`task p<ID> open`; ordinary parent headings have a null `id` and `todo_state` in
+task ID used by `task list`, `task agenda`, `task <ID> show`, and
+`task <ID> open`; ordinary parent headings have a null `id` and `todo_state` in
 structured output.
 
 ## Filters And Views
 
 Task item commands accept positional filters after the subcommand. Source
-filters select providers:
+filters may explicitly select the local source:
 
 ```text
 source:pkms
-source:todoist
-source:all
 src:pkms
-src:todoist
-src:all
-todoist.filter:<query>
 ```
 
-The default source is `pkms`. `todoist.filter:` is valid only with Todoist in
-the selected source set and takes precedence over generated Todoist agenda
-filters.
+The default and only source is `pkms`.
 
 Supported task criteria include:
 
@@ -261,12 +212,6 @@ Agenda shortcut subcommands are aliases for date filters:
 `task agenda upcoming --days N` is equivalent to
 `task agenda --days N date:upcoming`.
 
-Todoist-backed `task agenda` uses the Todoist `!no date` filter by default to
-fetch scheduled tasks, then applies local criteria such as `date:today` or
-`date:upcoming` to the fetched items. `todoist.filter:<query>` overrides the
-Todoist fetch query, but local task criteria still apply. `task inbox
-source:todoist` uses Todoist's `#Inbox` filter.
-
 Do not expand this into a broad boolean expression language without a concrete
 use case and tests.
 
@@ -289,20 +234,13 @@ pkms task agenda --columns -Project
 The `Date` column displays task dates as `YYYY-MM-DD Day`. Daily-note tasks
 without `SCHEDULED` or `DEADLINE` markers use the daily note date.
 
-Default columns can be configured globally or per source and view:
+Default columns can be configured globally or for PKMS task views:
 
 ```toml
 [columns.pkms]
 tasks = ["Id", "State", "Prio", "Tags", "Note", "Heading"]
 agenda = ["Id", "Date", "State", "Type", "Prio", "Tags", "Note", "Heading"]
-
-[columns.todoist]
-tasks = ["Id", "State", "Prio", "Tags", "Project", "Heading"]
-agenda = ["Id", "Date", "State", "Type", "Prio", "Tags", "Project", "Heading"]
 ```
-
-For `source:all`, source-specific configured defaults must resolve to the same
-column set; otherwise users should pass `--columns` explicitly.
 
 JSON output should preserve complete source-neutral task fields. NDJSON output
 should print one task record per line for stream-like views. Changed-task JSON
@@ -394,54 +332,13 @@ Local mutation rules:
   content, and unrelated planning metadata.
 - Do not add close timestamps unless the project adopts a clear org convention.
 
-## Todoist Integration
-
-Todoist support requires a `todoist` feature build and configuration:
-
-```toml
-[todoist]
-enabled = false
-token_env = "TODOIST_API_TOKEN"
-default_filter = "today | overdue"
-```
-
-`[todoist].token` is supported, but environment variables are preferred. Never
-print token values. `TODOIST_API_TOKEN` is the default token environment
-variable, and `PKMS_TODOIST_API_BASE_URL` exists for tests and mock servers.
-HTTPS uses the platform certificate verifier so system trust-store corporate
-proxy roots are honored.
-
-For debugging Todoist API behavior, set `PKMS_LOG_HTTP=1`. It writes HTTP
-metadata and pagination counts to stderr without logging tokens, request
-bodies, task content, or descriptions.
-
-Todoist responsibilities currently include:
-
-- Read list, agenda, inbox, projects, labels, and show.
-- Server-side `todoist.filter:` filtering with pagination.
-- Source-neutral mapping into `TaskItem`.
-- Task-provider reads and mutation execution inside `pkms-task`.
-- Quick Add creation from positional text.
-- Structured creation using add modifiers for title, due/schedule, deadline,
-  project, labels, priority, and description.
-- Completion, reopening via `state open`, scheduling/unscheduling,
-  deadline/clear-deadline, recurring postponement, and dry-run completion.
-
-Todoist task IDs used for mutation must be `todoist:<remote-id>`.
-
-Listing or showing Todoist tasks detects `pkms:id:<uuid>` PKMS note markers in
-Todoist descriptions and fills `note_uuid` and `note_title` when the note exists
-locally. Treat that marker as a privacy boundary: the PKMS UUID leaves the local
-database.
-
 ## Non-Goals
 
 The task namespace does not include:
 
 - TUI or prompt-driven task processing.
 - Persistent caches, daemons, watch mode, background sync, or hidden state.
-- View-local Todoist command IDs.
-- Bidirectional Todoist/PKMS sync.
+- Remote provider command IDs or sync.
 - Taskwarrior storage integration.
 - Full Taskwarrior filter language.
 - Generic local org editing beyond the explicit task mutations above.

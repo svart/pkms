@@ -516,7 +516,7 @@ mod tests {
     fn converts_pkms_task_record_to_source_neutral_item() {
         let item = record_to_task_item(&task_states(), record());
         assert_eq!(item.id, TaskId::Pkms(7));
-        assert_eq!(item.display_id, "p7");
+        assert_eq!(item.display_id, "7");
         assert_eq!(item.source, TaskSourceKind::Pkms);
         assert_eq!(item.status, TaskStatus::Open);
         assert_eq!(item.title, "Call supplier");

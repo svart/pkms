@@ -103,12 +103,9 @@ fn execute(
 }
 
 fn resolve_target(ctx: &CommandContext<'_>, target: &str) -> Result<ResolvedTagTarget> {
-    if let Some(id) = target.strip_prefix('p')
-        && !id.is_empty()
-        && id.bytes().all(|byte| byte.is_ascii_digit())
-    {
-        let canonical_id = id.parse::<usize>()?;
-        if canonical_id > 0 && format!("p{canonical_id}") == target {
+    if !target.is_empty() && target.bytes().all(|byte| byte.is_ascii_digit()) {
+        let canonical_id = target.parse::<usize>()?;
+        if canonical_id > 0 && canonical_id.to_string() == target {
             return resolve_task_target(ctx, canonical_id);
         }
     }
@@ -118,7 +115,7 @@ fn resolve_target(ctx: &CommandContext<'_>, target: &str) -> Result<ResolvedTagT
     if let Some(uuid) = uuid {
         return resolve_note_target(ctx, &uuid.hyphenated().to_string());
     }
-    bail!("Tag suggestion target must be a full note UUID or canonical task ID such as p12")
+    bail!("Tag suggestion target must be a full note UUID or canonical task ID such as 12")
 }
 
 fn resolve_note_target(ctx: &CommandContext<'_>, target: &str) -> Result<ResolvedTagTarget> {
@@ -200,7 +197,7 @@ fn resolve_task_target(ctx: &CommandContext<'_>, canonical_id: usize) -> Result<
     Ok(ResolvedTagTarget {
         output: TagTargetOutput {
             kind: TagTargetKind::Task,
-            id: format!("p{canonical_id}"),
+            id: canonical_id.to_string(),
             uuid: uuid.clone(),
             title: parser::strip_org_links(&heading.title),
             path: path.display().to_string(),

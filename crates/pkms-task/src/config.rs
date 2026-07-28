@@ -18,14 +18,6 @@ pub struct PkmsTaskConfig {
     pub daily_notes_dir_configured: bool,
 }
 
-#[derive(Debug, Clone)]
-pub struct TodoistProviderConfig {
-    pub org: OrgConfig,
-    pub token: String,
-    pub api_base_url: String,
-    pub default_filter: Option<String>,
-}
-
 impl PkmsTaskConfig {
     pub(crate) fn load_snapshot(&self) -> Result<OrgSnapshot> {
         OrgSnapshot::load(&self.org.scan_config(), &self.org.link_resolution_context())

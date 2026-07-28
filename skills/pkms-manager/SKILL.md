@@ -26,11 +26,7 @@ stdout parseable:
 
 ```bash
 PKMS_LOG=debug pkms --output-format json <command>
-PKMS_LOG_HTTP=1 pkms task todoist:<remote-id> done
 ```
-
-Use `PKMS_LOG_HTTP=1` for Todoist API debugging. It logs request and response
-metadata without tokens or Todoist task payloads.
 
 Prefer structured output when an agent must parse results:
 
@@ -100,19 +96,16 @@ understand the intended target.
 
 ### Work With Tasks
 
-Use `task list` and `task agenda` for task views. In `source:pkms` text views,
-the `Id` column is the bare PKMS task ID accepted by ID-first task commands.
-Todoist-only text views show bare remote IDs; use `todoist:<remote-id>` for
-Todoist ID-first actions. Mixed `source:all` views disambiguate IDs as `p<ID>`
-and `todoist:<remote-id>`.
+Use `task list` and `task agenda` for local org task views. The `Id` column is
+the bare PKMS task ID accepted by ID-first task commands.
 
 ```bash
 pkms task list --columns Id,Date,Prio,Note,Heading
 pkms task agenda today
-pkms task p5 show
-pkms task p5 open
-pkms task p5 state WAITING
-pkms task p5 done --dry-run
+pkms task 5 show
+pkms task 5 open
+pkms task 5 state WAITING
+pkms task 5 done --dry-run
 ```
 
 See the task reference before changing task workflows.

@@ -164,7 +164,7 @@ pkms rag index --embedding-batch-size 128 --embedding-max-body-chars 8000
 pkms rag search "externalHostname"
 pkms rag retrieve "agenda inspect tasks" --limit 5 --mode hybrid
 pkms tags suggest 11111111-1111-4111-8111-111111111111
-pkms tags suggest p12
+pkms tags suggest 12
 pkms rag serve --host 127.0.0.1 --port 7337
 ```
 
@@ -181,8 +181,8 @@ present in the corpus:
 
 ```bash
 pkms tags suggest 11111111-1111-4111-8111-111111111111
-pkms tags suggest p12
-pkms tags suggest p12 --limit 3 --neighbors 30
+pkms tags suggest 12
+pkms tags suggest 12 --limit 3 --neighbors 30
 ```
 
 The command uses cleaned live target content as its dense-search query. Note
@@ -197,13 +197,13 @@ Both target kinds preview by default. Add recommendations explicitly:
 
 ```bash
 pkms tags suggest 11111111-1111-4111-8111-111111111111 --apply
-pkms tags suggest p12 --apply
+pkms tags suggest 12 --apply
 ```
 
-Targets must be a full note UUID or canonical local `p<ID>` task ID. Apply is
+Targets must be a full note UUID or canonical local `<ID>` task ID. Apply is
 additive: existing tags are preserved. Notes receive a canonical
 `#+filetags:` directive; local tasks receive heading tags through the existing
-task mutation path. Todoist targets are rejected. Source files remain
+task mutation path. Unsupported targets are rejected. Source files remain
 authoritative, and applying does not rebuild the RAG index automatically.
 
 JSON returns one complete response. NDJSON emits one object per recommendation

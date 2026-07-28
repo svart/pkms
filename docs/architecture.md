@@ -30,7 +30,7 @@ state. The RAG SQLite index is explicit derived local state owned by
 | `pkms` | Umbrella binary crate: CLI parser, config mapping, dispatch, output, and cross-domain orchestration. | [crates/pkms.md](crates/pkms.md) |
 | `pkms-org` | Org discovery, parsing, immutable snapshots, graph indexes/traversal, link resolution, and raw typed org edits. | [crates/pkms-org.md](crates/pkms-org.md) |
 | `pkms-db` | Note database command logic: health checks, validation, search, graph navigation, creation, extraction, and repair. | [crates/pkms-db.md](crates/pkms-db.md) |
-| `pkms-task` | Task semantics: state policy, org projection, canonical IDs, filters, providers, show/mutation use cases, and Todoist integration. | [crates/pkms-task.md](crates/pkms-task.md) |
+| `pkms-task` | Local task semantics: state policy, org projection, canonical IDs, filters, show, and mutation use cases. | [crates/pkms-task.md](crates/pkms-task.md) |
 | `pkms-rag` | Local retrieval services: indexing, encapsulated storage, embeddings, search, retrieval, and RAG HTTP API. | [crates/pkms-rag.md](crates/pkms-rag.md) |
 | `pkms-web` | Local web viewer: note rendering, static assets, routes, previews, and foreground HTTP serving. | [crates/pkms-web.md](crates/pkms-web.md) |
 | `pkms-tokens` | Leaf utility crate for token encoding, counting, and truncation. | [crates/pkms-tokens.md](crates/pkms-tokens.md) |
@@ -106,9 +106,9 @@ See [Note Database Commands](note-database-commands.md).
 ### Task Commands
 
 `pkms task` command adapters live under `crates/pkms/src/commands/task/`.
-They map CLI filters and modifiers into `pkms-task`, which collects provider
-items, preserves canonical local task IDs, and sends typed org edit requests to
-`pkms-org` for local writes. Todoist support is behind the `todoist` feature.
+They map CLI filters and modifiers into `pkms-task`, which collects task items,
+preserves canonical local task IDs, and sends typed org edit requests to
+`pkms-org` for local writes.
 See [TODO and Agenda](todo-agenda.md) and [Task System Design](task-system.md).
 
 ### Web Viewer
@@ -139,7 +139,6 @@ See [JSON and NDJSON Output](json-output.md) and [Pipelining](pipelining.md).
 
 | Feature | Default | Purpose |
 |---------|---------|---------|
-| `todoist` | off | Enables Todoist task reads and writes through `pkms-task`. |
 | `web` | off | Enables `pkms serve` and the optional `pkms-web` dependency. |
 | `ssh` | off | Enables remote SSH `file:` link checks in `pkms-db`. |
 | `rag` | off | Enables `pkms rag` and the optional `pkms-rag` dependency. |

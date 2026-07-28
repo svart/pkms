@@ -30,10 +30,8 @@ impl RowItem for TaskRow<'_> {
     }
 
     fn display_id(&self) -> String {
-        match self.source {
-            SourceSelection::All => self.item.display_id.clone(),
-            SourceSelection::Pkms | SourceSelection::Todoist => self.item.source_id.clone(),
-        }
+        let SourceSelection::Pkms = self.source;
+        self.item.source_id.clone()
     }
 
     fn todo_state(&self) -> Option<&str> {
@@ -307,7 +305,6 @@ fn print_created_task(item: &TaskItem) {
 fn source_display_name(item: &TaskItem) -> &'static str {
     match item.source {
         TaskSourceKind::Pkms => "PKMS",
-        TaskSourceKind::Todoist => "Todoist",
     }
 }
 
@@ -660,7 +657,6 @@ fn task_columns(columns: Option<&[Column]>) -> &[Column] {
 pub(super) fn source_name(item: &TaskItem) -> &'static str {
     match item.source {
         TaskSourceKind::Pkms => "pkms",
-        TaskSourceKind::Todoist => "todoist",
     }
 }
 
