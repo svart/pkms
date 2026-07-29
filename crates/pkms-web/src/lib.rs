@@ -234,20 +234,21 @@ mod tests {
         let css = page_css();
 
         assert!(css.contains("@font-face"));
-        assert!(css.contains("font-family: \"PKMS Alegreya\""));
-        assert!(css.contains("font-family: \"PKMS Alegreya Sans\""));
-        assert!(css.contains("font-family: \"PKMS Fira Code\""));
-        assert!(css.contains("url(\"/font/Alegreya.ttf\")"));
-        assert!(css.contains("url(\"/font/Alegreya-Italic.ttf\")"));
-        assert!(css.contains("url(\"/font/AlegreyaSans-Regular.ttf\")"));
-        assert!(css.contains("url(\"/font/AlegreyaSans-Bold.ttf\")"));
-        assert!(css.contains("url(\"/font/FiraCode.ttf\")"));
+        assert!(css.contains("font-family: \"PKMS Commissioner\""));
+        assert!(css.contains("font-family: \"PKMS Outfit\""));
+        assert!(css.contains("font-family: \"PKMS Iosevka\""));
+        assert!(css.contains("font-family: \"PKMS Symbols Nerd Font Mono\""));
+        assert!(css.contains("url(\"/font/Commissioner.ttf\")"));
+        assert!(css.contains("url(\"/font/Outfit.ttf\")"));
+        assert!(css.contains("url(\"/font/Iosevka-Regular.woff2\")"));
+        assert!(css.contains("url(\"/font/Iosevka-Bold.woff2\")"));
+        assert!(css.contains("url(\"/font/SymbolsNerdFontMono-Regular.woff2\")"));
         assert!(css.contains("font-display: swap;"));
     }
 
     #[test]
     fn serves_bundled_font_assets_by_exact_name() {
-        let response = assets::font_response("Alegreya.ttf");
+        let response = assets::font_response("Commissioner.ttf");
 
         assert_eq!(response.status, 200);
         assert_eq!(response.content_type.as_str(), "font/ttf");
@@ -957,6 +958,8 @@ generic export
 
         assert!(css.contains(".syn-code"));
         assert!(css.contains(".code pre .syn-code"));
+        assert!(css.contains("@media (prefers-color-scheme: dark)"));
+        assert!(css.contains("#c0c5ce"));
         assert!(css.contains("background-color:transparent!important"));
     }
 }

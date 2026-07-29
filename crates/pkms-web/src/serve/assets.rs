@@ -9,6 +9,7 @@ pub(crate) enum ContentType {
     Css,
     Svg,
     FontTtf,
+    FontWoff2,
     ImagePng,
     ImageJpeg,
     ImageGif,
@@ -25,6 +26,7 @@ impl ContentType {
             ContentType::Css => "text/css; charset=utf-8",
             ContentType::Svg => "image/svg+xml",
             ContentType::FontTtf => "font/ttf",
+            ContentType::FontWoff2 => "font/woff2",
             ContentType::ImagePng => "image/png",
             ContentType::ImageJpeg => "image/jpeg",
             ContentType::ImageGif => "image/gif",
@@ -72,39 +74,29 @@ struct ServedFont {
 
 static SERVED_FONTS: &[ServedFont] = &[
     ServedFont {
-        name: "Alegreya.ttf",
-        bytes: include_bytes!("../serve_fonts/Alegreya.ttf"),
+        name: "Commissioner.ttf",
+        bytes: include_bytes!("../serve_fonts/Commissioner.ttf"),
         content_type: ContentType::FontTtf,
     },
     ServedFont {
-        name: "Alegreya-Italic.ttf",
-        bytes: include_bytes!("../serve_fonts/Alegreya-Italic.ttf"),
+        name: "Outfit.ttf",
+        bytes: include_bytes!("../serve_fonts/Outfit.ttf"),
         content_type: ContentType::FontTtf,
     },
     ServedFont {
-        name: "AlegreyaSans-Regular.ttf",
-        bytes: include_bytes!("../serve_fonts/AlegreyaSans-Regular.ttf"),
-        content_type: ContentType::FontTtf,
+        name: "Iosevka-Regular.woff2",
+        bytes: include_bytes!("../serve_fonts/Iosevka-Regular.woff2"),
+        content_type: ContentType::FontWoff2,
     },
     ServedFont {
-        name: "AlegreyaSans-Italic.ttf",
-        bytes: include_bytes!("../serve_fonts/AlegreyaSans-Italic.ttf"),
-        content_type: ContentType::FontTtf,
+        name: "Iosevka-Bold.woff2",
+        bytes: include_bytes!("../serve_fonts/Iosevka-Bold.woff2"),
+        content_type: ContentType::FontWoff2,
     },
     ServedFont {
-        name: "AlegreyaSans-Bold.ttf",
-        bytes: include_bytes!("../serve_fonts/AlegreyaSans-Bold.ttf"),
-        content_type: ContentType::FontTtf,
-    },
-    ServedFont {
-        name: "AlegreyaSans-BoldItalic.ttf",
-        bytes: include_bytes!("../serve_fonts/AlegreyaSans-BoldItalic.ttf"),
-        content_type: ContentType::FontTtf,
-    },
-    ServedFont {
-        name: "FiraCode.ttf",
-        bytes: include_bytes!("../serve_fonts/FiraCode.ttf"),
-        content_type: ContentType::FontTtf,
+        name: "SymbolsNerdFontMono-Regular.woff2",
+        bytes: include_bytes!("../serve_fonts/SymbolsNerdFontMono-Regular.woff2"),
+        content_type: ContentType::FontWoff2,
     },
 ];
 

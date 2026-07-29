@@ -44,18 +44,24 @@ fn syntax_for_lang<'a>(lang: &str, syntax_set: &'a SyntaxSet) -> &'a SyntaxRefer
         .unwrap_or_else(|| syntax_set.find_syntax_plain_text())
 }
 
-fn syntect_theme() -> &'static Theme {
+fn syntect_theme(name: &str) -> &'static Theme {
     THEME_SET
         .themes
-        .get("InspiredGitHub")
-        .or_else(|| THEME_SET.themes.get("base16-ocean.dark"))
+        .get(name)
         .or_else(|| THEME_SET.themes.values().next())
         .expect("syntect default themes should include at least one theme")
 }
 
 pub(crate) fn syntect_css() -> String {
     let mut css =
-        css_for_theme_with_class_style(syntect_theme(), SYNTECT_CLASS_STYLE).unwrap_or_default();
+        css_for_theme_with_class_style(syntect_theme("InspiredGitHub"), SYNTECT_CLASS_STYLE)
+            .unwrap_or_default();
+    let dark_css =
+        css_for_theme_with_class_style(syntect_theme("base16-ocean.dark"), SYNTECT_CLASS_STYLE)
+            .unwrap_or_default();
+    css.push_str("@media (prefers-color-scheme: dark){");
+    css.push_str(&dark_css);
+    css.push('}');
     css.push_str(
         ".code pre .syn-code,.code pre .syn-code span{background:transparent!important;background-color:transparent!important}",
     );
