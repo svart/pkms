@@ -1,6 +1,6 @@
 [package]
 name = "pkms"
-version = "2.6.1"
+version = "2.6.2"
 description = "CLI for navigating and maintaining org-roam personal knowledge base + todo CLI"
 edition = "2024"
 license = "MIT"

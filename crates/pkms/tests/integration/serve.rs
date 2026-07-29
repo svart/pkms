@@ -379,6 +379,84 @@ fn test_serve_asset_endpoint_only_serves_linked_note_assets() {
     let _ = child.wait();
 }
 
+#[test]
+fn test_serve_heading_scoped_attachment() {
+    let _server_guard = lock_server_test();
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().to_path_buf();
+    let config_home = setup_test_config_home();
+    let roam = root.join("roam");
+    let note_uuid = "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa";
+    let heading_uuid = "bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb";
+    let attachment_dir = root
+        .join(".attach")
+        .join(&heading_uuid[..2])
+        .join(&heading_uuid[2..]);
+    std::fs::create_dir_all(&roam).unwrap();
+    std::fs::create_dir_all(&attachment_dir).unwrap();
+    std::fs::write(attachment_dir.join("heading.png"), "heading attachment").unwrap();
+    std::fs::write(
+        roam.join("a.org"),
+        format!(
+            r#":PROPERTIES:
+:ID:       {note_uuid}
+:END:
+#+title: Alpha
+
+* Attached image
+:PROPERTIES:
+:ID:       {heading_uuid}
+:END:
+
+[[attachment:heading.png]]
+"#
+        ),
+    )
+    .unwrap();
+
+    let mut child = Command::new(pkms_binary())
+        .args([
+            "--db",
+            root.to_str().unwrap(),
+            "serve",
+            "Alpha",
+            "--port",
+            "0",
+        ])
+        .env("XDG_CONFIG_HOME", config_home.path())
+        .env_remove("PKMS_DB_ROOT")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("failed to spawn pkms serve");
+
+    let stdout = child.stdout.take().unwrap();
+    let mut reader = BufReader::new(stdout);
+    let mut line = String::new();
+    reader.read_line(&mut line).unwrap();
+    let url = line
+        .trim()
+        .strip_prefix("Serving ")
+        .expect("serve startup URL");
+    let (_, rest) = url.split_once("://").unwrap();
+    let (host_port, path) = rest.split_once('/').unwrap();
+
+    let page = http_get(host_port, &format!("/{path}"));
+    assert!(page.contains(&format!(
+        "/asset?note={heading_uuid}&amp;kind=attachment&amp;target=heading.png"
+    )));
+
+    let attachment = http_get(
+        host_port,
+        &asset_path(heading_uuid, "attachment", "heading.png"),
+    );
+    assert!(attachment.contains("HTTP/1.1 200 OK"));
+    assert!(attachment.contains("heading attachment"));
+
+    child.kill().unwrap();
+    let _ = child.wait();
+}
+
 fn http_get(host_port: &str, path: &str) -> String {
     let mut stream = TcpStream::connect(host_port).unwrap();
     let write_result = write!(

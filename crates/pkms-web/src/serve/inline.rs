@@ -33,7 +33,7 @@ impl<'a> AssetRef<'a> {
         None
     }
 
-    fn resolve_path(self, config: &WebConfig, node: &Node) -> PathBuf {
+    fn resolve_path(self, config: &WebConfig, node: &Node, attachment_owner_uuid: &str) -> PathBuf {
         match self.kind {
             assets::AssetKind::File => resolve_file_link_path_with_home(
                 self.target,
@@ -43,14 +43,20 @@ impl<'a> AssetRef<'a> {
             ),
             assets::AssetKind::Attachment => assets::resolve_existing_attachment(
                 config.resolved_db_root(),
-                &node.uuid,
+                attachment_owner_uuid,
                 self.target,
             ),
         }
     }
 }
 
-pub(super) fn render_inline(graph: &Graph, config: &WebConfig, node: &Node, text: &str) -> String {
+pub(super) fn render_inline(
+    graph: &Graph,
+    config: &WebConfig,
+    node: &Node,
+    attachment_owner_uuid: &str,
+    text: &str,
+) -> String {
     let mut html = String::new();
     let mut last = 0;
     for cap in LINK_RE.captures_iter(text) {
@@ -62,7 +68,14 @@ pub(super) fn render_inline(graph: &Graph, config: &WebConfig, node: &Node, text
         ));
         let target = cap.get(1).map_or("", |m| m.as_str());
         let desc = cap.get(2).map(|m| m.as_str()).filter(|s| !s.is_empty());
-        html.push_str(&render_link(graph, config, node, target, desc));
+        html.push_str(&render_link(
+            graph,
+            config,
+            node,
+            attachment_owner_uuid,
+            target,
+            desc,
+        ));
         last = m.end();
     }
     html.push_str(&render_formatted_text_with_plain_links(&text[last..]));
@@ -73,6 +86,7 @@ fn render_link(
     graph: &Graph,
     config: &WebConfig,
     node: &Node,
+    attachment_owner_uuid: &str,
     target: &str,
     desc: Option<&str>,
 ) -> String {
@@ -108,8 +122,9 @@ fn render_link(
         );
     }
     if let Some(asset) = AssetRef::parse(target) {
-        let href = asset_href(&node.uuid, asset);
-        if assets::is_image_path(&asset.resolve_path(config, node)) {
+        let owner_uuid = asset_owner_uuid(&node.uuid, attachment_owner_uuid, asset);
+        let href = asset_href(owner_uuid, asset);
+        if assets::is_image_path(&asset.resolve_path(config, node, attachment_owner_uuid)) {
             return format!(
                 "<figure><img src=\"{href}\" alt=\"{}\"><figcaption>{}</figcaption></figure>",
                 escape_html(label),
@@ -131,6 +146,7 @@ fn render_link(
 pub(super) fn render_standalone_image(
     config: &WebConfig,
     node: &Node,
+    attachment_owner_uuid: &str,
     text: &str,
     caption: &str,
 ) -> Option<String> {
@@ -141,20 +157,29 @@ pub(super) fn render_standalone_image(
     }
     let target = cap.get(1).map_or("", |m| m.as_str());
     let desc = cap.get(2).map(|m| m.as_str()).filter(|s| !s.is_empty());
-    render_image_link(config, node, target, desc, Some(caption))
+    render_image_link(
+        config,
+        node,
+        attachment_owner_uuid,
+        target,
+        desc,
+        Some(caption),
+    )
 }
 
 fn render_image_link(
     config: &WebConfig,
     node: &Node,
+    attachment_owner_uuid: &str,
     target: &str,
     desc: Option<&str>,
     caption: Option<&str>,
 ) -> Option<String> {
     let asset = AssetRef::parse(target)?;
-    if assets::is_image_path(&asset.resolve_path(config, node)) {
+    if assets::is_image_path(&asset.resolve_path(config, node, attachment_owner_uuid)) {
+        let owner_uuid = asset_owner_uuid(&node.uuid, attachment_owner_uuid, asset);
         return Some(render_image_figure(
-            &asset_href(&node.uuid, asset),
+            &asset_href(owner_uuid, asset),
             caption.or(desc).unwrap_or(target),
         ));
     }
@@ -167,6 +192,17 @@ fn render_image_figure(href: &str, caption: &str) -> String {
         escape_html(caption),
         render_formatted_text(caption)
     )
+}
+
+fn asset_owner_uuid<'a>(
+    note_uuid: &'a str,
+    attachment_owner_uuid: &'a str,
+    asset: AssetRef<'_>,
+) -> &'a str {
+    match asset.kind {
+        assets::AssetKind::File => note_uuid,
+        assets::AssetKind::Attachment => attachment_owner_uuid,
+    }
 }
 
 fn asset_href(note_uuid: &str, asset: AssetRef<'_>) -> String {

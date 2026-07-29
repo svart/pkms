@@ -49,6 +49,7 @@ impl<'a> OrgBodyRenderer<'a> {
                 graph,
                 config,
                 node,
+                attachment_owner_uuid: node.uuid.to_string(),
             },
             lines: content.lines().collect(),
             headings_by_line,
@@ -168,9 +169,13 @@ impl<'a> OrgBodyRenderer<'a> {
         let Some(caption) = self.pending_caption.take() else {
             return false;
         };
-        let Some(figure) =
-            render_standalone_image(self.context.config, self.context.node, trimmed, &caption)
-        else {
+        let Some(figure) = render_standalone_image(
+            self.context.config,
+            self.context.node,
+            &self.context.attachment_owner_uuid,
+            trimmed,
+            &caption,
+        ) else {
             return false;
         };
         self.html.push_str(&figure);
@@ -197,6 +202,11 @@ impl<'a> OrgBodyRenderer<'a> {
 
     fn render_heading(&mut self, line_number: usize, cap: &regex::Captures<'_>) {
         self.end_flow_and_drop_caption();
+        self.context.attachment_owner_uuid = self
+            .headings_by_line
+            .get(&line_number)
+            .and_then(|heading| heading.uuid.as_ref().map(ToString::to_string))
+            .unwrap_or_else(|| self.context.node.uuid.to_string());
         self.html.push_str(&render_heading_line(
             &self.context,
             &self.headings_by_line,
@@ -237,11 +247,18 @@ pub(super) struct OrgRenderContext<'a> {
     graph: &'a Graph,
     config: &'a WebConfig,
     node: &'a Node,
+    attachment_owner_uuid: String,
 }
 
 impl OrgRenderContext<'_> {
     pub(super) fn render_inline(&self, text: &str) -> String {
-        render_inline(self.graph, self.config, self.node, text)
+        render_inline(
+            self.graph,
+            self.config,
+            self.node,
+            &self.attachment_owner_uuid,
+            text,
+        )
     }
 }
 
