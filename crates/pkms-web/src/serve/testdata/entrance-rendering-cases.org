@@ -6,6 +6,8 @@
 
 Here starts the formula: $S=\pi{r}^2$.
 
+Backtick inline code: `cargo test`.
+
 Link to a file with [[file:~/work/project/source.rs::40][line number]].
 Link to a file with [[~/work/project/source.rs::40][line number]] but without ~file:~.
 [[file:~/work/project/source.rs::pub const VALUE: &str =][search link]]

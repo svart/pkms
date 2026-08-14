@@ -1,5 +1,8 @@
+use super::highlight::highlight_code;
 use super::inline::percent_encode;
-use pulldown_cmark::{CowStr, Event, HeadingLevel, Options, Parser, Tag, TagEnd, html};
+use pulldown_cmark::{
+    CodeBlockKind, CowStr, Event, HeadingLevel, Options, Parser, Tag, TagEnd, html,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct MarkdownHeading {
@@ -21,6 +24,7 @@ pub(super) fn render_markdown(content: &str, request_path: &str) -> RenderedMark
     let mut events = Vec::new();
     let mut last_heading_offset = 0;
     let mut heading_line_number = 1;
+    let mut fenced_language = None;
 
     for (event, range) in Parser::new_ext(content, options).into_offset_iter() {
         let event = match event {
@@ -47,6 +51,17 @@ pub(super) fn render_markdown(content: &str, request_path: &str) -> RenderedMark
                     classes,
                     attrs,
                 })
+            }
+            Event::Start(Tag::CodeBlock(kind)) => {
+                fenced_language = match &kind {
+                    CodeBlockKind::Fenced(info) => info
+                        .split_whitespace()
+                        .next()
+                        .filter(|language| !language.is_empty())
+                        .map(str::to_string),
+                    CodeBlockKind::Indented => None,
+                };
+                Event::Start(Tag::CodeBlock(kind))
             }
             Event::Start(Tag::Link {
                 link_type,
@@ -76,11 +91,19 @@ pub(super) fn render_markdown(content: &str, request_path: &str) -> RenderedMark
                 }
                 Event::End(TagEnd::Heading(level))
             }
+            Event::End(TagEnd::CodeBlock) => {
+                fenced_language = None;
+                Event::End(TagEnd::CodeBlock)
+            }
             Event::Text(text) => {
-                if let Some(heading) = current_heading.as_mut() {
-                    heading.title.push_str(&text);
+                if let Some(language) = fenced_language.as_deref() {
+                    Event::Html(CowStr::from(highlight_code(language, &text)))
+                } else {
+                    if let Some(heading) = current_heading.as_mut() {
+                        heading.title.push_str(&text);
+                    }
+                    Event::Text(text)
                 }
-                Event::Text(text)
             }
             Event::Code(code) => {
                 if let Some(heading) = current_heading.as_mut() {
@@ -216,5 +239,20 @@ mod tests {
         assert!(declares_local_asset(content, "pic.png"));
         assert!(!declares_local_asset(content, "missing.png"));
         assert!(!declares_local_asset(content, "https://example.com"));
+    }
+
+    #[test]
+    fn highlights_fenced_cpp_source_code() {
+        let rendered = render_markdown(
+            "```c++\n#include <vector>\nclass ThisIsClass {\npublic:\n    int value;\n};\n```\n",
+            "/tmp/guide.md",
+        );
+
+        assert!(rendered.body.contains("<code class=\"language-c++\">"));
+        assert!(rendered.body.contains("<span class=\"syn-"));
+        assert!(rendered.body.contains("ThisIsClass"));
+        assert!(rendered.body.contains("&lt;"));
+        assert!(rendered.body.contains("&gt;"));
+        assert!(!rendered.body.contains("<vector>"));
     }
 }

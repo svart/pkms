@@ -929,7 +929,7 @@ generic export
     #[test]
     fn renders_org_inline_formatting() {
         let html = render_formatted_text(
-            "*bold* /italic/ _under_ +gone+ =literal @skip <tag>= ~orange @skip~ @alice @bob-dev email@example.com @ $x^2$",
+            "*bold* /italic/ _under_ +gone+ =literal @skip <tag>= ~orange @skip~ `backtick @skip` @alice @bob-dev email@example.com @ $x^2$",
         );
 
         assert!(html.contains("<strong>bold</strong>"));
@@ -938,6 +938,7 @@ generic export
         assert!(html.contains("<del>gone</del>"));
         assert!(html.contains("<code class=\"inline-code\">literal @skip &lt;tag&gt;</code>"));
         assert!(html.contains("<code class=\"inline-code code-orange\">orange @skip</code>"));
+        assert!(html.contains("<code class=\"inline-code code-orange\">backtick @skip</code>"));
         assert!(html.contains("<code class=\"inline-code code-mention\">@alice</code>"));
         assert!(html.contains("<code class=\"inline-code code-mention\">@bob-dev</code>"));
         assert!(html.contains("email@example.com @ "));

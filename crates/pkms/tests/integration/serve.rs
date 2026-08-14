@@ -268,6 +268,10 @@ Intro with **strong text**.
 ## Details
 
 <script>alert("unsafe")</script>
+
+```c++
+class ThisIsClass {{}};
+```
 "#,
             absolute_file_path.display()
         ),
@@ -320,6 +324,9 @@ Intro with **strong text**.
         percent_encode(markdown_path.canonicalize().unwrap().to_str().unwrap())
     )));
     assert!(response.contains("&lt;script&gt;alert(\"unsafe\")&lt;/script&gt;"));
+    assert!(response.contains("<code class=\"language-c++\">"));
+    assert!(response.contains("<span class=\"syn-"));
+    assert!(response.contains("ThisIsClass"));
     assert!(!response.contains("<details class=\"side-panel backlinks-panel\">"));
     assert!(!response.contains("class=\"uuid\""));
     assert!(!response.contains("id=\"note-preview\""));

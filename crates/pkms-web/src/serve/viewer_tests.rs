@@ -164,6 +164,9 @@ Heading body.
     assert!(html.contains("#projects"));
     assert!(html.contains("class=\"katex\""));
     assert!(html.contains("S=\\pi{r}^2"));
+    assert!(html.contains(
+        "Backtick inline code: <code class=\"inline-code code-orange\">cargo test</code>."
+    ));
 
     assert!(html.contains("kind=file&amp;target=~%2Fwork%2Fproject%2Fsource.rs%3A%3A40"));
     assert!(

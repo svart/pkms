@@ -120,6 +120,8 @@ including a path outside the database root. Files outside the Org graph keep
 the contents panel and open in Emacs at line 1, but omit backlinks, UUID/tag
 metadata, and hover previews. Graph-backed Org notes retain the complete view.
 Raw Markdown HTML is escaped.
+Language-tagged fenced Markdown blocks use syntax highlighting, including
+`c++`. In Org files, backtick-delimited inline code is styled like `~code~`.
 
 ## Tags
 

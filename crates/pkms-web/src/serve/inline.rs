@@ -328,7 +328,7 @@ fn render_org_markup(text: &str) -> String {
             html.push_str(&escape_html(inner));
             html.push_str("</code>");
         }
-        InlineStyle::OrangeCode => {
+        InlineStyle::OrangeCode | InlineStyle::BacktickCode => {
             html.push_str("<code class=\"inline-code code-orange\">");
             html.push_str(&escape_html(inner));
             html.push_str("</code>");
@@ -398,6 +398,7 @@ enum InlineStyle {
     Strike,
     Verbatim,
     OrangeCode,
+    BacktickCode,
 }
 
 impl InlineStyle {
@@ -409,6 +410,7 @@ impl InlineStyle {
             InlineStyle::Strike => '+',
             InlineStyle::Verbatim => '=',
             InlineStyle::OrangeCode => '~',
+            InlineStyle::BacktickCode => '`',
         }
     }
 
@@ -420,6 +422,7 @@ impl InlineStyle {
             '+' => Some(InlineStyle::Strike),
             '=' => Some(InlineStyle::Verbatim),
             '~' => Some(InlineStyle::OrangeCode),
+            '`' => Some(InlineStyle::BacktickCode),
             _ => None,
         }
     }

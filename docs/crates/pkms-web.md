@@ -10,8 +10,9 @@ one selected note plus linked-note navigation through a foreground HTTP server.
   or Markdown target from any readable file path.
 - Render org content to HTML, including headings, lists, tables, planning
   badges, tags, source blocks, inline formatting, formulas, and links.
-- Render Markdown through `pulldown-cmark`, escape raw HTML, and omit graph-only
-  backlinks and preview UI.
+- Render Markdown through `pulldown-cmark`, highlight language-tagged fenced
+  code through Syntect, escape raw HTML, and omit graph-only backlinks and
+  preview UI.
 - Render Org files outside the graph with the normal Org renderer while omitting
   backlinks, UUID/tag metadata, and preview UI.
 - Serve internal note navigation, note previews, local declared file links,

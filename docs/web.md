@@ -43,6 +43,10 @@ The process stays in the foreground until interrupted.
 - Hover previews for internal note links.
 - Org tables, lists, tags, TODO states, priorities, planning badges, inline
   markup, source blocks, syntax highlighting, and static KaTeX formula HTML.
+- Backtick-delimited text in Org files uses the same inline-code styling as
+  tilde-delimited text.
+- Fenced Markdown source blocks use Syntect highlighting when they declare a
+  language, including language identifiers such as `c++`.
 - Free-standing `http://` and `https://` URLs after org links are resolved.
 - An "Open in Emacs" action that uses the same default editor path as
   `task open`.
