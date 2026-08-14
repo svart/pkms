@@ -88,6 +88,7 @@ When built with `--features web`:
 ```bash
 pkms serve <target>
 pkms serve <target> --port 0
+pkms serve docs/guide.md
 ```
 
 See [Web Viewer](web.md) for build/run instructions and local file-serving
@@ -111,6 +112,12 @@ HTML:
   and collapsed on constrained viewports.
 - Hovering over an internal note link opens a scrollable note preview after a
   short delay.
+
+`<target>` may also be any readable `.org`, `.md`, or `.markdown` file path,
+including a path outside the database root. Files outside the Org graph keep
+the contents panel and open in Emacs at line 1, but omit backlinks, UUID/tag
+metadata, and hover previews. Graph-backed Org notes retain the complete view.
+Raw Markdown HTML is escaped.
 
 ## Tags
 

@@ -6,9 +6,14 @@ one selected note plus linked-note navigation through a foreground HTTP server.
 ## Responsibilities
 
 - Load the current graph at server startup through `pkms-org`.
-- Resolve the initial target note from UUID, path, or title.
+- Resolve the initial Org target from UUID, path, or title, or a standalone Org
+  or Markdown target from any readable file path.
 - Render org content to HTML, including headings, lists, tables, planning
   badges, tags, source blocks, inline formatting, formulas, and links.
+- Render Markdown through `pulldown-cmark`, escape raw HTML, and omit graph-only
+  backlinks and preview UI.
+- Render Org files outside the graph with the normal Org renderer while omitting
+  backlinks, UUID/tag metadata, and preview UI.
 - Serve internal note navigation, note previews, local declared file links,
   declared attachment links, static assets, fonts, CSS, and JavaScript.
 - Provide the "Open in Emacs" route through a callback supplied by the umbrella
@@ -23,6 +28,7 @@ one selected note plus linked-note navigation through a foreground HTTP server.
 | `serve/mod.rs` | Private viewer module wiring and shared page assets. |
 | `serve/http.rs` | HTTP request routing and response handling. |
 | `serve/page.rs` | Page shell, panels, backlinks, preview hooks, and note layout. |
+| `serve/markdown_html.rs` | Markdown parsing, safe HTML events, and heading anchors. |
 | `serve/org_html.rs` | Org-to-HTML rendering entry point. |
 | `serve/org_html/blocks.rs` | Block-level org rendering. |
 | `serve/org_html/lists.rs` | List rendering. |
@@ -44,6 +50,8 @@ one selected note plus linked-note navigation through a foreground HTTP server.
   resolve under supported org-attach roots.
 - Internal `id:` links navigate through the viewer instead of exposing raw
   filesystem paths.
+- External files are served only when they match the canonical startup target;
+  arbitrary external `file=` query paths remain unavailable.
 
 ## Boundaries
 

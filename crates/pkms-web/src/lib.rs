@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use pkms_org::{Graph, OrgConfig};
 use serde::Serialize;
 use std::net::TcpListener;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 mod serve;
 
@@ -10,7 +10,7 @@ mod serve;
 use serve::highlight::highlight_code;
 use serve::http::ServeState;
 #[cfg(test)]
-use serve::http::{is_client_disconnect, open_response};
+use serve::http::{is_client_disconnect, open_response, resolve_file_target};
 #[cfg(test)]
 use serve::inline::{percent_decode, percent_encode, render_display_math, render_formatted_text};
 use serve::{HttpResponse, http};
@@ -58,10 +58,32 @@ pub struct ServeStarted {
     pub url: String,
     pub host: String,
     pub port: u16,
+    #[serde(skip_serializing_if = "String::is_empty")]
     pub uuid: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub path: Option<String>,
 }
 
 pub type OpenTargetFn = fn(&Graph, &str, &str, Option<usize>) -> Result<()>;
+
+#[derive(Debug, Clone)]
+pub(crate) enum InitialTarget {
+    Org(pkms_org::domain::NoteId),
+    File(FileTarget),
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct FileTarget {
+    pub(crate) path: PathBuf,
+    pub(crate) request_path: String,
+    pub(crate) format: FileFormat,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum FileFormat {
+    Org,
+    Markdown,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ViewerMethod {
@@ -120,7 +142,7 @@ impl NoteViewer {
         let state = ServeState {
             config: &self.config,
             graph: &self.graph,
-            initial_uuid: None,
+            initial_target: None,
             open_target: self.open_target,
             default_editor: &self.default_editor,
         };
@@ -142,24 +164,45 @@ pub fn serve(
     started: impl FnOnce(&ServeStarted) -> Result<()>,
 ) -> Result<()> {
     let graph = config.load_graph()?;
-    let initial_uuid = graph.resolve_target(&opts.target)?.uuid.clone();
+    let initial_target = if http::is_supported_file_path(Path::new(&opts.target)) {
+        match graph.find_node(&opts.target) {
+            Some(node) => InitialTarget::Org(node.uuid.clone()),
+            None => InitialTarget::File(http::resolve_file_target(config, &opts.target)?),
+        }
+    } else {
+        InitialTarget::Org(graph.resolve_target(&opts.target)?.uuid.clone())
+    };
     let listener = TcpListener::bind((opts.host.as_str(), opts.port))
         .with_context(|| format!("Failed to bind {}:{}", opts.host, opts.port))?;
     let addr = listener.local_addr()?;
-    let url = format!("http://{}:{}/?id={}", addr.ip(), addr.port(), initial_uuid);
+    let query = match &initial_target {
+        InitialTarget::Org(uuid) => format!("id={}", serve::inline::percent_encode(uuid)),
+        InitialTarget::File(target) => format!(
+            "file={}",
+            serve::inline::percent_encode(&target.request_path)
+        ),
+    };
+    let url = format!("http://{}:{}/?{query}", addr.ip(), addr.port());
 
     let started_event = ServeStarted {
         url: url.clone(),
         host: addr.ip().to_string(),
         port: addr.port(),
-        uuid: initial_uuid.to_string(),
+        uuid: match &initial_target {
+            InitialTarget::Org(uuid) => uuid.to_string(),
+            InitialTarget::File(_) => String::new(),
+        },
+        path: match &initial_target {
+            InitialTarget::Org(_) => None,
+            InitialTarget::File(target) => Some(target.request_path.clone()),
+        },
     };
     started(&started_event)?;
 
     let state = ServeState {
         config,
         graph: &graph,
-        initial_uuid: Some(&initial_uuid),
+        initial_target: Some(&initial_target),
         open_target,
         default_editor,
     };
@@ -187,6 +230,9 @@ mod tests {
     use std::fs;
     use std::io;
     use std::path::PathBuf;
+    use std::sync::Mutex;
+
+    static OPENED_TARGET: Mutex<Option<(PathBuf, usize)>> = Mutex::new(None);
 
     fn web_config(db_root: PathBuf) -> WebConfig {
         WebConfig {
@@ -206,6 +252,16 @@ mod tests {
         _editor: &str,
         _line: Option<usize>,
     ) -> Result<()> {
+        Ok(())
+    }
+
+    fn record_open_target(
+        _graph: &Graph,
+        target: &str,
+        _editor: &str,
+        line: Option<usize>,
+    ) -> Result<()> {
+        *OPENED_TARGET.lock().unwrap() = Some((PathBuf::from(target), line.unwrap_or(1)));
         Ok(())
     }
 
@@ -415,10 +471,11 @@ Body.
         let corpus = config.load_corpus().unwrap();
         let graph = Graph::from_corpus(&corpus);
         let initial_uuid: pkms_org::domain::NoteId = "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa".into();
+        let initial_target = InitialTarget::Org(initial_uuid);
         let state = ServeState {
             config: &config,
             graph: &graph,
-            initial_uuid: Some(&initial_uuid),
+            initial_target: Some(&initial_target),
             open_target: noop_open_target,
             default_editor: "true",
         };
@@ -431,6 +488,54 @@ Body.
         assert_eq!(response.content_type.as_str(), "text/plain; charset=utf-8");
         assert_eq!(String::from_utf8(response.body).unwrap(), "Opened Alpha");
         assert_eq!(missing.status, 404);
+    }
+
+    #[test]
+    fn open_response_opens_markdown_at_the_beginning() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("db");
+        fs::create_dir(&root).unwrap();
+        let markdown_path = dir.path().join("guide.md");
+        fs::write(&markdown_path, "# Guide\n").unwrap();
+        let config = web_config(root);
+        let corpus = config.load_corpus().unwrap();
+        let graph = Graph::from_corpus(&corpus);
+        let file_target = resolve_file_target(&config, markdown_path.to_str().unwrap()).unwrap();
+        let initial_target = InitialTarget::File(file_target);
+        let state = ServeState {
+            config: &config,
+            graph: &graph,
+            initial_target: Some(&initial_target),
+            open_target: record_open_target,
+            default_editor: "emacsclient -n",
+        };
+        *OPENED_TARGET.lock().unwrap() = None;
+
+        let query = format!(
+            "file={}",
+            percent_encode(markdown_path.canonicalize().unwrap().to_str().unwrap())
+        );
+        let response = open_response(&state, Some(&query)).unwrap();
+
+        assert_eq!(response.status, 200);
+        assert_eq!(
+            *OPENED_TARGET.lock().unwrap(),
+            Some((markdown_path.canonicalize().unwrap(), 1))
+        );
+    }
+
+    #[test]
+    fn file_target_prefers_the_database_relative_path() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().to_path_buf();
+        let markdown_path = root.join("README.md");
+        fs::write(&markdown_path, "# Database readme\n").unwrap();
+        let config = web_config(root);
+
+        let target = resolve_file_target(&config, "README.md").unwrap();
+
+        assert_eq!(target.path, markdown_path.canonicalize().unwrap());
+        assert_eq!(target.request_path, "README.md");
     }
 
     #[test]

@@ -88,6 +88,36 @@ Preview body.
 }
 
 #[test]
+fn note_viewer_rejects_external_paths_without_a_matching_startup_target() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("db");
+    fs::create_dir_all(&root).unwrap();
+    fs::write(dir.path().join("outside.md"), "# Outside\n").unwrap();
+    let viewer = NoteViewer::new(web_config(root), noop_open_target, "true").unwrap();
+
+    for path in ["/", "/open"] {
+        let response = viewer
+            .respond(ViewerRequest {
+                method: if path == "/" {
+                    ViewerMethod::Get
+                } else {
+                    ViewerMethod::Post
+                },
+                path: path.to_string(),
+                query: Some("file=..%2Foutside.md".to_string()),
+            })
+            .unwrap();
+
+        assert_eq!(response.status, 404);
+        assert!(
+            !String::from_utf8(response.body)
+                .unwrap()
+                .contains("Outside")
+        );
+    }
+}
+
+#[test]
 fn renders_all_cases_preserved_from_entrance_note() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path().to_path_buf();

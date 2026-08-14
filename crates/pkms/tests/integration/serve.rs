@@ -239,6 +239,142 @@ fn test_serve_accepts_cwd_relative_note_path() {
 }
 
 #[test]
+fn test_serve_renders_markdown_without_org_only_ui() {
+    let _server_guard = lock_server_test();
+    let db = tempfile::tempdir().unwrap();
+    let root = db.path().to_path_buf();
+    let files = tempfile::tempdir().unwrap();
+    let config_home = setup_test_config_home();
+    let docs = files.path().join("docs");
+    std::fs::create_dir_all(&docs).unwrap();
+    let markdown_path = docs.join("guide.md");
+    std::fs::write(
+        &markdown_path,
+        r#"# Markdown Guide
+
+Intro with **strong text**.
+
+## Details
+
+<script>alert("unsafe")</script>
+"#,
+    )
+    .unwrap();
+
+    let mut child = Command::new(pkms_binary())
+        .args([
+            "--db",
+            root.to_str().unwrap(),
+            "serve",
+            markdown_path.to_str().unwrap(),
+            "--port",
+            "0",
+        ])
+        .env("XDG_CONFIG_HOME", config_home.path())
+        .env_remove("PKMS_DB_ROOT")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("failed to spawn pkms serve");
+
+    let stdout = child.stdout.take().unwrap();
+    let mut reader = BufReader::new(stdout);
+    let mut line = String::new();
+    reader.read_line(&mut line).unwrap();
+    assert!(
+        line.starts_with("Serving http://"),
+        "unexpected line: {line}"
+    );
+    let url = line.trim().strip_prefix("Serving ").unwrap();
+    let (_, rest) = url.split_once("://").unwrap();
+    let (host_port, path) = rest.split_once('/').unwrap();
+
+    let response = http_get(host_port, &format!("/{path}"));
+    assert!(response.contains("HTTP/1.1 200 OK"));
+    assert!(response.contains("<h1 id=\"h-1\">Markdown Guide</h1>"));
+    assert!(response.contains("<strong>strong text</strong>"));
+    assert!(response.contains("href=\"#h-5\""));
+    assert!(response.contains(&format!(
+        "data-open-url=\"/open?file={}\"",
+        percent_encode(markdown_path.canonicalize().unwrap().to_str().unwrap())
+    )));
+    assert!(response.contains("&lt;script&gt;alert(\"unsafe\")&lt;/script&gt;"));
+    assert!(!response.contains("<details class=\"side-panel backlinks-panel\">"));
+    assert!(!response.contains("class=\"uuid\""));
+    assert!(!response.contains("id=\"note-preview\""));
+
+    child.kill().unwrap();
+    let _ = child.wait();
+}
+
+#[test]
+fn test_serve_renders_external_org_without_graph_only_ui() {
+    let _server_guard = lock_server_test();
+    let db = tempfile::tempdir().unwrap();
+    let files = tempfile::tempdir().unwrap();
+    let config_home = setup_test_config_home();
+    let org_path = files.path().join("external.org");
+    std::fs::write(
+        &org_path,
+        r#":PROPERTIES:
+:ID:       dddddddd-dddd-4ddd-8ddd-dddddddddddd
+:END:
+#+title: External Org
+
+* Section
+Body with *bold text*.
+"#,
+    )
+    .unwrap();
+
+    let mut child = Command::new(pkms_binary())
+        .args([
+            "--db",
+            db.path().to_str().unwrap(),
+            "serve",
+            org_path.to_str().unwrap(),
+            "--port",
+            "0",
+        ])
+        .env("XDG_CONFIG_HOME", config_home.path())
+        .env_remove("PKMS_DB_ROOT")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("failed to spawn pkms serve");
+
+    let stdout = child.stdout.take().unwrap();
+    let mut reader = BufReader::new(stdout);
+    let mut line = String::new();
+    reader.read_line(&mut line).unwrap();
+    assert!(
+        line.starts_with("Serving http://"),
+        "unexpected line: {line}"
+    );
+    let url = line.trim().strip_prefix("Serving ").unwrap();
+    let (_, rest) = url.split_once("://").unwrap();
+    let (host_port, path) = rest.split_once('/').unwrap();
+
+    let response = http_get(host_port, &format!("/{path}"));
+    assert!(response.contains("HTTP/1.1 200 OK"));
+    assert!(response.contains("<h1>External Org</h1>"));
+    assert!(response.contains("<h2 id=\"h-6\">Section</h2>"));
+    assert!(response.contains("Body with <strong>bold text</strong>."));
+    assert!(response.contains("href=\"#h-6\""));
+    assert!(response.contains(&format!(
+        "data-open-url=\"/open?file={}\"",
+        percent_encode(org_path.canonicalize().unwrap().to_str().unwrap())
+    )));
+    assert!(!response.contains("<details class=\"side-panel backlinks-panel\">"));
+    assert!(!response.contains("class=\"uuid\""));
+    assert!(!response.contains("dddddddd-dddd-4ddd-8ddd-dddddddddddd"));
+    assert!(!response.contains("id=\"note-preview\""));
+
+    child.kill().unwrap();
+    let _ = child.wait();
+}
+
+#[test]
 fn test_serve_ndjson_startup_emits_single_json_line() {
     let _server_guard = lock_server_test();
     let (_dir, root) = setup_db();

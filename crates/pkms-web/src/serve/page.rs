@@ -1,14 +1,153 @@
 use super::inline::{escape_html, percent_encode, render_formatted_text};
+use super::markdown_html::{MarkdownHeading, render_markdown};
 use super::org_html::{
     heading_title_with_visible_prefixes, is_configured_todo_state, render_org_body,
 };
 use super::{page_css, page_js};
 use crate::WebConfig;
+use pkms_org::domain::NoteId;
 use pkms_org::graph::{Graph, Node};
 use pkms_org::org_edit::parsed_heading_subtree_end_index;
 use pkms_org::parser::{HEADING_RE, Heading, parse_note, strip_org_links};
 use std::collections::BTreeMap;
 use std::fmt::Write as FmtWrite;
+use std::path::Path;
+
+pub(crate) fn render_markdown_html(path: &Path, request_path: &str, content: &str) -> String {
+    let rendered = render_markdown(content);
+    let contents = render_markdown_contents_panel(&rendered.headings);
+    let fallback_title = path
+        .file_stem()
+        .map_or_else(String::new, |stem| stem.to_string_lossy().into_owned());
+    let title = rendered
+        .headings
+        .iter()
+        .find(|heading| heading.level == 1)
+        .map_or(fallback_title.as_str(), |heading| heading.title.as_str());
+    let fallback_heading = if rendered.headings.iter().any(|heading| heading.level == 1) {
+        String::new()
+    } else {
+        format!("<h1>{}</h1>\n", escape_html(&fallback_title))
+    };
+    render_standalone_html(
+        title,
+        "pkms markdown",
+        request_path,
+        &contents,
+        &fallback_heading,
+        "markdown-body",
+        &rendered.body,
+    )
+}
+
+pub(crate) fn render_standalone_org_html(
+    graph: &Graph,
+    config: &WebConfig,
+    path: &Path,
+    request_path: &str,
+    content: &str,
+) -> String {
+    let parsed = parse_note(content);
+    let title = parsed.title.clone().unwrap_or_else(|| {
+        path.file_stem()
+            .map_or_else(String::new, |stem| stem.to_string_lossy().into_owned())
+    });
+    let headings_count = parsed.headings.len();
+    let heading_uuids = parsed.heading_uuids();
+    let has_todos = parsed.has_todo_headings();
+    let node = Node {
+        uuid: NoteId::new(path.to_string_lossy().into_owned()),
+        title: title.clone(),
+        path: path.to_path_buf(),
+        filetags: parsed.filetags,
+        categories: parsed.categories,
+        aliases: parsed.aliases,
+        refs: parsed.roam_refs,
+        outgoing: parsed.outgoing,
+        headings_count,
+        heading_uuids,
+        has_todos,
+    };
+    let body = render_org_body(graph, config, &node, content);
+    let contents = render_contents_panel(config, content);
+    let heading = format!("<h1>{}</h1>\n", escape_html(&title));
+    render_standalone_html(
+        &title,
+        "pkms org file",
+        request_path,
+        &contents,
+        &heading,
+        "org-file-body",
+        &body,
+    )
+}
+
+fn render_standalone_html(
+    title: &str,
+    eyebrow: &str,
+    request_path: &str,
+    contents: &str,
+    heading: &str,
+    body_class: &str,
+    body: &str,
+) -> String {
+    format!(
+        r#"<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<title>{}</title>
+<style>{}</style>
+</head>
+<body>
+{contents}
+<main>
+<header class="note-header">
+<div class="note-header-actions">
+<p class="eyebrow">{}</p>
+<button type="button" class="open-note-button" data-open-url="/open?file={}">Open in Emacs</button>
+</div>
+{heading}</header>
+<article class="note-body {body_class}">
+{}
+</article>
+</main>
+<script>{}</script>
+</body>
+</html>"#,
+        escape_html(title),
+        page_css(),
+        escape_html(eyebrow),
+        percent_encode(request_path),
+        body,
+        page_js()
+    )
+}
+
+fn render_markdown_contents_panel(headings: &[MarkdownHeading]) -> String {
+    let mut html = String::from(
+        "<details class=\"side-panel contents-panel\">\n<summary>Contents</summary>\n",
+    );
+    if headings.is_empty() {
+        html.push_str("<p class=\"panel-empty\">No headings</p>\n");
+    } else {
+        html.push_str("<nav aria-label=\"Note contents\"><ol class=\"outline-list\">\n");
+        for heading in headings {
+            let indent = heading.level.saturating_sub(1);
+            let _ = writeln!(
+                html,
+                "<li style=\"--outline-depth: {indent}\"><a href=\"#{}\">{}</a></li>",
+                heading_anchor(heading.line_number),
+                escape_html(&heading.title)
+            );
+        }
+        html.push_str("</ol></nav>\n");
+    }
+    html.push_str("</details>\n");
+    html
+}
 
 pub(crate) fn render_note_html(
     graph: &Graph,

@@ -9,6 +9,7 @@ Run from a checkout:
 
 ```bash
 cargo run --features web -- --db ~/Documents/org serve "Project Alpha"
+cargo run --features web -- --db ~/Documents/org serve docs/project-alpha.md
 ```
 
 Or install a binary with the web feature:
@@ -36,7 +37,7 @@ The process stays in the foreground until interrupted.
 
 ## What It Renders
 
-- The selected note body.
+- The selected Org note or Markdown file body.
 - Internal `id:` links as viewer navigation.
 - Backlinks and table of contents panels.
 - Hover previews for internal note links.
@@ -46,10 +47,23 @@ The process stays in the foreground until interrupted.
 - An "Open in Emacs" action that uses the same default editor path as
   `task open`.
 
+Standalone targets may use an `.org`, `.md`, or `.markdown` extension and do
+not need to be under the database root. Markdown uses CommonMark plus tables,
+footnotes, strikethrough, and task lists; raw HTML is shown as text rather than
+inserted into the page. Standalone files keep the table of contents and "Open
+in Emacs" action, but omit backlinks, UUID and tag metadata, and note previews.
+Opening a standalone file in Emacs always starts at line 1.
+
+Org files represented in the configured database graph retain the complete Org
+note view, including backlinks. An Org file outside that graph is rendered as a
+standalone file. For safety, an external file is exposed only when it is the
+server's explicit startup target; changing the URL to another external path
+does not expose that file.
+
 ## Local File and Attachment Links
 
-The viewer serves local `file:` and `attachment:` targets only when the rendered
-note declares the exact link:
+For graph-backed Org notes, the viewer serves local `file:` and `attachment:`
+targets only when the note declares the exact link:
 
 - `file:` targets must resolve under the database root.
 - `attachment:` targets must resolve under supported org-attach roots.

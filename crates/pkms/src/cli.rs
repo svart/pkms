@@ -543,7 +543,7 @@ pub struct QueryArgs {
 #[cfg(feature = "web")]
 #[derive(Debug, Args)]
 pub struct ServeArgs {
-    #[arg(help = "UUID, file path, or note title to render first")]
+    #[arg(help = "Org UUID/title/path or Markdown file path to render first")]
     pub target: String,
     #[arg(long, default_value = "127.0.0.1", help = "Address to bind")]
     pub host: String,

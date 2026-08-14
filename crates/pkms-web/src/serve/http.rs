@@ -1,7 +1,9 @@
-use super::{assets, inline::percent_decode, render_note_html, render_preview_html};
-use crate::{OpenTargetFn, ViewerMethod, WebConfig};
+use super::{
+    assets, inline::percent_decode, render_markdown_html, render_note_html, render_preview_html,
+    render_standalone_org_html,
+};
+use crate::{FileFormat, FileTarget, InitialTarget, OpenTargetFn, ViewerMethod, WebConfig};
 use anyhow::{Context, Result};
-use pkms_org::domain::NoteId;
 use pkms_org::graph::{Graph, Node, resolve_file_link_path_with_home};
 use pkms_org::parser::{Link, parse_note};
 use std::io::{self, BufRead, BufReader, Write};
@@ -11,7 +13,7 @@ use std::path::{Path, PathBuf};
 pub(crate) struct ServeState<'a> {
     pub(crate) config: &'a WebConfig,
     pub(crate) graph: &'a Graph,
-    pub(crate) initial_uuid: Option<&'a NoteId>,
+    pub(crate) initial_target: Option<&'a InitialTarget>,
     pub(crate) open_target: OpenTargetFn,
     pub(crate) default_editor: &'a str,
 }
@@ -284,12 +286,24 @@ impl AssetRequest {
 }
 
 fn render_response(state: &ServeState<'_>, query: Option<&str>) -> Result<HttpResponse> {
-    let Some(requested) =
-        query_param(query, "id").or_else(|| state.initial_uuid.map(NoteId::to_string))
-    else {
-        return Ok(HttpResponse::not_found("Missing id"));
-    };
-    let node = state.graph.resolve_target(&requested)?;
+    if let Some(requested) = query_param(query, "id") {
+        return render_org_response(state, &requested);
+    }
+    if let Some(requested) = query_param(query, "file") {
+        let Some(target) = resolve_file_request(state, &requested) else {
+            return Ok(HttpResponse::not_found("File not found"));
+        };
+        return render_file_response(state, &target);
+    }
+    match state.initial_target {
+        Some(InitialTarget::Org(uuid)) => render_org_response(state, uuid.as_str()),
+        Some(InitialTarget::File(target)) => render_file_response(state, target),
+        None => Ok(HttpResponse::not_found("Missing target")),
+    }
+}
+
+fn render_org_response(state: &ServeState<'_>, requested: &str) -> Result<HttpResponse> {
+    let node = state.graph.resolve_target(requested)?;
     let node = if let Some(primary_uuid) = state.graph.primary_uuid_for_heading(&node.uuid) {
         state.graph.resolve_target(primary_uuid)?
     } else {
@@ -303,6 +317,22 @@ fn render_response(state: &ServeState<'_>, query: Option<&str>) -> Result<HttpRe
         node,
         &content,
     )))
+}
+
+fn render_file_response(state: &ServeState<'_>, target: &FileTarget) -> Result<HttpResponse> {
+    let content = std::fs::read_to_string(&target.path)
+        .with_context(|| format!("Failed to read {}", target.path.display()))?;
+    let html = match target.format {
+        FileFormat::Markdown => render_markdown_html(&target.path, &target.request_path, &content),
+        FileFormat::Org => render_standalone_org_html(
+            state.graph,
+            state.config,
+            &target.path,
+            &target.request_path,
+            &content,
+        ),
+    };
+    Ok(HttpResponse::html(html))
 }
 
 fn preview_response(state: &ServeState<'_>, query: Option<&str>) -> Result<HttpResponse> {
@@ -368,12 +398,94 @@ fn note_declares_asset_link(
 }
 
 pub(crate) fn open_response(state: &ServeState<'_>, query: Option<&str>) -> Result<HttpResponse> {
-    let Some(note_uuid) = query_param(query, "id") else {
-        return Ok(HttpResponse::not_found("Missing id"));
+    if let Some(note_uuid) = query_param(query, "id") {
+        let node = state.graph.resolve_target(&note_uuid)?;
+        (state.open_target)(state.graph, &node.uuid, state.default_editor, Some(1))?;
+        return Ok(HttpResponse::text(format!("Opened {}", node.title)));
+    }
+    if let Some(file) = query_param(query, "file") {
+        let Some(target) = resolve_file_request(state, &file) else {
+            return Ok(HttpResponse::not_found("File not found"));
+        };
+        (state.open_target)(
+            state.graph,
+            &target.path.to_string_lossy(),
+            state.default_editor,
+            Some(1),
+        )?;
+        return Ok(HttpResponse::text(format!(
+            "Opened {}",
+            target.request_path
+        )));
+    }
+    Ok(HttpResponse::not_found("Missing target"))
+}
+
+pub(crate) fn resolve_file_target(config: &WebConfig, requested: &str) -> Result<FileTarget> {
+    let requested_path = Path::new(requested);
+    let db_candidate = config.resolved_db_root().join(requested_path);
+    let candidate = if requested_path.is_absolute() {
+        requested_path.to_path_buf()
+    } else if db_candidate.exists() {
+        db_candidate
+    } else {
+        requested_path.to_path_buf()
     };
-    let node = state.graph.resolve_target(&note_uuid)?;
-    (state.open_target)(state.graph, &node.uuid, state.default_editor, Some(1))?;
-    Ok(HttpResponse::text(format!("Opened {}", node.title)))
+    file_target_from_path(config, &candidate)
+}
+
+fn resolve_file_request(state: &ServeState<'_>, requested: &str) -> Option<FileTarget> {
+    let target = resolve_file_target(state.config, requested).ok()?;
+    let under_db_root = std::fs::canonicalize(state.config.resolved_db_root())
+        .is_ok_and(|root| target.path.starts_with(root));
+    let is_initial_file = matches!(
+        state.initial_target,
+        Some(InitialTarget::File(initial)) if initial.path == target.path
+    );
+    (under_db_root || is_initial_file).then_some(target)
+}
+
+fn file_target_from_path(config: &WebConfig, candidate: &Path) -> Result<FileTarget> {
+    let format = file_format(candidate)
+        .ok_or_else(|| anyhow::anyhow!("Not a supported file: {}", candidate.display()))?;
+    let root = std::fs::canonicalize(config.resolved_db_root()).with_context(|| {
+        format!(
+            "Failed to resolve db root '{}'",
+            config.resolved_db_root().display()
+        )
+    })?;
+    let path = std::fs::canonicalize(candidate)
+        .with_context(|| format!("Failed to resolve file '{}'", candidate.display()))?;
+    if !path.is_file() {
+        anyhow::bail!("Not a file: {}", candidate.display());
+    }
+    let request_path = path.strip_prefix(&root).map_or_else(
+        |_| path.to_string_lossy().into_owned(),
+        |relative| relative.to_string_lossy().into_owned(),
+    );
+    Ok(FileTarget {
+        path,
+        request_path,
+        format,
+    })
+}
+
+pub(crate) fn is_supported_file_path(path: &Path) -> bool {
+    file_format(path).is_some()
+}
+
+fn file_format(path: &Path) -> Option<FileFormat> {
+    path.extension().and_then(|extension| {
+        let extension = extension.to_string_lossy();
+        if extension.eq_ignore_ascii_case("org") {
+            Some(FileFormat::Org)
+        } else if extension.eq_ignore_ascii_case("md") || extension.eq_ignore_ascii_case("markdown")
+        {
+            Some(FileFormat::Markdown)
+        } else {
+            None
+        }
+    })
 }
 
 fn split_target(target: &str) -> (&str, Option<&str>) {

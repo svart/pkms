@@ -34,6 +34,10 @@ pub fn target_for_note(
     target: &str,
     line_override: Option<usize>,
 ) -> Result<EditorTarget> {
+    let path = Path::new(target);
+    if path.is_file() {
+        return Ok(EditorTarget::from_location(graph, path, 1, line_override));
+    }
     let node = graph.resolve_target(target)?;
     let line_number = line_override.unwrap_or_else(|| first_task_line(graph, &node.path));
     Ok(EditorTarget {
@@ -133,5 +137,20 @@ mod tests {
         let status = status.expect("shell should start");
 
         assert_eq!(status.code(), Some(7));
+    }
+
+    #[cfg(feature = "web")]
+    #[test]
+    fn direct_file_target_starts_at_requested_line() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("guide.md");
+        std::fs::write(&path, "# Guide\n").unwrap();
+        let graph = Graph::from_corpus(&pkms_org::Corpus::scan(dir.path(), &[]).unwrap());
+
+        let target = target_for_note(&graph, path.to_str().unwrap(), Some(1)).unwrap();
+
+        assert_eq!(target.path, path);
+        assert_eq!(target.line_number, 1);
+        assert_eq!(target.title, "guide");
     }
 }
