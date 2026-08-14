@@ -54,6 +54,10 @@ inserted into the page. Standalone files keep the table of contents and "Open
 in Emacs" action, but omit backlinks, UUID and tag metadata, and note previews.
 Opening a standalone file in Emacs always starts at line 1.
 
+Local images and file links declared by a Markdown file are served through the
+viewer. Relative targets resolve from the Markdown file's directory, while
+absolute targets resolve as written. Undeclared files are not exposed.
+
 Org files represented in the configured database graph retain the complete Org
 note view, including backlinks. An Org file outside that graph is rendered as a
 standalone file. For safety, an external file is exposed only when it is the

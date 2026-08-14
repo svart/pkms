@@ -14,7 +14,7 @@ use std::fmt::Write as FmtWrite;
 use std::path::Path;
 
 pub(crate) fn render_markdown_html(path: &Path, request_path: &str, content: &str) -> String {
-    let rendered = render_markdown(content);
+    let rendered = render_markdown(content, request_path);
     let contents = render_markdown_contents_panel(&rendered.headings);
     let fallback_title = path
         .file_stem()

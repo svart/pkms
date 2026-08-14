@@ -102,6 +102,8 @@ HTML:
 - Local `file:` and `attachment:` links are served only when the rendered note
   declares the exact link. `file:` targets must resolve under the database root;
   `attachment:` targets must resolve under the supported org-attach roots.
+- Markdown images and file links resolve relative to the Markdown file's
+  directory or from an absolute path, and only declared targets are served.
 - Free-standing `http://` and `https://` URLs become clickable after org links
   are resolved.
 - Org tables, tag chips, planning badges, Syntect source highlighting, and

@@ -1,6 +1,6 @@
 use super::{
-    assets, inline::percent_decode, render_markdown_html, render_note_html, render_preview_html,
-    render_standalone_org_html,
+    assets, inline::percent_decode, markdown_html::declares_local_asset, render_markdown_html,
+    render_note_html, render_preview_html, render_standalone_org_html,
 };
 use crate::{FileFormat, FileTarget, InitialTarget, OpenTargetFn, ViewerMethod, WebConfig};
 use anyhow::{Context, Result};
@@ -22,6 +22,7 @@ enum Route<'a> {
     Root,
     Preview,
     Asset,
+    MarkdownAsset,
     Favicon,
     Open,
     Font(&'a str),
@@ -163,6 +164,7 @@ fn response_for_request(state: &ServeState<'_>, request: &HttpRequest<'_>) -> Re
             Route::Root => render_response(state, request.query),
             Route::Preview => preview_response(state, request.query),
             Route::Asset => asset_response(state, request.query),
+            Route::MarkdownAsset => markdown_asset_response(state, request.query),
             Route::Favicon => Ok(assets::favicon_response()),
             Route::Open => Ok(HttpResponse::method_not_allowed("Method not allowed")),
             Route::Font(font_name) => Ok(assets::font_response(font_name)),
@@ -371,6 +373,50 @@ fn asset_response(state: &ServeState<'_>, query: Option<&str>) -> Result<HttpRes
     })
 }
 
+fn markdown_asset_response(state: &ServeState<'_>, query: Option<&str>) -> Result<HttpResponse> {
+    let Some(source) = query_param(query, "file") else {
+        return Ok(HttpResponse::not_found("Missing file"));
+    };
+    let Some(target) = query_param(query, "target") else {
+        return Ok(HttpResponse::not_found("Missing target"));
+    };
+    let Some(source) = resolve_file_request(state, &source) else {
+        return Ok(HttpResponse::not_found("Asset not found"));
+    };
+    if source.format != FileFormat::Markdown {
+        return Ok(HttpResponse::not_found("Asset not found"));
+    }
+    let content = std::fs::read_to_string(&source.path)
+        .with_context(|| format!("Failed to read {}", source.path.display()))?;
+    if !declares_local_asset(&content, &target) {
+        return Ok(HttpResponse::not_found("Asset not found"));
+    }
+
+    let decoded_target = percent_decode_url_path(&target);
+    let requested = Path::new(&decoded_target);
+    let candidate = if requested.is_absolute() {
+        requested.to_path_buf()
+    } else {
+        source
+            .path
+            .parent()
+            .unwrap_or_else(|| Path::new("."))
+            .join(requested)
+    };
+    let Ok(path) = std::fs::canonicalize(candidate) else {
+        return Ok(HttpResponse::not_found("Asset not found"));
+    };
+    if !path.is_file() {
+        return Ok(HttpResponse::not_found("Asset not found"));
+    }
+
+    Ok(HttpResponse {
+        status: 200,
+        content_type: assets::mime_type(&path),
+        body: std::fs::read(path)?,
+    })
+}
+
 fn note_declares_asset_link(
     note_path: &Path,
     kind: assets::AssetKind,
@@ -503,6 +549,7 @@ fn route_for_path(path: &str) -> Route<'_> {
         "/" => Route::Root,
         "/preview" => Route::Preview,
         "/asset" => Route::Asset,
+        "/markdown-asset" => Route::MarkdownAsset,
         "/favicon.svg" => Route::Favicon,
         "/open" => Route::Open,
         _ => Route::NotFound,
@@ -514,6 +561,26 @@ fn query_param(query: Option<&str>, key: &str) -> Option<String> {
         let (k, v) = part.split_once('=')?;
         (k == key).then(|| percent_decode(v))
     })
+}
+
+fn percent_decode_url_path(text: &str) -> String {
+    let bytes = text.as_bytes();
+    let mut decoded = Vec::with_capacity(bytes.len());
+    let mut index = 0;
+    while index < bytes.len() {
+        if bytes[index] == b'%'
+            && index + 2 < bytes.len()
+            && let Ok(hex) = std::str::from_utf8(&bytes[index + 1..index + 3])
+            && let Ok(byte) = u8::from_str_radix(hex, 16)
+        {
+            decoded.push(byte);
+            index += 3;
+        } else {
+            decoded.push(bytes[index]);
+            index += 1;
+        }
+    }
+    String::from_utf8_lossy(&decoded).into_owned()
 }
 
 fn write_response(
@@ -605,6 +672,14 @@ mod tests {
         assert_eq!(
             String::from_utf8(unknown.body).unwrap(),
             "Unknown asset kind"
+        );
+    }
+
+    #[test]
+    fn url_path_decoding_preserves_literal_plus_characters() {
+        assert_eq!(
+            percent_decode_url_path("assets%2Fpic%20one%2Btwo.png"),
+            "assets/pic one+two.png"
         );
     }
 }

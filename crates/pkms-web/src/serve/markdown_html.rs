@@ -1,3 +1,4 @@
+use super::inline::percent_encode;
 use pulldown_cmark::{CowStr, Event, HeadingLevel, Options, Parser, Tag, TagEnd, html};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -12,12 +13,8 @@ pub(super) struct RenderedMarkdown {
     pub(super) headings: Vec<MarkdownHeading>,
 }
 
-pub(super) fn render_markdown(content: &str) -> RenderedMarkdown {
-    let mut options = Options::empty();
-    options.insert(Options::ENABLE_FOOTNOTES);
-    options.insert(Options::ENABLE_STRIKETHROUGH);
-    options.insert(Options::ENABLE_TABLES);
-    options.insert(Options::ENABLE_TASKLISTS);
+pub(super) fn render_markdown(content: &str, request_path: &str) -> RenderedMarkdown {
+    let options = markdown_options();
 
     let mut headings = Vec::new();
     let mut current_heading: Option<MarkdownHeading> = None;
@@ -58,7 +55,7 @@ pub(super) fn render_markdown(content: &str) -> RenderedMarkdown {
                 id,
             }) => Event::Start(Tag::Link {
                 link_type,
-                dest_url: safe_destination(dest_url),
+                dest_url: safe_destination(dest_url, request_path),
                 title,
                 id,
             }),
@@ -69,7 +66,7 @@ pub(super) fn render_markdown(content: &str) -> RenderedMarkdown {
                 id,
             }) => Event::Start(Tag::Image {
                 link_type,
-                dest_url: safe_destination(dest_url),
+                dest_url: safe_destination(dest_url, request_path),
                 title,
                 id,
             }),
@@ -102,15 +99,49 @@ pub(super) fn render_markdown(content: &str) -> RenderedMarkdown {
     RenderedMarkdown { body, headings }
 }
 
-fn safe_destination(destination: CowStr<'_>) -> CowStr<'_> {
+fn safe_destination<'a>(destination: CowStr<'a>, request_path: &str) -> CowStr<'a> {
     let trimmed = destination.trim();
+    if is_document_destination(trimmed) {
+        return destination;
+    }
     let scheme = trimmed
         .split_once(':')
         .map(|(scheme, _)| scheme.to_ascii_lowercase());
     match scheme.as_deref() {
-        None | Some("http" | "https" | "mailto") => destination,
+        None => CowStr::from(format!(
+            "/markdown-asset?file={}&target={}",
+            percent_encode(request_path),
+            percent_encode(trimmed)
+        )),
+        Some("http" | "https" | "mailto") => destination,
         Some(_) => CowStr::Borrowed("#"),
     }
+}
+
+pub(super) fn declares_local_asset(content: &str, target: &str) -> bool {
+    Parser::new_ext(content, markdown_options()).any(|event| match event {
+        Event::Start(Tag::Link { dest_url, .. } | Tag::Image { dest_url, .. }) => {
+            dest_url.trim() == target && is_local_asset_destination(dest_url.trim())
+        }
+        _ => false,
+    })
+}
+
+fn markdown_options() -> Options {
+    let mut options = Options::empty();
+    options.insert(Options::ENABLE_FOOTNOTES);
+    options.insert(Options::ENABLE_STRIKETHROUGH);
+    options.insert(Options::ENABLE_TABLES);
+    options.insert(Options::ENABLE_TASKLISTS);
+    options
+}
+
+fn is_local_asset_destination(destination: &str) -> bool {
+    !is_document_destination(destination) && !destination.contains(':')
+}
+
+fn is_document_destination(destination: &str) -> bool {
+    destination.starts_with('#') || destination.starts_with('?') || destination.starts_with("//")
 }
 
 fn heading_level(level: HeadingLevel) -> usize {
@@ -132,6 +163,7 @@ mod tests {
     fn renders_anchored_headings_and_escapes_raw_html() {
         let rendered = render_markdown(
             "# Title\n\n## Details\n\n<script>bad()</script>\n\n[bad](javascript:alert(1))\n",
+            "/tmp/guide.md",
         );
 
         assert!(rendered.body.contains("<h1 id=\"h-1\">Title</h1>"));
@@ -154,5 +186,35 @@ mod tests {
                 },
             ]
         );
+    }
+
+    #[test]
+    fn rewrites_local_assets_and_preserves_document_and_web_destinations() {
+        let rendered = render_markdown(
+            "![Relative](<images/pic one.png>)\n\n[Absolute](/tmp/report.pdf)\n\n[Section](#part)\n\n[Web](https://example.com)\n",
+            "/tmp/guide.md",
+        );
+
+        assert!(
+            rendered
+                .body
+                .contains("src=\"/markdown-asset?file=%2Ftmp%2Fguide.md&amp;target=images%2Fpic%20one.png\" alt=\"Relative\""),
+            "{}",
+            rendered.body
+        );
+        assert!(rendered.body.contains(
+            "href=\"/markdown-asset?file=%2Ftmp%2Fguide.md&amp;target=%2Ftmp%2Freport.pdf\""
+        ));
+        assert!(rendered.body.contains("href=\"#part\""));
+        assert!(rendered.body.contains("href=\"https://example.com\""));
+    }
+
+    #[test]
+    fn recognizes_only_declared_local_assets() {
+        let content = "![Image](pic.png)\n\n[Web](https://example.com)\n";
+
+        assert!(declares_local_asset(content, "pic.png"));
+        assert!(!declares_local_asset(content, "missing.png"));
+        assert!(!declares_local_asset(content, "https://example.com"));
     }
 }

@@ -246,18 +246,31 @@ fn test_serve_renders_markdown_without_org_only_ui() {
     let files = tempfile::tempdir().unwrap();
     let config_home = setup_test_config_home();
     let docs = files.path().join("docs");
-    std::fs::create_dir_all(&docs).unwrap();
+    std::fs::create_dir_all(docs.join("assets")).unwrap();
     let markdown_path = docs.join("guide.md");
+    let relative_image_path = docs.join("assets/relative image.svg");
+    let absolute_file_path = files.path().join("absolute.txt");
+    let undeclared_path = docs.join("undeclared.txt");
+    std::fs::write(&relative_image_path, "<svg>relative image</svg>").unwrap();
+    std::fs::write(&absolute_file_path, "absolute file").unwrap();
+    std::fs::write(&undeclared_path, "undeclared file").unwrap();
     std::fs::write(
         &markdown_path,
-        r#"# Markdown Guide
+        format!(
+            r#"# Markdown Guide
 
 Intro with **strong text**.
+
+![Relative image](<assets/relative image.svg>)
+
+[Absolute file]({})
 
 ## Details
 
 <script>alert("unsafe")</script>
 "#,
+            absolute_file_path.display()
+        ),
     )
     .unwrap();
 
@@ -293,7 +306,15 @@ Intro with **strong text**.
     assert!(response.contains("HTTP/1.1 200 OK"));
     assert!(response.contains("<h1 id=\"h-1\">Markdown Guide</h1>"));
     assert!(response.contains("<strong>strong text</strong>"));
-    assert!(response.contains("href=\"#h-5\""));
+    assert!(response.contains("href=\"#h-9\""));
+    let markdown_request_path = percent_encode(markdown_path.to_str().unwrap());
+    assert!(response.contains(&format!(
+        "src=\"/markdown-asset?file={markdown_request_path}&amp;target=assets%2Frelative%20image.svg\" alt=\"Relative image\""
+    )));
+    assert!(response.contains(&format!(
+        "href=\"/markdown-asset?file={markdown_request_path}&amp;target={}\"",
+        percent_encode(absolute_file_path.to_str().unwrap())
+    )));
     assert!(response.contains(&format!(
         "data-open-url=\"/open?file={}\"",
         percent_encode(markdown_path.canonicalize().unwrap().to_str().unwrap())
@@ -302,6 +323,37 @@ Intro with **strong text**.
     assert!(!response.contains("<details class=\"side-panel backlinks-panel\">"));
     assert!(!response.contains("class=\"uuid\""));
     assert!(!response.contains("id=\"note-preview\""));
+
+    let relative_image = http_get(
+        host_port,
+        &format!(
+            "/markdown-asset?file={markdown_request_path}&target={}",
+            percent_encode("assets/relative image.svg")
+        ),
+    );
+    assert!(relative_image.contains("HTTP/1.1 200 OK"));
+    assert!(relative_image.contains("Content-Type: image/svg+xml"));
+    assert!(relative_image.contains("relative image"));
+
+    let absolute_file = http_get(
+        host_port,
+        &format!(
+            "/markdown-asset?file={markdown_request_path}&target={}",
+            percent_encode(absolute_file_path.to_str().unwrap())
+        ),
+    );
+    assert!(absolute_file.contains("HTTP/1.1 200 OK"));
+    assert!(absolute_file.contains("absolute file"));
+
+    let undeclared_file = http_get(
+        host_port,
+        &format!(
+            "/markdown-asset?file={markdown_request_path}&target={}",
+            percent_encode(undeclared_path.to_str().unwrap())
+        ),
+    );
+    assert!(undeclared_file.contains("HTTP/1.1 404 Not Found"));
+    assert!(!undeclared_file.contains("undeclared file"));
 
     child.kill().unwrap();
     let _ = child.wait();

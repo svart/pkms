@@ -15,7 +15,8 @@ one selected note plus linked-note navigation through a foreground HTTP server.
 - Render Org files outside the graph with the normal Org renderer while omitting
   backlinks, UUID/tag metadata, and preview UI.
 - Serve internal note navigation, note previews, local declared file links,
-  declared attachment links, static assets, fonts, CSS, and JavaScript.
+  declared attachment links, Markdown-relative and absolute declared files,
+  static assets, fonts, CSS, and JavaScript.
 - Provide the "Open in Emacs" route through a callback supplied by the umbrella
   crate.
 - Keep the viewer foreground-only and free of persistent derived state.
@@ -52,6 +53,9 @@ one selected note plus linked-note navigation through a foreground HTTP server.
   filesystem paths.
 - External files are served only when they match the canonical startup target;
   arbitrary external `file=` query paths remain unavailable.
+- Markdown assets must be declared by an allowed Markdown source. Relative
+  targets resolve from that source file's directory; absolute targets resolve
+  as written.
 
 ## Boundaries
 
