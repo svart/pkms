@@ -125,12 +125,14 @@ fn render_src_block(block: &OrgBlock<'_>, caption: Option<&str>) -> String {
     } else {
         highlight_code(lang, &code)
     };
-    let mut html = format!(
-        "<figure class=\"org-block org-block-src code\"><figcaption>{}</figcaption><pre><code class=\"syn-code\">{}</code></pre>",
-        escape_html(&label),
-        rendered_code
-    );
+    let mut html = String::from("<figure class=\"org-block org-block-src code\">");
     push_block_caption(&mut html, caption);
+    html.push_str("<figcaption>");
+    html.push_str(&escape_html(&label));
+    html.push_str("</figcaption>");
+    html.push_str("<pre><code class=\"syn-code\">");
+    html.push_str(&rendered_code);
+    html.push_str("</code></pre>");
     html.push_str("</figure>\n");
     html
 }
@@ -238,5 +240,16 @@ mod tests {
 
         let (block, _) = read_org_block(&["#+begin_unknown", "body", "#+end_unknown"], 0).unwrap();
         assert!(matches!(block.kind, OrgBlockKind::Other(ref kind) if kind == "unknown"));
+    }
+
+    #[test]
+    fn renders_source_caption_as_first_block_row() {
+        let (block, _) = read_org_block(&["#+begin_src", "echo hello", "#+end_src"], 0).unwrap();
+
+        let html = render_src_block(&block, Some("example caption"));
+
+        assert!(html.contains(
+            "<figure class=\"org-block org-block-src code\"><div class=\"org-block-caption\">example caption</div><figcaption>Source</figcaption><pre>"
+        ));
     }
 }

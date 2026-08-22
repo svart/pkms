@@ -581,6 +581,11 @@ pre {
   padding: 0.55rem 0.75rem;
 }
 
+.org-block-src .org-block-caption {
+  border-top: 0;
+  border-bottom: 1px solid var(--border);
+}
+
 .org-block-content p:last-child,
 .org-block-content > :last-child {
   margin-bottom: 0;
