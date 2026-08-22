@@ -43,6 +43,11 @@ The process stays in the foreground until interrupted.
 - Hover previews for internal note links.
 - Org tables, lists, tags, TODO states, priorities, planning badges, inline
   markup, source blocks, syntax highlighting, and static KaTeX formula HTML.
+- Persisted Org Babel results as result panels paired with their source blocks.
+  Fixed-width output drops Org's leading colon marker, while tables, lists,
+  links, drawers, and wrapped results retain their rendered Org shape. The
+  viewer displays results already stored in the note; it does not execute code
+  or imply that a result is current.
 - Backtick-delimited text in Org files uses the same inline-code styling as
   tilde-delimited text.
 - Fenced Markdown source blocks use Syntect highlighting when they declare a

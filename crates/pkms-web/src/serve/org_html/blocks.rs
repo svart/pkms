@@ -87,6 +87,22 @@ pub(super) fn render_org_block(
 }
 
 impl OrgBlock<'_> {
+    pub(super) fn is_src(&self) -> bool {
+        matches!(self.kind, OrgBlockKind::Src)
+    }
+
+    pub(super) fn is_example(&self) -> bool {
+        matches!(self.kind, OrgBlockKind::Example)
+    }
+
+    pub(super) fn is_results_wrapper(&self) -> bool {
+        matches!(&self.kind, OrgBlockKind::Other(kind) if kind == "results")
+    }
+
+    pub(super) fn body(&self) -> &[&str] {
+        &self.body
+    }
+
     fn body_text(&self) -> String {
         let mut text = self.body.join("\n");
         if !text.is_empty() {

@@ -10,12 +10,15 @@ use std::fmt::Write as FmtWrite;
 mod blocks;
 #[path = "org_html/lists.rs"]
 mod lists;
+#[path = "org_html/results.rs"]
+mod results;
 
 use blocks::{read_org_block, render_org_block, render_table};
 use lists::{
     ListFrame, append_list_continuation as append_list_continuation_html, close_lists, list_item,
     render_list_item as render_list_item_html,
 };
+use results::{render_org_result, result_after};
 
 pub(super) fn render_org_body(
     graph: &Graph,
@@ -91,6 +94,11 @@ impl<'a> OrgBodyRenderer<'a> {
         if lower.starts_with("#+caption:") {
             return self.read_caption(i);
         }
+        if let Some((result, next_i)) = render_org_result(&self.context, &self.lines, i) {
+            self.end_flow_and_drop_caption();
+            self.html.push_str(&result);
+            return next_i;
+        }
         if let Some(next_i) = self.render_block(i) {
             return next_i;
         }
@@ -145,8 +153,19 @@ impl<'a> OrgBodyRenderer<'a> {
         let (block, next_i) = read_org_block(&self.lines, i)?;
         self.end_flow();
         let caption = self.pending_caption.take();
-        self.html
-            .push_str(&render_org_block(&self.context, &block, caption.as_deref()));
+        let block_html = render_org_block(&self.context, &block, caption.as_deref());
+        if block.is_src()
+            && let Some(result_i) = result_after(&self.lines, next_i)
+            && let Some((result_html, result_next_i)) =
+                render_org_result(&self.context, &self.lines, result_i)
+        {
+            self.html.push_str("<div class=\"org-execution\">\n");
+            self.html.push_str(&block_html);
+            self.html.push_str(&result_html);
+            self.html.push_str("</div>\n");
+            return Some(result_next_i);
+        }
+        self.html.push_str(&block_html);
         Some(next_i)
     }
 

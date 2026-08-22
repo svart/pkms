@@ -329,8 +329,10 @@ pub fn unpack_vector(bytes: &[u8]) -> Result<Vec<f32>> {
         );
     }
     Ok(bytes
-        .chunks_exact(size_of::<f32>())
-        .map(|chunk| f32::from_le_bytes(chunk.try_into().expect("chunk size is checked")))
+        .as_chunks::<{ size_of::<f32>() }>()
+        .0
+        .iter()
+        .map(|chunk| f32::from_le_bytes(*chunk))
         .collect())
 }
 

@@ -21,6 +21,18 @@ fn main() -> Result<()> {
 }
 #+end_src
 
+#+RESULTS: greeting
+: hello <world>
+: second line
+
+#+begin_src python
+return [["item", "value"], ["alpha", 1]]
+#+end_src
+
+#+RESULTS: data
+| item  | value |
+| alpha |     1 |
+
 #+begin_src c++
 class ThisIsClass {
 public:

@@ -519,6 +519,56 @@ pre {
   background: transparent;
 }
 
+.org-execution {
+  margin: 1.25em 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.org-execution > .org-block {
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+}
+
+.org-execution > .org-block-result {
+  border-top: 1px solid var(--border);
+}
+
+.org-block-result {
+  background: var(--code);
+}
+
+.org-block-result pre {
+  color: var(--fg);
+}
+
+.org-block-result samp {
+  font: inherit;
+}
+
+.org-result-content {
+  padding: 0.8rem 0.9rem;
+}
+
+.org-result-content > :first-child {
+  margin-top: 0;
+}
+
+.org-result-content > :last-child {
+  margin-bottom: 0;
+}
+
+.org-result-content > table {
+  margin: 0;
+}
+
+.org-result-empty {
+  color: var(--muted);
+  font-style: italic;
+}
+
 .org-block-content {
   padding: 0.8rem 0.9rem;
   white-space: pre-wrap;

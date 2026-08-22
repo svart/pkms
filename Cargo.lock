@@ -2928,7 +2928,7 @@ dependencies = [
 
 [[package]]
 name = "pkms-rag"
-version = "2.3.6"
+version = "2.3.7"
 dependencies = [
  "anyhow",
  "axum",
@@ -2968,7 +2968,7 @@ dependencies = [
 
 [[package]]
 name = "pkms-web"
-version = "2.4.1"
+version = "2.4.2"
 dependencies = [
  "anyhow",
  "katex",

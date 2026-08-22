@@ -118,6 +118,97 @@ fn note_viewer_rejects_external_paths_without_a_matching_startup_target() {
 }
 
 #[test]
+fn renders_persisted_org_results_by_shape() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().to_path_buf();
+    fs::write(
+        root.join("results.org"),
+        r#":PROPERTIES:
+:ID:       aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa
+:END:
+#+title: Result shapes
+
+#+begin_src python
+print("items")
+#+end_src
+
+#+RESULTS: items <script>
+- first
+- second
+
+#+begin_src shell
+printf 'example'
+#+end_src
+
+#+RESULTS:
+#+begin_example
+example <output>
+#+end_example
+
+#+begin_src python
+return [["name", "value"], ["alpha", 1]]
+#+end_src
+
+#+RESULTS:
+:RESULTS:
+| name  | value |
+| alpha |     1 |
+:END:
+
+#+begin_src emacs-lisp :results drawer
+'("wrapped")
+#+end_src
+
+#+RESULTS:
+#+begin_results
+- wrapped
+#+end_results
+
+#+begin_src shell
+printf 'artifact'
+#+end_src
+
+#+RESULTS:
+[[https://example.org/output][artifact]]
+
+#+begin_src shell
+true
+#+end_src
+
+#+RESULTS:
+
+* After results
+"#,
+    )
+    .unwrap();
+    let viewer = NoteViewer::new(web_config(root), noop_open_target, "true").unwrap();
+
+    let page = viewer
+        .respond(ViewerRequest {
+            method: ViewerMethod::Get,
+            path: "/".to_string(),
+            query: Some("id=aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa".to_string()),
+        })
+        .unwrap();
+    let html = String::from_utf8(page.body).unwrap();
+
+    assert_eq!(page.status, 200);
+    assert_eq!(html.matches("class=\"org-execution\"").count(), 6);
+    assert!(html.contains("<figcaption>Result: items &lt;script&gt;</figcaption>"));
+    assert!(html.contains("<li>first</li>\n<li>second</li>"));
+    assert!(html.contains("<pre><samp>example &lt;output&gt;\n</samp></pre>"));
+    assert!(html.contains("<td>alpha</td>"));
+    assert!(html.contains("<li>wrapped</li>"));
+    assert!(
+        html.contains("<a href=\"https://example.org/output\" rel=\"noreferrer\">artifact</a>")
+    );
+    assert!(html.contains("org-result-empty\">No output</div>"));
+    assert!(html.contains(">After results</h2>"));
+    assert!(!html.contains(":RESULTS:"));
+    assert!(!html.contains("Block: results"));
+}
+
+#[test]
 fn renders_all_cases_preserved_from_entrance_note() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path().to_path_buf();
@@ -189,6 +280,13 @@ Heading body.
     assert!(html.contains("<figcaption>Source: sh</figcaption>"));
     assert!(html.contains("<figcaption>Source</figcaption>"));
     assert!(html.contains("<code class=\"syn-code\">"));
+    assert!(html.contains(
+        "<figure class=\"org-block org-block-result\"><figcaption>Result: greeting</figcaption><pre><samp>hello &lt;world&gt;\nsecond line\n</samp></pre></figure>"
+    ));
+    assert!(html.contains(
+        "<figure class=\"org-block org-block-result\"><figcaption>Result: data</figcaption><div class=\"org-result-content\"><table>"
+    ));
+    assert!(!html.contains("<p>: hello &lt;world&gt;"));
     assert!(html.contains("<table>"));
     assert!(html.contains("<th scope=\"col\">head 1</th>"));
     assert!(html.contains("<td><a href=\"/?id=bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb\""));

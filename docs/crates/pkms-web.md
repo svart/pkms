@@ -9,7 +9,8 @@ one selected note plus linked-note navigation through a foreground HTTP server.
 - Resolve the initial Org target from UUID, path, or title, or a standalone Org
   or Markdown target from any readable file path.
 - Render org content to HTML, including headings, lists, tables, planning
-  badges, tags, source blocks, inline formatting, formulas, and links.
+  badges, tags, source blocks, persisted Babel result panels, inline formatting,
+  formulas, and links.
 - Render Markdown through `pulldown-cmark`, highlight language-tagged fenced
   code through Syntect, escape raw HTML, and omit graph-only backlinks and
   preview UI.
@@ -34,6 +35,7 @@ one selected note plus linked-note navigation through a foreground HTTP server.
 | `serve/org_html.rs` | Org-to-HTML rendering entry point. |
 | `serve/org_html/blocks.rs` | Block-level org rendering. |
 | `serve/org_html/lists.rs` | List rendering. |
+| `serve/org_html/results.rs` | Persisted Babel result recognition and rendering. |
 | `serve/inline.rs` | Inline links, text formatting, math, and encoding helpers. |
 | `serve/highlight.rs` | Syntect source highlighting and CSS. |
 | `serve/assets.rs` | Font and static asset serving. |
