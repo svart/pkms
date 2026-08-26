@@ -396,6 +396,7 @@ pub struct TargetArgs {
 }
 
 #[derive(Debug, Args)]
+#[group(id = "stats_mode", multiple = false)]
 pub struct StatsArgs {
     #[arg(short, long, help = "Show notes modified in last N days")]
     pub days: Option<u32>,

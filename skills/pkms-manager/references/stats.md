@@ -11,6 +11,9 @@ pkms stats --tags
 pkms stats --todos
 ```
 
+Use at most one of `--days`, `--hubs`, `--tags`, and `--todos` in one command.
+The CLI rejects every combination of these modes.
+
 `--hubs` is useful before research because hub notes often make good starting
 points. `--tags` helps browse topic areas. `--todos` summarizes configured task
 state per note.

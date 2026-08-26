@@ -1,6 +1,25 @@
 use super::*;
 
 #[test]
+fn test_stats_rejects_every_pair_of_modes() {
+    let (_dir, root) = setup_clean_db();
+    let modes: &[&[&str]] = &[&["--days", "7"], &["--hubs"], &["--tags"], &["--todos"]];
+
+    for (index, left) in modes.iter().enumerate() {
+        for right in &modes[index + 1..] {
+            let mut args = vec!["--db", root.to_str().unwrap(), "stats"];
+            args.extend_from_slice(left);
+            args.extend_from_slice(right);
+            let (stdout, stderr, status) = run(&args);
+            assert!(
+                !status.success(),
+                "stats modes should conflict: {args:?}\nstdout: {stdout}\nstderr: {stderr}"
+            );
+        }
+    }
+}
+
+#[test]
 fn test_stats_human() {
     let (_dir, root) = setup_db();
     let (stdout, _stderr, status) = run(&["--db", root.to_str().unwrap(), "stats"]);

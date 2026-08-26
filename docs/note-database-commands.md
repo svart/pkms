@@ -132,6 +132,9 @@ pkms orphans --limit 20
 pkms suggest <uuid> --limit 10 --exclude-orphans
 ```
 
+Choose at most one stats mode: `--days`, `--hubs`, `--tags`, or `--todos`.
+Combinations are rejected rather than resolved by precedence.
+
 Bare `suggest` returns at most ten candidates. Use `--all` only when an
 unbounded result is intentional.
 

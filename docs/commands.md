@@ -253,6 +253,9 @@ pkms suggest <uuid> --limit 5
 pkms suggest <uuid> --all
 ```
 
+`stats` accepts only one mode selector per invocation: `--days`, `--hubs`,
+`--tags`, or `--todos`. Combining selectors is a CLI error.
+
 `--todos` and heading output use the TODO states configured under `[agenda]`;
 other uppercase heading prefixes remain part of the heading title.
 

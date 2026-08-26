@@ -163,3 +163,6 @@ pkms stats --tags
 pkms stats --todos
 pkms orphans
 ```
+
+Stats mode selectors (`--days`, `--hubs`, `--tags`, and `--todos`) are mutually
+exclusive.
