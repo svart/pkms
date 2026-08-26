@@ -146,9 +146,9 @@ fn test_rag_retrieve_text_uses_readable_chunk_layout() {
         "\
 [ops/media-library.org:40-58] score 0.585 (bm25+metadata+links)
 Media Library Migration to Jellyfin
-Jellyfin internal host stays jellyfin:8096/jellyfin, but jellyfin.externalHostname must be http://server.in.svart.io/jellyfin so browser Play on Jellyfin links are reachable.
+Jellyfin internal host stays jellyfin:8096/jellyfin, but jellyfin.externalHostname must be http://media.example.com/jellyfin so browser Play on Jellyfin links are reachable.
 
-[tasks/pkms-task.org:10-16] score 0.454 (bm25+metadata+links)
+[tasks/pkms-task.org:10-16] score 0.452 (bm25+metadata+links)
 PKMS Task Backend
 Use pkms task agenda week --output-format json to inspect the week's local tasks without mutating them.
 ",
