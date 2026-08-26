@@ -71,7 +71,11 @@ fn dispatch(cli: &Cli, command_ctx: &CommandContext<'_>) -> Result<ExitCode> {
                 command_ctx,
                 &commands::suggest::SuggestOptions {
                     targets,
-                    limit: args.limit,
+                    limit: if args.all {
+                        None
+                    } else {
+                        Some(args.limit.unwrap_or(10))
+                    },
                     exclude_orphans: args.exclude_orphans,
                 },
             ))?

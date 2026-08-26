@@ -41,6 +41,10 @@ useful.
 NDJSON is one JSON object per line. Pipeline consumers read the `uuid` field by
 default unless the command documents a narrower input shape.
 
+`query` bounds each result's `content_matches` to three entries by default and
+includes `content_matches_total` so consumers can detect truncation. Use
+`--max-matches-per-note N` or `--all-matches` to select another policy.
+
 ## Check Output Notes
 
 `pkms --output-format json check --file-links` reports missing local or remote

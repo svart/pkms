@@ -80,6 +80,105 @@ fn test_query_json() {
 }
 
 #[test]
+fn test_query_bounds_content_matches_and_reports_total() {
+    let (_dir, root) = setup_clean_db();
+    db_write(
+        &root,
+        "bounded-query.org",
+        r#":PROPERTIES:
+:ID:       56565656-5656-4656-8656-565656565656
+:END:
+#+title: Bounded Query
+
+needle one
+needle two
+needle three
+needle four
+needle five
+"#,
+    );
+
+    let (bounded, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "query",
+        "needle",
+        "--content",
+    ]);
+    assert!(status.success());
+    assert_eq!(bounded["results"][0]["content_matches_total"], 5);
+    assert_eq!(
+        bounded["results"][0]["content_matches"]
+            .as_array()
+            .unwrap()
+            .len(),
+        3
+    );
+
+    let (limited, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "query",
+        "needle",
+        "--content",
+        "--max-matches-per-note",
+        "2",
+    ]);
+    assert!(status.success());
+    assert_eq!(
+        limited["results"][0]["content_matches"]
+            .as_array()
+            .unwrap()
+            .len(),
+        2
+    );
+
+    let (unbounded, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "query",
+        "needle",
+        "--content",
+        "--all-matches",
+    ]);
+    assert!(status.success());
+    assert_eq!(
+        unbounded["results"][0]["content_matches"]
+            .as_array()
+            .unwrap()
+            .len(),
+        5
+    );
+}
+
+#[test]
+fn test_query_rejects_conflicting_or_zero_match_limits() {
+    let (_dir, root) = setup_clean_db();
+    let db = root.to_str().unwrap();
+
+    let (_stdout, _stderr, conflict) = run(&[
+        "--db",
+        db,
+        "query",
+        "needle",
+        "--max-matches-per-note",
+        "2",
+        "--all-matches",
+    ]);
+    assert!(!conflict.success());
+
+    let (_stdout, _stderr, zero) =
+        run(&["--db", db, "query", "needle", "--max-matches-per-note", "0"]);
+    assert!(!zero.success());
+}
+
+#[test]
 fn test_query_missing_terms_json_error() {
     let (_dir, root) = setup_db();
     let (stdout, _stderr, status) = run(&[

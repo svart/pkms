@@ -36,7 +36,12 @@ pkms query "terms" --title
 pkms query "terms" --tags
 pkms query "terms" --content
 pkms query "terms" --todos
+pkms query "terms" --max-matches-per-note 5
+pkms query "terms" --all-matches
 ```
+
+Query results include at most three content matches per note by default and
+report the uncapped count in `content_matches_total`.
 
 ## Inspect and Navigate
 
@@ -67,6 +72,10 @@ RAG search/retrieve JSON and NDJSON results include `uuid` for the source note,
 so they can feed note-target pipeline consumers.
 Use `[rag].fastembed_model_dir` or `PKMS_RAG_FASTEMBED_MODEL_DIR` when FastEmbed
 should load model files from a local directory instead of downloading them.
+
+Graph-based note suggestions return at most ten candidates per target by
+default. Use `pkms suggest <uuid> --limit N` for another positive bound or
+`pkms suggest <uuid> --all` for every candidate.
 
 List direct note and heading tag assignments, sorted by descending usage count:
 

@@ -23,7 +23,6 @@ fn parse_encoding(value: &str) -> Result<tokens::Encoding, String> {
         .map_err(|()| format!("unknown token encoding '{value}'"))
 }
 
-#[cfg(feature = "rag")]
 fn parse_positive_usize(value: &str) -> Result<usize, String> {
     let parsed = value
         .parse::<usize>()
@@ -448,8 +447,16 @@ pub struct FixAttachArgs {
 pub struct SuggestArgs {
     #[arg(help = "UUID of the target note")]
     pub target: Option<String>,
-    #[arg(short, long, help = "Number of suggestions (default: unlimited)")]
+    #[arg(
+        short,
+        long,
+        value_parser = parse_positive_usize,
+        conflicts_with = "all",
+        help = "Number of suggestions (default: 10)"
+    )]
     pub limit: Option<usize>,
+    #[arg(long, conflicts_with = "limit", help = "Return every suggestion")]
+    pub all: bool,
     #[arg(long, help = "Exclude orphan notes from suggestions")]
     pub exclude_orphans: bool,
     #[arg(long, help = "Read UUIDs from NDJSON stdin")]
@@ -538,6 +545,19 @@ pub struct QueryArgs {
     pub content: bool,
     #[arg(long, help = "Restrict to files with TODO headings")]
     pub todos: bool,
+    #[arg(
+        long,
+        value_parser = parse_positive_usize,
+        conflicts_with = "all_matches",
+        help = "Maximum content matches per note (default: 3)"
+    )]
+    pub max_matches_per_note: Option<usize>,
+    #[arg(
+        long,
+        conflicts_with = "max_matches_per_note",
+        help = "Return every content match for each note"
+    )]
+    pub all_matches: bool,
 }
 
 #[cfg(feature = "web")]

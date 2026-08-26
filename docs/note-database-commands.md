@@ -74,7 +74,12 @@ pkms query "distributed systems" --limit 10
 pkms query "agenda" --title
 pkms query "rust" --content
 pkms query "project" --todos
+pkms query "project" --max-matches-per-note 5
 ```
+
+Content matches are capped at three per note by default in text and structured
+output. The result's `content_matches_total` field preserves the uncapped count;
+use `--all-matches` when the full list is required.
 
 ## Inspect and Navigate
 
@@ -105,6 +110,9 @@ pkms stats --todos
 pkms orphans --limit 20
 pkms suggest <uuid> --limit 10 --exclude-orphans
 ```
+
+Bare `suggest` returns at most ten candidates. Use `--all` only when an
+unbounded result is intentional.
 
 TODO-aware discovery, heading inspection, and statistics use the configured
 `[agenda].open_todo_states` and `[agenda].closed_todo_states` lists.

@@ -13,6 +13,11 @@ pub fn options_from_args(args: &QueryArgs) -> Result<QueryOptions> {
             .clone()
             .ok_or_else(|| anyhow::anyhow!("No search terms specified. Provide terms"))?,
         limit: args.limit,
+        max_matches_per_note: if args.all_matches {
+            None
+        } else {
+            Some(args.max_matches_per_note.unwrap_or(3))
+        },
         scope: QuerySearchScope::from_flags(args.title, args.tags, args.content),
         todo_filter: if args.todos {
             QueryTodoFilter::WithTodos

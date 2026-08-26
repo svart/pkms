@@ -23,6 +23,7 @@ pub struct QueryResultEntry {
     pub score: f64,
     pub matches: Vec<String>,
     pub content_matches: Vec<ContextLine>,
+    pub content_matches_total: usize,
 }
 
 #[derive(Serialize)]
@@ -34,6 +35,7 @@ pub struct ContextLine {
 pub struct QueryOptions {
     pub terms: String,
     pub limit: Option<usize>,
+    pub max_matches_per_note: Option<usize>,
     pub scope: QuerySearchScope,
     pub todo_filter: QueryTodoFilter,
 }
@@ -93,6 +95,12 @@ pub fn execute(config: &OrgConfig, opts: &QueryOptions) -> Result<QueryOutput> {
         combined.retain(|r| graph.node(r.uuid.as_str()).is_some_and(|n| n.has_todos));
     }
 
+    if let Some(limit) = opts.max_matches_per_note {
+        for result in &mut combined {
+            result.content_matches.truncate(limit);
+        }
+    }
+
     let total_results = combined.len();
     let showed = opts.limit.map(|l| {
         let shown = combined.len().min(l);
@@ -138,6 +146,7 @@ fn search_by_text(
                 score: result.score,
                 matches: result.matches,
                 content_matches: vec![],
+                content_matches_total: 0,
             });
         }
     }
@@ -156,11 +165,13 @@ fn search_by_text(
                     }
                 })
                 .collect();
+            let content_matches_total = ctx_lines.len();
             if let Some(existing) = combined
                 .iter_mut()
                 .find(|r| r.uuid == result.node.uuid.as_str())
             {
                 existing.content_matches = ctx_lines;
+                existing.content_matches_total = content_matches_total;
             } else {
                 combined.push(QueryResultEntry {
                     uuid: result.node.uuid.to_string(),
@@ -170,6 +181,7 @@ fn search_by_text(
                     score: 1.0,
                     matches: vec!["content".to_string()],
                     content_matches: ctx_lines,
+                    content_matches_total,
                 });
             }
         }
@@ -206,11 +218,15 @@ pub fn render_text(output: &QueryOutput) -> String {
             let _ = writeln!(text, "       Matches: {}", r.matches.join(", "));
         }
         if !r.content_matches.is_empty() {
-            for cm in &r.content_matches[..std::cmp::min(3, r.content_matches.len())] {
+            for cm in &r.content_matches {
                 let _ = writeln!(text, "       > {}", cm.text);
             }
-            if r.content_matches.len() > 3 {
-                let _ = writeln!(text, "       ... and {} more", r.content_matches.len() - 3);
+            if r.content_matches_total > r.content_matches.len() {
+                let _ = writeln!(
+                    text,
+                    "       ... and {} more",
+                    r.content_matches_total - r.content_matches.len()
+                );
             }
         }
     }
@@ -231,6 +247,7 @@ mod tests {
             score,
             matches: vec!["title".to_string()],
             content_matches: vec![],
+            content_matches_total: 0,
         }
     }
 
@@ -266,7 +283,7 @@ mod tests {
     }
 
     #[test]
-    fn renders_first_three_content_matches() {
+    fn renders_bounded_content_matches_and_reports_remaining_count() {
         let mut result = entry("Alpha Note", 1.0);
         result.content_matches = vec![
             ContextLine {
@@ -281,11 +298,8 @@ mod tests {
                 line: 3,
                 text: "three".to_string(),
             },
-            ContextLine {
-                line: 4,
-                text: "four".to_string(),
-            },
         ];
+        result.content_matches_total = 4;
         let output = QueryOutput {
             query: "alpha".to_string(),
             total_results: 1,
@@ -297,7 +311,6 @@ mod tests {
 
         assert!(text.contains("       > one"));
         assert!(text.contains("       > three"));
-        assert!(!text.contains("       > four"));
         assert!(text.contains("       ... and 1 more"));
     }
 }

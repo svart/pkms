@@ -45,6 +45,67 @@ fn test_suggest_json() {
 }
 
 #[test]
+fn test_suggest_defaults_to_ten_and_all_is_explicit() {
+    let (_dir, root) = setup_clean_db();
+    db_write(
+        &root,
+        "target.org",
+        r#":PROPERTIES:
+:ID:       78787878-7878-4878-8878-787878787878
+:END:
+#+title: Sharedtopic Target
+
+sharedtopic content
+"#,
+    );
+    for index in 0..12 {
+        db_write(
+            &root,
+            &format!("candidate-{index}.org"),
+            &format!(
+                ":PROPERTIES:\n:ID:       00000000-0000-4000-8000-{index:012}\n:END:\n#+title: Sharedtopic Candidate {index}\n\nsharedtopic content\n"
+            ),
+        );
+    }
+    let db = root.to_str().unwrap();
+    let target = "78787878-7878-4878-8878-787878787878";
+
+    let (bounded, status) = run_json(&["--db", db, "--output-format", "json", "suggest", target]);
+    assert!(status.success());
+    assert_eq!(bounded["total"], 12);
+    assert_eq!(bounded["showed"], 10);
+    assert_eq!(bounded["suggestions"].as_array().unwrap().len(), 10);
+
+    let (unbounded, status) = run_json(&[
+        "--db",
+        db,
+        "--output-format",
+        "json",
+        "suggest",
+        target,
+        "--all",
+    ]);
+    assert!(status.success());
+    assert!(unbounded.get("showed").is_none());
+    assert_eq!(unbounded["suggestions"].as_array().unwrap().len(), 12);
+}
+
+#[test]
+fn test_suggest_rejects_limit_with_all() {
+    let (_dir, root) = setup_clean_db();
+    let (_stdout, _stderr, status) = run(&[
+        "--db",
+        root.to_str().unwrap(),
+        "suggest",
+        "78787878-7878-4878-8878-787878787878",
+        "--limit",
+        "2",
+        "--all",
+    ]);
+    assert!(!status.success());
+}
+
+#[test]
 fn test_suggest_note_not_found() {
     let (_dir, root) = setup_db();
     let (_stdout, _stderr, status) =

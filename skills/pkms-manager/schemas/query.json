@@ -20,9 +20,10 @@
         "filetags": { "type": "array", "items": { "type": "string" } },
         "score": { "type": "number" },
         "matches": { "type": "array", "items": { "type": "string" } },
-        "content_matches": { "type": "array", "items": { "type": "object", "additionalProperties": true } }
+        "content_matches": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
+        "content_matches_total": { "type": "integer" }
       },
-      "required": ["uuid", "title", "score"]
+      "required": ["uuid", "title", "score", "content_matches_total"]
     }
   }
 }

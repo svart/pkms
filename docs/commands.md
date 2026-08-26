@@ -68,7 +68,13 @@ pkms query "search terms" --title
 pkms query "search terms" --tags
 pkms query "search terms" --content
 pkms query "search terms" --todos
+pkms query "search terms" --max-matches-per-note 5
+pkms query "search terms" --all-matches
 ```
+
+Query output includes at most three content matches per note by default and
+reports the uncapped number as `content_matches_total`. Use a positive
+`--max-matches-per-note N` to change the bound or `--all-matches` to disable it.
 
 ## Navigation
 
@@ -232,10 +238,16 @@ pkms stats --todos
 pkms orphans
 pkms orphans --with-dailies
 pkms orphans --limit 20
+pkms suggest <uuid>
+pkms suggest <uuid> --limit 5
+pkms suggest <uuid> --all
 ```
 
 `--todos` and heading output use the TODO states configured under `[agenda]`;
 other uppercase heading prefixes remain part of the heading title.
+
+`suggest` returns at most ten candidates per target by default. `--limit N`
+selects another positive bound; `--all` explicitly returns every candidate.
 
 ## Creation and Repair
 

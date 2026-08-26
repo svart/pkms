@@ -9,9 +9,15 @@ pkms query "terms" --title
 pkms query "terms" --tags
 pkms query "terms" --content
 pkms query "terms" --todos
+pkms query "terms" --max-matches-per-note 5
+pkms query "terms" --all-matches
 ```
 
 Use `resolve` first for exact title/alias lookup. Use `query` when the term may
 appear in note content or when you need broader discovery.
+
+Each result includes at most three content matches by default and reports the
+uncapped count as `content_matches_total`. Use `--max-matches-per-note N` for a
+different positive bound or `--all-matches` for the complete match list.
 
 `query --output-format ndjson` is a pipeline producer.
