@@ -10,6 +10,7 @@ use std::{
 };
 
 use anyhow::{Context, Result};
+use pkms_org::ScopeFilter;
 use rusqlite::{Connection, OptionalExtension, Transaction, params};
 
 use crate::{
@@ -219,6 +220,15 @@ pub(crate) fn status(conn: &Connection, db_path: impl AsRef<Path>) -> Result<Sta
 }
 
 pub(crate) fn search(conn: &Connection, query: &str, limit: usize) -> Result<Vec<SearchResult>> {
+    search_scoped(conn, query, limit, None)
+}
+
+pub(crate) fn search_scoped(
+    conn: &Connection,
+    query: &str,
+    limit: usize,
+    scope_filter: Option<&ScopeFilter>,
+) -> Result<Vec<SearchResult>> {
     let fts_query = build_fts_query(query);
     if fts_query.is_empty() || limit == 0 {
         return Ok(Vec::new());
@@ -249,11 +259,28 @@ pub(crate) fn search(conn: &Connection, query: &str, limit: usize) -> Result<Vec
             "#,
         )
         .context("failed to prepare RAG search query")?;
+    let sql_limit = if scope_filter.is_some() {
+        i64::MAX
+    } else {
+        i64::try_from(limit).unwrap_or(i64::MAX)
+    };
     let rows = stmt
-        .query_map(params![fts_query, limit as i64], row_to_search_result)
+        .query_map(params![fts_query, sql_limit], row_to_search_result)
         .context("failed to run RAG search query")?;
-    rows.collect::<rusqlite::Result<Vec<_>>>()
-        .context("failed to read RAG search rows")
+    let mut results = Vec::new();
+    for row in rows {
+        let result = row.context("failed to read RAG search row")?;
+        if scope_filter
+            .is_some_and(|filter| !filter.matches(Path::new(&result.path), &result.tags, true))
+        {
+            continue;
+        }
+        results.push(result);
+        if results.len() == limit {
+            break;
+        }
+    }
+    Ok(results)
 }
 
 pub(crate) fn note_tags(conn: &Connection, note_id: &str) -> Result<Vec<String>> {
@@ -278,6 +305,7 @@ pub(crate) fn compatible_embedding_count(
     .context("failed to count compatible embeddings")
 }
 
+#[cfg(test)]
 pub(crate) fn dense_search(
     conn: &Connection,
     query: &str,

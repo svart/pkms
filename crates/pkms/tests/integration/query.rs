@@ -1,6 +1,104 @@
 use super::*;
 
 #[test]
+fn test_query_applies_shared_scope_filters_before_limits() {
+    let (_dir, root) = setup_clean_db();
+    for (path, id, tags) in [
+        (
+            "projects/keep.org",
+            "10101010-1010-4010-8010-101010101010",
+            ":rust:project:",
+        ),
+        (
+            "projects/private.org",
+            "20202020-2020-4020-8020-202020202020",
+            ":rust:private:",
+        ),
+        (
+            "projects/2026-08-27.org",
+            "30303030-3030-4030-8030-303030303030",
+            ":rust:project:",
+        ),
+        (
+            "archive/old.org",
+            "40404040-4040-4040-8040-404040404040",
+            ":rust:project:",
+        ),
+    ] {
+        db_write(
+            &root,
+            path,
+            &format!(
+                ":PROPERTIES:\n:ID:       {id}\n:END:\n#+title: Scope Needle {path}\n#+filetags: {tags}\n\nscope needle\n"
+            ),
+        );
+    }
+
+    let (value, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "query",
+        "Scope Needle",
+        "--include-tags",
+        "rust,project",
+        "--exclude-tags",
+        "private",
+        "--path-prefix",
+        "roam/projects",
+        "--without-dailies",
+        "--limit",
+        "1",
+    ]);
+    assert!(status.success());
+    assert_eq!(value["total_results"], 1);
+    assert_eq!(
+        value["results"][0]["title"],
+        "Scope Needle projects/keep.org"
+    );
+
+    let (future, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "query",
+        "Scope Needle",
+        "--modified-since",
+        "2999-01-01",
+    ]);
+    assert!(status.success());
+    assert_eq!(future["total_results"], 0);
+}
+
+#[test]
+fn test_scope_rejects_conflicting_daily_modes_and_invalid_dates() {
+    let (_dir, root) = setup_clean_db();
+    let db = root.to_str().unwrap();
+
+    let (_, _, conflict) = run(&[
+        "--db",
+        db,
+        "query",
+        "needle",
+        "--with-dailies",
+        "--without-dailies",
+    ]);
+    assert!(!conflict.success());
+
+    let (_, _, invalid_date) = run(&[
+        "--db",
+        db,
+        "query",
+        "needle",
+        "--modified-since",
+        "yesterday-ish",
+    ]);
+    assert!(!invalid_date.success());
+}
+
+#[test]
 fn test_query_todos_uses_configured_states() {
     let (_dir, root) = setup_clean_db();
     db_write(

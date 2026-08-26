@@ -1,12 +1,13 @@
 use crate::cli::{OutputFormat, QueryArgs};
 use crate::command_context::CommandContext;
+use crate::config::ResolvedConfig;
 use crate::output::OutputContext;
 use anyhow::Result;
 use pkms_db::commands::query::{
     self, QueryOptions, QueryOutput, QuerySearchScope, QueryTodoFilter,
 };
 
-pub fn options_from_args(args: &QueryArgs) -> Result<QueryOptions> {
+pub fn options_from_args(args: &QueryArgs, config: &ResolvedConfig) -> Result<QueryOptions> {
     Ok(QueryOptions {
         terms: args
             .terms
@@ -24,6 +25,7 @@ pub fn options_from_args(args: &QueryArgs) -> Result<QueryOptions> {
         } else {
             QueryTodoFilter::All
         },
+        scope_filter: super::scope::filter_from_args(&args.scope, config),
     })
 }
 

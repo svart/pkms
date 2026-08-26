@@ -20,4 +20,8 @@ Each result includes at most three content matches by default and reports the
 uncapped count as `content_matches_total`. Use `--max-matches-per-note N` for a
 different positive bound or `--all-matches` for the complete match list.
 
+Use shared `--include-tags`, `--exclude-tags`, `--path-prefix`,
+`--with-dailies`/`--without-dailies`, and `--modified-since` flags to constrain
+the note scope before result counts and limits are applied.
+
 `query --output-format ndjson` is a pipeline producer.

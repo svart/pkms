@@ -1,7 +1,7 @@
 use anyhow::Result;
 use pkms_org::Graph;
-use pkms_org::OrgConfig;
 use pkms_org::graph::search::{SearchField, SearchFields};
+use pkms_org::{OrgConfig, ScopeFilter};
 use serde::Serialize;
 use std::fmt::Write;
 
@@ -38,6 +38,7 @@ pub struct QueryOptions {
     pub max_matches_per_note: Option<usize>,
     pub scope: QuerySearchScope,
     pub todo_filter: QueryTodoFilter,
+    pub scope_filter: ScopeFilter,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -94,6 +95,11 @@ pub fn execute(config: &OrgConfig, opts: &QueryOptions) -> Result<QueryOutput> {
     if opts.todo_filter == QueryTodoFilter::WithTodos {
         combined.retain(|r| graph.node(r.uuid.as_str()).is_some_and(|n| n.has_todos));
     }
+
+    combined.retain(|result| {
+        opts.scope_filter
+            .matches(std::path::Path::new(&result.path), &result.filetags, true)
+    });
 
     if let Some(limit) = opts.max_matches_per_note {
         for result in &mut combined {

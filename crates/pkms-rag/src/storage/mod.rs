@@ -6,6 +6,7 @@ use crate::models::{
     StatusResponse, TagRecommendation, TagRecommendationRequest,
 };
 use anyhow::Result;
+use pkms_org::ScopeFilter;
 use std::path::{Path, PathBuf};
 
 pub(crate) mod sqlite;
@@ -48,6 +49,16 @@ impl RagIndex {
         sqlite::search(&connection, query, limit)
     }
 
+    pub fn search_scoped(
+        &self,
+        query: &str,
+        limit: usize,
+        scope_filter: &ScopeFilter,
+    ) -> Result<Vec<SearchResult>> {
+        let connection = sqlite::connect(&self.db_path)?;
+        sqlite::search_scoped(&connection, query, limit, Some(scope_filter))
+    }
+
     pub fn retrieve(
         &self,
         request: &RetrieveRequest,
@@ -57,32 +68,72 @@ impl RagIndex {
         crate::retrieve::retrieve(&connection, request, embedding_provider)
     }
 
+    pub fn retrieve_scoped(
+        &self,
+        request: &RetrieveRequest,
+        embedding_provider: &dyn EmbeddingProvider,
+        scope_filter: &ScopeFilter,
+    ) -> Result<RetrieveResponse> {
+        let connection = sqlite::connect(&self.db_path)?;
+        crate::retrieve::retrieve_scoped(
+            &connection,
+            request,
+            embedding_provider,
+            Some(scope_filter),
+        )
+    }
+
     pub fn recommend_tags(
         &self,
         request: &TagRecommendationRequest,
         embedding_provider: &dyn EmbeddingProvider,
     ) -> Result<Vec<TagRecommendation>> {
         let connection = sqlite::connect(&self.db_path)?;
-        let status = sqlite::status(&connection, &self.db_path)?;
-        anyhow::ensure!(
-            status.notes > 0 && status.embeddings > 0,
-            "RAG index has no embedded notes; run `pkms rag index` first"
-        );
-        let compatible_embeddings = sqlite::compatible_embedding_count(
-            &connection,
-            embedding_provider.model_name(),
-            embedding_provider.dimension(),
-        )?;
-        anyhow::ensure!(
-            compatible_embeddings > 0,
-            "RAG index does not contain compatible embeddings for model {} with dimension {}; run `pkms rag index` with the configured embedding provider",
-            embedding_provider.model_name(),
-            embedding_provider.dimension()
-        );
+        ensure_recommendation_index(&connection, &self.db_path, embedding_provider)?;
         crate::tags::recommend_tags(&connection, request, embedding_provider)
+    }
+
+    pub fn recommend_tags_scoped(
+        &self,
+        request: &TagRecommendationRequest,
+        embedding_provider: &dyn EmbeddingProvider,
+        scope_filter: &ScopeFilter,
+    ) -> Result<Vec<TagRecommendation>> {
+        let connection = sqlite::connect(&self.db_path)?;
+        ensure_recommendation_index(&connection, &self.db_path, embedding_provider)?;
+        crate::tags::recommend_tags_scoped(
+            &connection,
+            request,
+            embedding_provider,
+            Some(scope_filter),
+        )
     }
 
     pub fn path(&self) -> &Path {
         &self.db_path
     }
+}
+
+fn ensure_recommendation_index(
+    connection: &rusqlite::Connection,
+    db_path: &Path,
+    embedding_provider: &dyn EmbeddingProvider,
+) -> Result<()> {
+    let status = sqlite::status(connection, db_path)?;
+    anyhow::ensure!(
+        status.notes > 0 && status.embeddings > 0,
+        "RAG index has no embedded notes; run `pkms rag index` first"
+    );
+    let compatible_embeddings = sqlite::compatible_embedding_count(
+        connection,
+        embedding_provider.model_name(),
+        embedding_provider.dimension(),
+    )?;
+    anyhow::ensure!(
+        compatible_embeddings > 0,
+        "RAG index does not contain compatible embeddings for model {} with dimension {}; run `pkms rag index` with the configured embedding provider",
+        embedding_provider.model_name(),
+        embedding_provider.dimension()
+    );
+    Ok(())
 }

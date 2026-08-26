@@ -1,5 +1,5 @@
 use anyhow::Result;
-use pkms_org::OrgConfig;
+use pkms_org::{OrgConfig, ScopeFilter};
 use serde::Serialize;
 
 #[derive(Serialize)]
@@ -21,16 +21,13 @@ pub struct OrphanEntry {
 
 pub struct OrphansOptions {
     pub limit: Option<usize>,
-    pub with_dailies: bool,
+    pub scope_filter: ScopeFilter,
 }
 
 pub fn execute(config: &OrgConfig, opts: &OrphansOptions) -> Result<OrphansOutput> {
     let graph = crate::load_graph(config)?;
-    let mut orphans = if opts.with_dailies {
-        graph.orphan_nodes_including_dailies()
-    } else {
-        graph.orphan_nodes()
-    };
+    let mut orphans = graph.orphan_nodes_including_dailies();
+    orphans.retain(|node| opts.scope_filter.matches(&node.path, &node.filetags, false));
 
     let count = orphans.len();
     let showed = opts.limit.map(|l| {

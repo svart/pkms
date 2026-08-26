@@ -52,7 +52,7 @@ fn dispatch(cli: &Cli, command_ctx: &CommandContext<'_>) -> Result<ExitCode> {
         ))?,
         Command::Orphans(args) => success(commands::orphans::run(
             command_ctx,
-            &commands::orphans::options_from_args(args),
+            &commands::orphans::options_from_args(command_ctx, args),
         ))?,
         Command::Info => success(commands::info::run(command_ctx))?,
         Command::InitConfig(args) => success(init_config(
@@ -62,7 +62,7 @@ fn dispatch(cli: &Cli, command_ctx: &CommandContext<'_>) -> Result<ExitCode> {
         ))?,
         Command::Resolve(args) => success(commands::resolve::run(
             command_ctx,
-            &commands::resolve::options_from_args(args),
+            &commands::resolve::options_from_args(command_ctx, args),
         ))?,
         Command::Fix(args) => success(commands::fix::run(command_ctx, args))?,
         Command::Suggest(args) => {
@@ -77,6 +77,10 @@ fn dispatch(cli: &Cli, command_ctx: &CommandContext<'_>) -> Result<ExitCode> {
                         Some(args.limit.unwrap_or(10))
                     },
                     exclude_orphans: args.exclude_orphans,
+                    scope_filter: commands::scope::filter_from_args(
+                        &args.scope,
+                        command_ctx.config(),
+                    ),
                 },
             ))?
         }
@@ -104,7 +108,7 @@ fn dispatch(cli: &Cli, command_ctx: &CommandContext<'_>) -> Result<ExitCode> {
         }
         Command::Query(args) => success(commands::query::run(
             command_ctx,
-            &commands::query::options_from_args(args)?,
+            &commands::query::options_from_args(args, command_ctx.config())?,
         ))?,
         Command::Task(args) => commands::task::run(command_ctx, &args.command)?,
         Command::Tags(args) => success(commands::tags::run(command_ctx, args))?,

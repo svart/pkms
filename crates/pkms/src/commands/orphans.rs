@@ -5,10 +5,10 @@ use crate::output::OutputContext;
 use anyhow::Result;
 use pkms_db::commands::orphans::{self, OrphansOptions, OrphansOutput};
 
-pub fn options_from_args(args: &OrphansArgs) -> OrphansOptions {
+pub fn options_from_args(ctx: &CommandContext<'_>, args: &OrphansArgs) -> OrphansOptions {
     OrphansOptions {
         limit: args.limit,
-        with_dailies: args.with_dailies,
+        scope_filter: super::scope::filter_from_args(&args.scope, ctx.config()),
     }
 }
 

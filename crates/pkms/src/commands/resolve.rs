@@ -4,7 +4,7 @@ use crate::output::OutputContext;
 use anyhow::Result;
 use pkms_db::commands::resolve::{self, ResolveCommandOutput, ResolveOptions};
 
-pub fn options_from_args(args: &ResolveArgs) -> ResolveOptions {
+pub fn options_from_args(ctx: &CommandContext<'_>, args: &ResolveArgs) -> ResolveOptions {
     ResolveOptions {
         uuid: args.uuid.clone(),
         title: args.title.clone(),
@@ -12,6 +12,7 @@ pub fn options_from_args(args: &ResolveArgs) -> ResolveOptions {
         limit: args.limit,
         fields: args.fields.clone(),
         todos: args.todos,
+        scope_filter: super::scope::filter_from_args(&args.scope, ctx.config()),
     }
 }
 

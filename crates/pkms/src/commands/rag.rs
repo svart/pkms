@@ -74,7 +74,13 @@ fn run_index(command_ctx: &CommandContext<'_>, args: &RagIndexArgs) -> Result<()
 
 fn run_search(command_ctx: &CommandContext<'_>, args: &RagSearchArgs) -> Result<()> {
     let db_path = resolve_rag_db(args.rag_db.as_ref(), command_ctx.config());
-    let results = pkms_rag::RagIndex::open(db_path)?.search(&args.query, args.limit)?;
+    let index = pkms_rag::RagIndex::open(db_path)?;
+    let scope_filter = super::scope::filter_from_args(&args.scope, command_ctx.config());
+    let results = if scope_filter.is_active() {
+        index.search_scoped(&args.query, args.limit, &scope_filter)?
+    } else {
+        index.search(&args.query, args.limit)?
+    };
     let response = pkms_rag::SearchResponse {
         query: args.query.clone(),
         results,
@@ -93,7 +99,13 @@ fn run_retrieve(command_ctx: &CommandContext<'_>, args: &RagRetrieveArgs) -> Res
         max_token_budget: args.max_token_budget,
         weights: pkms_rag::RetrieveWeights::default(),
     };
-    let response = pkms_rag::RagIndex::open(db_path)?.retrieve(&request, provider.as_ref())?;
+    let index = pkms_rag::RagIndex::open(db_path)?;
+    let scope_filter = super::scope::filter_from_args(&args.scope, command_ctx.config());
+    let response = if scope_filter.is_active() {
+        index.retrieve_scoped(&request, provider.as_ref(), &scope_filter)?
+    } else {
+        index.retrieve(&request, provider.as_ref())?
+    };
     render_retrieve_response(command_ctx.output(), &response)
 }
 

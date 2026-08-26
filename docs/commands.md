@@ -76,6 +76,13 @@ Query output includes at most three content matches per note by default and
 reports the uncapped number as `content_matches_total`. Use a positive
 `--max-matches-per-note N` to change the bound or `--all-matches` to disable it.
 
+`resolve`, `query`, `orphans`, `suggest`, `rag search`, `rag retrieve`, and
+`tags suggest` share `--include-tags`, `--exclude-tags`, `--path-prefix`,
+`--with-dailies`, `--without-dailies`, and `--modified-since`. Include tags use
+all-match semantics, exclude tags use any-match semantics, and tag matching is
+exact. The daily-note flags conflict. `--modified-since` accepts `YYYY-MM-DD`
+in UTC or an RFC 3339 timestamp and checks current source file metadata.
+
 ## Navigation
 
 ```bash

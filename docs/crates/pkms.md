@@ -23,6 +23,8 @@ cross-domain orchestration.
 - List direct note and heading tag assignments through `pkms tags`, resolve
   live note/task targets for `pkms tags suggest`, and apply additive source
   mutations while `pkms-rag` owns recommendation scoring.
+- Parse shared discovery scope flags and map them to the `pkms-org` scope
+  domain type after resolving `db_root`.
 
 ## Main Modules
 
@@ -37,6 +39,7 @@ cross-domain orchestration.
 | `src/app.rs` | Startup state construction and structured startup/command errors. |
 | `src/config/` | Config parsing, defaults, path precedence, columns, and per-domain config mapping. |
 | `src/commands/` | CLI adapters and output rendering for command namespaces. |
+| `src/commands/scope.rs` | Maps shared CLI note-scope flags to the domain filter. |
 | `src/output.rs` and `src/output/` | Output format selection, structured output, task tables, and terminal markup. |
 | `src/input.rs` | Stdin target detection, target parsing, and command input helpers. |
 | `src/logging.rs` | `PKMS_LOG`, `PKMS_LOG_FORMAT`, and stderr logging setup. |

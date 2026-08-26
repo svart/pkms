@@ -33,6 +33,57 @@ fn parse_positive_usize(value: &str) -> Result<usize, String> {
     Ok(parsed)
 }
 
+fn parse_modified_since(value: &str) -> Result<i64, String> {
+    if let Ok(timestamp) = chrono::DateTime::parse_from_rfc3339(value) {
+        return Ok(timestamp.timestamp());
+    }
+    chrono::NaiveDate::parse_from_str(value, "%Y-%m-%d")
+        .map(|date| {
+            date.and_hms_opt(0, 0, 0)
+                .expect("midnight is valid")
+                .and_utc()
+                .timestamp()
+        })
+        .map_err(|_| format!("invalid date or RFC 3339 timestamp '{value}'"))
+}
+
+#[derive(Debug, Clone, Default, Args)]
+pub struct ScopeArgs {
+    #[arg(
+        long,
+        value_name = "TAG",
+        value_delimiter = ',',
+        value_parser = trim_delimited_value,
+        help = "Require all listed note tags"
+    )]
+    pub include_tags: Vec<String>,
+    #[arg(
+        long,
+        value_name = "TAG",
+        value_delimiter = ',',
+        value_parser = trim_delimited_value,
+        help = "Exclude notes with any listed tag"
+    )]
+    pub exclude_tags: Vec<String>,
+    #[arg(
+        long,
+        value_name = "PATH",
+        help = "Restrict to a database-relative path prefix"
+    )]
+    pub path_prefix: Option<PathBuf>,
+    #[arg(long, conflicts_with = "without_dailies", help = "Include daily notes")]
+    pub with_dailies: bool,
+    #[arg(long, conflicts_with = "with_dailies", help = "Exclude daily notes")]
+    pub without_dailies: bool,
+    #[arg(
+        long,
+        value_name = "DATE",
+        value_parser = parse_modified_since,
+        help = "Restrict to files modified since a UTC date or RFC 3339 timestamp"
+    )]
+    pub modified_since: Option<i64>,
+}
+
 #[derive(Parser)]
 #[command(
     name = "pkms",
@@ -166,6 +217,8 @@ pub struct TagSuggestionOptions {
     pub rag_db: Option<PathBuf>,
     #[arg(long, help = "Add suggestions to the source note or task")]
     pub apply: bool,
+    #[command(flatten)]
+    pub scope: ScopeArgs,
 }
 
 #[cfg(feature = "rag")]
@@ -254,6 +307,8 @@ pub struct RagSearchArgs {
     pub limit: usize,
     #[arg(long, value_name = "PATH", help = "Path to RAG SQLite index")]
     pub rag_db: Option<PathBuf>,
+    #[command(flatten)]
+    pub scope: ScopeArgs,
 }
 
 #[cfg(feature = "rag")]
@@ -277,6 +332,8 @@ pub struct RagRetrieveArgs {
     pub max_token_budget: Option<usize>,
     #[arg(long, value_name = "PATH", help = "Path to RAG SQLite index")]
     pub rag_db: Option<PathBuf>,
+    #[command(flatten)]
+    pub scope: ScopeArgs,
 }
 
 #[cfg(feature = "rag")]
@@ -359,8 +416,8 @@ pub struct StatsArgs {
 pub struct OrphansArgs {
     #[arg(long, help = "Maximum results (default: unlimited)")]
     pub limit: Option<usize>,
-    #[arg(long, help = "Include daily notes in the orphans list")]
-    pub with_dailies: bool,
+    #[command(flatten)]
+    pub scope: ScopeArgs,
 }
 
 #[derive(Debug, Args)]
@@ -401,6 +458,8 @@ pub struct ResolveArgs {
     pub fields: Option<Vec<String>>,
     #[arg(long, help = "Restrict to files with TODO headings")]
     pub todos: bool,
+    #[command(flatten)]
+    pub scope: ScopeArgs,
 }
 
 #[derive(Debug, Args)]
@@ -461,6 +520,8 @@ pub struct SuggestArgs {
     pub exclude_orphans: bool,
     #[arg(long, help = "Read UUIDs from NDJSON stdin")]
     pub from_stdin: bool,
+    #[command(flatten)]
+    pub scope: ScopeArgs,
 }
 
 #[derive(Debug, Args)]
@@ -558,6 +619,8 @@ pub struct QueryArgs {
         help = "Return every content match for each note"
     )]
     pub all_matches: bool,
+    #[command(flatten)]
+    pub scope: ScopeArgs,
 }
 
 #[cfg(feature = "web")]

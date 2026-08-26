@@ -14,5 +14,8 @@ pkms query "topic" --output-format ndjson | pkms suggest --limit 3 --from-stdin
 default. Use `--limit N` for another positive bound or `--all` explicitly for
 every candidate. Use `resolve` first when starting from a title.
 
+Shared scope flags filter suggestion candidates before `total`, `showed`, and
+`--limit` are computed.
+
 Use suggestions as candidates, not proof. Read candidate notes before adding
 links.

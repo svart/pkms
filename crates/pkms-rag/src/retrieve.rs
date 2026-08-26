@@ -4,16 +4,17 @@ use std::{
 };
 
 use anyhow::{Context, Result};
+use pkms_org::ScopeFilter;
 use pkms_tokens::{Encoding, count_tokens};
 use rusqlite::Connection;
 
 use crate::{
     embeddings::EmbeddingProvider,
     models::{
-        RetrieveMode, RetrieveRequest, RetrieveResponse, RetrieveResult, RetrieveWeights,
-        ScoreBreakdown, SearchResult,
+        RetrieveMode, RetrieveRequest, RetrieveResponse, RetrieveResult, ScoreBreakdown,
+        SearchResult,
     },
-    storage::sqlite::{dense_search, row_to_stored_search_result, search},
+    storage::sqlite::{dense_search_filtered, row_to_stored_search_result, search_scoped},
 };
 
 #[derive(Debug, Clone)]
@@ -27,30 +28,39 @@ pub(crate) fn retrieve(
     request: &RetrieveRequest,
     embedding_provider: &dyn EmbeddingProvider,
 ) -> Result<RetrieveResponse> {
+    retrieve_scoped(conn, request, embedding_provider, None)
+}
+
+pub(crate) fn retrieve_scoped(
+    conn: &Connection,
+    request: &RetrieveRequest,
+    embedding_provider: &dyn EmbeddingProvider,
+    scope_filter: Option<&ScopeFilter>,
+) -> Result<RetrieveResponse> {
     Ok(RetrieveResponse {
         query: request.query.clone(),
         mode: request.mode,
-        results: retrieve_results(
-            conn,
-            &request.query,
-            request.limit,
-            request.mode,
-            request.max_token_budget,
-            request.weights,
-            embedding_provider,
-        )?,
+        results: retrieve_results(conn, request, embedding_provider, scope_filter)?,
     })
 }
 
 pub(crate) fn retrieve_results(
     conn: &Connection,
-    query: &str,
-    limit: usize,
-    mode: RetrieveMode,
-    max_token_budget: Option<usize>,
-    weights: RetrieveWeights,
+    request: &RetrieveRequest,
     embedding_provider: &dyn EmbeddingProvider,
+    scope_filter: Option<&ScopeFilter>,
 ) -> Result<Vec<RetrieveResult>> {
+    let RetrieveRequest {
+        query,
+        limit,
+        mode,
+        max_token_budget,
+        weights,
+    } = request;
+    let limit = *limit;
+    let mode = *mode;
+    let max_token_budget = *max_token_budget;
+    let weights = *weights;
     if limit == 0 {
         return Ok(Vec::new());
     }
@@ -59,12 +69,16 @@ pub(crate) fn retrieve_results(
     let bm25_results = if mode == RetrieveMode::Dense {
         Vec::new()
     } else {
-        search(conn, query, candidate_limit)?
+        search_scoped(conn, query, candidate_limit, scope_filter)?
     };
     let dense_results = if mode == RetrieveMode::Bm25 {
         Vec::new()
     } else {
-        dense_search(conn, query, candidate_limit, embedding_provider)?
+        dense_search_filtered(conn, query, candidate_limit, embedding_provider, |result| {
+            scope_filter.is_none_or(|filter| {
+                filter.matches(std::path::Path::new(&result.path), &result.tags, true)
+            })
+        })?
     };
 
     let mut by_chunk = HashMap::new();
@@ -125,6 +139,15 @@ pub(crate) fn retrieve_results(
             .unwrap_or(Ordering::Equal)
             .then_with(|| left.result.chunk_id.cmp(&right.result.chunk_id))
     });
+    if let Some(filter) = scope_filter {
+        retrieved.retain(|item| {
+            filter.matches(
+                std::path::Path::new(&item.result.path),
+                &item.result.tags,
+                true,
+            )
+        });
+    }
     Ok(trim_to_budget(retrieved, limit, max_token_budget))
 }
 
@@ -388,6 +411,7 @@ mod tests {
     use super::*;
     use crate::{
         embeddings::HashEmbeddingProvider,
+        models::RetrieveWeights,
         ndjson::load_ndjson,
         storage::sqlite::{connect, ingest_records},
     };
@@ -411,12 +435,15 @@ mod tests {
 
         let results = retrieve_results(
             &conn,
-            "externalHostname",
-            5,
-            RetrieveMode::Hybrid,
-            None,
-            RetrieveWeights::default(),
+            &RetrieveRequest {
+                query: "externalHostname".to_string(),
+                limit: 5,
+                mode: RetrieveMode::Hybrid,
+                max_token_budget: None,
+                weights: RetrieveWeights::default(),
+            },
             &provider,
+            None,
         )
         .expect("retrieve succeeds");
 
@@ -443,12 +470,15 @@ mod tests {
 
         let results = retrieve_results(
             &conn,
-            "externalHostname",
-            5,
-            RetrieveMode::Bm25,
-            None,
-            RetrieveWeights::default(),
+            &RetrieveRequest {
+                query: "externalHostname".to_string(),
+                limit: 5,
+                mode: RetrieveMode::Bm25,
+                max_token_budget: None,
+                weights: RetrieveWeights::default(),
+            },
             &provider,
+            None,
         )
         .expect("retrieve succeeds");
 
@@ -472,12 +502,15 @@ mod tests {
 
         let results = retrieve_results(
             &conn,
-            "agenda inspect tasks",
-            5,
-            RetrieveMode::Dense,
-            None,
-            RetrieveWeights::default(),
+            &RetrieveRequest {
+                query: "agenda inspect tasks".to_string(),
+                limit: 5,
+                mode: RetrieveMode::Dense,
+                max_token_budget: None,
+                weights: RetrieveWeights::default(),
+            },
             &provider,
+            None,
         )
         .expect("retrieve succeeds");
 
@@ -498,12 +531,15 @@ mod tests {
 
         let results = retrieve_results(
             &conn,
-            "externalHostname",
-            5,
-            RetrieveMode::Bm25,
-            Some(1),
-            RetrieveWeights::default(),
+            &RetrieveRequest {
+                query: "externalHostname".to_string(),
+                limit: 5,
+                mode: RetrieveMode::Bm25,
+                max_token_budget: Some(1),
+                weights: RetrieveWeights::default(),
+            },
             &provider,
+            None,
         )
         .expect("retrieve succeeds");
 

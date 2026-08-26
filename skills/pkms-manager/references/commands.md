@@ -43,6 +43,10 @@ pkms query "terms" --all-matches
 Query results include at most three content matches per note by default and
 report the uncapped count in `content_matches_total`.
 
+`resolve`, `query`, `orphans`, `suggest`, `rag search`, `rag retrieve`, and
+`tags suggest` share exact tag inclusion/exclusion, path-prefix, daily-mode, and
+source modification-time scope flags. These filters run before command limits.
+
 ## Inspect and Navigate
 
 ```bash

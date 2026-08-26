@@ -21,6 +21,128 @@ fn test_rag_help_works() {
 }
 
 #[test]
+fn test_rag_search_and_retrieve_apply_shared_scope_filters() {
+    let db = TestDb::clean();
+    for (path, id, tags) in [
+        (
+            "projects/keep.org",
+            "81818181-8181-4181-8181-818181818181",
+            ":keep:",
+        ),
+        (
+            "projects/2026-08-27.org",
+            "82828282-8282-4282-8282-828282828282",
+            ":keep:",
+        ),
+        (
+            "archive/other.org",
+            "83838383-8383-4383-8383-838383838383",
+            ":keep:",
+        ),
+    ] {
+        db.write_roam(
+            path,
+            &format!(
+                ":PROPERTIES:\n:ID:       {id}\n:END:\n#+title: Scoped Retrieval {path}\n#+filetags: {tags}\n\nscopedneedle retrieval body\n"
+            ),
+        );
+    }
+    let rag_db = db.root().join("rag.sqlite3");
+    let (_, stderr, status) = run_hash(&[
+        "--db",
+        db.root().to_str().unwrap(),
+        "rag",
+        "index",
+        "--rag-db",
+        rag_db.to_str().unwrap(),
+    ]);
+    assert!(status.success(), "index failed: {stderr}");
+
+    for command in ["search", "retrieve"] {
+        let (value, status) = run_hash_json(&[
+            "--db",
+            db.root().to_str().unwrap(),
+            "--output-format",
+            "json",
+            "rag",
+            command,
+            "scopedneedle",
+            "--rag-db",
+            rag_db.to_str().unwrap(),
+            "--include-tags",
+            "keep",
+            "--path-prefix",
+            "roam/projects",
+            "--without-dailies",
+        ]);
+        assert!(status.success(), "{command} failed: {value}");
+        assert_eq!(value["results"].as_array().unwrap().len(), 1);
+        let result = &value["results"][0];
+        let path = result
+            .get("path")
+            .or_else(|| result.get("result").and_then(|item| item.get("path")))
+            .and_then(serde_json::Value::as_str)
+            .unwrap();
+        assert_eq!(path, "roam/projects/keep.org");
+    }
+}
+
+#[test]
+fn test_tag_suggestions_apply_shared_scope_filters() {
+    let db = TestDb::clean();
+    db.write_roam(
+        "target.org",
+        ":PROPERTIES:\n:ID:       91919191-9191-4191-8191-919191919191\n:END:\n#+title: Scope Target\n\nsemantic scope workflow\n",
+    );
+    db.write_roam(
+        "regular.org",
+        ":PROPERTIES:\n:ID:       92929292-9292-4292-8292-929292929292\n:END:\n#+title: Regular Neighbor\n#+filetags: :regular-source:\n\nsemantic scope workflow\n",
+    );
+    db.write_roam(
+        "2026-08-27.org",
+        ":PROPERTIES:\n:ID:       93939393-9393-4393-8393-939393939393\n:END:\n#+title: Daily Neighbor\n#+filetags: :daily-source:\n\nsemantic scope workflow\n",
+    );
+    let rag_db = db.root().join("rag.sqlite3");
+    let (_, stderr, status) = run_hash(&[
+        "--db",
+        db.root().to_str().unwrap(),
+        "rag",
+        "index",
+        "--rag-db",
+        rag_db.to_str().unwrap(),
+    ]);
+    assert!(status.success(), "index failed: {stderr}");
+
+    let (value, status) = run_hash_json(&[
+        "--db",
+        db.root().to_str().unwrap(),
+        "--output-format",
+        "json",
+        "tags",
+        "suggest",
+        "91919191-9191-4191-8191-919191919191",
+        "--rag-db",
+        rag_db.to_str().unwrap(),
+        "--without-dailies",
+    ]);
+    assert!(status.success());
+    let tags = value["suggestions"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|item| item["tag"].as_str())
+        .collect::<Vec<_>>();
+    assert!(
+        tags.contains(&"regular-source"),
+        "unexpected suggestions: {value}"
+    );
+    assert!(
+        !tags.contains(&"daily-source"),
+        "unexpected suggestions: {value}"
+    );
+}
+
+#[test]
 fn test_rag_status_json_empty_index() {
     let db = TestDb::clean();
     let rag_db = db.root().join("rag.sqlite3");

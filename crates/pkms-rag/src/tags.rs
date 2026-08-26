@@ -4,6 +4,7 @@ use std::{
 };
 
 use anyhow::{Result, ensure};
+use pkms_org::ScopeFilter;
 use rusqlite::Connection;
 
 use crate::models::{
@@ -72,6 +73,15 @@ pub(crate) fn recommend_tags(
     request: &TagRecommendationRequest,
     provider: &dyn EmbeddingProvider,
 ) -> Result<Vec<TagRecommendation>> {
+    recommend_tags_scoped(conn, request, provider, None)
+}
+
+pub(crate) fn recommend_tags_scoped(
+    conn: &Connection,
+    request: &TagRecommendationRequest,
+    provider: &dyn EmbeddingProvider,
+    scope_filter: Option<&ScopeFilter>,
+) -> Result<Vec<TagRecommendation>> {
     ensure!(
         request.limit > 0,
         "tag recommendation limit must be positive"
@@ -98,7 +108,12 @@ pub(crate) fn recommend_tags(
         &request.query,
         request.neighbor_limit,
         provider,
-        |result| !is_target_result(result, request),
+        |result| {
+            !is_target_result(result, request)
+                && scope_filter.is_none_or(|filter| {
+                    filter.matches(std::path::Path::new(&result.path), &result.tags, true)
+                })
+        },
     )?;
 
     let mut note_tags = HashMap::new();

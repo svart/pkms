@@ -33,6 +33,10 @@ pkms tags suggest 11111111-1111-4111-8111-111111111111 --apply
 pkms tags suggest 12 --limit 3 --neighbors 30 --apply
 ```
 
+`rag search`, `rag retrieve`, and `tags suggest` accept shared exact-tag,
+path-prefix, daily-mode, and source modification-time filters. Use
+`--without-dailies` when daily notes would dominate retrieval evidence.
+
 Recommendations come only from tags already present in similar indexed notes
 or headings. Note recommendations use filetags; task recommendations use
 heading-specific tags and do not copy inherited note filetags onto the task.

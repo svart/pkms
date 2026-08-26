@@ -176,6 +176,21 @@ so RAG output can feed pipeline consumers such as `get`, `validate`, and
 `task list`. Each text retrieval result prints its source path and line range,
 score and match reason, title, then snippet on separate lines.
 
+Search, retrieval, and tag recommendations accept the shared note scope flags:
+
+```bash
+pkms rag search "retrieval" --include-tags project --without-dailies
+pkms rag retrieve "retrieval" --exclude-tags archived --path-prefix roam/projects
+pkms tags suggest 12 --without-dailies --modified-since 2026-08-01
+```
+
+All included tags must match exactly, while any excluded tag removes a result.
+Relative path prefixes use the resolved `db_root`. `--modified-since` checks the
+current source file represented by an indexed path, not the index timestamp; an
+indexed record whose source file is unavailable does not match that filter.
+Daily notes remain included by default on these RAG commands, and
+`--with-dailies` conflicts with `--without-dailies`.
+
 ## Tag Recommendations
 
 Use semantically similar indexed notes and headings to recommend tags already

@@ -1,6 +1,41 @@
 use super::*;
 
 #[test]
+fn test_resolve_applies_shared_scope_filters() {
+    let (_dir, root) = setup_clean_db();
+    db_write(
+        &root,
+        "projects/keep.org",
+        ":PROPERTIES:\n:ID:       14141414-1414-4414-8414-141414141414\n:END:\n#+title: Scoped Resolve\n#+filetags: :keep:\n",
+    );
+    db_write(
+        &root,
+        "archive/other.org",
+        ":PROPERTIES:\n:ID:       15151515-1515-4515-8515-151515151515\n:END:\n#+title: Scoped Resolve\n#+filetags: :keep:\n",
+    );
+
+    let (value, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "resolve",
+        "--title",
+        "Scoped Resolve",
+        "--include-tags",
+        "keep",
+        "--path-prefix",
+        "roam/projects",
+    ]);
+    assert!(status.success());
+    assert_eq!(value["total"], 1);
+    assert_eq!(
+        value["results"][0]["uuid"],
+        "14141414-1414-4414-8414-141414141414"
+    );
+}
+
+#[test]
 fn test_resolve_human() {
     let (_dir, root) = setup_db();
     let (stdout, _stderr, status) =

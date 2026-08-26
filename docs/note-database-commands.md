@@ -64,6 +64,7 @@ pkms resolve --title "graph"
 pkms resolve --tags "project,active"
 pkms resolve --title "project" --todos
 pkms resolve --tags "project" --fields uuid,title,path,tags
+pkms resolve --title "project" --include-tags active --path-prefix roam/projects
 ```
 
 Use `query` when you want fuzzy search across titles, aliases, refs, tags, or
@@ -80,6 +81,26 @@ pkms query "project" --max-matches-per-note 5
 Content matches are capped at three per note by default in text and structured
 output. The result's `content_matches_total` field preserves the uncapped count;
 use `--all-matches` when the full list is required.
+
+### Shared scope filters
+
+`resolve`, `query`, `orphans`, and `suggest` accept the same optional scope
+filters:
+
+```bash
+pkms query "distributed systems" --include-tags project,active
+pkms query "distributed systems" --exclude-tags archived,private
+pkms query "distributed systems" --path-prefix roam/projects
+pkms query "distributed systems" --without-dailies
+pkms query "distributed systems" --modified-since 2026-08-01
+```
+
+All `--include-tags` values must be present; any `--exclude-tags` value rejects
+a note. Tag matching is exact. Relative path prefixes are resolved against
+`db_root`. `--modified-since` accepts a UTC `YYYY-MM-DD` date or an RFC 3339
+timestamp and checks current source-file modification times. `--with-dailies`
+and `--without-dailies` are mutually exclusive. Commands continue to include
+daily notes by default except `orphans`, which continues to exclude them.
 
 ## Inspect and Navigate
 

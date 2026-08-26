@@ -20,6 +20,8 @@ with `--features rag`.
   binary downloads.
 - Search with SQLite FTS.
 - Retrieve cited chunks with BM25, dense, or hybrid scoring.
+- Apply `pkms-org` note-scope filters before search, retrieval, and
+  recommendation limits.
 - Recommend existing note filetags or heading-specific tags from dense-neighbor
   evidence while keeping target resolution and source writes outside this crate.
 - Track background index progress with serialized `IndexPhase` and `IndexStep`
@@ -63,6 +65,8 @@ with `--features rag`.
 - No public API accepts or returns `rusqlite::Connection`.
 - Tag recommendations use indexed taxonomy only: note scope reads note tags,
   while heading scope subtracts inherited note tags from chunk tags.
+- Scope-filter modification times come from current org source files, not
+  SQLite index timestamps.
 
 ## Configuration Surface
 

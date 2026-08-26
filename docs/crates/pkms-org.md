@@ -18,6 +18,8 @@ primitives.
   insertion, task planning-line edits, task state edits, and task subtree moves.
 - Provide attachment path helpers and local link checks used by database
   commands.
+- Provide shared tag, path, daily-note, and source modification-time filtering
+  for read-only discovery and retrieval commands.
 
 ## Main Modules
 
@@ -28,6 +30,7 @@ primitives.
 | `corpus.rs` | Loads parsed notes from discovered files. |
 | `graph/` | Builds graph storage plus search, analytics, validation, and traversal over parsed notes. |
 | `snapshot.rs` | Loads parsed content and graph indexes from one fresh scan. |
+| `scope.rs` | Applies shared note-scope filters against current source paths and tags. |
 | `domain.rs` | Shared domain identifiers such as note IDs and link targets. |
 | `attachments.rs` | Org-attach path and target helpers. |
 | `link_check.rs` | Local link target checking helpers. |
@@ -53,6 +56,8 @@ primitives.
   private; callers use `Graph` methods and the intentionally public search and
   validation types.
 - Org editing helpers should preserve user content around the specific edit.
+- Scope filters use exact tags and current source-file metadata; they do not
+  introduce cached note state.
 - Domain crates and command adapters should use these helpers instead of
   open-coded org string manipulation.
 

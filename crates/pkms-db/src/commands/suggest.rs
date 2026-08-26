@@ -1,7 +1,7 @@
 use anyhow::Result;
-use pkms_org::OrgConfig;
 use pkms_org::graph::{Graph, Node};
 use pkms_org::parser::{HEADING_RE, Link};
+use pkms_org::{OrgConfig, ScopeFilter};
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Write;
@@ -465,6 +465,7 @@ fn compute_suggestions_for_node(
     exclude_orphans: bool,
     limit: Option<usize>,
     target_uuid: Option<String>,
+    scope_filter: &ScopeFilter,
 ) -> Result<SuggestComputation> {
     let node = graph
         .node(target)
@@ -550,6 +551,7 @@ fn compute_suggestions_for_node(
         target_outgoing: &target_outgoing,
     };
     let mut scored = compute_scores(&node, graph, &suggest_ctx, exclude_orphans);
+    scored.retain(|item| scope_filter.matches(&item.node.path, &item.node.filetags, true));
     scored.sort_by(|a, b| {
         b.score
             .partial_cmp(&a.score)
@@ -594,6 +596,7 @@ pub struct SuggestOptions {
     pub targets: Vec<String>,
     pub limit: Option<usize>,
     pub exclude_orphans: bool,
+    pub scope_filter: ScopeFilter,
 }
 
 pub fn execute(config: &OrgConfig, opts: &SuggestOptions) -> Result<Vec<SuggestOutput>> {
@@ -608,6 +611,7 @@ pub fn execute(config: &OrgConfig, opts: &SuggestOptions) -> Result<Vec<SuggestO
                 opts.exclude_orphans,
                 opts.limit,
                 None,
+                &opts.scope_filter,
             )?;
             Ok(SuggestOutput {
                 target: result.node.title.clone(),

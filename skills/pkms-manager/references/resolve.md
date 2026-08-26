@@ -18,3 +18,6 @@ heading-level IDs; heading matches include `matched_heading_uuid` in structured
 output.
 
 `resolve --output-format ndjson` is a pipeline producer.
+
+Shared scope flags (`--include-tags`, `--exclude-tags`, `--path-prefix`, daily
+mode, and `--modified-since`) filter matches before `--limit`.

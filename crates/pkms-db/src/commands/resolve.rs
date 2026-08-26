@@ -1,7 +1,7 @@
 use anyhow::Result;
-use pkms_org::OrgConfig;
 use pkms_org::discovery;
 use pkms_org::parser::{ParsedNoteSummary, parse_note_summary_with_todo_states};
+use pkms_org::{OrgConfig, ScopeFilter};
 use serde::Serialize;
 use std::collections::HashSet;
 use std::fmt::Write;
@@ -112,6 +112,7 @@ pub struct ResolveOptions {
     pub limit: Option<usize>,
     pub fields: Option<Vec<String>>,
     pub todos: bool,
+    pub scope_filter: ScopeFilter,
 }
 
 pub struct ResolveCommandOutput {
@@ -166,6 +167,12 @@ pub fn execute(config: &OrgConfig, opts: &ResolveOptions) -> Result<ResolveComma
                 }
             }
             if opts.todos && !n.has_todos {
+                return false;
+            }
+            if !opts
+                .scope_filter
+                .matches(Path::new(&n.path), &n.filetags, true)
+            {
                 return false;
             }
             true
@@ -396,6 +403,7 @@ mod tests {
                 limit: None,
                 fields: None,
                 todos: true,
+                scope_filter: ScopeFilter::default(),
             },
         )
         .unwrap();

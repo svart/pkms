@@ -84,8 +84,13 @@ fn execute(
         limit: options.limit,
         neighbor_limit: options.neighbors,
     };
-    let suggestions =
-        pkms_rag::RagIndex::open(&db_path)?.recommend_tags(&request, provider.as_ref())?;
+    let index = pkms_rag::RagIndex::open(&db_path)?;
+    let scope_filter = crate::commands::scope::filter_from_args(&options.scope, ctx.config());
+    let suggestions = if scope_filter.is_active() {
+        index.recommend_tags_scoped(&request, provider.as_ref(), &scope_filter)?
+    } else {
+        index.recommend_tags(&request, provider.as_ref())?
+    };
     let applied = if options.apply && !suggestions.is_empty() {
         apply_tags(ctx, &target, &suggestions)?
     } else {

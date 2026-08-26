@@ -18,6 +18,7 @@ pub mod query;
 #[cfg(feature = "rag")]
 pub mod rag;
 pub mod resolve;
+pub mod scope;
 #[cfg(feature = "web")]
 pub mod serve;
 pub mod stats;

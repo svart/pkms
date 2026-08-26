@@ -1,6 +1,44 @@
 use super::*;
 
 #[test]
+fn test_suggest_applies_scope_before_counting_and_limiting() {
+    let (_dir, root) = setup_clean_db();
+    db_write(
+        &root,
+        "target.org",
+        ":PROPERTIES:\n:ID:       51515151-5151-4151-8151-515151515151\n:END:\n#+title: Scope Topic Target\n\nscope topic\n",
+    );
+    db_write(
+        &root,
+        "candidate.org",
+        ":PROPERTIES:\n:ID:       61616161-6161-4161-8161-616161616161\n:END:\n#+title: Scope Topic Candidate\n#+filetags: :keep:\n\nscope topic\n",
+    );
+    db_write(
+        &root,
+        "2026-08-27.org",
+        ":PROPERTIES:\n:ID:       71717171-7171-4171-8171-717171717171\n:END:\n#+title: Scope Topic Daily\n#+filetags: :keep:\n\nscope topic\n",
+    );
+
+    let (value, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "suggest",
+        "51515151-5151-4151-8151-515151515151",
+        "--include-tags",
+        "keep",
+        "--without-dailies",
+        "--limit",
+        "1",
+    ]);
+    assert!(status.success());
+    assert_eq!(value["total"], 1);
+    assert_eq!(value["showed"], 1);
+    assert_eq!(value["suggestions"][0]["title"], "Scope Topic Candidate");
+}
+
+#[test]
 fn test_suggest_human() {
     let (_dir, root) = setup_db();
     let (stdout, _stderr, status) = run(&[

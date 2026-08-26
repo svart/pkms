@@ -158,3 +158,9 @@ ambiguous.
 
 `orphans` excludes daily notes by default. Use `orphans --with-dailies` only
 when explicitly auditing daily notes or debugging orphan-count differences.
+
+For `resolve`, `query`, `orphans`, `suggest`, `rag search`, `rag retrieve`, and
+`tags suggest`, narrow discovery with `--include-tags`, `--exclude-tags`,
+`--path-prefix`, `--without-dailies`, or `--modified-since` when the requested
+scope is known. Included tags all match exactly; any excluded tag rejects a
+note. Do not combine `--with-dailies` and `--without-dailies`.

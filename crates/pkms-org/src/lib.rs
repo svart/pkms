@@ -13,6 +13,7 @@ pub mod org_edit;
 pub mod org_task_edit;
 pub mod org_task_mutation;
 pub mod parser;
+pub mod scope;
 pub mod snapshot;
 
 pub use corpus::{Corpus, FileScanResult};
@@ -22,6 +23,7 @@ pub use parser::{
     Heading, Link, OrgPriority, OrgTodoState, ParsedNote, ParsedNoteSummary,
     parse_note_summary_with_todo_states, parse_note_with_todo_states,
 };
+pub use scope::{DailyNoteScope, ScopeFilter};
 pub use snapshot::OrgSnapshot;
 
 #[derive(Debug, Clone)]

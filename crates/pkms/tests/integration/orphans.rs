@@ -92,6 +92,36 @@ fn test_orphans_with_dailies_includes_daily_notes() {
 }
 
 #[test]
+fn test_orphans_applies_shared_tag_and_path_filters() {
+    let (_dir, root) = setup_clean_db();
+    db_write(
+        &root,
+        "projects/keep.org",
+        ":PROPERTIES:\n:ID:       16161616-1616-4616-8616-161616161616\n:END:\n#+title: Kept Orphan\n#+filetags: :keep:\n",
+    );
+    db_write(
+        &root,
+        "archive/other.org",
+        ":PROPERTIES:\n:ID:       17171717-1717-4717-8717-171717171717\n:END:\n#+title: Other Orphan\n#+filetags: :keep:\n",
+    );
+
+    let (value, status) = run_json(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "orphans",
+        "--include-tags",
+        "keep",
+        "--path-prefix",
+        "roam/projects",
+    ]);
+    assert!(status.success());
+    assert_eq!(value["count"], 1);
+    assert_eq!(value["orphans"][0]["title"], "Kept Orphan");
+}
+
+#[test]
 fn test_orphans_ndjson() {
     let (_dir, root) = setup_db();
     let (stdout, _stderr, status) = run(&[
