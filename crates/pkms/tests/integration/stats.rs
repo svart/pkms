@@ -195,3 +195,52 @@ fn test_stats_todos_counts_file_once_when_heading_ids_exist() {
     assert_eq!(v["total_todo_headings"], 1);
     assert_eq!(v["files_with_todos"], 1);
 }
+
+#[test]
+fn test_stats_todos_uses_configured_states() {
+    let (_dir, root) = setup_clean_db();
+    db_write(
+        &root,
+        "configured-todo-states.org",
+        r#":PROPERTIES:
+:ID:       cccccccc-cccc-4ccc-8ccc-cccccccccccc
+:END:
+#+title: Configured TODO States
+
+* API design
+* NEXT Implement it
+* DONE Verify it
+"#,
+    );
+    let config = r#"[agenda]
+open_todo_states = ["NEXT"]
+closed_todo_states = ["DONE"]
+"#;
+
+    let (stdout, stderr, status) = run_with_config(
+        &[
+            "--db",
+            root.to_str().unwrap(),
+            "--output-format",
+            "json",
+            "stats",
+            "--todos",
+        ],
+        config,
+    );
+    assert!(
+        status.success(),
+        "stats --todos failed:\n{stdout}\n{stderr}"
+    );
+    let value: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+
+    assert_eq!(value["total_todo_headings"], 2);
+    assert_eq!(value["files_with_todos"], 1);
+    assert_eq!(
+        value["by_state"],
+        serde_json::json!([
+            {"state": "DONE", "count": 1},
+            {"state": "NEXT", "count": 1}
+        ])
+    );
+}

@@ -106,6 +106,9 @@ pkms orphans --limit 20
 pkms suggest <uuid> --limit 10 --exclude-orphans
 ```
 
+TODO-aware discovery, heading inspection, and statistics use the configured
+`[agenda].open_todo_states` and `[agenda].closed_todo_states` lists.
+
 ## Create and Restructure Notes
 
 Preview a new note path and UUID:
@@ -178,4 +181,3 @@ for output contracts.
 - [Maintenance Workflows](workflows.md)
 - [pkms-db crate](crates/pkms-db.md)
 - [pkms-org crate](crates/pkms-org.md)
-

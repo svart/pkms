@@ -97,6 +97,49 @@ Some content
 }
 
 #[test]
+fn test_get_headings_uses_configured_todo_states() {
+    let (_dir, root) = setup_clean_db();
+    db_write(
+        &root,
+        "configured-get-states.org",
+        r#":PROPERTIES:
+:ID:       dddddddd-dddd-4ddd-8ddd-dddddddddddd
+:END:
+#+title: Configured Get States
+
+* PKMS operational logging
+* NEXT Configured task
+"#,
+    );
+    let config = r#"[agenda]
+open_todo_states = ["NEXT"]
+closed_todo_states = ["DONE"]
+"#;
+
+    let (stdout, stderr, status) = run_with_config(
+        &[
+            "--db",
+            root.to_str().unwrap(),
+            "--output-format",
+            "json",
+            "get",
+            "Configured Get States",
+            "--headings",
+            "--no-content",
+        ],
+        config,
+    );
+    assert!(status.success(), "get failed:\n{stdout}\n{stderr}");
+    let value: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    let headings = value["node"]["headings"].as_array().unwrap();
+
+    assert_eq!(headings[0]["title"], "PKMS operational logging");
+    assert!(headings[0]["todo_state"].is_null());
+    assert_eq!(headings[1]["title"], "Configured task");
+    assert_eq!(headings[1]["todo_state"], "NEXT");
+}
+
+#[test]
 fn test_get_headings_text_with_uuids() {
     let (_dir, root) = setup_db();
     let db = root.to_str().unwrap();

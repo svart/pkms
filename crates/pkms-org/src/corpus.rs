@@ -1,6 +1,6 @@
 use crate::ScanConfig;
 use crate::discovery::discover_files;
-use crate::parser::{ParsedNote, parse_note};
+use crate::parser::{ParsedNote, parse_note, parse_note_with_todo_states};
 use anyhow::Result;
 use rayon::prelude::*;
 use std::path::{Path, PathBuf};
@@ -38,16 +38,34 @@ impl Corpus {
             ignore_pattern_count = ignore.len(),
             "loading corpus"
         );
-        Self::scan(db_root, ignore)
+        Self::scan_with_todo_states(db_root, ignore, &config.todo_states)
     }
 
     pub fn scan(db_root: &Path, ignore: &[String]) -> Result<Self> {
+        Self::scan_with(db_root, ignore, parse_note)
+    }
+
+    pub fn scan_with_todo_states(
+        db_root: &Path,
+        ignore: &[String],
+        todo_states: &[String],
+    ) -> Result<Self> {
+        Self::scan_with(db_root, ignore, |content| {
+            parse_note_with_todo_states(content, todo_states)
+        })
+    }
+
+    fn scan_with(
+        db_root: &Path,
+        ignore: &[String],
+        parse: impl Fn(&str) -> ParsedNote + Sync,
+    ) -> Result<Self> {
         let files = discover_files(db_root, ignore)?;
         let results: Vec<FileScanResult> = files
             .into_par_iter()
             .map(|path| match std::fs::read_to_string(&path) {
                 Ok(content) => {
-                    let parsed = parse_note(&content);
+                    let parsed = parse(&content);
                     FileScanResult {
                         path,
                         parsed,

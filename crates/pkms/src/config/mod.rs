@@ -214,6 +214,7 @@ impl ResolvedConfig {
             db_root: self.db_root.clone(),
             ignore_patterns: self.resolve_ignore_patterns(),
             home_dir: self.runtime.home_dir.clone(),
+            todo_states: self.todo_states(),
         }
     }
 

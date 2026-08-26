@@ -12,6 +12,7 @@ fn test_org_config(db_root: impl Into<PathBuf>) -> OrgConfig {
         db_root: db_root.into(),
         ignore_patterns: Vec::new(),
         home_dir: None,
+        todo_states: vec!["TODO".to_string(), "DONE".to_string()],
     }
 }
 

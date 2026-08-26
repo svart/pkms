@@ -69,6 +69,64 @@ fn test_resolve_query() {
 }
 
 #[test]
+fn test_resolve_todos_uses_configured_states() {
+    let (_dir, root) = setup_clean_db();
+    db_write(
+        &root,
+        "not-a-task.org",
+        r#":PROPERTIES:
+:ID:       eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee
+:END:
+#+title: Not A Task
+
+* API design
+"#,
+    );
+    db_write(
+        &root,
+        "configured-task.org",
+        r#":PROPERTIES:
+:ID:       ffffffff-ffff-4fff-8fff-ffffffffffff
+:END:
+#+title: Configured Task
+
+* NEXT Implement it
+"#,
+    );
+    let config = r#"[agenda]
+open_todo_states = ["NEXT"]
+closed_todo_states = ["DONE"]
+"#;
+
+    let (stdout, stderr, status) = run_with_config(
+        &[
+            "--db",
+            root.to_str().unwrap(),
+            "--output-format",
+            "json",
+            "resolve",
+            "--title",
+            "",
+            "--todos",
+        ],
+        config,
+    );
+    assert!(
+        status.success(),
+        "resolve --todos failed:\n{stdout}\n{stderr}"
+    );
+    let value: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    let titles: Vec<_> = value["results"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|note| note["title"].as_str())
+        .collect();
+
+    assert_eq!(titles, vec!["Configured Task"]);
+}
+
+#[test]
 fn test_resolve_fields_human() {
     let (_dir, root) = setup_db();
     let (stdout, _stderr, status) = run(&[

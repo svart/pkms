@@ -18,13 +18,17 @@ pub mod snapshot;
 pub use corpus::{Corpus, FileScanResult};
 pub use domain::{LinkTarget, NoteId};
 pub use graph::Graph;
-pub use parser::{Heading, Link, OrgPriority, OrgTodoState, ParsedNote, ParsedNoteSummary};
+pub use parser::{
+    Heading, Link, OrgPriority, OrgTodoState, ParsedNote, ParsedNoteSummary,
+    parse_note_summary_with_todo_states, parse_note_with_todo_states,
+};
 pub use snapshot::OrgSnapshot;
 
 #[derive(Debug, Clone)]
 pub struct ScanConfig {
     pub db_root: PathBuf,
     pub ignore_patterns: Vec<String>,
+    pub todo_states: Vec<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -38,6 +42,7 @@ pub struct OrgConfig {
     pub db_root: PathBuf,
     pub ignore_patterns: Vec<String>,
     pub home_dir: Option<PathBuf>,
+    pub todo_states: Vec<String>,
 }
 
 impl OrgConfig {
@@ -45,6 +50,7 @@ impl OrgConfig {
         ScanConfig {
             db_root: self.db_root.clone(),
             ignore_patterns: self.ignore_patterns.clone(),
+            todo_states: self.todo_states.clone(),
         }
     }
 

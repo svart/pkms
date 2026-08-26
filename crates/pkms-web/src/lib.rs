@@ -240,6 +240,7 @@ mod tests {
                 ignore_patterns: Vec::new(),
                 db_root,
                 home_dir: None,
+                todo_states: vec!["TODO".to_string(), "DONE".to_string()],
             },
             open_todo_states: vec!["TODO".to_string()],
             closed_todo_states: vec!["DONE".to_string()],

@@ -63,8 +63,14 @@ task table columns. Available task columns are `Id`, `Date`, `State`, `Type`,
 | `[columns.pkms].tasks` | - | `pkms task list --columns COLS`, `pkms task inbox --columns COLS` | Default columns for local PKMS task lists and inbox views. |
 | `[columns.pkms].agenda` | - | `pkms task agenda --columns COLS` | Default columns for local PKMS agenda-style views. |
 | `[tasks].inbox` | - | - | Inbox note for `pkms task inbox` and default `pkms task add`. Use `daily` to append under today's daily note `* Inbox` heading. |
-| `[agenda].open_todo_states` | - | - | States treated as active tasks by task commands. Defaults to `["TODO"]`. |
-| `[agenda].closed_todo_states` | - | - | States treated as completed tasks. Defaults to `["DONE"]`. These state lists affect canonical task ID ordering. |
+| `[agenda].open_todo_states` | - | - | States treated as active tasks throughout note parsing, graph search, statistics, and task commands. Defaults to `["TODO"]`. |
+| `[agenda].closed_todo_states` | - | - | States treated as completed tasks throughout note parsing, graph search, statistics, and task commands. Defaults to `["DONE"]`. These state lists affect canonical task ID ordering. |
+
+An uppercase word at the start of a heading is a TODO state only when it occurs
+in one of these lists. For example, `* API design` remains an ordinary heading
+unless `API` is configured as a state. This interpretation is shared by
+`resolve --todos`, `query --todos`, `get --headings`, `stats --todos`, and the
+`task` namespace.
 
 ## RAG Retrieval
 

@@ -339,6 +339,7 @@ Body
             db_root: dir.path().to_path_buf(),
             ignore_patterns: Vec::new(),
             home_dir: None,
+            todo_states: vec!["TODO".to_string(), "DONE".to_string()],
         };
         let outputs = execute(
             &config,

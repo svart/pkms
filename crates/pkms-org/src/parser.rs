@@ -278,7 +278,7 @@ pub static UUID_FORMAT_RE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$").unwrap()
 });
 
-struct ParseContext {
+struct ParseContext<'a> {
     uuids: Vec<NoteId>,
     title: Option<String>,
     filetags: Vec<String>,
@@ -292,10 +292,11 @@ struct ParseContext {
     in_src_block: bool,
     just_saw_heading: bool,
     heading_stack: Vec<usize>,
+    todo_states: Option<&'a [String]>,
 }
 
-impl ParseContext {
-    fn new() -> Self {
+impl<'a> ParseContext<'a> {
+    fn new(todo_states: Option<&'a [String]>) -> Self {
         ParseContext {
             uuids: Vec::new(),
             title: None,
@@ -310,6 +311,7 @@ impl ParseContext {
             in_src_block: false,
             just_saw_heading: false,
             heading_stack: Vec::new(),
+            todo_states,
         }
     }
 
@@ -442,12 +444,26 @@ impl ParseContext {
             }
         }
 
-        let todo_state = cap.get(2).map(|m| OrgTodoState::new(m.as_str()));
+        let todo_candidate = cap.get(2).map(|m| m.as_str());
+        let is_todo_state = todo_candidate.is_some_and(|candidate| {
+            self.todo_states.is_none_or(|states| {
+                states
+                    .iter()
+                    .any(|state| state.eq_ignore_ascii_case(candidate))
+            })
+        });
+        let todo_state = todo_candidate
+            .filter(|_| is_todo_state)
+            .map(OrgTodoState::new);
         let priority = cap
             .get(3)
             .and_then(|m| m.as_str().chars().next())
             .and_then(OrgPriority::from_char);
-        let heading_title = cap.get(4).map_or("", |m| m.as_str()).to_string();
+        let parsed_title = cap.get(4).map_or("", |m| m.as_str());
+        let heading_title = match (todo_candidate, is_todo_state) {
+            (Some(candidate), false) => format!("{candidate} {parsed_title}").trim().to_string(),
+            _ => parsed_title.to_string(),
+        };
         let tags = cap
             .get(5)
             .map(|m| {
@@ -529,7 +545,18 @@ impl ParseContext {
 }
 
 pub fn parse_note(content: &str) -> ParsedNote {
-    let mut ctx = ParseContext::new();
+    parse_note_with_optional_todo_states(content, None)
+}
+
+pub fn parse_note_with_todo_states(content: &str, todo_states: &[String]) -> ParsedNote {
+    parse_note_with_optional_todo_states(content, Some(todo_states))
+}
+
+fn parse_note_with_optional_todo_states(
+    content: &str,
+    todo_states: Option<&[String]>,
+) -> ParsedNote {
+    let mut ctx = ParseContext::new(todo_states);
     for (line_idx, line) in content.lines().enumerate() {
         ctx.process_line(line_idx, line);
     }
@@ -537,6 +564,20 @@ pub fn parse_note(content: &str) -> ParsedNote {
 }
 
 pub fn parse_note_summary(content: &str) -> ParsedNoteSummary {
+    parse_note_summary_with_optional_todo_states(content, None)
+}
+
+pub fn parse_note_summary_with_todo_states(
+    content: &str,
+    todo_states: &[String],
+) -> ParsedNoteSummary {
+    parse_note_summary_with_optional_todo_states(content, Some(todo_states))
+}
+
+fn parse_note_summary_with_optional_todo_states(
+    content: &str,
+    todo_states: Option<&[String]>,
+) -> ParsedNoteSummary {
     let uuids = ID_PROPERTY_RE
         .captures_iter(content)
         .filter_map(|c| c.get(1))
@@ -578,11 +619,11 @@ pub fn parse_note_summary(content: &str) -> ParsedNoteSummary {
         filetags,
         categories,
         aliases,
-        has_todos: note_has_todo_headings(content),
+        has_todos: note_has_todo_headings(content, todo_states),
     }
 }
 
-fn note_has_todo_headings(content: &str) -> bool {
+fn note_has_todo_headings(content: &str, todo_states: Option<&[String]>) -> bool {
     let mut in_src_block = false;
     let mut in_properties = false;
     for line in content.lines() {
@@ -615,10 +656,13 @@ fn note_has_todo_headings(content: &str) -> bool {
         if cap[1].len() <= 1 && cap.get(4).is_none_or(|m| m.as_str().is_empty()) {
             continue;
         }
-        if cap
-            .get(2)
-            .is_some_and(|m| m.as_str().chars().all(|c| c.is_uppercase() || c == '-'))
-        {
+        if cap.get(2).is_some_and(|candidate| {
+            todo_states.is_none_or(|states| {
+                states
+                    .iter()
+                    .any(|state| state.eq_ignore_ascii_case(candidate.as_str()))
+            })
+        }) {
             return true;
         }
     }
@@ -916,6 +960,22 @@ Some text
         assert_eq!(note.headings[0].tags, vec!["tag1"]);
         assert_eq!(note.headings[1].tags, vec!["tag2", "tag3"]);
         assert!(note.headings[2].tags.is_empty());
+    }
+
+    #[test]
+    fn configured_todo_states_preserve_other_uppercase_heading_prefixes() {
+        let states = vec!["NEXT".to_string(), "DONE".to_string()];
+        let note = parse_note_with_todo_states(
+            "* API design\n* NEXT Implement it\n* DONE Verify it\n",
+            &states,
+        );
+
+        assert_eq!(note.headings[0].title, "API design");
+        assert!(note.headings[0].todo_state.is_none());
+        assert_eq!(note.headings[1].title, "Implement it");
+        assert_eq!(note.headings[1].todo_state.as_deref(), Some("NEXT"));
+        assert_eq!(note.headings[2].title, "Verify it");
+        assert_eq!(note.headings[2].todo_state.as_deref(), Some("DONE"));
     }
 
     #[test]

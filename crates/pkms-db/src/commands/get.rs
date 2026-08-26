@@ -37,8 +37,8 @@ impl From<&parser::Heading> for HeadingJson {
     }
 }
 
-fn headings_from_content(content: &str) -> Vec<HeadingJson> {
-    parser::parse_note(content)
+fn headings_from_content(content: &str, todo_states: &[String]) -> Vec<HeadingJson> {
+    parser::parse_note_with_todo_states(content, todo_states)
         .headings
         .iter()
         .map(HeadingJson::from)
@@ -118,8 +118,12 @@ fn get_neighbor_map(graph: &Graph, uuid: &str) -> HashMap<u32, NeighborOutput> {
     map
 }
 
-fn heading_block_from_content(content: &str, heading_title: &str) -> Option<String> {
-    let parsed = parser::parse_note(content);
+fn heading_block_from_content(
+    content: &str,
+    heading_title: &str,
+    todo_states: &[String],
+) -> Option<String> {
+    let parsed = parser::parse_note_with_todo_states(content, todo_states);
     let heading_idx = parsed
         .headings
         .iter()
@@ -132,7 +136,12 @@ fn heading_block_from_content(content: &str, heading_title: &str) -> Option<Stri
     Some(lines[start..end].join("\n"))
 }
 
-fn process_one_get(graph: &Graph, target: &str, opts: &GetOptions) -> Result<GetOutput> {
+fn process_one_get(
+    graph: &Graph,
+    target: &str,
+    opts: &GetOptions,
+    todo_states: &[String],
+) -> Result<GetOutput> {
     let node = graph.resolve_target(target)?.clone();
     let neighbors = if opts.show_links {
         get_neighbor_map(graph, &node.uuid)
@@ -155,7 +164,7 @@ fn process_one_get(graph: &Graph, target: &str, opts: &GetOptions) -> Result<Get
             let content = full_content
                 .as_deref()
                 .expect("heading content requires note content");
-            heading_block_from_content(content, title)
+            heading_block_from_content(content, title, todo_states)
                 .ok_or_else(|| anyhow::anyhow!("Heading not found: {title}"))
         })
         .transpose()?;
@@ -176,7 +185,9 @@ fn process_one_get(graph: &Graph, target: &str, opts: &GetOptions) -> Result<Get
     };
 
     let headings = if opts.show_headings {
-        full_content.as_deref().map(headings_from_content)
+        full_content
+            .as_deref()
+            .map(|content| headings_from_content(content, todo_states))
     } else {
         None
     };
@@ -200,7 +211,7 @@ pub fn execute(config: &OrgConfig, opts: &GetOptions) -> Result<Vec<GetOutput>> 
     let graph = crate::load_graph(config)?;
     opts.targets
         .iter()
-        .map(|target| process_one_get(&graph, target, opts))
+        .map(|target| process_one_get(&graph, target, opts, &config.todo_states))
         .collect()
 }
 

@@ -51,6 +51,7 @@ mod tests {
         let scan = ScanConfig {
             db_root: dir.path().to_path_buf(),
             ignore_patterns: Vec::new(),
+            todo_states: vec!["TODO".to_string(), "DONE".to_string()],
         };
         let links = LinkResolutionContext {
             db_root: dir.path().to_path_buf(),

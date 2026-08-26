@@ -42,8 +42,9 @@ primitives.
   duplicate-ID validation, links, and neighborhoods.
 - `Graph::load_from()` and `OrgSnapshot::load()` always perform a fresh scan;
   neither introduces persistent derived state.
-- Scanning accepts `ScanConfig`; link resolution accepts
-  `LinkResolutionContext`. Note-creation directories are not loading inputs.
+- Scanning accepts `ScanConfig`, including the resolved TODO-state keywords;
+  link resolution accepts `LinkResolutionContext`. Note-creation directories
+  are not loading inputs.
 - `~` expansion for file links uses the injected `home_dir`; this crate does
   not resolve the process environment itself.
 - Task state policy, task projection, and canonical task IDs belong to

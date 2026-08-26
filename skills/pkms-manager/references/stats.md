@@ -12,8 +12,8 @@ pkms stats --todos
 ```
 
 `--hubs` is useful before research because hub notes often make good starting
-points. `--tags` helps browse topic areas. `--todos` summarizes task state per
-note.
+points. `--tags` helps browse topic areas. `--todos` summarizes configured task
+state per note.
 
 Orphan counts in stats exclude daily notes and should match default
 `pkms orphans` output. Use `pkms orphans --with-dailies` only for explicit

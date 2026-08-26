@@ -8,6 +8,7 @@ fn org_config(db_root: &std::path::Path) -> OrgConfig {
         db_root: db_root.to_path_buf(),
         ignore_patterns: Vec::new(),
         home_dir: None,
+        todo_states: vec!["TODO".to_string(), "DONE".to_string()],
     }
 }
 

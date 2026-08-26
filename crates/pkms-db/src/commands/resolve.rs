@@ -1,7 +1,7 @@
 use anyhow::Result;
 use pkms_org::OrgConfig;
 use pkms_org::discovery;
-use pkms_org::parser::{ParsedNoteSummary, parse_note_summary};
+use pkms_org::parser::{ParsedNoteSummary, parse_note_summary_with_todo_states};
 use serde::Serialize;
 use std::collections::HashSet;
 use std::fmt::Write;
@@ -34,6 +34,7 @@ fn scan_files(
     ignore_patterns: &[String],
     uuid_query: Option<&str>,
     require_todos: bool,
+    todo_states: &[String],
 ) -> Vec<ResolvedNote> {
     let Ok(files) = discovery::walk_org_files(root, ignore_patterns) else {
         return Vec::new();
@@ -48,7 +49,7 @@ fn scan_files(
         };
 
         if do_full_scan {
-            let summary = parse_note_summary(&content);
+            let summary = parse_note_summary_with_todo_states(&content, todo_states);
             let Some(primary_uuid) = summary.uuids.first().cloned() else {
                 continue;
             };
@@ -70,7 +71,7 @@ fn scan_files(
         } else {
             let header: Vec<&str> = content.lines().take(100).collect();
             let header_str = header.join("\n");
-            let summary = parse_note_summary(&header_str);
+            let summary = parse_note_summary_with_todo_states(&header_str, todo_states);
             let Some(uuid) = summary.uuids.first().cloned() else {
                 continue;
             };
@@ -121,7 +122,13 @@ pub struct ResolveCommandOutput {
 pub fn execute(config: &OrgConfig, opts: &ResolveOptions) -> Result<ResolveCommandOutput> {
     let db_root = config.db_root.as_path();
     let ignore = config.ignore_patterns.as_slice();
-    let notes = scan_files(db_root, ignore, opts.uuid.as_deref(), opts.todos);
+    let notes = scan_files(
+        db_root,
+        ignore,
+        opts.uuid.as_deref(),
+        opts.todos,
+        &config.todo_states,
+    );
 
     let title_query = opts.title.as_ref().map(|s| s.to_lowercase());
 
@@ -378,6 +385,7 @@ mod tests {
             db_root: dir.path().to_path_buf(),
             ignore_patterns: Vec::new(),
             home_dir: None,
+            todo_states: vec!["TODO".to_string(), "DONE".to_string()],
         };
         let output = execute(
             &config,

@@ -1,6 +1,60 @@
 use super::*;
 
 #[test]
+fn test_query_todos_uses_configured_states() {
+    let (_dir, root) = setup_clean_db();
+    db_write(
+        &root,
+        "query-configured-states.org",
+        r#":PROPERTIES:
+:ID:       12121212-1212-4212-8212-121212121212
+:END:
+#+title: Query Configured States
+
+* API design
+"#,
+    );
+    db_write(
+        &root,
+        "query-configured-task.org",
+        r#":PROPERTIES:
+:ID:       34343434-3434-4434-8434-343434343434
+:END:
+#+title: Query Configured Task
+
+* NEXT Implement it
+"#,
+    );
+    let config = r#"[agenda]
+open_todo_states = ["NEXT"]
+closed_todo_states = ["DONE"]
+"#;
+
+    let (stdout, stderr, status) = run_with_config(
+        &[
+            "--db",
+            root.to_str().unwrap(),
+            "--output-format",
+            "json",
+            "query",
+            "Configured",
+            "--todos",
+        ],
+        config,
+    );
+    assert!(status.success(), "query failed:\n{stdout}\n{stderr}");
+    let value: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    let titles: Vec<_> = value["results"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|note| note["title"].as_str())
+        .collect();
+
+    assert_eq!(titles, vec!["Query Configured Task"]);
+}
+
+#[test]
 fn test_query_human() {
     let (_dir, root) = setup_db();
     let (stdout, _stderr, status) = run(&["--db", root.to_str().unwrap(), "query", "Note"]);

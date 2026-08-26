@@ -234,6 +234,9 @@ pkms orphans --with-dailies
 pkms orphans --limit 20
 ```
 
+`--todos` and heading output use the TODO states configured under `[agenda]`;
+other uppercase heading prefixes remain part of the heading title.
+
 ## Creation and Repair
 
 ```bash
