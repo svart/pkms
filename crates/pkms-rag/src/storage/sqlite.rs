@@ -198,6 +198,7 @@ pub(crate) fn ingest_records_with_progress(
             processed_embeddings: embeddings_computed,
             summary: summary.clone(),
         });
+        set_metadata(&tx, "last_indexed_at", &unix_timestamp()?.to_string())?;
     }
 
     tx.commit()
@@ -216,7 +217,47 @@ pub(crate) fn status(conn: &Connection, db_path: impl AsRef<Path>) -> Result<Sta
         embeddings: count(conn, "SELECT COUNT(*) FROM chunk_embeddings")?,
         embedding_models: embedding_models(conn)?,
         db_path: display_path(db_path.as_ref()),
+        last_indexed_at: metadata_i64(conn, "last_indexed_at")?,
+        source: None,
     })
+}
+
+pub(crate) fn indexed_note_ids(conn: &Connection) -> Result<HashSet<String>> {
+    let mut stmt = conn
+        .prepare("SELECT note_id FROM notes")
+        .context("failed to prepare indexed note ID query")?;
+    let rows = stmt
+        .query_map([], |row| row.get::<_, String>(0))
+        .context("failed to query indexed note IDs")?;
+    rows.collect::<rusqlite::Result<HashSet<_>>>()
+        .context("failed to read indexed note IDs")
+}
+
+fn set_metadata(tx: &Transaction<'_>, key: &str, value: &str) -> Result<()> {
+    tx.execute(
+        "INSERT INTO index_metadata (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        params![key, value],
+    )
+    .with_context(|| format!("failed to set RAG index metadata {key}"))?;
+    Ok(())
+}
+
+fn metadata_i64(conn: &Connection, key: &str) -> Result<Option<i64>> {
+    let value = conn
+        .query_row(
+            "SELECT value FROM index_metadata WHERE key = ?",
+            [key],
+            |row| row.get::<_, String>(0),
+        )
+        .optional()
+        .with_context(|| format!("failed to query RAG index metadata {key}"))?;
+    value
+        .map(|value| {
+            value
+                .parse::<i64>()
+                .with_context(|| format!("invalid integer RAG index metadata {key}"))
+        })
+        .transpose()
 }
 
 pub(crate) fn search(conn: &Connection, query: &str, limit: usize) -> Result<Vec<SearchResult>> {
@@ -1111,6 +1152,29 @@ mod tests {
         assert_eq!(current.embeddings, 0);
         assert!(current.embedding_models.is_empty());
         assert_eq!(current.db_path, path.to_string_lossy().into_owned());
+    }
+
+    #[test]
+    fn status_tracks_only_successful_full_rebuilds() {
+        let tempdir = tempfile::tempdir().expect("tempdir");
+        let path = tempdir.path().join("rag.sqlite3");
+        let mut conn = connect(&path).expect("connect initializes database");
+        let provider = HashEmbeddingProvider::default();
+
+        ingest_records(&mut conn, &fixture_records(), &provider, false)
+            .expect("incremental ingest succeeds");
+        assert_eq!(
+            status(&conn, &path).expect("status reads").last_indexed_at,
+            None
+        );
+
+        ingest_records(&mut conn, &[], &provider, true).expect("empty full rebuild succeeds");
+        assert!(
+            status(&conn, &path)
+                .expect("status reads")
+                .last_indexed_at
+                .is_some()
+        );
     }
 
     #[test]

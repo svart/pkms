@@ -34,6 +34,29 @@ impl RagIndex {
         sqlite::status(&connection, &self.db_path)
     }
 
+    pub fn status_with_source(
+        &self,
+        root: impl AsRef<Path>,
+        ignore_patterns: &[String],
+    ) -> Result<StatusResponse> {
+        let connection = sqlite::connect(&self.db_path)?;
+        let mut status = sqlite::status(&connection, &self.db_path)?;
+        let source = crate::org_export::inspect_org_source_with_ignore(root, ignore_patterns)?;
+        let indexed_ids = sqlite::indexed_note_ids(&connection)?;
+        let indexed_notes = source.note_ids.intersection(&indexed_ids).count() as u64;
+        status.source = Some(crate::models::SourceStatus {
+            root: source.root,
+            discovered_files: source.discovered_files,
+            indexable_notes: source.note_ids.len() as u64,
+            indexed_notes,
+            empty_notes: source.empty_notes,
+            excluded_files: source.excluded_files,
+            missing_notes: source.note_ids.len() as u64 - indexed_notes,
+            orphaned_index_notes: indexed_ids.len() as u64 - indexed_notes,
+        });
+        Ok(status)
+    }
+
     pub fn ingest(
         &self,
         records: &[RetrievalRecord],

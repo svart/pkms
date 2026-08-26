@@ -72,6 +72,8 @@ links.
 
 `pkms rag` exists only in builds made with the `rag` feature. Use it for local
 retrieval indexing, search, cited retrieval, and the RAG HTTP API/UI.
+Use `rag status --output-format json` to compare current source IDs with indexed
+IDs and check the last successful full rebuild.
 RAG search/retrieve JSON and NDJSON results include `uuid` for the source note,
 so they can feed note-target pipeline consumers.
 Use `[rag].fastembed_model_dir` or `PKMS_RAG_FASTEMBED_MODEL_DIR` when FastEmbed

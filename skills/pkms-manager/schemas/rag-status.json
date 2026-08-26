@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "pkms rag status output",
+  "type": "object",
+  "properties": {
+    "schema_version": { "type": "integer" },
+    "notes": { "type": "integer" },
+    "chunks": { "type": "integer" },
+    "links": { "type": "integer" },
+    "stale_chunks": { "type": "integer" },
+    "fts_rows": { "type": "integer" },
+    "embeddings": { "type": "integer" },
+    "embedding_models": { "type": "array", "items": { "type": "string" } },
+    "db_path": { "type": "string" },
+    "last_indexed_at": { "type": ["integer", "null"] },
+    "source": {
+      "type": "object",
+      "properties": {
+        "root": { "type": "string" },
+        "discovered_files": { "type": "integer" },
+        "indexable_notes": { "type": "integer" },
+        "indexed_notes": { "type": "integer" },
+        "empty_notes": { "type": "integer" },
+        "excluded_files": { "type": "integer" },
+        "missing_notes": { "type": "integer" },
+        "orphaned_index_notes": { "type": "integer" }
+      },
+      "required": [
+        "root",
+        "discovered_files",
+        "indexable_notes",
+        "indexed_notes",
+        "empty_notes",
+        "excluded_files",
+        "missing_notes",
+        "orphaned_index_notes"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "schema_version",
+    "notes",
+    "chunks",
+    "links",
+    "stale_chunks",
+    "fts_rows",
+    "embeddings",
+    "embedding_models",
+    "db_path",
+    "last_indexed_at",
+    "source"
+  ],
+  "additionalProperties": false
+}

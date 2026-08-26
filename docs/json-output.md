@@ -45,6 +45,10 @@ default unless the command documents a narrower input shape.
 includes `content_matches_total` so consumers can detect truncation. Use
 `--max-matches-per-note N` or `--all-matches` to select another policy.
 
+`rag status` JSON matches `skills/pkms-manager/schemas/rag-status.json` and
+includes a fresh `source` completeness object plus `last_indexed_at` as Unix
+seconds or `null`.
+
 ## Check Output Notes
 
 `pkms --output-format json check --file-links` reports missing local or remote

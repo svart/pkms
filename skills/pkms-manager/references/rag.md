@@ -9,6 +9,13 @@ pkms rag index
 pkms rag status --output-format json
 ```
 
+Status JSON matches `schemas/rag-status.json`. Inspect `source.missing_notes`
+and `source.orphaned_index_notes` for source/index drift, `source.empty_notes`
+for indexed notes with no searchable chunks, and `last_indexed_at` to determine
+whether a full rebuild has ever completed. `source.excluded_files` counts
+scanned files without a unique note-level ID; configured ignored paths are
+outside the scan.
+
 List direct note and heading tag assignments with their usage counts:
 
 ```bash

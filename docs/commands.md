@@ -177,6 +177,9 @@ pkms rag serve --host 127.0.0.1 --port 7337
 path resolves from `--rag-db`, `PKMS_RAG_DB`, `[rag].rag_db`, then the default
 `.data/pkms-rag.sqlite3`.
 
+`pkms rag status` includes a fresh source/index completeness comparison and the
+last successful full-rebuild timestamp.
+
 `pkms rag index` rebuilds from the resolved `pkms` database root. Use
 `pkms rag ingest retrieval-export.ndjson` to upsert retrieval NDJSON instead.
 

@@ -26,6 +26,8 @@ with `--features rag`.
   evidence while keeping target resolution and source writes outside this crate.
 - Track background index progress with serialized `IndexPhase` and `IndexStep`
   enums while returning synchronous failures as `Result` values.
+- Persist the last successful full-rebuild timestamp and compare indexed note
+  IDs with a fresh source inventory for status diagnostics.
 - Serve the local HTTP API and browser UI used by `pkms rag serve`.
 - Expose note-viewer delegation hooks so the umbrella `pkms` crate can wire
   RAG UI result links to `pkms-web` without making `pkms-rag` depend on
@@ -67,6 +69,8 @@ with `--features rag`.
   while heading scope subtracts inherited note tags from chunk tags.
 - Scope-filter modification times come from current org source files, not
   SQLite index timestamps.
+- `rag status` source completeness compares unique note-level IDs; heading IDs
+  are not standalone RAG notes.
 
 ## Configuration Surface
 

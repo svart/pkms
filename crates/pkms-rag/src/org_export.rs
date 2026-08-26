@@ -1,4 +1,5 @@
 use std::{
+    collections::HashSet,
     fs,
     path::{Component, Path},
     time::UNIX_EPOCH,
@@ -12,6 +13,7 @@ use crate::{
     models::{NoteRecord, RetrievalRecord, SUPPORTED_SCHEMA_VERSION},
 };
 
+#[cfg(test)]
 pub fn export_org_notes(root: impl AsRef<Path>) -> Result<Vec<RetrievalRecord>> {
     export_org_notes_with_ignore(root, &[])
 }
@@ -20,6 +22,34 @@ pub fn export_org_notes_with_ignore(
     root: impl AsRef<Path>,
     ignore_patterns: &[String],
 ) -> Result<Vec<RetrievalRecord>> {
+    Ok(export_org_notes_with_inventory(root, ignore_patterns)?.records)
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct OrgSourceInventory {
+    pub root: String,
+    pub discovered_files: u64,
+    pub note_ids: HashSet<String>,
+    pub empty_notes: u64,
+    pub excluded_files: u64,
+}
+
+pub(crate) fn inspect_org_source_with_ignore(
+    root: impl AsRef<Path>,
+    ignore_patterns: &[String],
+) -> Result<OrgSourceInventory> {
+    Ok(export_org_notes_with_inventory(root, ignore_patterns)?.inventory)
+}
+
+struct OrgExport {
+    records: Vec<RetrievalRecord>,
+    inventory: OrgSourceInventory,
+}
+
+fn export_org_notes_with_inventory(
+    root: impl AsRef<Path>,
+    ignore_patterns: &[String],
+) -> Result<OrgExport> {
     let root = root.as_ref().canonicalize().with_context(|| {
         format!(
             "failed to resolve org notes root {}",
@@ -31,7 +61,11 @@ pub fn export_org_notes_with_ignore(
     let mut results = corpus.results().iter().collect::<Vec<_>>();
     results.sort_by_key(|result| &result.path);
 
+    let discovered_files = results.len() as u64;
     let mut records = Vec::new();
+    let mut note_ids = HashSet::new();
+    let mut empty_notes = 0;
+    let mut excluded_files = 0;
     for result in results {
         let raw_content = result.raw_content.as_deref().with_context(|| {
             format!(
@@ -40,8 +74,13 @@ pub fn export_org_notes_with_ignore(
             )
         })?;
         let Some(note_id) = result.parsed.uuids.first() else {
+            excluded_files += 1;
             continue;
         };
+        let unique_note_id = note_ids.insert(note_id.as_str().to_string());
+        if !unique_note_id {
+            excluded_files += 1;
+        }
 
         let path = relative_org_path(&root, &result.path);
         let title = note_title(&result.path, result.parsed.title.as_deref());
@@ -60,7 +99,7 @@ pub fn export_org_notes_with_ignore(
             content_hash: content_hash(raw_content),
         }));
 
-        for chunk in chunk_note(ChunkNoteInput {
+        let chunks = chunk_note(ChunkNoteInput {
             note_id: note_id.as_str(),
             path: &path,
             title: &title,
@@ -69,12 +108,25 @@ pub fn export_org_notes_with_ignore(
             updated_at,
             parsed: &result.parsed,
             raw_content,
-        })? {
+        })?;
+        if unique_note_id && chunks.is_empty() {
+            empty_notes += 1;
+        }
+        for chunk in chunks {
             records.push(RetrievalRecord::Chunk(chunk));
         }
     }
 
-    Ok(records)
+    Ok(OrgExport {
+        records,
+        inventory: OrgSourceInventory {
+            root: display_path(&root),
+            discovered_files,
+            note_ids,
+            empty_notes,
+            excluded_files,
+        },
+    })
 }
 
 fn modified_unix_seconds(path: &Path) -> Result<i64> {

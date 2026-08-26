@@ -58,4 +58,9 @@ CREATE TABLE IF NOT EXISTS chunk_embeddings (
     PRIMARY KEY (chunk_id, model_name),
     FOREIGN KEY(chunk_id) REFERENCES chunks(chunk_id) ON DELETE CASCADE
 );
+
+CREATE TABLE IF NOT EXISTS index_metadata (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
 "#;

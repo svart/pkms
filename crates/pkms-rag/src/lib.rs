@@ -26,7 +26,7 @@ pub use models::{
     ChunkRecord, DeleteEntityType, DeleteRecord, IndexPhase, IndexProgress, IndexStep,
     IngestSummary, LinkRecord, NoteRecord, RetrievalRecord, RetrieveMode, RetrieveRequest,
     RetrieveResponse, RetrieveResult, RetrieveWeights, SUPPORTED_SCHEMA_VERSION, ScoreBreakdown,
-    SearchRequest, SearchResponse, SearchResult, StatusResponse, TagRecommendation,
+    SearchRequest, SearchResponse, SearchResult, SourceStatus, StatusResponse, TagRecommendation,
     TagRecommendationEvidence, TagRecommendationRequest, TagScope, TagSourceRange,
 };
 pub use ndjson::{NdjsonError, load_ndjson};

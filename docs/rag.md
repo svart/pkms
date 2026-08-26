@@ -26,6 +26,16 @@ pkms rag status
 pkms rag retrieve "agenda inspect tasks" --limit 5 --mode hybrid
 ```
 
+`rag status` compares the current org source with the selected SQLite index.
+Its `source` object reports discovered files, unique indexable note IDs, IDs
+present in both source and index, indexable notes with no retrievable chunks,
+files excluded because they have no unique note-level ID, source notes missing
+from the index, and indexed notes no longer present in source. Configured ignore
+patterns define the source scan and are not counted as excluded files.
+`last_indexed_at` is the Unix timestamp of the last successful full rebuild, or
+`null` for an index that has never completed one; incremental `rag ingest` does
+not change it.
+
 Override the index path while using the configured `pkms` database root:
 
 ```bash

@@ -265,6 +265,21 @@ pub struct StatusResponse {
     pub embeddings: u64,
     pub embedding_models: Vec<String>,
     pub db_path: String,
+    pub last_indexed_at: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source: Option<SourceStatus>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SourceStatus {
+    pub root: String,
+    pub discovered_files: u64,
+    pub indexable_notes: u64,
+    pub indexed_notes: u64,
+    pub empty_notes: u64,
+    pub excluded_files: u64,
+    pub missing_notes: u64,
+    pub orphaned_index_notes: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

@@ -161,6 +161,103 @@ fn test_rag_status_json_empty_index() {
     assert_eq!(value["notes"], 0);
     assert_eq!(value["chunks"], 0);
     assert_eq!(value["db_path"], rag_db.to_string_lossy().as_ref());
+    assert!(value["last_indexed_at"].is_null());
+    assert_eq!(value["source"]["discovered_files"], 0);
+}
+
+#[test]
+fn test_rag_status_reports_source_index_completeness() {
+    let db = TestDb::clean();
+    db.write_roam(
+        "indexed.org",
+        ":PROPERTIES:\n:ID:       24242424-2424-4424-8424-242424242424\n:END:\n#+title: Indexed\n\nRetrievable body.\n",
+    );
+    db.write_roam(
+        "empty.org",
+        ":PROPERTIES:\n:ID:       25252525-2525-4525-8525-252525252525\n:END:\n#+title: Empty\n",
+    );
+    db.write_roam("excluded.org", "#+title: Missing note ID\n\nBody.\n");
+    let rag_db = db.root().join("rag.sqlite3");
+    let (_, stderr, status) = run_hash(&[
+        "--db",
+        db.root().to_str().unwrap(),
+        "rag",
+        "index",
+        "--rag-db",
+        rag_db.to_str().unwrap(),
+    ]);
+    assert!(status.success(), "index failed: {stderr}");
+
+    let (indexed, status) = run_hash_json(&[
+        "--db",
+        db.root().to_str().unwrap(),
+        "--output-format",
+        "json",
+        "rag",
+        "status",
+        "--rag-db",
+        rag_db.to_str().unwrap(),
+    ]);
+    assert!(status.success());
+    assert!(indexed["last_indexed_at"].as_i64().is_some());
+    assert_eq!(indexed["source"]["discovered_files"], 3);
+    assert_eq!(indexed["source"]["indexable_notes"], 2);
+    assert_eq!(indexed["source"]["indexed_notes"], 2);
+    assert_eq!(indexed["source"]["empty_notes"], 1);
+    assert_eq!(indexed["source"]["excluded_files"], 1);
+    assert_eq!(indexed["source"]["missing_notes"], 0);
+    assert_eq!(indexed["source"]["orphaned_index_notes"], 0);
+
+    std::fs::remove_file(db.root().join("roam/indexed.org")).unwrap();
+    db.write_roam(
+        "missing.org",
+        ":PROPERTIES:\n:ID:       26262626-2626-4626-8626-262626262626\n:END:\n#+title: Missing From Index\n\nNew body.\n",
+    );
+    let (drifted, status) = run_hash_json(&[
+        "--db",
+        db.root().to_str().unwrap(),
+        "--output-format",
+        "json",
+        "rag",
+        "status",
+        "--rag-db",
+        rag_db.to_str().unwrap(),
+    ]);
+    assert!(status.success());
+    assert_eq!(drifted["source"]["discovered_files"], 3);
+    assert_eq!(drifted["source"]["indexable_notes"], 2);
+    assert_eq!(drifted["source"]["indexed_notes"], 1);
+    assert_eq!(drifted["source"]["missing_notes"], 1);
+    assert_eq!(drifted["source"]["orphaned_index_notes"], 1);
+}
+
+#[test]
+fn test_rag_index_and_status_share_configured_ignore_patterns() {
+    let db = TestDb::clean();
+    db.write_roam(
+        "keep.org",
+        ":PROPERTIES:\n:ID:       27272727-2727-4727-8727-272727272727\n:END:\n#+title: Keep\n\nkeepneedle\n",
+    );
+    db.write_roam(
+        "ignored/skip.org",
+        ":PROPERTIES:\n:ID:       28282828-2828-4828-8828-282828282828\n:END:\n#+title: Skip\n\nskipneedle\n",
+    );
+    let rag_db = db.root().join("rag.sqlite3");
+    let config = format!(
+        "db_root = \"{}\"\nignore_patterns = [\"ignored\"]\n\n[rag]\nrag_db = \"{}\"\n\n{TEST_CONFIG}",
+        db.root().display(),
+        rag_db.display()
+    );
+
+    let (_, stderr, status) = run_hash_with_config(&["rag", "index"], &config);
+    assert!(status.success(), "index failed: {stderr}");
+    let (value, status) =
+        run_hash_json_with_config(&["--output-format", "json", "rag", "status"], &config);
+    assert!(status.success());
+    assert_eq!(value["notes"], 1);
+    assert_eq!(value["source"]["discovered_files"], 1);
+    assert_eq!(value["source"]["indexed_notes"], 1);
+    assert_eq!(value["source"]["orphaned_index_notes"], 0);
 }
 
 #[test]

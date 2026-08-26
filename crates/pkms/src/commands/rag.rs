@@ -36,7 +36,9 @@ pub fn run(command_ctx: &CommandContext<'_>, command: &RagCommand) -> Result<()>
 
 fn run_status(command_ctx: &CommandContext<'_>, args: &RagStatusArgs) -> Result<()> {
     let db_path = resolve_rag_db(args.rag_db.as_ref(), command_ctx.config());
-    let status = pkms_rag::RagIndex::open(db_path)?.status()?;
+    let org_config = command_ctx.config().org_config();
+    let status = pkms_rag::RagIndex::open(db_path)?
+        .status_with_source(&org_config.db_root, &org_config.ignore_patterns)?;
     render_status(command_ctx.output(), &status)
 }
 
@@ -58,8 +60,10 @@ fn run_index(command_ctx: &CommandContext<'_>, args: &RagIndexArgs) -> Result<()
         pkms_rag::RagIndex::remove_files(&db_path)?;
     }
     let (notes_root, index_source) = resolve_index_sources(None, None, command_ctx.config());
+    let ignore_patterns = command_ctx.config().resolve_ignore_patterns();
     let provider_config = resolve_index_embedding_provider_config(command_ctx.config(), args)?;
     let indexer = pkms_rag::BackgroundIndexer::new(db_path, index_source, notes_root)
+        .with_ignore_patterns(ignore_patterns)
         .with_embedding_max_body_chars(
             args.embedding_max_body_chars
                 .unwrap_or(pkms_rag::DEFAULT_EMBEDDING_MAX_BODY_CHARS),
@@ -208,8 +212,25 @@ fn render_status(ctx: &OutputContext, status: &pkms_rag::StatusResponse) -> Resu
     println!("Stale chunks: {}", status.stale_chunks);
     println!("FTS rows: {}", status.fts_rows);
     println!("Embeddings: {}", status.embeddings);
+    match status.last_indexed_at {
+        Some(timestamp) => println!("Last indexed at: {timestamp}"),
+        None => println!("Last indexed at: never"),
+    }
     if !status.embedding_models.is_empty() {
         println!("Embedding models: {}", status.embedding_models.join(", "));
+    }
+    if let Some(source) = &status.source {
+        println!("Source root: {}", source.root);
+        println!("Source files: {} discovered", source.discovered_files);
+        println!(
+            "Source notes: {} indexable, {} indexed, {} empty, {} excluded, {} missing",
+            source.indexable_notes,
+            source.indexed_notes,
+            source.empty_notes,
+            source.excluded_files,
+            source.missing_notes
+        );
+        println!("Orphaned index notes: {}", source.orphaned_index_notes);
     }
     Ok(())
 }

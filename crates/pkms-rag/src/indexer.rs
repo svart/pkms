@@ -14,7 +14,7 @@ use crate::{
     },
     models::{IndexPhase, IndexProgress, IndexStep, IngestSummary, RetrievalRecord},
     ndjson::load_ndjson,
-    org_export::export_org_notes,
+    org_export::export_org_notes_with_ignore,
     storage::sqlite::{IngestProgress, connect, ingest_records_with_progress},
 };
 
@@ -26,6 +26,7 @@ pub struct BackgroundIndexer {
     source_path: Option<PathBuf>,
     notes_root: Option<PathBuf>,
     embedding_max_body_chars: usize,
+    ignore_patterns: Vec<String>,
     progress: Arc<Mutex<IndexProgress>>,
     running: Arc<Mutex<bool>>,
 }
@@ -46,6 +47,7 @@ impl BackgroundIndexer {
             source_path,
             notes_root,
             embedding_max_body_chars: DEFAULT_EMBEDDING_MAX_BODY_CHARS,
+            ignore_patterns: Vec::new(),
             progress: Arc::new(Mutex::new(progress)),
             running: Arc::new(Mutex::new(false)),
         }
@@ -53,6 +55,11 @@ impl BackgroundIndexer {
 
     pub fn with_embedding_max_body_chars(mut self, max_body_chars: usize) -> Self {
         self.embedding_max_body_chars = max_body_chars;
+        self
+    }
+
+    pub fn with_ignore_patterns(mut self, ignore_patterns: Vec<String>) -> Self {
+        self.ignore_patterns = ignore_patterns;
         self
     }
 
@@ -245,7 +252,7 @@ impl BackgroundIndexer {
                 started_at,
             );
             self.emit_progress(on_progress);
-            return export_org_notes(notes_root);
+            return export_org_notes_with_ignore(notes_root, &self.ignore_patterns);
         }
 
         let Some(source_path) = &self.source_path else {
