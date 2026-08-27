@@ -5,6 +5,9 @@ description = "CLI for navigating and maintaining org-roam personal knowledge ba
 edition = "2024"
 license = "MIT"
 
+[lints]
+workspace = true
+
 [features]
 default = []
 web = ["dep:pkms-web"]

@@ -5,6 +5,9 @@ description = "Note database command logic for pkms"
 edition = "2024"
 license = "MIT"
 
+[lints]
+workspace = true
+
 [features]
 default = []
 ssh = ["dep:russh", "dep:russh-sftp", "dep:tokio"]

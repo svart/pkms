@@ -123,7 +123,7 @@ fn validation_issue_message(issue: &NoteValidationIssue) -> String {
 
 fn validate_one(graph: &Graph, target: &str, db_root: &Path) -> Result<ValidateOutput> {
     let node = graph.resolve_target(target)?.clone();
-    validate_node(graph, &node, target, db_root)
+    Ok(validate_node(graph, &node, target, db_root))
 }
 
 fn validate_node(
@@ -131,7 +131,7 @@ fn validate_node(
     node: &pkms_org::graph::Node,
     target: &str,
     db_root: &Path,
-) -> Result<ValidateOutput> {
+) -> ValidateOutput {
     let validation = graph.collect_node_validation_issues(node, target, db_root);
     let mut issues: Vec<String> = validation
         .issues
@@ -162,14 +162,14 @@ fn validate_node(
         issues.push(format!("{} broken file link(s)", broken_files.len()));
     }
 
-    Ok(build_validate_output(
+    build_validate_output(
         node,
         incoming.len(),
         broken_internal,
         broken_files,
         backlink_entries,
         issues,
-    ))
+    )
 }
 
 pub struct ValidateOptions {

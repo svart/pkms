@@ -90,7 +90,7 @@ impl QuerySearchScope {
 pub fn execute(config: &OrgConfig, opts: &QueryOptions) -> Result<QueryOutput> {
     let graph = crate::load_graph(config)?;
 
-    let mut combined = search_by_text(&graph, &opts.terms, &opts.scope)?;
+    let mut combined = search_by_text(&graph, &opts.terms, &opts.scope);
 
     if opts.todo_filter == QueryTodoFilter::WithTodos {
         combined.retain(|r| graph.node(r.uuid.as_str()).is_some_and(|n| n.has_todos));
@@ -122,11 +122,7 @@ pub fn execute(config: &OrgConfig, opts: &QueryOptions) -> Result<QueryOutput> {
     })
 }
 
-fn search_by_text(
-    graph: &Graph,
-    terms: &str,
-    scope: &QuerySearchScope,
-) -> Result<Vec<QueryResultEntry>> {
+fn search_by_text(graph: &Graph, terms: &str, scope: &QuerySearchScope) -> Vec<QueryResultEntry> {
     let search_title = scope.includes(QuerySearchField::Title);
     let search_tags = scope.includes(QuerySearchField::Tags);
     let search_content = scope.includes(QuerySearchField::Content);
@@ -199,7 +195,7 @@ fn search_by_text(
             .unwrap_or(std::cmp::Ordering::Equal)
     });
 
-    Ok(combined)
+    combined
 }
 
 pub fn render_text(output: &QueryOutput) -> String {

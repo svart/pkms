@@ -116,7 +116,7 @@ pub(super) fn resolve_task_table_columns(
         return input::resolve_columns(Some(raw_columns), None).map(Some);
     }
 
-    let default_columns = config.default_columns(column_source(source), view)?;
+    let default_columns = config.default_columns(column_source(source), view);
     if raw_columns.is_none() && default_columns.is_none() {
         return Ok(None);
     }
@@ -154,12 +154,14 @@ pub(super) fn plan_agenda_request(
             let filters = agenda_date_shortcut_filters(&args.filters, "upcoming");
             return plan_agenda_request_from_filters(
                 config,
-                &filters,
-                None,
-                args.limit,
-                args.days,
-                &args.table,
-                clock,
+                AgendaPlanInput {
+                    raw_filters: &filters,
+                    raw_sort: None,
+                    limit: args.limit,
+                    days: args.days,
+                    table: &args.table,
+                    clock,
+                },
             );
         }
         None => {}
@@ -167,24 +169,38 @@ pub(super) fn plan_agenda_request(
 
     plan_agenda_request_from_filters(
         config,
-        &args.filters,
-        args.sort.as_deref(),
-        args.limit,
-        args.days,
-        &args.table,
-        clock,
+        AgendaPlanInput {
+            raw_filters: &args.filters,
+            raw_sort: args.sort.as_deref(),
+            limit: args.limit,
+            days: args.days,
+            table: &args.table,
+            clock,
+        },
     )
+}
+
+struct AgendaPlanInput<'a> {
+    raw_filters: &'a [String],
+    raw_sort: Option<&'a str>,
+    limit: Option<usize>,
+    days: Option<i64>,
+    table: &'a TaskTableArgs,
+    clock: TaskClock,
 }
 
 fn plan_agenda_request_from_filters(
     config: &TaskCommandConfig,
-    raw_filters: &[String],
-    raw_sort: Option<&str>,
-    limit: Option<usize>,
-    days: Option<i64>,
-    table: &TaskTableArgs,
-    clock: TaskClock,
+    input: AgendaPlanInput<'_>,
 ) -> Result<PlannedAgenda> {
+    let AgendaPlanInput {
+        raw_filters,
+        raw_sort,
+        limit,
+        days,
+        table,
+        clock,
+    } = input;
     let filters = parse_task_filters_on(raw_filters, clock.today)?;
     tracing::debug!(
         source = ?filters.source(),
@@ -221,7 +237,17 @@ fn plan_agenda_date_shortcut_request(
     clock: TaskClock,
 ) -> Result<PlannedAgenda> {
     let filters = agenda_date_shortcut_filters(&args.filters, date_filter);
-    plan_agenda_request_from_filters(config, &filters, None, args.limit, None, &args.table, clock)
+    plan_agenda_request_from_filters(
+        config,
+        AgendaPlanInput {
+            raw_filters: &filters,
+            raw_sort: None,
+            limit: args.limit,
+            days: None,
+            table: &args.table,
+            clock,
+        },
+    )
 }
 
 fn agenda_date_shortcut_filters(filters: &[String], date_filter: &str) -> Vec<String> {

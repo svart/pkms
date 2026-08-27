@@ -19,7 +19,7 @@ pub(super) fn render_org_result(
     let label = result_label(lines.get(start)?)?;
     let (body, next_i) = render_result_body(context, lines, start + 1);
     let mut html = String::from("<figure class=\"org-block org-block-result\"><figcaption>Result");
-    if let Some(label) = label {
+    if let ResultLabel::Named(label) = label {
         html.push_str(": ");
         html.push_str(&escape_html(label));
     }
@@ -29,7 +29,13 @@ pub(super) fn render_org_result(
     Some((html, next_i))
 }
 
-fn result_label(line: &str) -> Option<Option<&str>> {
+#[derive(Debug, PartialEq, Eq)]
+enum ResultLabel<'a> {
+    Unlabeled,
+    Named(&'a str),
+}
+
+fn result_label(line: &str) -> Option<ResultLabel<'_>> {
     let trimmed = line.trim();
     let colon = trimmed.find(':')?;
     let keyword = &trimmed[..colon];
@@ -41,7 +47,11 @@ fn result_label(line: &str) -> Option<Option<&str>> {
         return None;
     }
     let label = trimmed[colon + 1..].trim();
-    Some((!label.is_empty()).then_some(label))
+    Some(if label.is_empty() {
+        ResultLabel::Unlabeled
+    } else {
+        ResultLabel::Named(label)
+    })
 }
 
 fn render_result_body(
@@ -230,14 +240,14 @@ mod tests {
 
     #[test]
     fn recognizes_plain_named_and_cached_result_markers() {
-        assert_eq!(result_label("#+RESULTS:"), Some(None));
+        assert_eq!(result_label("#+RESULTS:"), Some(ResultLabel::Unlabeled));
         assert_eq!(
             result_label("#+results: named block"),
-            Some(Some("named block"))
+            Some(ResultLabel::Named("named block"))
         );
         assert_eq!(
             result_label("#+RESULTS[abc123]: cached"),
-            Some(Some("cached"))
+            Some(ResultLabel::Named("cached"))
         );
         assert_eq!(result_label("#+resultset: no"), None);
     }

@@ -87,7 +87,7 @@ pub fn mod_pkms_task(
     let modifier = org_task_mutation::HeadingMod {
         state: mod_state(config, spec)?,
         title,
-        priority: mod_pkms_priority(spec)?,
+        priority: mod_pkms_priority(spec),
         tags: spec.labels.clone(),
         scheduled: mod_pkms_date(spec.due.as_ref()),
         deadline: mod_pkms_date(spec.deadline.as_ref()),
@@ -110,7 +110,7 @@ pub fn mod_pkms_task(
     let mut location = pkms_task_location(location);
     let mut changes = Vec::new();
 
-    if let Some(dependency) = mod_dependency(spec)? {
+    if let Some(dependency) = mod_dependency(spec) {
         match dependency {
             DependencyMod::Set(target_id) => {
                 if target_id == canonical_id {
@@ -182,12 +182,12 @@ enum DependencyMod {
     Clear,
 }
 
-fn mod_dependency(spec: &TaskModifierSpec) -> Result<Option<DependencyMod>> {
+fn mod_dependency(spec: &TaskModifierSpec) -> Option<DependencyMod> {
     match spec.dependency.as_ref() {
-        None => Ok(None),
-        Some(TaskDependencyArg::Clear) => Ok(Some(DependencyMod::Clear)),
+        None => None,
+        Some(TaskDependencyArg::Clear) => Some(DependencyMod::Clear),
         Some(TaskDependencyArg::Set(TaskId::Pkms(canonical_id))) => {
-            Ok(Some(DependencyMod::Set(*canonical_id)))
+            Some(DependencyMod::Set(*canonical_id))
         }
     }
 }
@@ -234,14 +234,14 @@ fn current_dependency_parent(
         })
 }
 
-fn mod_pkms_priority(spec: &TaskModifierSpec) -> Result<Change<OrgPriority>> {
+fn mod_pkms_priority(spec: &TaskModifierSpec) -> Change<OrgPriority> {
     let Some(priority) = spec.priority else {
-        return Ok(Change::Unchanged);
+        return Change::Unchanged;
     };
-    Ok(match priority {
+    match priority {
         TaskPriorityArg::Clear => Change::Clear,
         TaskPriorityArg::Set(priority) => Change::Set(org_priority(priority)),
-    })
+    }
 }
 
 fn mod_pkms_date(value: Option<&TaskDateArg>) -> Change<String> {

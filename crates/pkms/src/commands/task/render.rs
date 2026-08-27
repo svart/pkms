@@ -318,7 +318,10 @@ pub(super) fn print_task_items(
     let total = apply_limit(&mut items, limit);
 
     match ctx.format {
-        OutputFormat::Text => print_task_table(&items, total, source, table),
+        OutputFormat::Text => {
+            print_task_table(&items, total, source, table);
+            Ok(())
+        }
         OutputFormat::Json => {
             #[derive(Serialize)]
             struct TaskListOutput {
@@ -340,7 +343,10 @@ pub(super) fn print_grouped_task_items(
     table: TaskTableRenderOptions<'_>,
 ) -> Result<()> {
     match ctx.format {
-        OutputFormat::Text => print_grouped_task_table(&groups, total, source, table),
+        OutputFormat::Text => {
+            print_grouped_task_table(&groups, total, source, table);
+            Ok(())
+        }
         OutputFormat::Json => {
             #[derive(Serialize)]
             struct GroupedTaskListOutput {
@@ -409,15 +415,10 @@ pub(super) fn print_agenda_task_items(
     let total = apply_limit(&mut items, limit);
 
     match ctx.format {
-        OutputFormat::Text => print_agenda_task_table(
-            &items,
-            total,
-            source,
-            opts.today,
-            opts.now,
-            opts.window,
-            opts.table,
-        ),
+        OutputFormat::Text => {
+            print_agenda_task_table(&items, total, source, opts);
+            Ok(())
+        }
         OutputFormat::Json => {
             #[derive(Serialize)]
             struct TaskListOutput {
@@ -435,7 +436,7 @@ pub(super) fn print_task_table(
     total: usize,
     source: SourceSelection,
     table: TaskTableRenderOptions<'_>,
-) -> Result<()> {
+) {
     let rows = task_rows(items, source);
     let sections = [("", rows.as_slice())];
     let footer = format!("Shown: {}, Total: {} task(s)", rows.len(), total);
@@ -446,7 +447,6 @@ pub(super) fn print_task_table(
         &footer,
         "No tasks found.",
     );
-    Ok(())
 }
 
 fn print_grouped_task_table(
@@ -454,7 +454,7 @@ fn print_grouped_task_table(
     total: usize,
     source: SourceSelection,
     table: TaskTableRenderOptions<'_>,
-) -> Result<()> {
+) {
     let labels: Vec<String> = groups
         .iter()
         .map(|(key, items)| format!("{key} ({})", items.len()))
@@ -477,19 +477,15 @@ fn print_grouped_task_table(
         &footer,
         "No tasks found.",
     );
-    Ok(())
 }
 
 fn print_agenda_task_table(
     items: &[TaskItem],
     total: usize,
     source: SourceSelection,
-    today: NaiveDate,
-    now: NaiveTime,
-    window: AgendaWindow,
-    table: TaskTableRenderOptions<'_>,
-) -> Result<()> {
-    let agenda_sections = build_agenda_sections(items, today, window);
+    opts: AgendaTaskRenderOptions<'_>,
+) {
+    let agenda_sections = build_agenda_sections(items, opts.today, opts.window);
     let rows: Vec<Vec<TaskRow<'_>>> = agenda_sections
         .iter()
         .map(|section| task_rows(&section.items, source))
@@ -498,7 +494,7 @@ fn print_agenda_task_table(
         .iter()
         .zip(rows.iter())
         .map(|(section, rows)| {
-            agenda_table_entries(&section.label, &section.items, rows, today, now)
+            agenda_table_entries(&section.label, &section.items, rows, opts.today, opts.now)
         })
         .collect();
     let sections: Vec<(&str, &[TaskTableEntry<'_, TaskRow<'_>>])> = agenda_sections
@@ -513,12 +509,11 @@ fn print_agenda_task_table(
     let footer = format!("Shown: {}, Total: {} task(s)", item_count, total);
     print_table_entries_with_empty_message(
         &sections,
-        task_columns(table.columns),
-        table.row_separators,
+        task_columns(opts.table.columns),
+        opts.table.row_separators,
         &footer,
         "No tasks found.",
     );
-    Ok(())
 }
 
 fn build_agenda_sections(

@@ -29,15 +29,15 @@ pub(crate) fn render_markdown_html(path: &Path, request_path: &str, content: &st
     } else {
         format!("<h1>{}</h1>\n", escape_html(&fallback_title))
     };
-    render_standalone_html(
+    render_standalone_html(StandalonePage {
         title,
-        "pkms markdown",
+        eyebrow: "pkms markdown",
         request_path,
-        &contents,
-        &fallback_heading,
-        "markdown-body",
-        &rendered.body,
-    )
+        contents: &contents,
+        heading: &fallback_heading,
+        body_class: "markdown-body",
+        body: &rendered.body,
+    })
 }
 
 pub(crate) fn render_standalone_org_html(
@@ -71,26 +71,37 @@ pub(crate) fn render_standalone_org_html(
     let body = render_org_body(graph, config, &node, content);
     let contents = render_contents_panel(config, content);
     let heading = format!("<h1>{}</h1>\n", escape_html(&title));
-    render_standalone_html(
-        &title,
-        "pkms org file",
+    render_standalone_html(StandalonePage {
+        title: &title,
+        eyebrow: "pkms org file",
         request_path,
-        &contents,
-        &heading,
-        "org-file-body",
-        &body,
-    )
+        contents: &contents,
+        heading: &heading,
+        body_class: "org-file-body",
+        body: &body,
+    })
 }
 
-fn render_standalone_html(
-    title: &str,
-    eyebrow: &str,
-    request_path: &str,
-    contents: &str,
-    heading: &str,
-    body_class: &str,
-    body: &str,
-) -> String {
+struct StandalonePage<'a> {
+    title: &'a str,
+    eyebrow: &'a str,
+    request_path: &'a str,
+    contents: &'a str,
+    heading: &'a str,
+    body_class: &'a str,
+    body: &'a str,
+}
+
+fn render_standalone_html(page: StandalonePage<'_>) -> String {
+    let StandalonePage {
+        title,
+        eyebrow,
+        request_path,
+        contents,
+        heading,
+        body_class,
+        body,
+    } = page;
     format!(
         r#"<!doctype html>
 <html lang="en">

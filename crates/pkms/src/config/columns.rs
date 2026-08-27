@@ -1,4 +1,3 @@
-use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -33,18 +32,18 @@ pub enum ColumnView {
 }
 
 impl ColumnsConfig {
-    pub fn default_for(&self, source: ColumnSource, view: ColumnView) -> Result<Option<&[String]>> {
+    pub fn default_for(&self, source: ColumnSource, view: ColumnView) -> Option<&[String]> {
         match self {
-            ColumnsConfig::Global(columns) => Ok(Some(columns.as_slice())),
+            ColumnsConfig::Global(columns) => Some(columns.as_slice()),
             ColumnsConfig::Matrix(matrix) => matrix.default_for(source, view),
         }
     }
 }
 
 impl ColumnMatrixConfig {
-    fn default_for(&self, source: ColumnSource, view: ColumnView) -> Result<Option<&[String]>> {
+    fn default_for(&self, source: ColumnSource, view: ColumnView) -> Option<&[String]> {
         match source {
-            ColumnSource::Pkms => Ok(source_default(self.pkms.as_ref(), view)),
+            ColumnSource::Pkms => source_default(self.pkms.as_ref(), view),
         }
     }
 }
@@ -60,9 +59,6 @@ pub(super) fn default_columns_for(
     columns: Option<&ColumnsConfig>,
     source: ColumnSource,
     view: ColumnView,
-) -> Result<Option<&[String]>> {
-    columns
-        .map(|columns| columns.default_for(source, view))
-        .transpose()
-        .map(Option::flatten)
+) -> Option<&[String]> {
+    columns.and_then(|columns| columns.default_for(source, view))
 }

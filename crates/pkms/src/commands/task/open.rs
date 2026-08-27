@@ -12,5 +12,6 @@ pub(super) fn run(
 ) -> Result<()> {
     let graph = ctx.config().load_graph()?;
     let target = EditorTarget::from_location(&graph, path, line_number, line_override);
-    editor::open(editor_command, &target)
+    editor::open(editor_command, &target);
+    Ok(())
 }

@@ -58,11 +58,7 @@ impl TaskCommandConfig {
         pkms_org::Graph::load_from(&self.org.scan_config(), &self.org.link_resolution_context())
     }
 
-    pub fn default_columns(
-        &self,
-        source: ColumnSource,
-        view: ColumnView,
-    ) -> Result<Option<&[String]>> {
+    pub fn default_columns(&self, source: ColumnSource, view: ColumnView) -> Option<&[String]> {
         default_columns_for(self.columns.as_ref(), source, view)
     }
 }
@@ -708,10 +704,7 @@ columns = ["Id", "Heading"]
             config
                 .columns
                 .as_ref()
-                .and_then(|columns| columns
-                    .default_for(ColumnSource::Pkms, ColumnView::Tasks)
-                    .ok())
-                .flatten(),
+                .and_then(|columns| { columns.default_for(ColumnSource::Pkms, ColumnView::Tasks) }),
             Some(["Id".to_string(), "Heading".to_string()].as_slice())
         );
     }
@@ -731,9 +724,7 @@ agenda = ["Id", "Date", "Heading"]
         .unwrap();
         let columns = config.columns.as_ref().unwrap();
         assert_eq!(
-            columns
-                .default_for(ColumnSource::Pkms, ColumnView::Tasks)
-                .unwrap(),
+            columns.default_for(ColumnSource::Pkms, ColumnView::Tasks),
             Some(["Id".to_string(), "Heading".to_string()].as_slice())
         );
     }

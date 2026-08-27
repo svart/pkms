@@ -10,3 +10,8 @@ members = [
 ]
 default-members = ["crates/pkms"]
 resolver = "3"
+
+[workspace.lints.clippy]
+# unnecessary_wraps = "warn"
+unused_self = "warn"
+option_option = "warn"

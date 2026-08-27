@@ -49,10 +49,11 @@ pub fn target_for_note(
 
 #[cfg(feature = "web")]
 pub fn open_target(graph: &Graph, target: &str, editor: &str, line: Option<usize>) -> Result<()> {
-    open(editor, &target_for_note(graph, target, line)?)
+    open(editor, &target_for_note(graph, target, line)?);
+    Ok(())
 }
 
-pub fn open(editor: &str, target: &EditorTarget) -> Result<()> {
+pub fn open(editor: &str, target: &EditorTarget) {
     println!("Opening: {} (line {})", target.title, target.line_number);
 
     match run_editor(editor, target) {
@@ -65,8 +66,6 @@ pub fn open(editor: &str, target: &EditorTarget) -> Result<()> {
             eprintln!("Failed to run {command}: {error}");
         }
     }
-
-    Ok(())
 }
 
 fn title_for_path(graph: &Graph, path: &Path) -> String {

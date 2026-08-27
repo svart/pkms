@@ -20,6 +20,7 @@ pub struct CheckConfig {
 }
 
 pub fn execute(config: &CheckConfig, opts: &CheckOptions) -> Result<CheckOutput> {
+    #[cfg(not(feature = "ssh"))]
     ensure_remote_file_links_available(opts.checks.requests(CheckItem::RemoteFileLinks))?;
 
     let graph = crate::load_graph(&config.org)?;
@@ -28,11 +29,6 @@ pub fn execute(config: &CheckConfig, opts: &CheckOptions) -> Result<CheckOutput>
     let display_opts = CheckDisplayOptions::from_options(opts);
     let issue_data = collect_check_data(config, &graph, db_root, opts, &display_opts)?;
     Ok(build_check_output(&issue_data, &display_opts))
-}
-
-#[cfg(feature = "ssh")]
-fn ensure_remote_file_links_available(_requested: bool) -> Result<()> {
-    Ok(())
 }
 
 #[cfg(not(feature = "ssh"))]

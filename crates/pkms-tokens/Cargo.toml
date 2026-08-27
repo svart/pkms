@@ -5,5 +5,8 @@ description = "Token encoding and counting primitives for pkms"
 edition = "2024"
 license = "MIT"
 
+[lints]
+workspace = true
+
 [dependencies]
 tiktoken-rs = "0.12"
