@@ -363,7 +363,6 @@ fn score_directory_proximity(node: &Node, other: &Node) -> f64 {
     }
 }
 
-#[allow(clippy::cast_precision_loss)]
 fn score_neighborhood(
     other: &Node,
     graph: &Graph,
@@ -403,7 +402,6 @@ fn score_neighborhood(
     boost
 }
 
-#[allow(clippy::cast_precision_loss)]
 fn compute_scores<'a>(
     node: &'a Node,
     graph: &'a Graph,

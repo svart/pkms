@@ -244,7 +244,10 @@ fn search_matches_for_field(
     }
 }
 
-#[allow(clippy::cast_precision_loss)]
+#[allow(
+    clippy::cast_precision_loss,
+    reason = "Word counts contribute to an approximate relevance score, not an exact count"
+)]
 fn score_case_insensitive_word_matches(
     field: SearchField,
     value: &str,

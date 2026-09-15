@@ -211,7 +211,10 @@ fn build_todo_stats(graph: &Graph) -> TodoStats {
     }
 }
 
-#[allow(clippy::cast_precision_loss)]
+#[allow(
+    clippy::cast_precision_loss,
+    reason = "The average links per note is approximate; exact integer precision is not required"
+)]
 fn build_stats_output(days: Option<u32>, graph: &Graph, db_root: &Path) -> StatsOutput {
     let stats = graph.stats();
 

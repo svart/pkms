@@ -21,3 +21,10 @@ needless_pass_by_ref_mut = "warn"
 ptr_arg = "warn"
 trivially_copy_pass_by_ref = "warn"
 large_types_passed_by_value = "warn"
+
+# Exceptions must be deliberate
+allow_attributes_without_reason = "deny"
+
+# Local readability
+wildcard_imports = "warn"
+enum_glob_use = "warn"
