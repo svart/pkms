@@ -464,7 +464,6 @@ fn compute_suggestions_for_node(
     target: &str,
     exclude_orphans: bool,
     limit: Option<usize>,
-    target_uuid: Option<String>,
     scope_filter: &ScopeFilter,
 ) -> Result<SuggestComputation> {
     let node = graph
@@ -574,7 +573,7 @@ fn compute_suggestions_for_node(
             reasons: item.reasons.clone(),
             filetags: item.node.filetags.clone(),
             scores: item.factor_scores.clone(),
-            target_uuid: target_uuid.clone(),
+            target_uuid: None,
             heading_context: heading_context.clone(),
         })
         .collect();
@@ -610,7 +609,6 @@ pub fn execute(config: &OrgConfig, opts: &SuggestOptions) -> Result<Vec<SuggestO
                 target,
                 opts.exclude_orphans,
                 opts.limit,
-                None,
                 &opts.scope_filter,
             )?;
             Ok(SuggestOutput {

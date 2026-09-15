@@ -111,6 +111,7 @@ fn close_list_frame(html: &mut String, stack: &mut Vec<ListFrame>) {
     }
 }
 
+#[derive(Clone, Copy)]
 pub(super) struct ListItem<'a> {
     indent: usize,
     kind: ListKind,

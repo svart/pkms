@@ -32,11 +32,11 @@ impl ApiError {
         }
     }
 
-    pub(super) fn json_rejection(rejection: JsonRejection) -> Self {
+    pub(super) fn json_rejection(rejection: &JsonRejection) -> Self {
         Self::bad_request(rejection.body_text())
     }
 
-    pub(super) fn internal(operation: &'static str, err: anyhow::Error) -> Self {
+    pub(super) fn internal(operation: &'static str, err: &anyhow::Error) -> Self {
         tracing::error!(
             event = "rag_api_request_failed",
             operation,

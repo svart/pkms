@@ -82,6 +82,7 @@ pub(crate) fn render_standalone_org_html(
     })
 }
 
+#[derive(Clone, Copy)]
 struct StandalonePage<'a> {
     title: &'a str,
     eyebrow: &'a str,

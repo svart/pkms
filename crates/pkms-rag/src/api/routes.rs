@@ -120,7 +120,7 @@ async fn health() -> Json<HealthResponse> {
 async fn get_status(State(state): State<AppState>) -> Result<Json<ApiStatusResponse>, ApiError> {
     let status = RagIndex::open(state.db_path.clone())
         .and_then(|index| index.status())
-        .map_err(|err| ApiError::internal("status", err))?;
+        .map_err(|err| ApiError::internal("status", &err))?;
     Ok(Json(ApiStatusResponse {
         status,
         note_viewer_available: state.note_viewer.is_some(),
@@ -148,10 +148,10 @@ async fn post_ingest(
     })?;
     let provider = state
         .provider()
-        .map_err(|err| ApiError::internal("ingest_provider", err))?;
+        .map_err(|err| ApiError::internal("ingest_provider", &err))?;
     let summary = RagIndex::open(state.db_path.clone())
         .and_then(|index| index.ingest(&records, provider.as_ref(), false))
-        .map_err(|err| ApiError::internal("ingest", err))?;
+        .map_err(|err| ApiError::internal("ingest", &err))?;
     tracing::info!(
         event = "rag_api_ingest_complete",
         records = records.len(),
@@ -167,10 +167,10 @@ async fn post_search(
     State(state): State<AppState>,
     payload: Result<Json<SearchRequest>, JsonRejection>,
 ) -> Result<Json<SearchResponse>, ApiError> {
-    let Json(request) = payload.map_err(ApiError::json_rejection)?;
+    let Json(request) = payload.map_err(|rejection| ApiError::json_rejection(&rejection))?;
     let results = RagIndex::open(state.db_path.clone())
         .and_then(|index| index.search(&request.query, request.limit))
-        .map_err(|err| ApiError::internal("search", err))?;
+        .map_err(|err| ApiError::internal("search", &err))?;
     tracing::info!(
         event = "rag_api_search_complete",
         query_len = request.query.chars().count(),
@@ -188,13 +188,13 @@ async fn post_retrieve(
     State(state): State<AppState>,
     payload: Result<Json<RetrieveRequest>, JsonRejection>,
 ) -> Result<Json<RetrieveResponse>, ApiError> {
-    let Json(request) = payload.map_err(ApiError::json_rejection)?;
+    let Json(request) = payload.map_err(|rejection| ApiError::json_rejection(&rejection))?;
     let provider = state
         .provider()
-        .map_err(|err| ApiError::internal("retrieve_provider", err))?;
+        .map_err(|err| ApiError::internal("retrieve_provider", &err))?;
     let response = RagIndex::open(state.db_path.clone())
         .and_then(|index| index.retrieve(&request, provider.as_ref()))
-        .map_err(|err| ApiError::internal("retrieve", err))?;
+        .map_err(|err| ApiError::internal("retrieve", &err))?;
     tracing::info!(
         event = "rag_api_retrieve_complete",
         query_len = response.query.chars().count(),

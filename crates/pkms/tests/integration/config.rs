@@ -1,7 +1,7 @@
 use super::*;
 use std::process::Command;
 
-fn parse_json_stdout(output: std::process::Output) -> serde_json::Value {
+fn parse_json_stdout(output: &std::process::Output) -> serde_json::Value {
     let stdout = String::from_utf8_lossy(&output.stdout).to_string();
     assert!(
         output.status.success(),
@@ -31,7 +31,7 @@ fn test_db_root_from_config_file() {
         .env_remove("PKMS_DB_ROOT")
         .output()
         .unwrap();
-    let v = parse_json_stdout(output);
+    let v = parse_json_stdout(&output);
 
     assert!(v["total_notes"].as_u64().unwrap_or(0) > 0);
 }
@@ -49,7 +49,7 @@ fn test_env_db_root_overrides_config_file() {
         .env("PKMS_DB_ROOT", &env_root)
         .output()
         .unwrap();
-    let v = parse_json_stdout(output);
+    let v = parse_json_stdout(&output);
 
     assert!(v["total_notes"].as_u64().unwrap_or(0) > 0);
 }
@@ -74,7 +74,7 @@ fn test_cli_db_root_overrides_env_and_config_file() {
         .env("PKMS_DB_ROOT", &env_root)
         .output()
         .unwrap();
-    let v = parse_json_stdout(output);
+    let v = parse_json_stdout(&output);
 
     assert!(v["total_notes"].as_u64().unwrap_or(0) > 0);
 }

@@ -384,6 +384,7 @@ pub(super) struct TaskTableRenderOptions<'a> {
     pub(super) row_separators: RowSeparatorMode,
 }
 
+#[derive(Clone, Copy)]
 pub(super) struct AgendaTaskRenderOptions<'a> {
     pub(super) table: TaskTableRenderOptions<'a>,
     pub(super) today: NaiveDate,

@@ -90,7 +90,7 @@ mod tests {
             app.clone(),
             Method::POST,
             "/search",
-            json_body(json!({"query": "UrlBase externalHostname", "limit": 5})),
+            json_body(&json!({"query": "UrlBase externalHostname", "limit": 5})),
             Some("application/json"),
         )
         .await;
@@ -105,7 +105,7 @@ mod tests {
             app,
             Method::POST,
             "/retrieve",
-            json_body(json!({"query": "agenda inspect tasks", "limit": 5, "mode": "hybrid"})),
+            json_body(&json!({"query": "agenda inspect tasks", "limit": 5, "mode": "hybrid"})),
             Some("application/json"),
         )
         .await;
@@ -260,7 +260,7 @@ Agents call /retrieve to search mounted PKMS notes.
             Method::POST,
             "/retrieve",
             json_body(
-                json!({"query": "agents retrieve mounted notes", "limit": 5, "mode": "hybrid"}),
+                &json!({"query": "agents retrieve mounted notes", "limit": 5, "mode": "hybrid"}),
             ),
             Some("application/json"),
         )
@@ -508,8 +508,8 @@ Serve startup rebuilds the configured RAG index.
         (status, body)
     }
 
-    fn json_body(value: Value) -> Body {
-        Body::from(serde_json::to_vec(&value).expect("json body serializes"))
+    fn json_body(value: &Value) -> Body {
+        Body::from(serde_json::to_vec(value).expect("json body serializes"))
     }
 
     fn fixture_text() -> String {

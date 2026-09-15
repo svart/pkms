@@ -65,7 +65,7 @@ impl Column {
         }
     }
 
-    pub fn name(&self) -> &'static str {
+    pub fn name(self) -> &'static str {
         match self {
             Column::Id => "Id",
             Column::Date => "Date",

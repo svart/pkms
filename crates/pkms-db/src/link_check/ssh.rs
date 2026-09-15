@@ -264,7 +264,7 @@ fn check_ssh_group(
         Ok(runtime) => runtime.block_on(check_ssh_group_async(connection, jobs, options)),
         Err(error) => ssh_error_results(
             jobs,
-            SshCheckFailure::new(
+            &SshCheckFailure::new(
                 SshErrorKind::Network,
                 format!("failed to initialize SSH runtime: {error}"),
             ),
@@ -278,13 +278,13 @@ async fn check_ssh_group_async(
     jobs: Vec<SshParsedJob>,
     options: &SshFileCheckOptions,
 ) -> LinkCheckResults {
-    let mut session = match connect_ssh_client(connection, options).await {
+    let session = match connect_ssh_client(connection, options).await {
         Ok(session) => session,
-        Err(failure) => return ssh_error_results(jobs, failure),
+        Err(failure) => return ssh_error_results(jobs, &failure),
     };
-    let sftp = match open_sftp_session(&mut session, options).await {
+    let sftp = match open_sftp_session(&session, options).await {
         Ok(sftp) => sftp,
-        Err(failure) => return ssh_error_results(jobs, failure),
+        Err(failure) => return ssh_error_results(jobs, &failure),
     };
 
     let mut results = LinkCheckResults::default();
@@ -308,7 +308,7 @@ async fn check_ssh_group_async(
 }
 
 #[cfg(feature = "ssh")]
-fn ssh_error_results(jobs: Vec<SshParsedJob>, failure: SshCheckFailure) -> LinkCheckResults {
+fn ssh_error_results(jobs: Vec<SshParsedJob>, failure: &SshCheckFailure) -> LinkCheckResults {
     let mut results = LinkCheckResults {
         broken: Vec::new(),
         errors: jobs
@@ -386,7 +386,7 @@ fn known_host_connect_failure(
 ) -> SshCheckFailure {
     match error {
         KnownHostCheckError::Failure(failure) => failure,
-        KnownHostCheckError::Russh(error) => russh_operational_failure(context, error),
+        KnownHostCheckError::Russh(error) => russh_operational_failure(context, &error),
     }
 }
 
@@ -432,7 +432,7 @@ async fn authenticate_ssh_client(
         .best_supported_rsa_hash()
         .await
         .map_err(|error| {
-            russh_auth_failure("failed to inspect server signature algorithms", error)
+            russh_auth_failure("failed to inspect server signature algorithms", &error)
         })?
         .flatten();
 
@@ -617,20 +617,20 @@ fn agent_identity_comment(identity: &russh::keys::agent::AgentIdentity) -> &str 
 
 #[cfg(feature = "ssh")]
 async fn open_sftp_session(
-    session: &mut russh::client::Handle<KnownHostsHandler>,
+    session: &russh::client::Handle<KnownHostsHandler>,
     options: &SshFileCheckOptions,
 ) -> Result<russh_sftp::client::SftpSession, SshCheckFailure> {
     let channel = tokio::time::timeout(operation_timeout(options), session.channel_open_session())
         .await
         .map_err(|_| timeout_failure("timed out opening SSH session channel"))?
-        .map_err(|error| russh_operational_failure("failed to open SSH session channel", error))?;
+        .map_err(|error| russh_operational_failure("failed to open SSH session channel", &error))?;
     tokio::time::timeout(
         operation_timeout(options),
         channel.request_subsystem(true, "sftp"),
     )
     .await
     .map_err(|_| timeout_failure("timed out requesting SFTP subsystem"))?
-    .map_err(|error| russh_operational_failure("failed to request SFTP subsystem", error))?;
+    .map_err(|error| russh_operational_failure("failed to request SFTP subsystem", &error))?;
 
     let sftp = tokio::time::timeout(
         operation_timeout(options),
@@ -638,7 +638,7 @@ async fn open_sftp_session(
     )
     .await
     .map_err(|_| timeout_failure("timed out initializing SFTP"))?
-    .map_err(|error| sftp_operational_failure("failed to initialize SFTP", error))?;
+    .map_err(|error| sftp_operational_failure("failed to initialize SFTP", &error))?;
     sftp.set_timeout(operation_timeout_secs(options));
     Ok(sftp)
 }
@@ -656,7 +656,10 @@ async fn check_ssh_file_target(
     .await
     .map_err(|_| timeout_failure(format!("timed out checking remote path {}", target.path)))?
     .map_err(|error| {
-        sftp_operational_failure(format!("failed to stat remote path {}", target.path), error)
+        sftp_operational_failure(
+            format!("failed to stat remote path {}", target.path),
+            &error,
+        )
     })?;
     if !exists {
         return Ok(false);
@@ -680,7 +683,7 @@ async fn check_ssh_file_target(
             Err(error) => {
                 return Err(sftp_operational_failure(
                     format!("failed to read remote path {}", target.path),
-                    error,
+                    &error,
                 ));
             }
         };
@@ -721,8 +724,8 @@ fn timeout_failure(message: impl Into<String>) -> SshCheckFailure {
 }
 
 #[cfg(feature = "ssh")]
-fn russh_auth_failure(context: impl AsRef<str>, error: russh::Error) -> SshCheckFailure {
-    let kind = if is_russh_timeout(&error) {
+fn russh_auth_failure(context: impl AsRef<str>, error: &russh::Error) -> SshCheckFailure {
+    let kind = if is_russh_timeout(error) {
         SshErrorKind::Timeout
     } else {
         SshErrorKind::Auth
@@ -731,10 +734,10 @@ fn russh_auth_failure(context: impl AsRef<str>, error: russh::Error) -> SshCheck
 }
 
 #[cfg(feature = "ssh")]
-fn russh_operational_failure(context: impl AsRef<str>, error: russh::Error) -> SshCheckFailure {
-    let kind = if is_russh_timeout(&error) {
+fn russh_operational_failure(context: impl AsRef<str>, error: &russh::Error) -> SshCheckFailure {
+    let kind = if is_russh_timeout(error) {
         SshErrorKind::Timeout
-    } else if is_russh_hostkey_error(&error) {
+    } else if is_russh_hostkey_error(error) {
         SshErrorKind::HostKey
     } else {
         SshErrorKind::Network
@@ -767,7 +770,7 @@ fn is_russh_hostkey_error(error: &russh::Error) -> bool {
 #[cfg(feature = "ssh")]
 fn sftp_operational_failure(
     context: impl AsRef<str>,
-    error: russh_sftp::client::error::Error,
+    error: &russh_sftp::client::error::Error,
 ) -> SshCheckFailure {
     let kind = if matches!(error, russh_sftp::client::error::Error::Timeout) {
         SshErrorKind::Timeout

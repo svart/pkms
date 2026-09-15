@@ -160,6 +160,7 @@ fn extract_outgoing(links: &[Link]) -> Vec<OutgoingLink> {
         .collect()
 }
 
+#[derive(Clone, Copy)]
 struct HeadingShowContext<'a> {
     content: &'a str,
     headings: &'a [Heading],

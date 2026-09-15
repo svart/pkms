@@ -139,6 +139,11 @@ impl NoteViewer {
     }
 
     pub fn respond(&self, request: ViewerRequest) -> Result<ViewerResponse> {
+        let ViewerRequest {
+            method,
+            path,
+            query,
+        } = request;
         let state = ServeState {
             config: &self.config,
             graph: &self.graph,
@@ -146,13 +151,7 @@ impl NoteViewer {
             open_target: self.open_target,
             default_editor: &self.default_editor,
         };
-        Ok(http::response_for_viewer_request(
-            &state,
-            request.method,
-            &request.path,
-            request.query.as_deref(),
-        )?
-        .into())
+        Ok(http::response_for_viewer_request(&state, method, &path, query.as_deref())?.into())
     }
 }
 

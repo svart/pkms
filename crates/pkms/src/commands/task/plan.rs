@@ -180,6 +180,7 @@ pub(super) fn plan_agenda_request(
     )
 }
 
+#[derive(Clone, Copy)]
 struct AgendaPlanInput<'a> {
     raw_filters: &'a [String],
     raw_sort: Option<&'a str>,

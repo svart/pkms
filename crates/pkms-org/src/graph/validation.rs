@@ -298,9 +298,9 @@ impl Graph {
                     .and_then(|uuid| self.nodes.get(uuid));
                 issues.extend(filetags_issues_for_content(
                     content,
-                    result.path.clone(),
-                    node.map(|node| node.title.clone())
-                        .or_else(|| result.parsed.title.clone())
+                    &result.path,
+                    node.map(|node| node.title.as_str())
+                        .or(result.parsed.title.as_deref())
                         .unwrap_or_default(),
                 ));
             }
@@ -570,14 +570,14 @@ fn internal_link_counts(node: &Node) -> HashMap<NoteId, usize> {
 
 fn filetags_issues_for_content(
     content: &str,
-    path: PathBuf,
-    title: String,
+    path: &Path,
+    title: &str,
 ) -> Vec<FiletagsValidationIssue> {
     validate_filetags_format(content)
         .into_iter()
         .map(|(raw, reason)| FiletagsValidationIssue {
-            path: path.clone(),
-            title: title.clone(),
+            path: path.to_path_buf(),
+            title: title.to_owned(),
             raw,
             reason,
         })

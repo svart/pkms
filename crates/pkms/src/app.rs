@@ -38,7 +38,7 @@ pub fn print_error(ctx: Option<&OutputContext>, err: &anyhow::Error) {
     }
 }
 
-pub fn startup_error(ctx: &OutputContext, err: anyhow::Error) -> ExitCode {
+pub fn startup_error(ctx: &OutputContext, err: &anyhow::Error) -> ExitCode {
     if ctx.is_structured() {
         let output = serde_json::json!({"error": err.to_string()});
         if let Err(print_err) = ctx.print_structured(&output) {
@@ -50,7 +50,7 @@ pub fn startup_error(ctx: &OutputContext, err: anyhow::Error) -> ExitCode {
     ExitCode::from(2)
 }
 
-pub fn command_error(ctx: &OutputContext, err: anyhow::Error) -> ExitCode {
-    print_error(Some(ctx), &err);
+pub fn command_error(ctx: &OutputContext, err: &anyhow::Error) -> ExitCode {
+    print_error(Some(ctx), err);
     ExitCode::from(1)
 }

@@ -14,9 +14,9 @@ pub fn run(cli: Cli) -> ExitCode {
         Ok(app) => app,
         Err(e) => {
             let ctx = OutputContext {
-                format: cli.output_format.clone().unwrap_or(OutputFormat::Text),
+                format: cli.output_format.unwrap_or(OutputFormat::Text),
             };
-            return app::startup_error(&ctx, e);
+            return app::startup_error(&ctx, &e);
         }
     };
 
@@ -28,7 +28,7 @@ pub fn run(cli: Cli) -> ExitCode {
         }
         Err(e) => {
             tracing::error!(command = cli.command.name(), error = %e, "command failed");
-            app::command_error(&app.output, e)
+            app::command_error(&app.output, &e)
         }
     }
 }

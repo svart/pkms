@@ -184,7 +184,7 @@ fn parse_column_name(name: &str) -> Result<Column> {
             trimmed,
             ALL_COLUMNS
                 .iter()
-                .map(Column::name)
+                .map(|column| column.name())
                 .collect::<Vec<_>>()
                 .join(",")
         )

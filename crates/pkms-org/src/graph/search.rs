@@ -82,7 +82,7 @@ impl SearchFields {
         Self { selected }
     }
 
-    fn includes(&self, field: SearchField) -> bool {
+    fn includes(self, field: SearchField) -> bool {
         self.selected[field.index()]
     }
 

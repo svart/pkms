@@ -45,11 +45,11 @@ pub(super) fn note_viewer_response(
             path: path.into(),
             query,
         })
-        .map_err(|err| ApiError::internal("note_viewer", err))?;
+        .map_err(|err| ApiError::internal("note_viewer", &err))?;
     let status = StatusCode::from_u16(viewer_response.status)
-        .map_err(|err| ApiError::internal("note_viewer_status", anyhow::Error::new(err)))?;
+        .map_err(|err| ApiError::internal("note_viewer_status", &anyhow::Error::new(err)))?;
     let content_type = HeaderValue::from_str(&viewer_response.content_type)
-        .map_err(|err| ApiError::internal("note_viewer_content_type", anyhow::Error::new(err)))?;
+        .map_err(|err| ApiError::internal("note_viewer_content_type", &anyhow::Error::new(err)))?;
     let mut response = (status, viewer_response.body).into_response();
     response
         .headers_mut()
