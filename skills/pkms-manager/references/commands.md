@@ -107,6 +107,7 @@ removing current tags.
 ```bash
 pkms new "Title"
 pkms new "Title" --create --tags "tag1,tag2"
+pkms new "Title" --create --body -    # body from stdin; or --body <path>
 pkms new "Existing Note" --create --heading "Heading"
 pkms extract <heading-full-uuid>
 pkms extract <heading-full-uuid> "New Note Title" --apply

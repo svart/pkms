@@ -258,3 +258,134 @@ Some content
     assert_eq!(content.matches(":PROPERTIES:").count(), 2);
     assert!(content.contains(":PROJECT: Alpha\n:ID:"));
 }
+
+fn created_note_content(stdout: &str) -> String {
+    let v: serde_json::Value = serde_json::from_str(stdout.trim()).unwrap();
+    assert_eq!(v["created"], true);
+    fs::read_to_string(v["path"].as_str().unwrap()).unwrap()
+}
+
+#[test]
+fn test_new_with_body_from_file() {
+    let (dir, root) = setup_db();
+    let body_path = dir.path().join("body.org");
+    fs::write(&body_path, "\n* Section\nBody text").unwrap();
+    let (stdout, stderr, status) = run(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "json",
+        "new",
+        "Body From File",
+        "--create",
+        "--tags",
+        "foo",
+        "--body",
+        body_path.to_str().unwrap(),
+    ]);
+    assert!(status.success(), "new failed: {stderr}");
+
+    let content = created_note_content(&stdout);
+    assert!(
+        content.ends_with("#+title: Body From File\n#+filetags: :foo:\n\n* Section\nBody text\n"),
+        "unexpected content:\n{content}"
+    );
+    assert_eq!(content.matches(":PROPERTIES:").count(), 1);
+}
+
+#[test]
+fn test_new_with_body_from_stdin() {
+    let (_dir, root) = setup_db();
+    let (stdout, stderr, status) = run_with_stdin(
+        &[
+            "--db",
+            root.to_str().unwrap(),
+            "--output-format",
+            "json",
+            "new",
+            "Body From Stdin",
+            "--create",
+            "--body",
+            "-",
+        ],
+        "* From stdin\n",
+    );
+    assert!(status.success(), "new failed: {stderr}");
+
+    let content = created_note_content(&stdout);
+    assert!(
+        content.ends_with("#+title: Body From Stdin\n* From stdin\n"),
+        "unexpected content:\n{content}"
+    );
+}
+
+#[test]
+fn test_new_body_requires_create() {
+    let (_dir, root) = setup_db();
+    let (_stdout, stderr, status) = run_with_stdin(
+        &[
+            "--db",
+            root.to_str().unwrap(),
+            "new",
+            "No Create",
+            "--body",
+            "-",
+        ],
+        "text\n",
+    );
+    assert!(!status.success());
+    assert!(stderr.contains("--create"), "stderr: {stderr}");
+}
+
+#[test]
+fn test_new_body_conflicts_with_heading() {
+    let (_dir, root) = setup_db();
+    let (_stdout, stderr, status) = run_with_stdin(
+        &[
+            "--db",
+            root.to_str().unwrap(),
+            "new",
+            "Some Note",
+            "--create",
+            "--heading",
+            "Section",
+            "--body",
+            "-",
+        ],
+        "text\n",
+    );
+    assert!(!status.success());
+    assert!(stderr.contains("--heading"), "stderr: {stderr}");
+}
+
+#[test]
+fn test_new_body_missing_file_creates_nothing() {
+    let (dir, root) = setup_db();
+    let missing = dir.path().join("missing.org");
+    let (_stdout, stderr, status) = run(&[
+        "--db",
+        root.to_str().unwrap(),
+        "new",
+        "Missing Body",
+        "--create",
+        "--body",
+        missing.to_str().unwrap(),
+    ]);
+    assert!(!status.success());
+    assert!(
+        stderr.contains("Failed to read note body"),
+        "stderr: {stderr}"
+    );
+    assert!(!contains_file_with(&root, "missing_body"));
+}
+
+fn contains_file_with(dir: &std::path::Path, needle: &str) -> bool {
+    fs::read_dir(dir).unwrap().any(|entry| {
+        let path = entry.unwrap().path();
+        if path.is_dir() {
+            contains_file_with(&path, needle)
+        } else {
+            path.to_string_lossy().contains(needle)
+        }
+    })
+}

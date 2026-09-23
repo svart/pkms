@@ -76,6 +76,32 @@ pub fn run(args: &[&str]) -> (String, String, ExitStatus) {
     )
 }
 
+pub fn run_with_stdin(args: &[&str], input: &str) -> (String, String, ExitStatus) {
+    use std::io::Write;
+    let config_home = setup_test_config_home();
+    let mut command = Command::new(pkms_binary());
+    configure_test_command(&mut command, config_home.path());
+    let mut child = command
+        .args(args)
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .unwrap();
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(input.as_bytes())
+        .unwrap();
+    let output = child.wait_with_output().unwrap();
+    (
+        String::from_utf8_lossy(&output.stdout).to_string(),
+        String::from_utf8_lossy(&output.stderr).to_string(),
+        output.status,
+    )
+}
+
 pub fn run_with_config(args: &[&str], config: &str) -> (String, String, ExitStatus) {
     let config_home = tempfile::tempdir().unwrap();
     fs::write(config_home.path().join("pkms.toml"), config).unwrap();

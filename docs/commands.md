@@ -269,6 +269,8 @@ pkms new "My Note"
 pkms new "My Note" --create
 pkms new "My Note" --create --tags "tag1,tag2"
 pkms new "My Note" --create --aliases "Alias1,Alias2"
+pkms new "My Note" --create --body draft.org
+cat draft.org | pkms new "My Note" --create --body -
 pkms new "Existing Note" --create --heading "Heading"
 pkms extract <heading-uuid>
 pkms extract <heading-uuid> "New Note Title" --apply
@@ -278,6 +280,9 @@ pkms fix attach
 pkms fix attach --apply
 pkms fix attach --apply --copy
 ```
+
+`new --body <PATH|->` appends org content from a file or stdin after the
+generated header; it requires `--create` and conflicts with `--heading`.
 
 `extract` is a dry run unless `--apply` is present. It accepts a heading-level
 UUID, creates a new note whose primary `:ID:` is that heading UUID, and replaces

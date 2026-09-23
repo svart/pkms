@@ -112,7 +112,9 @@ See the task reference before changing task workflows.
 
 ### Create and Link Notes
 
-Use `pkms new` for new note boilerplate and UUID generation. Use full dashed
+Use `pkms new` for new note boilerplate and UUID generation. To create a note
+with content in one step, pipe the body (without header) via
+`pkms new "Title" --create --body -` or pass `--body <path>`. Use full dashed
 UUIDs in org links:
 
 ```org

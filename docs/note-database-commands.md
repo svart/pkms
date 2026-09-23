@@ -155,6 +155,18 @@ Write the boilerplate file:
 pkms new "My Note" --create --tags "project,idea" --aliases "Alias One,Alias Two"
 ```
 
+Write the note with body content from a file, or from stdin with `-`:
+
+```bash
+pkms new "My Note" --create --body draft.org
+generate-draft | pkms new "My Note" --create --tags "idea" --body -
+```
+
+The body is appended verbatim after the generated `:PROPERTIES:`, `#+title`,
+and `#+filetags` header, so it should not contain its own header. A missing
+final newline is added. `--body` requires `--create` and cannot be combined
+with `--heading`.
+
 Generate a heading ID in an existing note:
 
 ```bash

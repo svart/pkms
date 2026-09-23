@@ -47,6 +47,8 @@ pub struct NewOptions {
     pub tags: Option<Vec<String>>,
     pub aliases: Option<Vec<String>>,
     pub heading: Option<String>,
+    /// Org content appended after the generated header. Requires `create`.
+    pub body: Option<String>,
 }
 
 pub fn execute(config: &crate::NoteCreationConfig, opts: &NewOptions) -> Result<NewOutput> {
@@ -63,6 +65,10 @@ pub fn execute(config: &crate::NoteCreationConfig, opts: &NewOptions) -> Result<
 
     if opts.create {
         std::fs::create_dir_all(new_notes_dir)?;
+    }
+
+    if opts.body.is_some() && (!opts.create || opts.heading.is_some()) {
+        anyhow::bail!("--body requires --create and cannot be combined with --heading.");
     }
 
     let mut created = false;
@@ -126,6 +132,10 @@ pub fn execute(config: &crate::NoteCreationConfig, opts: &NewOptions) -> Result<
             let _ = writeln!(content, "#+filetags: {ft}");
         }
 
+        if let Some(ref body) = opts.body {
+            append_body(&mut content, body);
+        }
+
         (filename, path) = create_note_file_exclusive(new_notes_dir, &timestamp, &slug, &content)?;
         created = true;
     } else if opts.create && heading_output.is_some() {
@@ -140,6 +150,13 @@ pub fn execute(config: &crate::NoteCreationConfig, opts: &NewOptions) -> Result<
         created,
         heading: heading_output,
     })
+}
+
+fn append_body(content: &mut String, body: &str) {
+    content.push_str(body);
+    if !body.is_empty() && !body.ends_with('\n') {
+        content.push('\n');
+    }
 }
 
 pub fn render_text(output: &NewOutput) -> String {
@@ -320,6 +337,17 @@ mod tests {
         assert_eq!(path.file_name().unwrap(), "20260604120000-collision-1.org");
         assert_eq!(std::fs::read_to_string(existing).unwrap(), "original");
         assert_eq!(std::fs::read_to_string(path).unwrap(), "replacement");
+    }
+
+    #[test]
+    fn append_body_keeps_body_verbatim_and_terminates_last_line() {
+        let mut content = "#+title: T\n".to_string();
+        append_body(&mut content, "\n* Heading\ntext");
+        assert_eq!(content, "#+title: T\n\n* Heading\ntext\n");
+
+        let mut content = "#+title: T\n".to_string();
+        append_body(&mut content, "");
+        assert_eq!(content, "#+title: T\n");
     }
 
     #[test]

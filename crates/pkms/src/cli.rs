@@ -551,6 +551,14 @@ pub struct NewArgs {
     pub aliases: Option<Vec<String>>,
     #[arg(long, help = "Heading title to generate :ID: for")]
     pub heading: Option<String>,
+    #[arg(
+        long,
+        value_name = "PATH|-",
+        requires = "create",
+        conflicts_with = "heading",
+        help = "Append note body from a file, or from stdin with -"
+    )]
+    pub body: Option<PathBuf>,
 }
 
 #[derive(Debug, Args)]
