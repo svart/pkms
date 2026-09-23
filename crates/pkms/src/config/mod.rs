@@ -116,10 +116,16 @@ impl Config {
                  or set db_root in ~/.config/pkms.toml"
             );
         };
+        // An overriding db root must not inherit absolute note dirs that point into
+        // another database; `Some` holds the config db root being overridden.
+        let overridden_root = self
+            .db_root
+            .as_deref()
+            .filter(|_| db_root_source != "config");
         let resolved = ResolvedConfig {
             db_root: canonicalize_or_abs(&db_root, runtime.current_dir.as_deref()),
-            new_notes_dir: self.new_notes_dir,
-            daily_notes_dir: self.daily_notes_dir,
+            new_notes_dir: rebase_notes_dir(self.new_notes_dir, overridden_root),
+            daily_notes_dir: rebase_notes_dir(self.daily_notes_dir, overridden_root),
             ignore_patterns: self.ignore_patterns,
             columns: self.columns,
             tasks: self.tasks,
@@ -143,6 +149,32 @@ impl Config {
         );
         Ok(resolved)
     }
+}
+
+/// Rewrites an absolute note dir for an overridden db root: a dir inside the
+/// overridden config db root becomes relative to it, and any other absolute dir
+/// is dropped in favor of the default so writes stay inside the selected db.
+fn rebase_notes_dir(dir: Option<PathBuf>, overridden_root: Option<&Path>) -> Option<PathBuf> {
+    let (Some(dir), Some(config_root)) = (dir.as_deref(), overridden_root) else {
+        return dir;
+    };
+    if !dir.is_absolute() {
+        return Some(dir.to_path_buf());
+    }
+    let canonical_root = canonicalize_or_abs(config_root, None);
+    let canonical_dir = canonicalize_or_abs(dir, None);
+    let relative = dir
+        .strip_prefix(config_root)
+        .or_else(|_| canonical_dir.strip_prefix(&canonical_root))
+        .ok()
+        .map(Path::to_path_buf);
+    if relative.is_none() {
+        tracing::warn!(
+            dir = %dir.display(),
+            "ignoring absolute notes dir outside the overridden config db_root"
+        );
+    }
+    relative
 }
 
 impl ResolvedConfig {
@@ -362,6 +394,56 @@ mod tests {
         assert_eq!(cli.db_root, PathBuf::from("/cli/db"));
         assert_eq!(env.db_root, PathBuf::from("/env/db"));
         assert_eq!(file.db_root, PathBuf::from("/config/db"));
+    }
+
+    #[test]
+    fn overridden_db_root_rebases_absolute_note_dirs_inside_config_db_root() {
+        let config = || Config {
+            db_root: Some(PathBuf::from("/config/db")),
+            new_notes_dir: Some(PathBuf::from("/config/db/roam")),
+            daily_notes_dir: Some(PathBuf::from("/config/db/roam/daily")),
+            ..Config::default()
+        };
+        let env = RuntimeInputs::from_values(&[("PKMS_DB_ROOT", "/env/db")]);
+
+        let cli = config()
+            .resolve(Some(PathBuf::from("/cli/db")), RuntimeInputs::default())
+            .unwrap();
+        let env = config().resolve(None, env).unwrap();
+        let file = config().resolve(None, RuntimeInputs::default()).unwrap();
+
+        assert_eq!(cli.resolve_new_notes_dir(), PathBuf::from("/cli/db/roam"));
+        assert_eq!(
+            cli.resolve_daily_notes_dir(),
+            PathBuf::from("/cli/db/roam/daily")
+        );
+        assert_eq!(env.resolve_new_notes_dir(), PathBuf::from("/env/db/roam"));
+        assert_eq!(
+            file.resolve_new_notes_dir(),
+            PathBuf::from("/config/db/roam")
+        );
+    }
+
+    #[test]
+    fn overridden_db_root_ignores_absolute_note_dirs_outside_config_db_root() {
+        let config = || Config {
+            db_root: Some(PathBuf::from("/config/db")),
+            new_notes_dir: Some(PathBuf::from("/elsewhere/notes")),
+            daily_notes_dir: Some(PathBuf::from("/elsewhere/daily")),
+            ..Config::default()
+        };
+
+        let cli = config()
+            .resolve(Some(PathBuf::from("/cli/db")), RuntimeInputs::default())
+            .unwrap();
+        let file = config().resolve(None, RuntimeInputs::default()).unwrap();
+
+        assert_eq!(cli.resolve_new_notes_dir(), PathBuf::from("/cli/db/roam"));
+        assert_eq!(cli.resolve_daily_notes_dir(), PathBuf::from("/cli/db/roam"));
+        assert_eq!(
+            file.resolve_new_notes_dir(),
+            PathBuf::from("/elsewhere/notes")
+        );
     }
 
     #[test]

@@ -389,3 +389,36 @@ fn contains_file_with(dir: &std::path::Path, needle: &str) -> bool {
         }
     })
 }
+
+#[test]
+fn test_new_with_db_override_ignores_config_absolute_new_notes_dir() {
+    let (_config_dir, config_root) = setup_db();
+    let (_dir, root) = setup_db();
+    let config_root = config_root.to_str().unwrap();
+    let config = format!("db_root = \"{config_root}\"\nnew_notes_dir = \"{config_root}/roam\"\n");
+    let (stdout, stderr, status) = run_with_config(
+        &[
+            "--db",
+            root.to_str().unwrap(),
+            "--output-format",
+            "json",
+            "new",
+            "Override Target",
+            "--create",
+        ],
+        &config,
+    );
+    assert!(status.success(), "new failed: {stderr}");
+
+    let v: serde_json::Value = serde_json::from_str(stdout.trim()).unwrap();
+    let path = std::path::PathBuf::from(v["path"].as_str().unwrap());
+    assert!(
+        path.starts_with(root.join("roam")),
+        "note written outside --db: {}",
+        path.display()
+    );
+    assert!(!contains_file_with(
+        std::path::Path::new(config_root),
+        "override_target"
+    ));
+}

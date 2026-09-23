@@ -51,6 +51,13 @@ notes and daily notes. Relative directory values are resolved under `db_root`.
 | `daily_notes_dir` | - | - | Directory for daily notes when `[tasks].inbox = "daily"`. Defaults to `new_notes_dir`. |
 | `ignore_patterns` | - | - | Glob-style patterns skipped during recursive `.org` discovery. |
 
+Relative `new_notes_dir` and `daily_notes_dir` values resolve against the
+effective db root. When `--db` or `PKMS_DB_ROOT` overrides the config `db_root`,
+absolute values inside the config `db_root` are re-rooted onto the selected
+database (`/notes/roam` becomes `<--db>/roam`), and absolute values outside it
+fall back to the defaults, so an explicit database never receives new notes
+in another one.
+
 ## Tasks, Agenda, And Columns
 
 These options control local task state handling, the default PKMS inbox, and
