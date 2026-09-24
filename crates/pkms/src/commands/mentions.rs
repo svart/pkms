@@ -4,7 +4,7 @@ use crate::output::OutputContext;
 use anyhow::{Context, Result};
 use pkms_db::commands::mentions::{self, MentionsOptions, MentionsOutput, MentionsSource};
 
-pub fn options_from_args(ctx: &CommandContext<'_>, args: &MentionsArgs) -> Result<MentionsOptions> {
+pub fn options_from_args(args: &MentionsArgs) -> Result<MentionsOptions> {
     let source = if args.target == "-" {
         MentionsSource::Text(
             std::io::read_to_string(std::io::stdin()).context("Failed to read text from stdin")?,
@@ -15,9 +15,7 @@ pub fn options_from_args(ctx: &CommandContext<'_>, args: &MentionsArgs) -> Resul
     Ok(MentionsOptions {
         source,
         incoming: args.incoming,
-        include_headings: args.headings,
-        min_length: args.min_length,
-        scope_filter: super::scope::filter_from_args(&args.scope, ctx.config()),
+        with_dailies: args.with_dailies,
     })
 }
 

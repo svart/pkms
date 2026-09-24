@@ -84,8 +84,8 @@ use `--all-matches` when the full list is required.
 
 ### Shared scope filters
 
-`resolve`, `query`, `orphans`, `suggest`, and `mentions` accept the same
-optional scope filters:
+`resolve`, `query`, `orphans`, and `suggest` accept the same optional scope
+filters:
 
 ```bash
 pkms query "distributed systems" --include-tags project,active
@@ -100,8 +100,7 @@ a note. Tag matching is exact. Relative path prefixes are resolved against
 `db_root`. `--modified-since` accepts a UTC `YYYY-MM-DD` date or an RFC 3339
 timestamp and checks current source-file modification times. `--with-dailies`
 and `--without-dailies` are mutually exclusive. Commands continue to include
-daily notes by default except `orphans`, which continues to exclude them, and
-`mentions` without `--incoming`, which excludes daily notes as mentioned notes.
+daily notes by default except `orphans`, which continues to exclude them.
 
 ## Inspect and Navigate
 
@@ -167,12 +166,12 @@ scanner skips text that is not prose:
 A note never reports itself or headings in its own file. The default mode
 leaves out these candidate notes:
 
-- notes with names shorter than `--min-length` (default 3)
+- notes with names shorter than 3 characters
 - daily notes, unless `--with-dailies` is set
-- heading nodes, unless `--headings` is set
+- heading nodes
 
-With `--incoming`, the scope filters select the source notes, daily notes are
-included, and `--min-length` does not apply.
+With `--incoming`, every other note is a source, daily notes included, and the
+minimum name length does not apply.
 
 `already_linked` is true when the scanned text already contains an `id:` link
 to the mentioned note elsewhere. Treat every record as a link candidate, not

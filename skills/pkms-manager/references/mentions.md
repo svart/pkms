@@ -7,7 +7,7 @@ not links. One scan replaces resolving candidate terms one by one.
 pkms mentions <uuid-or-title> --output-format ndjson       # names in this note
 pkms mentions <uuid-or-title> --incoming --output-format json  # notes naming this one
 pkms mentions - --output-format ndjson < draft.org          # a draft before it exists
-pkms mentions <uuid> --headings --min-length 2              # widen candidates
+pkms mentions <uuid> --with-dailies                         # also match daily notes
 ```
 
 Record fields:
@@ -30,11 +30,9 @@ Behavior:
 - The command never reports text inside links, URLs, keyword lines, drawers,
   planning lines, src/example/export blocks, `~code~`, `=verbatim=`,
   timestamps, or heading tags.
-- The default mode skips names shorter than `--min-length` (default 3), daily
-  notes, and heading nodes unless `--headings` is set. Scope flags limit the
-  mentioned notes.
-- `--incoming` includes daily notes as sources. Scope flags limit the source
-  notes.
+- The default mode skips names shorter than 3 characters, heading nodes, and
+  daily notes unless `--with-dailies` is set.
+- `--incoming` scans every other note, daily notes included.
 - A note never reports itself.
 
 Every record is a candidate, not an instruction to link. Before adding a link,

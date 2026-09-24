@@ -1,7 +1,8 @@
 use anyhow::{Result, bail};
 use pkms_org::graph::{Graph, Node};
 use pkms_org::mentions::{MentionHit, MentionKind, MentionMatcher, linked_ids};
-use pkms_org::{NoteId, OrgConfig, ScopeFilter};
+use pkms_org::parser::find_daily_file_date;
+use pkms_org::{NoteId, OrgConfig};
 use rayon::prelude::*;
 use serde::Serialize;
 use std::borrow::Cow;
@@ -19,12 +20,12 @@ pub enum MentionsSource {
 pub struct MentionsOptions {
     pub source: MentionsSource,
     pub incoming: bool,
-    /// Also match heading nodes with `:ID:` as mentioned notes (outgoing only).
-    pub include_headings: bool,
-    /// Ignore titles and aliases shorter than this many chars (outgoing only).
-    pub min_length: usize,
-    pub scope_filter: ScopeFilter,
+    /// Also match daily notes as mentioned notes (outgoing only).
+    pub with_dailies: bool,
 }
+
+/// Titles and aliases shorter than this many chars are not matched (outgoing only).
+const MIN_NAME_LENGTH: usize = 3;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
@@ -86,7 +87,7 @@ pub fn execute(config: &OrgConfig, opts: &MentionsOptions) -> Result<MentionsOut
         }
         (MentionsSource::Target(target), true) => {
             let node = graph.resolve_target(target)?;
-            Ok(incoming(&graph, node, &opts.scope_filter))
+            Ok(incoming(&graph, node))
         }
     }
 }
@@ -143,11 +144,11 @@ fn outgoing(graph: &Graph, region: &ScanRegion<'_>, opts: &MentionsOptions) -> M
         .nodes()
         .filter(|node| {
             is_same_file(node)
-                || ((opts.include_headings || !is_heading_node(graph, node))
-                    && opts.scope_filter.matches(&node.path, &node.filetags, false))
+                || (!is_heading_node(graph, node)
+                    && (opts.with_dailies || find_daily_file_date(&node.path).is_none()))
         })
         .flat_map(|node| names_for(graph, node))
-        .filter(|(name, _, _)| name.trim().chars().count() >= opts.min_length);
+        .filter(|(name, _, _)| name.trim().chars().count() >= MIN_NAME_LENGTH);
     let matcher = MentionMatcher::new(entries);
 
     let linked = linked_ids(&region.text);
@@ -173,8 +174,8 @@ fn outgoing(graph: &Graph, region: &ScanRegion<'_>, opts: &MentionsOptions) -> M
     }
 }
 
-fn incoming(graph: &Graph, target: &Node, scope_filter: &ScopeFilter) -> MentionsOutput {
-    // The user named this note explicitly, so --min-length does not apply.
+fn incoming(graph: &Graph, target: &Node) -> MentionsOutput {
+    // The user named this note explicitly, so the minimum name length does not apply.
     let matcher = MentionMatcher::new(names_for(graph, target));
     let contents: HashMap<&Path, &str> = graph
         .files()
@@ -183,11 +184,7 @@ fn incoming(graph: &Graph, target: &Node, scope_filter: &ScopeFilter) -> Mention
         .collect();
     let sources: Vec<&Node> = graph
         .nodes()
-        .filter(|node| {
-            !is_heading_node(graph, node)
-                && node.path != target.path
-                && scope_filter.matches(&node.path, &node.filetags, true)
-        })
+        .filter(|node| !is_heading_node(graph, node) && node.path != target.path)
         .collect();
 
     let mut mentions: Vec<Mention> = sources
@@ -402,9 +399,7 @@ mod tests {
         MentionsOptions {
             source,
             incoming: false,
-            include_headings: false,
-            min_length: 3,
-            scope_filter: ScopeFilter::default(),
+            with_dailies: false,
         }
     }
 
@@ -436,16 +431,17 @@ mod tests {
     }
 
     #[test]
-    fn outgoing_includes_heading_nodes_and_short_names_on_request() {
+    fn outgoing_matches_dailies_on_request() {
         let dir = fixture();
-        let mut opts = options(MentionsSource::Target(SOURCE.to_string()));
-        opts.include_headings = true;
-        opts.min_length = 2;
+        let mut opts = options(MentionsSource::Text("Rust on 2026-01-01.".to_string()));
+        opts.with_dailies = true;
 
         let output = execute(&config(&dir), &opts).unwrap();
 
-        let uuids: Vec<&str> = output.mentions.iter().map(|m| m.uuid.as_str()).collect();
-        assert_eq!(uuids, vec![RUST, ML, GO, TOKIO]);
+        assert_eq!(
+            summary(&output),
+            vec![(1, 1, "Rust", RUST), (1, 9, "2026-01-01", DAILY)]
+        );
     }
 
     #[test]

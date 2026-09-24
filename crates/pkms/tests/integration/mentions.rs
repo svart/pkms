@@ -152,3 +152,26 @@ fn mentions_ndjson_pipes_mentioned_notes_into_get() {
         "stdout: {stdout}"
     );
 }
+
+#[test]
+fn mentions_rejects_removed_filter_flags() {
+    let db = mentions_db();
+
+    for flag in [
+        &["--headings"][..],
+        &["--min-length", "2"],
+        &["--without-dailies"],
+        &["--modified-since", "2026-01-01"],
+        &["--include-tags", "x"],
+        &["--exclude-tags", "x"],
+        &["--path-prefix", "x"],
+    ] {
+        let mut args = vec!["mentions", SOURCE];
+        args.extend_from_slice(flag);
+
+        let (_, stderr, status) = db.run(&args);
+
+        assert!(!status.success(), "{flag:?} was accepted");
+        assert!(stderr.contains("unexpected argument"), "{stderr}");
+    }
+}

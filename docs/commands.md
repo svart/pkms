@@ -253,7 +253,7 @@ pkms suggest <uuid> --limit 5
 pkms suggest <uuid> --all
 pkms mentions <target>
 pkms mentions <target> --incoming
-pkms mentions <target> --headings --min-length 2
+pkms mentions <target> --with-dailies
 cat draft.org | pkms mentions -
 ```
 
@@ -274,8 +274,8 @@ target's title and aliases. Each record carries `line`, `col` (1-based, in
 characters), `phrase`, the mentioned note's `uuid` and `title`, `match`
 (`title` or `alias`), `already_linked`, and the `source_uuid`, `source_title`,
 and `path` of the scanned note (`null` for stdin). The default mode ignores
-names shorter than `--min-length` (default 3) and heading nodes unless
-`--headings` is set.
+names shorter than 3 characters, heading nodes, and daily notes unless
+`--with-dailies` is set.
 
 ## Creation and Repair
 

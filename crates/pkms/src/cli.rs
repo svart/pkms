@@ -537,22 +537,8 @@ pub struct MentionsArgs {
         help = "List other notes that mention the target without linking to it"
     )]
     pub incoming: bool,
-    #[arg(
-        long,
-        conflicts_with = "incoming",
-        help = "Also match headings with an :ID: as mentioned notes"
-    )]
-    pub headings: bool,
-    #[arg(
-        long,
-        value_name = "N",
-        default_value_t = 3,
-        conflicts_with = "incoming",
-        help = "Ignore titles and aliases shorter than N characters"
-    )]
-    pub min_length: usize,
-    #[command(flatten)]
-    pub scope: ScopeArgs,
+    #[arg(long, help = "Also match daily notes as mentioned notes")]
+    pub with_dailies: bool,
 }
 
 #[derive(Debug, Args)]
