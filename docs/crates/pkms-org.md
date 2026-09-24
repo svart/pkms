@@ -34,6 +34,7 @@ primitives.
 | `domain.rs` | Shared domain identifiers such as note IDs and link targets. |
 | `attachments.rs` | Org-attach path and target helpers. |
 | `link_check.rs` | Local link target checking helpers. |
+| `mentions.rs` | Unlinked-mention matching over org prose: title/alias names, skipped org syntax, line/column hits. |
 | `org_edit.rs` | Raw org edit primitives. |
 | `org_task_edit.rs` | Local task heading edit operations. |
 | `org_task_mutation.rs` | Typed task mutation requests applied to org files. |

@@ -84,8 +84,8 @@ use `--all-matches` when the full list is required.
 
 ### Shared scope filters
 
-`resolve`, `query`, `orphans`, and `suggest` accept the same optional scope
-filters:
+`resolve`, `query`, `orphans`, `suggest`, and `mentions` accept the same
+optional scope filters:
 
 ```bash
 pkms query "distributed systems" --include-tags project,active
@@ -100,7 +100,8 @@ a note. Tag matching is exact. Relative path prefixes are resolved against
 `db_root`. `--modified-since` accepts a UTC `YYYY-MM-DD` date or an RFC 3339
 timestamp and checks current source-file modification times. `--with-dailies`
 and `--without-dailies` are mutually exclusive. Commands continue to include
-daily notes by default except `orphans`, which continues to exclude them.
+daily notes by default except `orphans`, which continues to exclude them, and
+`mentions` without `--incoming`, which excludes daily notes as mentioned notes.
 
 ## Inspect and Navigate
 
@@ -137,6 +138,46 @@ Combinations are rejected rather than resolved by precedence.
 
 Bare `suggest` returns at most ten candidates. Use `--all` only when an
 unbounded result is intentional.
+
+### Find Unlinked Mentions
+
+`mentions` finds phrases that name another note by title or alias but are not
+links. org-roam calls these unlinked references.
+
+```bash
+pkms mentions <uuid-or-title>                      # names in this note
+pkms mentions <uuid-or-title> --incoming           # other notes naming this one
+pkms mentions <uuid-or-title> --output-format ndjson
+pkms mentions - < draft.org                        # a draft not yet saved
+```
+
+Matching is case-insensitive and Unicode-aware. A match must be a whole word:
+the characters on both sides must not be letters, digits, or `_`. When names
+overlap, the longest one wins, so `Machine Learning` beats `Learning`. The
+scanner skips text that is not prose:
+
+- links and bare URLs
+- `#+` keyword lines, comments, and drawers
+- `SCHEDULED:`, `DEADLINE:`, and `CLOSED:` lines
+- src, example, and export blocks
+- inline `~code~` and `=verbatim=`
+- timestamps
+- heading keywords, priorities, and tags
+
+A note never reports itself or headings in its own file. The default mode
+leaves out these candidate notes:
+
+- notes with names shorter than `--min-length` (default 3)
+- daily notes, unless `--with-dailies` is set
+- heading nodes, unless `--headings` is set
+
+With `--incoming`, the scope filters select the source notes, daily notes are
+included, and `--min-length` does not apply.
+
+`already_linked` is true when the scanned text already contains an `id:` link
+to the mentioned note elsewhere. Treat every record as a link candidate, not
+as a link to insert. Names are matched within one line, so a title wrapped
+across lines is not found.
 
 TODO-aware discovery, heading inspection, and statistics use the configured
 `[agenda].open_todo_states` and `[agenda].closed_todo_states` lists.

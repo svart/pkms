@@ -9,6 +9,7 @@ mod get;
 mod harness;
 mod info;
 mod logging;
+mod mentions;
 mod new;
 mod orphans;
 mod path;
@@ -30,19 +31,19 @@ use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::{Command, ExitStatus};
-use std::sync::{Mutex, MutexGuard};
 #[cfg(feature = "web")]
+use std::sync::{Mutex, MutexGuard};
 
 const TEST_CONFIG: &str = r#"[agenda]
 open_todo_states = ["TODO", "IN-PROGRESS", "IDEA", "PROBLEM", "WAITING", "DELEGATED", "POSTPONED"]
 closed_todo_states = ["DONE", "CANCELED"]
 "#;
 
+#[cfg(feature = "web")]
 static SERVER_TEST_LOCK: Mutex<()> = Mutex::new(());
-#[cfg(feature = "web")]
 
-fn lock_server_test() -> MutexGuard<'static, ()> {
 #[cfg(feature = "web")]
+fn lock_server_test() -> MutexGuard<'static, ()> {
     SERVER_TEST_LOCK
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner())

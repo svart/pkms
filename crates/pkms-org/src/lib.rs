@@ -8,6 +8,7 @@ pub mod discovery;
 pub mod domain;
 pub mod graph;
 pub mod link_check;
+pub mod mentions;
 pub mod org_date;
 pub mod org_edit;
 pub mod org_task_edit;

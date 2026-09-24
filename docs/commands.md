@@ -251,6 +251,10 @@ pkms orphans --limit 20
 pkms suggest <uuid>
 pkms suggest <uuid> --limit 5
 pkms suggest <uuid> --all
+pkms mentions <target>
+pkms mentions <target> --incoming
+pkms mentions <target> --headings --min-length 2
+cat draft.org | pkms mentions -
 ```
 
 `stats` accepts only one mode selector per invocation: `--days`, `--hubs`,
@@ -261,6 +265,17 @@ other uppercase heading prefixes remain part of the heading title.
 
 `suggest` returns at most ten candidates per target by default. `--limit N`
 selects another positive bound; `--all` explicitly returns every candidate.
+
+`mentions` finds unlinked references: phrases that name a note by title or
+alias. By default it scans the target note (a heading target scans only its
+subtree) or the org text from stdin when the target is `-`, and reports the
+notes it names. `--incoming` does the reverse. It scans other notes for the
+target's title and aliases. Each record carries `line`, `col` (1-based, in
+characters), `phrase`, the mentioned note's `uuid` and `title`, `match`
+(`title` or `alias`), `already_linked`, and the `source_uuid`, `source_title`,
+and `path` of the scanned note (`null` for stdin). The default mode ignores
+names shorter than `--min-length` (default 3) and heading nodes unless
+`--headings` is set.
 
 ## Creation and Repair
 

@@ -20,6 +20,7 @@ pkms get <uuid-or-title> --links
 pkms path "Source Note" "Target Note"
 pkms stats --hubs 20
 pkms orphans --limit 20
+pkms mentions <uuid-or-title>
 pkms new "New Note" --create --tags "project,idea"
 pkms extract <heading-uuid> "New Note Title" --apply
 pkms fix uuid <broken-uuid> <replacement-uuid> --apply

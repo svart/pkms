@@ -84,6 +84,10 @@ fn dispatch(cli: &Cli, command_ctx: &CommandContext<'_>) -> Result<ExitCode> {
                 },
             ))?
         }
+        Command::Mentions(args) => success(commands::mentions::run(
+            command_ctx,
+            &commands::mentions::options_from_args(command_ctx, args)?,
+        ))?,
         Command::New(args) => success(commands::new::run(
             command_ctx,
             &commands::new::options_from_args(args)?,

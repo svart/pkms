@@ -9,8 +9,8 @@ the database-oriented work.
 - Whole-database health checks and note validation.
 - UUID/title/tag resolution and fuzzy query behavior.
 - Note retrieval, link neighborhoods, heading display, and shortest paths.
-- Statistics, hubs, direct tag usage counts, TODO summaries, orphans, and
-  suggestions.
+- Statistics, hubs, direct tag usage counts, TODO summaries, orphans,
+  suggestions, and unlinked mentions.
 - Note creation planning and writing.
 - Heading extraction into a new note.
 - Broken UUID link repair and misplaced attachment repair.
@@ -31,6 +31,7 @@ the database-oriented work.
 | `commands/orphans.rs` | Orphan note discovery. |
 | `commands/path.rs` | Shortest path between notes. |
 | `commands/suggest.rs` | Related-note scoring. |
+| `commands/mentions.rs` | Outgoing, incoming, and stdin unlinked-mention reports. |
 | `commands/new.rs` | New note filename, UUID, and boilerplate generation. |
 | `commands/extract.rs` | Heading subtree extraction. |
 | `commands/fix.rs` | UUID and attachment repair flows. |

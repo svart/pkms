@@ -252,7 +252,7 @@ Consumers read targets from stdin via automatic pipe detection or
 `--from-stdin`.
 
 Producers: `resolve`, `query`, `orphans`, `stats --hubs`, `suggest`,
-`rag search`, `rag retrieve`.
+`mentions`, `rag search`, `rag retrieve`.
 
 Consumers: `get`, `suggest`, `validate`, `task list`.
 

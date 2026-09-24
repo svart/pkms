@@ -49,6 +49,7 @@ Load only the file needed for the task:
 - Note inspection and graph navigation: `references/get.md`, `references/path.md`
 - Note creation and repair: `references/new.md`, `references/fix.md`
 - Suggestions and orphan linking: `references/suggest.md`, `references/orphans.md`
+- Link candidates and unlinked references: `references/mentions.md`
 - TODO and agenda tasks: `references/task.md`
 - Pipelines: `references/pipelining.md`
 - RAG retrieval and tag recommendations: `references/rag.md`
@@ -65,6 +66,8 @@ JSON schemas for maintained structured outputs live in `schemas/`.
 3. Inspect promising results with `pkms get <target> --links`.
 4. Use `pkms tags` or `pkms stats --hubs` to find broader entry points.
 5. Use `pkms suggest <uuid>` after resolving an exact UUID.
+6. Use `pkms mentions <uuid> --incoming` to find notes that name a note
+   without linking to it.
 
 ### Build Research Context
 
@@ -120,6 +123,11 @@ UUIDs in org links:
 ```org
 [[id:aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa][description]]
 ```
+
+To find link candidates, run `pkms mentions <uuid> --output-format ndjson`
+after writing, or `pkms mentions - < draft.org` before the note exists. Do not
+resolve candidate terms one by one. Link only records whose sentence justifies
+the relation.
 
 For heading anchors, add the heading first, then run:
 

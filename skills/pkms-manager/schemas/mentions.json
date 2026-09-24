@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "title": "MentionsOutput",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "target": { "type": ["string", "null"] },
+    "target_uuid": { "type": ["string", "null"] },
+    "mode": { "type": "string", "enum": ["outgoing", "incoming"] },
+    "count": { "type": "integer" },
+    "mentions": { "type": "array", "items": { "$ref": "#/definitions/Mention" } }
+  },
+  "required": ["target", "target_uuid", "mode", "count", "mentions"],
+  "definitions": {
+    "Mention": {
+      "description": "One NDJSON record with --output-format ndjson.",
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "source_uuid": { "type": ["string", "null"] },
+        "source_title": { "type": ["string", "null"] },
+        "path": { "type": ["string", "null"] },
+        "line": { "type": "integer", "minimum": 1 },
+        "col": { "type": "integer", "minimum": 1 },
+        "phrase": { "type": "string" },
+        "uuid": { "type": "string" },
+        "title": { "type": "string" },
+        "match": { "type": "string", "enum": ["title", "alias"] },
+        "already_linked": { "type": "boolean" }
+      },
+      "required": ["source_uuid", "source_title", "path", "line", "col", "phrase", "uuid", "title", "match", "already_linked"]
+    }
+  }
+}

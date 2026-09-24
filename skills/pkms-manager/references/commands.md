@@ -79,6 +79,14 @@ so they can feed note-target pipeline consumers.
 Use `[rag].fastembed_model_dir` or `PKMS_RAG_FASTEMBED_MODEL_DIR` when FastEmbed
 should load model files from a local directory instead of downloading them.
 
+Unlinked references (title/alias phrases that are not links):
+
+```bash
+pkms mentions <target> --output-format ndjson
+pkms mentions <target> --incoming
+cat draft.org | pkms mentions -
+```
+
 Graph-based note suggestions return at most ten candidates per target by
 default. Use `pkms suggest <uuid> --limit N` for another positive bound or
 `pkms suggest <uuid> --all` for every candidate.

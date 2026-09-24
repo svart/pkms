@@ -128,6 +128,8 @@ pub enum Command {
     Fix(FixArgs),
     #[command(about = "Suggest related notes by multi-factor scoring (takes UUID only)")]
     Suggest(SuggestArgs),
+    #[command(about = "Find unlinked mentions of note titles and aliases")]
+    Mentions(MentionsArgs),
     #[command(about = "Generate a filename and UUID for a new note")]
     New(NewArgs),
     #[command(about = "Extract a heading subtree into a new note")]
@@ -166,6 +168,7 @@ impl Command {
             Command::Resolve(_) => "resolve",
             Command::Fix(_) => "fix",
             Command::Suggest(_) => "suggest",
+            Command::Mentions(_) => "mentions",
             Command::New(_) => "new",
             Command::Extract(_) => "extract",
             Command::Get(_) => "get",
@@ -521,6 +524,33 @@ pub struct SuggestArgs {
     pub exclude_orphans: bool,
     #[arg(long, help = "Read UUIDs from NDJSON stdin")]
     pub from_stdin: bool,
+    #[command(flatten)]
+    pub scope: ScopeArgs,
+}
+
+#[derive(Debug, Args)]
+pub struct MentionsArgs {
+    #[arg(help = "UUID, file path, or note title; `-` reads org text from stdin")]
+    pub target: String,
+    #[arg(
+        long,
+        help = "List other notes that mention the target without linking to it"
+    )]
+    pub incoming: bool,
+    #[arg(
+        long,
+        conflicts_with = "incoming",
+        help = "Also match headings with an :ID: as mentioned notes"
+    )]
+    pub headings: bool,
+    #[arg(
+        long,
+        value_name = "N",
+        default_value_t = 3,
+        conflicts_with = "incoming",
+        help = "Ignore titles and aliases shorter than N characters"
+    )]
+    pub min_length: usize,
     #[command(flatten)]
     pub scope: ScopeArgs,
 }

@@ -145,7 +145,8 @@ Command pipelining:
 - NDJSON producers emit one JSON object per line, usually with a `uuid` field.
 - Consumers read targets from stdin via automatic pipe detection or
   `--from-stdin`.
-- Producers: `resolve`, `query`, `orphans`, `stats --hubs`, `suggest`, and,
+- Producers: `resolve`, `query`, `orphans`, `stats --hubs`, `suggest`,
+  `mentions`, and,
   with the `rag` feature, `rag search` and `rag retrieve`.
 - Consumers: `get`, `suggest`, `validate`, `task list`.
 

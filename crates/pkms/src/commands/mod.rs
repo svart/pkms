@@ -11,6 +11,7 @@ pub mod extract;
 pub mod fix;
 pub mod get;
 pub mod info;
+pub mod mentions;
 pub mod new;
 pub mod orphans;
 pub mod path;
