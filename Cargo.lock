@@ -2863,7 +2863,7 @@ checksum = "19f132c84eca552bf34cab8ec81f1c1dcc229b811638f9d283dceabe58c5569e"
 
 [[package]]
 name = "pkms"
-version = "2.10.0"
+version = "2.10.1"
 dependencies = [
  "anyhow",
  "chrono",
@@ -2890,7 +2890,7 @@ dependencies = [
 
 [[package]]
 name = "pkms-db"
-version = "2.4.0"
+version = "2.4.1"
 dependencies = [
  "anyhow",
  "chrono",
