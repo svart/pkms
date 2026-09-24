@@ -1,3 +1,4 @@
+#[cfg(feature = "web")]
 use anyhow::Result;
 use pkms_org::Graph;
 use std::path::{Path, PathBuf};

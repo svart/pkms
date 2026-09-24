@@ -58,14 +58,16 @@ Before committing or handing work off, run the fast full-feature gate:
 cargo fmt --all -- --check
 scripts/check-crate-boundaries.sh
 cargo clippy --workspace --all-targets --all-features -- -D warnings
+cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace --all-features
 cargo build --workspace --all-features
 ```
 
 This gate covers the complete feature set in a single pass. It catches
-formatting, all-feature lint, unit tests, integration tests, and all-feature
-builds without making every local commit wait on the full feature-by-feature
-matrix.
+formatting, all-feature and default-feature lint, unit tests, integration
+tests, and all-feature builds without making every local commit wait on the
+full feature-by-feature matrix. The default-feature clippy run catches imports
+and helpers used only behind a feature flag.
 
 Also run focused commands for the files you changed. Examples:
 

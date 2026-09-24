@@ -366,6 +366,7 @@ pre-commit gate. Run the full matrix only when explicitly requested.
 cargo fmt --all -- --check
 scripts/check-crate-boundaries.sh
 cargo clippy --workspace --all-targets --all-features -- -D warnings
+cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace --all-features
 cargo build --workspace --all-features
 ```

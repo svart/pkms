@@ -31,6 +31,7 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::process::{Command, ExitStatus};
 use std::sync::{Mutex, MutexGuard};
+#[cfg(feature = "web")]
 
 const TEST_CONFIG: &str = r#"[agenda]
 open_todo_states = ["TODO", "IN-PROGRESS", "IDEA", "PROBLEM", "WAITING", "DELEGATED", "POSTPONED"]
@@ -38,8 +39,10 @@ closed_todo_states = ["DONE", "CANCELED"]
 "#;
 
 static SERVER_TEST_LOCK: Mutex<()> = Mutex::new(());
+#[cfg(feature = "web")]
 
 fn lock_server_test() -> MutexGuard<'static, ()> {
+#[cfg(feature = "web")]
     SERVER_TEST_LOCK
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner())
