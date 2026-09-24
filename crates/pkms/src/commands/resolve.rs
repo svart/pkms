@@ -2,12 +2,19 @@ use crate::cli::{OutputFormat, ResolveArgs};
 use crate::command_context::CommandContext;
 use crate::output::OutputContext;
 use anyhow::Result;
-use pkms_db::commands::resolve::{self, ResolveCommandOutput, ResolveOptions};
+use pkms_db::commands::resolve::{self, ResolveCommandOutput, ResolveOptions, TitleMatchMode};
 
 pub fn options_from_args(ctx: &CommandContext<'_>, args: &ResolveArgs) -> ResolveOptions {
     ResolveOptions {
         uuid: args.uuid.clone(),
-        title: args.title.clone(),
+        titles: args.title.clone(),
+        title_match: if args.exact {
+            TitleMatchMode::Exact
+        } else if args.word {
+            TitleMatchMode::Word
+        } else {
+            TitleMatchMode::Substring
+        },
         tags: args.tags.clone(),
         limit: args.limit,
         fields: args.fields.clone(),

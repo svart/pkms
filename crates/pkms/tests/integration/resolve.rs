@@ -261,3 +261,138 @@ fn test_resolve_heading_uuid() {
     assert_eq!(v["total"], 1, "should find 1 note by heading UUID");
     assert_eq!(v["results"][0]["title"], "Resolve Heading Test");
 }
+
+fn write_graph_notes(root: &std::path::Path) {
+    db_write(
+        root,
+        "paragraph.org",
+        ":PROPERTIES:\n:ID:       21212121-2121-4121-8121-212121212121\n:END:\n#+title: Paragraph\n",
+    );
+    db_write(
+        root,
+        "graph.org",
+        ":PROPERTIES:\n:ID:       22222222-2222-4222-8222-222222222222\n:END:\n#+title: Graph\n",
+    );
+    db_write(
+        root,
+        "graph-theory.org",
+        ":PROPERTIES:\n:ID:       23232323-2323-4323-8323-232323232323\n:END:\n#+title: Graph Theory\n",
+    );
+    db_write(
+        root,
+        "networks.org",
+        ":PROPERTIES:\n:ID:       24242424-2424-4424-8424-242424242424\n:ROAM_ALIASES: \"graph\"\n:END:\n#+title: Networks\n",
+    );
+}
+
+fn titles_and_kinds(value: &serde_json::Value) -> Vec<(String, String)> {
+    value["results"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|r| {
+            (
+                r["title"].as_str().unwrap().to_string(),
+                r["match_kind"].as_str().unwrap().to_string(),
+            )
+        })
+        .collect()
+}
+
+#[test]
+fn test_resolve_title_match_modes() {
+    let (_dir, root) = setup_clean_db();
+    write_graph_notes(&root);
+    let db = root.to_str().unwrap();
+
+    let (value, status) = run_json(&[
+        "--db",
+        db,
+        "--output-format",
+        "json",
+        "resolve",
+        "--title",
+        "graph",
+    ]);
+    assert!(status.success());
+    assert_eq!(
+        titles_and_kinds(&value),
+        vec![
+            ("Graph".into(), "exact".into()),
+            ("Networks".into(), "alias".into()),
+            ("Graph Theory".into(), "word".into()),
+            ("Paragraph".into(), "substring".into()),
+        ]
+    );
+
+    let (value, status) = run_json(&[
+        "--db",
+        db,
+        "--output-format",
+        "json",
+        "resolve",
+        "--title",
+        "graph",
+        "--word",
+    ]);
+    assert!(status.success());
+    assert_eq!(value["total"], 3);
+    assert!(!titles_and_kinds(&value).contains(&("Paragraph".into(), "substring".into())));
+
+    let (value, status) = run_json(&[
+        "--db",
+        db,
+        "--output-format",
+        "json",
+        "resolve",
+        "--title",
+        "graph",
+        "--exact",
+    ]);
+    assert!(status.success());
+    assert_eq!(value["total"], 2);
+}
+
+#[test]
+fn test_resolve_repeated_titles_ndjson_tags_each_query() {
+    let (_dir, root) = setup_clean_db();
+    write_graph_notes(&root);
+
+    let (stdout, _stderr, status) = run(&[
+        "--db",
+        root.to_str().unwrap(),
+        "--output-format",
+        "ndjson",
+        "resolve",
+        "--title",
+        "networks",
+        "--title",
+        "graph",
+        "--exact",
+        "--fields",
+        "uuid,matched_query,match_kind",
+    ]);
+    assert!(status.success());
+    let rows: Vec<serde_json::Value> = stdout
+        .lines()
+        .map(|l| serde_json::from_str(l).unwrap())
+        .collect();
+    let pairs: Vec<_> = rows
+        .iter()
+        .map(|r| {
+            (
+                r["matched_query"].as_str().unwrap(),
+                r["uuid"].as_str().unwrap(),
+                r["match_kind"].as_str().unwrap(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        pairs,
+        vec![
+            ("networks", "24242424-2424-4424-8424-242424242424", "exact"),
+            ("graph", "22222222-2222-4222-8222-222222222222", "exact"),
+            ("graph", "24242424-2424-4424-8424-242424242424", "alias"),
+        ]
+    );
+}

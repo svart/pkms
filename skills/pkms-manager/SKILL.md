@@ -61,7 +61,10 @@ JSON schemas for maintained structured outputs live in `schemas/`.
 
 ### Discover Notes
 
-1. Use `pkms resolve --title <term>` for fast title/alias lookup.
+1. Use `pkms resolve --title <term>` for fast title/alias lookup; add
+   `--word` for whole-word matches, `--exact` for equality, or repeat
+   `--title` to look up several terms in one call (check `match_kind` and
+   `matched_query`).
 2. Use `pkms query "<terms>"` for broad title/tag/content search.
 3. Inspect promising results with `pkms get <target> --links`.
 4. Use `pkms tags` or `pkms stats --hubs` to find broader entry points.
@@ -126,7 +129,7 @@ UUIDs in org links:
 
 To find link candidates, run `pkms mentions <uuid> --output-format ndjson`
 after writing, or `pkms mentions - < draft.org` before the note exists. Do not
-resolve candidate terms one by one. Link only records whose sentence justifies
+resolve candidate terms one by one; batch them with repeated `--title`. Link only records whose sentence justifies
 the relation.
 
 For heading anchors, add the heading first, then run:

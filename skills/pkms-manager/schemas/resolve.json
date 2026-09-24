@@ -22,7 +22,9 @@
         "categories": { "type": "array", "items": { "type": "string" } },
         "aliases": { "type": "array", "items": { "type": "string" } },
         "matched_heading_uuid": { "type": "string" },
-        "has_todos": { "type": "boolean" }
+        "has_todos": { "type": "boolean" },
+        "match_kind": { "type": "string", "enum": ["exact", "alias", "word", "substring"] },
+        "matched_query": { "type": "string" }
       },
       "required": ["uuid", "title", "path"]
     }

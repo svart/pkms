@@ -61,11 +61,21 @@ Use `resolve` when you know a UUID fragment, title fragment, alias, or filetag:
 ```bash
 pkms resolve --uuid <uuid-fragment>
 pkms resolve --title "graph"
+pkms resolve --title "graph" --exact
+pkms resolve --title "graph" --word
+pkms resolve --title "graph" --title "emacs" --output-format ndjson
 pkms resolve --tags "project,active"
 pkms resolve --title "project" --todos
 pkms resolve --tags "project" --fields uuid,title,path,tags
 pkms resolve --title "project" --include-tags active --path-prefix roam/projects
 ```
+
+`--title` matches query words anywhere in titles and aliases by default, so
+`graph` also matches `Paragraph`. `--word` requires whole-word matches;
+`--exact` requires the title or an alias to equal the query. JSON and NDJSON results carry
+`match_kind` (`exact`, `alias`, `word`, `substring`) and `matched_query`.
+Repeat `--title` to look up several terms in one scan; results are grouped per
+query and `--limit` applies to each query.
 
 Use `query` when you want fuzzy search across titles, aliases, refs, tags, or
 content:

@@ -18,11 +18,97 @@ pub struct ResolvedNote {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub matched_heading_uuid: Option<String>,
     pub has_todos: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub match_kind: Option<MatchKind>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub matched_query: Option<String>,
+}
+
+/// How a `--title` query matched a note, ordered from strongest to weakest.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum MatchKind {
+    /// The whole title equals the query.
+    Exact,
+    /// One alias equals the query.
+    Alias,
+    /// Every query word appears as a whole word in the title or one alias.
+    Word,
+    /// Every query word appears as a substring of the title or one alias.
+    Substring,
+}
+
+/// Weakest match kind accepted for `--title` queries.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum TitleMatchMode {
+    /// Exact title or alias equality.
+    Exact,
+    /// Exact, alias, or whole-word matches.
+    Word,
+    /// Any of the above plus substring matches.
+    #[default]
+    Substring,
+}
+
+impl TitleMatchMode {
+    fn accepts(self, kind: MatchKind) -> bool {
+        let weakest = match self {
+            Self::Exact => MatchKind::Alias,
+            Self::Word => MatchKind::Word,
+            Self::Substring => MatchKind::Substring,
+        };
+        kind <= weakest
+    }
+}
+
+/// Returns the strongest way `query` matches the note title or aliases.
+pub fn title_match_kind(title: &str, aliases: &[String], query: &str) -> Option<MatchKind> {
+    let query = normalize(query);
+    let title = normalize(title);
+    let aliases: Vec<String> = aliases.iter().map(|a| normalize(a)).collect();
+    if title == query {
+        return Some(MatchKind::Exact);
+    }
+    if aliases.contains(&query) {
+        return Some(MatchKind::Alias);
+    }
+    let words: Vec<&str> = query.split(' ').filter(|w| !w.is_empty()).collect();
+    let candidates = || std::iter::once(&title).chain(aliases.iter());
+    if candidates().any(|c| words.iter().all(|w| contains_word(c, w))) {
+        return Some(MatchKind::Word);
+    }
+    if candidates().any(|c| words.iter().all(|w| c.contains(w))) {
+        return Some(MatchKind::Substring);
+    }
+    None
+}
+
+fn normalize(s: &str) -> String {
+    s.split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .to_lowercase()
+}
+
+fn is_word_char(c: char) -> bool {
+    c.is_alphanumeric() || c == '_'
+}
+
+/// True when `word` occurs in `text` without word characters on either side.
+fn contains_word(text: &str, word: &str) -> bool {
+    text.match_indices(word).any(|(start, m)| {
+        let before = text[..start].chars().next_back();
+        let after = text[start + m.len()..].chars().next();
+        !before.is_some_and(is_word_char) && !after.is_some_and(is_word_char)
+    })
 }
 
 #[derive(Serialize)]
 pub struct ResolveOutput {
     pub query: String,
+    /// Title queries in request order; used to group text output.
+    #[serde(skip)]
+    pub titles: Vec<String>,
     pub total: usize,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub showed: Option<usize>,
@@ -102,13 +188,18 @@ fn resolved_note_from_parsed(
         aliases: summary.aliases.clone(),
         matched_heading_uuid: matched_heading,
         has_todos: summary.has_todos,
+        match_kind: None,
+        matched_query: None,
     }
 }
 
 pub struct ResolveOptions {
     pub uuid: Option<String>,
-    pub title: Option<String>,
+    /// Title queries; each one is matched and limited independently.
+    pub titles: Vec<String>,
+    pub title_match: TitleMatchMode,
     pub tags: Option<Vec<String>>,
+    /// Maximum results, applied per title query when titles are given.
     pub limit: Option<usize>,
     pub fields: Option<Vec<String>>,
     pub todos: bool,
@@ -131,9 +222,7 @@ pub fn execute(config: &OrgConfig, opts: &ResolveOptions) -> Result<ResolveComma
         &config.todo_states,
     );
 
-    let title_query = opts.title.as_ref().map(|s| s.to_lowercase());
-
-    let mut all: Vec<ResolvedNote> = notes
+    let mut candidates: Vec<ResolvedNote> = notes
         .into_iter()
         .filter(|n| {
             if let Some(ref uq) = opts.uuid
@@ -143,17 +232,6 @@ pub fn execute(config: &OrgConfig, opts: &ResolveOptions) -> Result<ResolveComma
                     .is_none_or(|h| !h.to_lowercase().contains(&uq.to_lowercase()))
             {
                 return false;
-            }
-            if let Some(ref tq) = title_query {
-                let words: Vec<&str> = tq.split_whitespace().collect();
-                let title_match = words.iter().all(|w| n.title.to_lowercase().contains(w));
-                let alias_match = n
-                    .aliases
-                    .iter()
-                    .any(|a| words.iter().all(|w| a.to_lowercase().contains(w)));
-                if !title_match && !alias_match {
-                    return false;
-                }
             }
             if let Some(ref tags) = opts.tags {
                 let matches_tag = tags
@@ -179,37 +257,69 @@ pub fn execute(config: &OrgConfig, opts: &ResolveOptions) -> Result<ResolveComma
         })
         .collect();
 
-    all.sort_by(|a, b| a.title.cmp(&b.title).then_with(|| a.uuid.cmp(&b.uuid)));
+    candidates.sort_by(|a, b| a.title.cmp(&b.title).then_with(|| a.uuid.cmp(&b.uuid)));
 
-    let total = all.len();
-    let (shown, showed) = if let Some(l) = opts.limit {
-        let shown: Vec<_> = all.into_iter().take(l).collect();
-        let showed = shown.len();
-        (shown, Some(showed))
+    let groups: Vec<Vec<ResolvedNote>> = if opts.titles.is_empty() {
+        vec![candidates]
     } else {
-        (all, None)
+        opts.titles
+            .iter()
+            .map(|query| match_title(&candidates, query, opts.title_match))
+            .collect()
     };
+
+    let total = groups.iter().map(Vec::len).sum();
+    let shown: Vec<ResolvedNote> = groups
+        .into_iter()
+        .flat_map(|group| group.into_iter().take(opts.limit.unwrap_or(usize::MAX)))
+        .collect();
+    let showed = opts.limit.map(|_| shown.len());
 
     let field_set: Option<HashSet<String>> =
         opts.fields.as_ref().map(|f| f.iter().cloned().collect());
 
-    let query_str = opts
-        .title
-        .as_deref()
-        .or(opts.uuid.as_deref())
-        .or_else(|| opts.tags.as_ref().map(|_| "tags"))
-        .unwrap_or_default()
-        .to_string();
+    let query_str = if opts.titles.is_empty() {
+        opts.uuid
+            .as_deref()
+            .or_else(|| opts.tags.as_ref().map(|_| "tags"))
+            .unwrap_or_default()
+            .to_string()
+    } else {
+        opts.titles.join(" | ")
+    };
 
     Ok(ResolveCommandOutput {
         output: ResolveOutput {
             query: query_str,
+            titles: opts.titles.clone(),
             total,
             showed,
             results: shown,
         },
         fields: field_set,
     })
+}
+
+/// Notes matching one title query, strongest match kind first.
+fn match_title(
+    candidates: &[ResolvedNote],
+    query: &str,
+    mode: TitleMatchMode,
+) -> Vec<ResolvedNote> {
+    let mut matched: Vec<ResolvedNote> = candidates
+        .iter()
+        .filter_map(|n| {
+            let kind =
+                title_match_kind(&n.title, &n.aliases, query).filter(|k| mode.accepts(*k))?;
+            let mut note = n.clone();
+            note.match_kind = Some(kind);
+            note.matched_query = Some(query.to_string());
+            Some(note)
+        })
+        .collect();
+    // Stable sort keeps the title/uuid order within each kind.
+    matched.sort_by_key(|n| n.match_kind);
+    matched
 }
 
 pub fn render_text(output: &ResolveOutput, field_set: Option<&HashSet<String>>) -> String {
@@ -225,7 +335,29 @@ pub fn render_text(output: &ResolveOutput, field_set: Option<&HashSet<String>>) 
             output.results.len()
         );
     }
-    for note in &output.results {
+    if output.titles.len() > 1 {
+        for title in &output.titles {
+            let notes: Vec<&ResolvedNote> = output
+                .results
+                .iter()
+                .filter(|n| n.matched_query.as_deref() == Some(title.as_str()))
+                .collect();
+            let _ = writeln!(text, "Query: {title} ({})", notes.len());
+            render_notes(&mut text, notes, field_set);
+        }
+    } else {
+        render_notes(&mut text, output.results.iter(), field_set);
+    }
+
+    text
+}
+
+fn render_notes<'a>(
+    text: &mut String,
+    notes: impl IntoIterator<Item = &'a ResolvedNote>,
+    field_set: Option<&HashSet<String>>,
+) {
+    for note in notes {
         if let Some(fs) = field_set {
             if fs.contains("title") {
                 let _ = writeln!(text, "  {}", note.title);
@@ -256,8 +388,6 @@ pub fn render_text(output: &ResolveOutput, field_set: Option<&HashSet<String>>) 
             }
         }
     }
-
-    text
 }
 
 pub fn filter_fields(
@@ -295,6 +425,8 @@ mod tests {
             aliases: vec!["Alias A".to_string()],
             matched_heading_uuid: None,
             has_todos: false,
+            match_kind: None,
+            matched_query: None,
         }
     }
 
@@ -302,6 +434,7 @@ mod tests {
     fn renders_default_text_from_typed_output() {
         let output = ResolveOutput {
             query: "Note".to_string(),
+            titles: vec!["Note".to_string()],
             total: 1,
             showed: None,
             results: vec![resolved_note()],
@@ -320,6 +453,7 @@ mod tests {
     fn renders_selected_text_fields_and_limit_metadata() {
         let output = ResolveOutput {
             query: "Note".to_string(),
+            titles: vec!["Note".to_string()],
             total: 3,
             showed: Some(1),
             results: vec![resolved_note()],
@@ -398,7 +532,8 @@ mod tests {
             &config,
             &ResolveOptions {
                 uuid: None,
-                title: Some("Alpha".to_string()),
+                titles: vec!["Alpha".to_string()],
+                title_match: TitleMatchMode::Word,
                 tags: None,
                 limit: None,
                 fields: None,
@@ -410,5 +545,225 @@ mod tests {
 
         assert_eq!(output.output.total, 1);
         assert!(output.output.results[0].has_todos);
+    }
+
+    fn aliases(values: &[&str]) -> Vec<String> {
+        values.iter().map(|v| (*v).to_string()).collect()
+    }
+
+    #[test]
+    fn title_match_kind_classifies_strongest_match() {
+        let none: Vec<String> = Vec::new();
+        assert_eq!(
+            title_match_kind("Graph  Theory", &none, "graph theory"),
+            Some(MatchKind::Exact)
+        );
+        assert_eq!(
+            title_match_kind("Graph Theory", &aliases(&["GT"]), "gt"),
+            Some(MatchKind::Alias)
+        );
+        assert_eq!(
+            title_match_kind("Theory of Graph", &none, "graph theory"),
+            Some(MatchKind::Word)
+        );
+        assert_eq!(
+            title_match_kind("Graphs", &aliases(&["graph db"]), "graph"),
+            Some(MatchKind::Word)
+        );
+        assert_eq!(
+            title_match_kind("Paragraph style", &none, "graph"),
+            Some(MatchKind::Substring)
+        );
+        assert_eq!(title_match_kind("Tree", &none, "graph"), None);
+    }
+
+    #[test]
+    fn word_boundaries_handle_punctuation_and_unicode() {
+        let none: Vec<String> = Vec::new();
+        assert_eq!(
+            title_match_kind("Using org-roam daily", &none, "org-roam"),
+            Some(MatchKind::Word)
+        );
+        assert_eq!(
+            title_match_kind("C++ templates", &none, "c++"),
+            Some(MatchKind::Word)
+        );
+        assert_eq!(
+            title_match_kind("Теория графов", &none, "граф"),
+            Some(MatchKind::Substring)
+        );
+        assert_eq!(
+            title_match_kind("snake_case names", &none, "snake"),
+            Some(MatchKind::Substring)
+        );
+    }
+
+    #[test]
+    fn match_mode_limits_accepted_kinds() {
+        assert!(TitleMatchMode::Exact.accepts(MatchKind::Alias));
+        assert!(!TitleMatchMode::Exact.accepts(MatchKind::Word));
+        assert!(TitleMatchMode::Word.accepts(MatchKind::Word));
+        assert!(!TitleMatchMode::Word.accepts(MatchKind::Substring));
+        assert!(TitleMatchMode::Substring.accepts(MatchKind::Substring));
+    }
+
+    fn write_note(dir: &Path, name: &str, uuid: &str, title: &str, alias: Option<&str>) {
+        let alias = alias
+            .map(|a| format!(":ROAM_ALIASES: \"{a}\"\n"))
+            .unwrap_or_default();
+        std::fs::write(
+            dir.join(name),
+            format!(":PROPERTIES:\n:ID:       {uuid}\n{alias}:END:\n#+title: {title}\n"),
+        )
+        .unwrap();
+    }
+
+    fn test_config(dir: &Path) -> OrgConfig {
+        OrgConfig {
+            db_root: dir.to_path_buf(),
+            ignore_patterns: Vec::new(),
+            home_dir: None,
+            todo_states: vec!["TODO".to_string(), "DONE".to_string()],
+        }
+    }
+
+    fn title_options(
+        titles: &[&str],
+        mode: TitleMatchMode,
+        limit: Option<usize>,
+    ) -> ResolveOptions {
+        ResolveOptions {
+            uuid: None,
+            titles: titles.iter().map(|t| (*t).to_string()).collect(),
+            title_match: mode,
+            tags: None,
+            limit,
+            fields: None,
+            todos: false,
+            scope_filter: ScopeFilter::default(),
+        }
+    }
+
+    fn graph_db() -> tempfile::TempDir {
+        let dir = tempfile::tempdir().unwrap();
+        let d = dir.path();
+        write_note(
+            d,
+            "a.org",
+            "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            "Paragraph",
+            None,
+        );
+        write_note(
+            d,
+            "b.org",
+            "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+            "Graph theory",
+            None,
+        );
+        write_note(
+            d,
+            "c.org",
+            "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+            "Graph",
+            None,
+        );
+        write_note(
+            d,
+            "d.org",
+            "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+            "Networks",
+            Some("graph"),
+        );
+        write_note(
+            d,
+            "e.org",
+            "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
+            "Emacs",
+            None,
+        );
+        dir
+    }
+
+    fn kinds(output: &ResolveOutput) -> Vec<(String, MatchKind)> {
+        output
+            .results
+            .iter()
+            .map(|n| (n.title.clone(), n.match_kind.unwrap()))
+            .collect()
+    }
+
+    #[test]
+    fn default_title_match_includes_substring_ranked_last() {
+        let dir = graph_db();
+        let out = execute(
+            &test_config(dir.path()),
+            &title_options(&["graph"], TitleMatchMode::default(), None),
+        )
+        .unwrap();
+
+        assert_eq!(
+            kinds(&out.output),
+            vec![
+                ("Graph".to_string(), MatchKind::Exact),
+                ("Networks".to_string(), MatchKind::Alias),
+                ("Graph theory".to_string(), MatchKind::Word),
+                ("Paragraph".to_string(), MatchKind::Substring),
+            ]
+        );
+    }
+
+    #[test]
+    fn exact_and_word_modes_bound_results() {
+        let dir = graph_db();
+        let config = test_config(dir.path());
+        let exact = execute(
+            &config,
+            &title_options(&["graph"], TitleMatchMode::Exact, None),
+        )
+        .unwrap();
+        assert_eq!(exact.output.total, 2);
+
+        let word = execute(
+            &config,
+            &title_options(&["graph"], TitleMatchMode::Word, None),
+        )
+        .unwrap();
+        assert_eq!(word.output.total, 3);
+        assert!(
+            word.output
+                .results
+                .iter()
+                .all(|n| n.match_kind != Some(MatchKind::Substring))
+        );
+    }
+
+    #[test]
+    fn repeated_titles_group_results_and_limit_per_query() {
+        let dir = graph_db();
+        let out = execute(
+            &test_config(dir.path()),
+            &title_options(
+                &["emacs", "graph", "missing"],
+                TitleMatchMode::default(),
+                Some(1),
+            ),
+        )
+        .unwrap();
+
+        let rows: Vec<_> = out
+            .output
+            .results
+            .iter()
+            .map(|n| (n.matched_query.as_deref().unwrap(), n.title.as_str()))
+            .collect();
+        assert_eq!(rows, vec![("emacs", "Emacs"), ("graph", "Graph")]);
+        assert_eq!(out.output.total, 5);
+        assert_eq!(out.output.showed, Some(2));
+        assert_eq!(out.output.query, "emacs | graph | missing");
+
+        let text = render_text(&out.output, None);
+        assert!(text.contains("Query: emacs (1)"));
+        assert!(text.contains("Query: missing (0)"));
     }
 }

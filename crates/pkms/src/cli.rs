@@ -434,10 +434,23 @@ pub struct ResolveArgs {
     pub uuid: Option<String>,
     #[arg(
         long,
-        help = "Search by title or alias (substring match)",
+        help = "Search by title or alias (substring match); repeat for several titles",
         required_unless_present_any = ["uuid", "tags"]
     )]
-    pub title: Option<String>,
+    pub title: Vec<String>,
+    #[arg(
+        long,
+        requires = "title",
+        conflicts_with = "word",
+        help = "Only match titles or aliases equal to --title"
+    )]
+    pub exact: bool,
+    #[arg(
+        long,
+        requires = "title",
+        help = "Only match --title words as whole words"
+    )]
+    pub word: bool,
     #[arg(
         long,
         help = "Include notes with these filetags (comma-separated)",
@@ -448,7 +461,7 @@ pub struct ResolveArgs {
         required_unless_present_any = ["uuid", "title"]
     )]
     pub tags: Option<Vec<String>>,
-    #[arg(long, help = "Maximum results")]
+    #[arg(long, help = "Maximum results (per --title when titles are given)")]
     pub limit: Option<usize>,
     #[arg(
         long,
@@ -457,7 +470,7 @@ pub struct ResolveArgs {
         num_args = 1,
         action = clap::ArgAction::Set,
         value_parser = trim_delimited_value,
-        help = "Comma-separated fields: uuid,title,path,tags,aliases"
+        help = "Comma-separated fields: uuid,title,path,tags,aliases,match_kind,matched_query"
     )]
     pub fields: Option<Vec<String>>,
     #[arg(long, help = "Restrict to files with TODO headings")]
@@ -703,6 +716,36 @@ mod tests {
         };
         assert_eq!(args.tags, Some(vec!["alpha".into(), "beta".into()]));
         assert_eq!(args.fields, Some(vec!["uuid".into(), "title".into()]));
+    }
+
+    #[test]
+    fn resolve_accepts_repeated_titles_without_splitting_commas() {
+        let cli = parse(&[
+            "pkms",
+            "resolve",
+            "--title",
+            "Graph, theory",
+            "--title",
+            "Emacs",
+            "--exact",
+        ]);
+
+        let Command::Resolve(args) = cli.command else {
+            panic!("expected resolve command");
+        };
+        assert_eq!(
+            args.title,
+            vec!["Graph, theory".to_string(), "Emacs".into()]
+        );
+        assert!(args.exact);
+    }
+
+    #[test]
+    fn resolve_rejects_conflicting_title_match_modes() {
+        assert!(
+            Cli::try_parse_from(["pkms", "resolve", "--title", "x", "--exact", "--word"]).is_err()
+        );
+        assert!(Cli::try_parse_from(["pkms", "resolve", "--tags", "x", "--exact"]).is_err());
     }
 
     #[test]

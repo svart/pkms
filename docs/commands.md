@@ -61,6 +61,9 @@ timeout, unsupported syntax, and other SSH/SFTP failures are reported in
 ```bash
 pkms resolve --uuid <uuid>
 pkms resolve --title <title>
+pkms resolve --title <title> --exact
+pkms resolve --title <title> --word
+pkms resolve --title <title> --title <title2>
 pkms resolve --tags "tag1,tag2"
 pkms resolve --title <title> --todos
 pkms query "search terms"
